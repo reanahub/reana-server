@@ -19,21 +19,32 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-"""Main entrypoint for Reana-Server."""
+"""Reana-Server Ping-functionality Flask-Blueprint."""
 
-import logging
+from flask import Blueprint, jsonify
 
-from .factory import create_app
 
-# Needed for flask.with_appcontext decorator to work.
-app = create_app()
+ping_bp = Blueprint('api', __name__)
 
-if __name__ == '__main__':
 
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s - %(threadName)s - %(levelname)s: %(message)s'
-    )
+@ping_bp.route('/ping', methods=['GET'])
+def ping():  # noqa
+    r"""Endpoint to ping the server. Responds with a pong.
+    ---
+    get:
+      summary: Ping the server (healthcheck)
+      description: >-
+        Ping the server.
+      produces:
+       - application/json
+      responses:
+        200:
+          description: >-
+            Ping succeeded. Service is running and accessible.
+          examples:
+            application/json:
+              message: OK
+              status: 200
+    """
 
-    app = create_app()
-    app.run(debug=True, port=5000, host='0.0.0.0')
+    return jsonify(message="OK", status="200"), 200

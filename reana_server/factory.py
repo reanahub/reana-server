@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+#
 # This file is part of REANA.
 # Copyright (C) 2017 CERN.
 #
@@ -10,21 +12,26 @@
 # WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 # A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 #
-# You should have received a copy of the GNU General Public License along with
-# REANA; if not, write to the Free Software Foundation, Inc., 59 Temple Place,
-# Suite 330, Boston, MA 02111-1307, USA.
+# You should have received a copy of the GNU General Public License
+# along with REANA; if not, see <http://www.gnu.org/licenses>.
 #
 # In applying this license, CERN does not waive the privileges and immunities
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-FROM python:3.5
-ADD . /code
-WORKDIR /code
-RUN pip install -e .[all]
-RUN adduser --uid 1000 --disabled-password --gecos '' reanauser && \
-    chown -R reanauser:reanauser /code
-USER reanauser
-EXPOSE 5000
-ENV FLASK_APP=/code/reana_server/app.py
-CMD ["flask", "run", "--host=0.0.0.0"]
+"""Flask-application factory for Reana-Server."""
+
+from flask import Flask
+
+
+def create_app():
+    """REANA Server application factory."""
+    app = Flask(__name__)
+    app.config.from_object('reana_server.config')
+    app.secret_key = "hyper secret key"
+
+    # Register API routes
+    from .rest import ping  # noqa
+    app.register_blueprint(ping.ping_bp, url_prefix='/api')
+
+    return app
