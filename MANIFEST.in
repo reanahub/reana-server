@@ -26,6 +26,7 @@ include scripts/*.py
 include docs/requirements.txt
 include Dockerfile
 recursive-include reana_server *.py
+recursive-include reana_server *.json
 prune docs/_build
 recursive-include docs *.py
 recursive-include docs *.png

@@ -35,7 +35,7 @@ tests_require = [
     'apispec>=0.21.0',
     'check-manifest>=0.25',
     'coverage>=4.0',
-    'isort>=4.2.2',
+    'isort>=4.2.15',
     'marshmallow>=2.13',
     'pydocstyle>=1.0.0',
     'pytest-cache>=1.0',
@@ -67,7 +67,8 @@ setup_requires = [
 
 install_requires = [
     'click>=6.7',
-    'Flask>=0.11'
+    'Flask>=0.11',
+    'bravado>=9.0.6',
 ]
 
 packages = find_packages()
@@ -90,6 +91,7 @@ setup(
     url='https://github.com/reanahub/reana-server',
     packages=['reana_server'],
     zip_safe=False,
+    include_package_data=True,
     extras_require=extras_require,
     install_requires=install_requires,
     setup_requires=setup_requires,

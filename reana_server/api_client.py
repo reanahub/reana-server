@@ -19,39 +19,35 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-"""Reana-Server Ping-functionality Flask-Blueprint."""
+"""REST API client generator."""
 
-from flask import Blueprint, jsonify
+import json
+import os
+
+import pkg_resources
+from bravado.client import SwaggerClient
+
+from .config import COMPONENTS_DATA
 
 
-blueprint = Blueprint('ping', __name__)
+def get_spec(spec_file):
+    """Get json specification from package data."""
+    spec_file_path = os.path.join(
+        pkg_resources.resource_filename('reana_server',
+                                        'openapi_connections'),
+        spec_file)
+    with open(spec_file_path) as f:
+        json_spec = json.load(f)
+    return json_spec
 
 
-@blueprint.route('/ping', methods=['GET'])
-def ping():  # noqa
-    r"""Endpoint to ping the server. Responds with a pong.
-    ---
-    get:
-      summary: Ping the server (healthcheck)
-      description: >-
-        Ping the server.
-      produces:
-       - application/json
-      responses:
-        200:
-          description: >-
-            Ping succeeded. Service is running and accessible.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-              status:
-                type: string
-          examples:
-            application/json:
-              message: OK
-              status: 200
-    """
-
-    return jsonify(message="OK", status="200"), 200
+def create_openapi_client(component):
+    """Create a OpenAPI client for a given spec."""
+    try:
+        address, spec_file = COMPONENTS_DATA[component]
+        json_spec = get_spec(spec_file)
+        client = SwaggerClient.from_spec(json_spec)
+        client.swagger_spec.api_url = address
+        return client
+    except KeyError:
+        raise Exception('Unkown component {}'.format(component))

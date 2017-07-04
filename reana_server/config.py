@@ -20,3 +20,19 @@
 # submit itself to any jurisdiction.
 
 """Flask application configuration."""
+
+import os
+
+COMPONENTS_DATA = {
+    'reana-workflow-controller': (
+        'http://{address}:{port}'.format(
+            address=os.getenv('WORKFLOW_CONTROLLER_SERVICE_HOST', '0.0.0.0'),
+            port=os.getenv('WORKFLOW_CONTROLLER_SERVICE_PORT_HTTP', '5000')),
+        'reana_workflow_controller.json')
+}
+"""REANA Workflow Controller address."""
+
+AVAILABLE_WORKFLOW_ENGINES = [
+    'yadage',
+]
+"""Available workflow engines."""

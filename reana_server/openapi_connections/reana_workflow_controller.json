@@ -1,21 +1,38 @@
 {
   "definitions": {},
   "info": {
-    "description": "Submit workflows to be run on REANA Cloud",
-    "title": "REANA Server",
+    "description": "Submit and manage workflows",
+    "title": "REANA Workflow Controller",
     "version": "0.1"
   },
   "parameters": {},
   "paths": {
-    "/api/analyses": {
+    "/api/workflows": {
       "get": {
-        "description": "This resource return all analyses in JSON format.",
+        "description": "This resource is expecting an organization name and an user UUID. The information related to all workflows for a given user will be served as JSON",
+        "operationId": "get_workflows",
+        "parameters": [
+          {
+            "description": "Required. Organization which the worklow belongs to.",
+            "in": "query",
+            "name": "organization",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          }
+        ],
         "produces": [
           "application/json"
         ],
         "responses": {
           "200": {
-            "description": "Request succeeded. The response contains the list of all analyses.",
+            "description": "Requests succeeded. The response contains the current workflows for a given user and organization.",
             "examples": {
               "application/json": [
                 {
@@ -65,6 +82,9 @@
               "type": "array"
             }
           },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed."
+          },
           "500": {
             "description": "Request failed. Internal controller error.",
             "examples": {
@@ -74,11 +94,13 @@
             }
           }
         },
-        "summary": "Returns list of all analyses."
-      },
+        "summary": "Returns all workflows."
+      }
+    },
+    "/api/yadage": {
       "post": {
         "consumes": [
-          "multipart/form-data"
+          "application/json"
         ],
         "description": "This resource is expecting JSON data with all the necessary informations to instantiate a yadage workflow.",
         "operationId": "create_yadage_workflow",
@@ -98,18 +120,27 @@
             "type": "string"
           },
           {
-            "description": "Required. Name of the workflow engine to be used.",
-            "in": "query",
-            "name": "workflow_engine",
+            "description": "Specification with necessary data to instantiate a yadage workflow.",
+            "in": "body",
+            "name": "yadage_payload",
             "required": true,
-            "type": "string"
-          },
-          {
-            "description": "Specification with necessary data to instantiate an analysis for the given workflow engine.",
-            "in": "formData",
-            "name": "analysis_payload",
-            "required": true,
-            "type": "file"
+            "schema": {
+              "properties": {
+                "nparallel": {
+                  "type": "string"
+                },
+                "preset_pars": {
+                  "type": "object"
+                },
+                "toplevel": {
+                  "type": "string"
+                },
+                "workflow": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         ],
         "produces": [
@@ -120,7 +151,7 @@
             "description": "Request succeeded. The workflow has been instantiated.",
             "examples": {
               "application/json": {
-                "message": "Analysis successfully launched",
+                "message": "Workflow successfully launched",
                 "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
               }
             },
@@ -141,37 +172,6 @@
           }
         },
         "summary": "Creates a new yadage workflow."
-      }
-    },
-    "/api/ping": {
-      "get": {
-        "description": "Ping the server.",
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Ping succeeded. Service is running and accessible.",
-            "examples": {
-              "application/json": {
-                "message": "OK",
-                "status": 200
-              }
-            },
-            "schema": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                },
-                "status": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Ping the server (healthcheck)"
       }
     }
   },
