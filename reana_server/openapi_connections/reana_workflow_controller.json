@@ -97,13 +97,13 @@
         "summary": "Returns all workflows."
       }
     },
-    "/api/yadage": {
+    "/api/yadage/remote": {
       "post": {
         "consumes": [
           "application/json"
         ],
-        "description": "This resource is expecting JSON data with all the necessary informations to instantiate a yadage workflow.",
-        "operationId": "create_yadage_workflow",
+        "description": "This resource is expecting JSON data with all the necessary information to instantiate a yadage workflow from a remote repository.",
+        "operationId": "run_yadage_workflow_from_remote",
         "parameters": [
           {
             "description": "Required. Organization which the worklow belongs to.",
@@ -120,22 +120,25 @@
             "type": "string"
           },
           {
-            "description": "Specification with necessary data to instantiate a yadage workflow.",
+            "description": "Workflow information in JSON format with all the necessary data to instantiate a yadage workflow from a remote repository such as GitHub.",
             "in": "body",
-            "name": "yadage_payload",
+            "name": "workflow_data",
             "required": true,
             "schema": {
               "properties": {
                 "nparallel": {
-                  "type": "string"
+                  "type": "integer"
                 },
                 "preset_pars": {
+                  "description": "Workflow parameters.",
                   "type": "object"
                 },
                 "toplevel": {
+                  "description": "Yadage toplevel argument. It represents the remote repository where the workflow should be pulled from.",
                   "type": "string"
                 },
                 "workflow": {
+                  "description": "Yadage workflow parameter. It represents the name of the workflow spec file name inside the remote repository.",
                   "type": "string"
                 }
               },
@@ -171,7 +174,80 @@
             "description": "Request failed. The incoming data specification seems malformed"
           }
         },
-        "summary": "Creates a new yadage workflow."
+        "summary": "Creates a new yadage workflow from a remote repository."
+      }
+    },
+    "/api/yadage/spec": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "This resource is expecting a JSON yadage specification.",
+        "operationId": "run_yadage_workflow_from_spec",
+        "parameters": [
+          {
+            "description": "Required. Organization which the worklow belongs to.",
+            "in": "query",
+            "name": "organization",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "JSON object including workflow parameters and workflow specification in JSON format (`yadageschemas.load()` output) with necessary data to instantiate a yadage workflow.",
+            "in": "body",
+            "name": "workflow",
+            "required": true,
+            "schema": {
+              "properties": {
+                "parameters": {
+                  "description": "Workflow parameters.",
+                  "type": "object"
+                },
+                "workflow_spec": {
+                  "description": "Yadage specification in JSON format.",
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The workflow has been instantiated.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow successfully launched",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "workflow_id": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed"
+          }
+        },
+        "summary": "Creates a new yadage workflow from a specification file."
       }
     }
   },
