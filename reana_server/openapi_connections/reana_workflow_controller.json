@@ -324,6 +324,79 @@
         },
         "summary": "Creates a new yadage workflow from a specification file."
       }
+    },
+    "/api/cwl/spec": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "This resource is expecting a JSON cwl specification.",
+        "operationId": "run_cwl_workflow_from_spec",
+        "parameters": [
+          {
+            "description": "Required. Organization which the worklow belongs to.",
+            "in": "query",
+            "name": "organization",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "JSON object including workflow parameters and workflow specification in JSON format (`cwlschemas.load()` output) with necessary data to instantiate a cwl workflow.",
+            "in": "body",
+            "name": "workflow",
+            "required": true,
+            "schema": {
+              "properties": {
+                "parameters": {
+                  "description": "Workflow inputs",
+                  "type": "object"
+                },
+                "workflow_spec": {
+                  "description": "cwl specification filename",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The workflow has been instantiated.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow successfully launched",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "workflow_id": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed"
+          }
+        },
+        "summary": "Creates a new cwl workflow from a specification file."
+      }
     }
   },
   "swagger": "2.0",
