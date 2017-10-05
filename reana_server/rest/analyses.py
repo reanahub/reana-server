@@ -191,6 +191,15 @@ def create_analysis():  # noqa
                     },
                     user=request.args.get('user'),
                     organization=request.args.get('organization')).result()
+        elif workflow_engine == 'cwl':
+            # From spec file
+            res = rwc_api_client.api.run_cwl_workflow_from_spec(
+                workflow={
+                    'parameters': reana_spec_file['parameters']['input'],
+                    'workflow_spec': reana_spec_file['workflow']['spec'],
+                },
+                user=request.args.get('user'),
+                organization=request.args.get('organization')).result()
 
             return jsonify(res), 200
     except KeyError as e:
