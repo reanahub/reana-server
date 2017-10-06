@@ -97,6 +97,81 @@
         "summary": "Returns all workflows."
       }
     },
+    "/api/workflows/{workflow_id}/workspace": {
+      "post": {
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "description": "This resource is expecting a workflow UUID and a file to place in the workflow workspace.",
+        "operationId": "seed_workflow",
+        "parameters": [
+          {
+            "description": "Required. Organization which the worklow belongs to.",
+            "in": "query",
+            "name": "organization",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Workflow UUID.",
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. File to add to the workflow workspace.",
+            "in": "formData",
+            "name": "file_content",
+            "required": true,
+            "type": "file"
+          },
+          {
+            "description": "Required. File name.",
+            "in": "query",
+            "name": "file_name",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The file has been added to the workspace.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow has been added to the workspace",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "workflow_id": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed"
+          }
+        },
+        "summary": "Adds a file to the workflow workspace."
+      }
+    },
     "/api/yadage/remote": {
       "post": {
         "consumes": [

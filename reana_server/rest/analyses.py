@@ -21,8 +21,6 @@
 
 """Reana-Server Ping-functionality Flask-Blueprint."""
 
-import json
-
 from flask import current_app as app
 from flask import Blueprint, jsonify, request
 
@@ -34,13 +32,13 @@ rwc_api_client = create_openapi_client('reana-workflow-controller')
 
 @blueprint.route('/analyses', methods=['GET'])
 def get_analyses():  # noqa
-    r"""Get all analyses.
+    r"""Get all current analyses in REANA.
 
     ---
     get:
-      summary: Returns list of all analyses.
+      summary: Returns list of all current analyses in REANA.
       description: >-
-        This resource return all analyses in JSON format.
+        This resource return all current analyses in JSON format.
       produces:
        - application/json
       responses:
@@ -98,10 +96,10 @@ def get_analyses():  # noqa
               }
     """
     try:
-        res = rwc_api_client.api.get_workflows(
+        response, status_code = rwc_api_client.api.get_workflows(
             organization='default',
             user='00000000-0000-0000-0000-000000000000').result()
-        return jsonify(res), 200
+        return jsonify(response), status_code
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
@@ -115,7 +113,7 @@ def create_analysis():  # noqa
       summary: Creates a new yadage workflow.
       description: >-
         This resource is expecting JSON data with all the necessary
-        informations to instantiate a yadage workflow.
+        information to instantiate a yadage workflow.
       operationId: create_analysis
       consumes:
         - application/json
@@ -167,10 +165,12 @@ def create_analysis():  # noqa
             Request failed. The incoming data specification seems malformed
     """
     try:
+        reana_spec_file = None
+        reana_spec_url = None
         if request.json:
             # validate against schema
-            reana_spec_file = request.json
-            workflow_engine = reana_spec_file['workflow']['type']
+            reana_spec = request.json
+            workflow_engine = reana_spec['workflow']['type']
         elif request.args.get('spec'):
             # TODO implement load workflow engine from remote
             return jsonify('Not implemented'), 501
@@ -182,17 +182,94 @@ def create_analysis():  # noqa
             raise Exception('Unknown workflow engine')
 
         if workflow_engine == 'yadage':
-            if 'reana_spec_file' in locals():
+            if reana_spec_file:
                 # From spec file
-                res = rwc_api_client.api.run_yadage_workflow_from_spec(
-                    workflow={
-                        'parameters': reana_spec_file['parameters'],
-                        'workflow_spec': reana_spec_file['workflow']['spec'],
-                    },
-                    user=request.args.get('user'),
-                    organization=request.args.get('organization')).result()
+                (response, status_code) = \
+                    rwc_api_client.api.run_yadage_workflow_from_spec(
+                        workflow={
+                            'parameters': reana_spec['parameters'],
+                            'workflow_spec': reana_spec['workflow']['spec'],
+                        },
+                        user=request.args.get('user'),
+                        organization=request.args.get('organization')).result()
 
-            return jsonify(res), 200
+            return jsonify(response), status_code
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/analyses/<analysis_id>/workspace', methods=['POST'])
+def seed_analysis(analysis_id):  # noqa
+    r"""Seed analysis with files.
+
+    ---
+    post:
+      summary: Seeds the analysis workspace with the provided file.
+      description: >-
+        This resource expects a file which will be placed in the analysis
+        workspace identified by the UUID `analysis_id`.
+      operationId: seed_analysis
+      consumes:
+        - multipart/form-data
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the analysis belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of analysis owner.
+          required: true
+          type: string
+        - name: analysis_id
+          in: path
+          description: Required. Analysis UUID.
+          required: true
+          type: string
+        - name: file_content
+          in: formData
+          description: >-
+            Required. File to be transferred to the analysis workspace.
+          required: true
+          type: file
+        - name: file_name
+          in: query
+          description: Required. File name.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. File successfully trasferred.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "File successfully transferred",
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed
+    """
+    try:
+        file_ = request.files['file_content'].stream.read()
+        response, status_code = rwc_api_client.api.seed_workflow(
+            user=request.args['user'],
+            organization=request.args['organization'],
+            workflow_id=analysis_id,
+            file_content=file_,
+            file_name=request.args['file_name']).result()
+
+        return jsonify(response), status_code
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
