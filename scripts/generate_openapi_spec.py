@@ -79,7 +79,8 @@ def build_openapi_spec():
         if key != 'static' and key != 'get_openapi_spec':
             spec.add_path(view=current_app.view_functions[key])
 
-    spec_json = json.dumps(spec.to_dict(), indent=2, sort_keys=True)
+    spec_json = json.dumps(spec.to_dict(), indent=2,
+                           separators=(',', ': '), sort_keys=True)
 
     # Output spec to JSON file
     with click.open_file(__output_path__, mode='w+',
