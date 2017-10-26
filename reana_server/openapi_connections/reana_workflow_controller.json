@@ -359,8 +359,8 @@
                   "type": "object"
                 },
                 "workflow_spec": {
-                  "description": "cwl specification filename",
-                  "type": "string"
+                  "description": "CWL workflow",
+                  "type": "object"
                 }
               },
               "type": "object"
