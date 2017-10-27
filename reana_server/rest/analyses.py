@@ -110,10 +110,10 @@ def create_analysis():  # noqa
 
     ---
     post:
-      summary: Creates a new yadage workflow.
+      summary: Creates a new workflow based on a REANA specification file.
       description: >-
-        This resource is expecting JSON data with all the necessary
-        information to instantiate a yadage workflow.
+        This resource is expecting a REANA specification in JSON format with
+        all the necessary information to instantiate a workflow.
       operationId: create_analysis
       consumes:
         - application/json
@@ -146,7 +146,7 @@ def create_analysis():  # noqa
       responses:
         200:
           description: >-
-            Request succeeded. The workflow has been instantiated.
+            Request succeeded. The workflow has been created.
           schema:
             type: object
             properties:
@@ -157,7 +157,7 @@ def create_analysis():  # noqa
           examples:
             application/json:
               {
-                "message": "Analysis successfully launched",
+                "message": "The workflow has been successfully created.",
                 "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
               }
         400:
@@ -165,46 +165,30 @@ def create_analysis():  # noqa
             Request failed. The incoming data specification seems malformed
     """
     try:
-        reana_spec_file = None
-        reana_spec_url = None
         if request.json:
             # validate against schema
-            reana_spec = request.json
-            workflow_engine = reana_spec['workflow']['type']
+            reana_spec_file = request.json
+            workflow_engine = reana_spec_file['workflow']['type']
         elif request.args.get('spec'):
-            # TODO implement load workflow engine from remote
+            # TODO implement load reana spec from remote
             return jsonify('Not implemented'), 501
         else:
             raise Exception('Either remote repository or a reana spec need to \
             be provided')
 
         if workflow_engine not in app.config['AVAILABLE_WORKFLOW_ENGINES']:
-            raise Exception('Unknown workflow engine')
+            raise Exception('Unknown workflow type.')
 
-        if workflow_engine == 'yadage':
-            if reana_spec_file:
-                # From spec file
-                (response, status_code) = \
-                    rwc_api_client.api.run_yadage_workflow_from_spec(
-                        workflow={
-                            'parameters': reana_spec['parameters'],
-                            'workflow_spec': reana_spec['workflow']['spec'],
-                        },
-                        user=request.args.get('user'),
-                        organization=request.args.get('organization')).result()
-
-        elif workflow_engine == 'cwl':
-            # From spec file
-            (response, status_code) = rwc_api_client.api.run_cwl_workflow_from_spec(
-                workflow={
-                    'parameters': reana_spec['parameters']['input'],
-                    'workflow_spec': reana_spec['workflow']['spec'],
-                },
-                user=request.args.get('user'),
-                organization=request.args.get('organization')).result()
+        response, status_code = rwc_api_client.api.create_workflow(
+            workflow={
+                'parameters': reana_spec_file['parameters'],
+                'specification': reana_spec_file['workflow']['spec'],
+                'type': reana_spec_file['workflow']['type'],
+            },
+            user=request.args.get('user'),
+            organization=request.args.get('organization')).result()
 
         return jsonify(response), status_code
-
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
