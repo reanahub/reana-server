@@ -80,7 +80,7 @@
         "consumes": [
           "application/json"
         ],
-        "description": "This resource is expecting JSON data with all the necessary information to instantiate a yadage workflow.",
+        "description": "This resource is expecting a REANA specification in JSON format with all the necessary information to instantiate a workflow.",
         "operationId": "create_analysis",
         "parameters": [
           {
@@ -119,10 +119,10 @@
         ],
         "responses": {
           "200": {
-            "description": "Request succeeded. The workflow has been instantiated.",
+            "description": "Request succeeded. The workflow has been created.",
             "examples": {
               "application/json": {
-                "message": "Analysis successfully launched",
+                "message": "The workflow has been successfully created.",
                 "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
               }
             },
@@ -142,7 +142,7 @@
             "description": "Request failed. The incoming data specification seems malformed"
           }
         },
-        "summary": "Creates a new yadage workflow."
+        "summary": "Creates a new workflow based on a REANA specification file."
       }
     },
     "/api/analyses/{analysis_id}/workspace": {
