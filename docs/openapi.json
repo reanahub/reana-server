@@ -118,7 +118,7 @@
           "application/json"
         ],
         "responses": {
-          "200": {
+          "201": {
             "description": "Request succeeded. The workflow has been created.",
             "examples": {
               "application/json": {
@@ -140,6 +140,12 @@
           },
           "400": {
             "description": "Request failed. The incoming data specification seems malformed"
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          },
+          "501": {
+            "description": "Request failed. Not implemented."
           }
         },
         "summary": "Creates a new workflow based on a REANA specification file."

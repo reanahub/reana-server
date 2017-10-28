@@ -150,8 +150,8 @@
           "application/json"
         ],
         "responses": {
-          "200": {
-            "description": "Request succeeded. The file has been added to the workspace.",
+          "201": {
+            "description": "Request succeeded. The workflow has been created along with its workspace",
             "examples": {
               "application/json": {
                 "message": "Workflow workspace has been created.",
