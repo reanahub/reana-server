@@ -96,10 +96,10 @@ def get_analyses():  # noqa
               }
     """
     try:
-        response, status_code = rwc_api_client.api.get_workflows(
+        response, http_response = rwc_api_client.api.get_workflows(
             organization='default',
             user='00000000-0000-0000-0000-000000000000').result()
-        return jsonify(response), status_code
+        return jsonify(response), http_response.status_code
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
@@ -144,7 +144,7 @@ def create_analysis():  # noqa
           schema:
             type: object
       responses:
-        200:
+        201:
           description: >-
             Request succeeded. The workflow has been created.
           schema:
@@ -163,6 +163,12 @@ def create_analysis():  # noqa
         400:
           description: >-
             Request failed. The incoming data specification seems malformed
+        500:
+          description: >-
+            Request failed. Internal controller error.
+        501:
+          description: >-
+            Request failed. Not implemented.
     """
     try:
         if request.json:
@@ -179,7 +185,7 @@ def create_analysis():  # noqa
         if workflow_engine not in app.config['AVAILABLE_WORKFLOW_ENGINES']:
             raise Exception('Unknown workflow type.')
 
-        response, status_code = rwc_api_client.api.create_workflow(
+        response, http_response = rwc_api_client.api.create_workflow(
             workflow={
                 'parameters': reana_spec_file['parameters'],
                 'specification': reana_spec_file['workflow']['spec'],
@@ -188,7 +194,7 @@ def create_analysis():  # noqa
             user=request.args.get('user'),
             organization=request.args.get('organization')).result()
 
-        return jsonify(response), status_code
+        return jsonify(response), http_response.status_code
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
@@ -257,14 +263,14 @@ def seed_analysis(analysis_id):  # noqa
     """
     try:
         file_ = request.files['file_content'].stream.read()
-        response, status_code = rwc_api_client.api.seed_workflow(
+        response, http_response = rwc_api_client.api.seed_workflow(
             user=request.args['user'],
             organization=request.args['organization'],
             workflow_id=analysis_id,
             file_content=file_,
             file_name=request.args['file_name']).result()
 
-        return jsonify(response), status_code
+        return jsonify(response), http_response.status_code
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
     except Exception as e:
