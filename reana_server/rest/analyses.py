@@ -197,8 +197,8 @@ def create_analysis():  # noqa
             # From spec file
             (response, status_code) = rwc_api_client.api.run_cwl_workflow_from_spec(
                 workflow={
-                    'parameters': reana_spec_file['parameters']['input'],
-                    'workflow_spec': reana_spec_file['workflow']['spec'],
+                    'parameters': reana_spec['parameters']['input'],
+                    'workflow_spec': reana_spec['workflow']['spec'],
                 },
                 user=request.args.get('user'),
                 organization=request.args.get('organization')).result()
