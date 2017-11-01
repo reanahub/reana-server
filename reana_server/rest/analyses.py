@@ -19,7 +19,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-"""Reana-Server Ping-functionality Flask-Blueprint."""
+"""Reana-Server analysis-functionality Flask-Blueprint."""
 
 from flask import current_app as app
 from flask import Blueprint, jsonify, request
@@ -39,8 +39,20 @@ def get_analyses():  # noqa
       summary: Returns list of all current analyses in REANA.
       description: >-
         This resource return all current analyses in JSON format.
+      operationId: get_analyses
       produces:
        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the analysis belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of analysis owner.
+          required: true
+          type: string
       responses:
         200:
           description: >-
@@ -97,8 +109,8 @@ def get_analyses():  # noqa
     """
     try:
         response, http_response = rwc_api_client.api.get_workflows(
-            organization='default',
-            user='00000000-0000-0000-0000-000000000000').result()
+            user=request.args.get('user'),
+            organization=request.args.get('organization')).result()
         return jsonify(response), http_response.status_code
     except Exception as e:
         return jsonify({"message": str(e)}), 500
