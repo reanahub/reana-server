@@ -111,6 +111,7 @@ def get_analyses():  # noqa
         response, http_response = rwc_api_client.api.get_workflows(
             user=request.args.get('user'),
             organization=request.args.get('organization')).result()
+
         return jsonify(response), http_response.status_code
     except Exception as e:
         return jsonify({"message": str(e)}), 500
@@ -281,6 +282,98 @@ def seed_analysis(analysis_id):  # noqa
             workflow_id=analysis_id,
             file_content=file_,
             file_name=request.args['file_name']).result()
+
+        return jsonify(response), http_response.status_code
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/analyses/<analysis_id>/status', methods=['GET'])
+def analysis_status(analysis_id):  # noqa
+    r"""Get analysis status.
+
+    ---
+    get:
+      summary: Get status of an analysis.
+      description: >-
+        This resource reports the status of an analysis.
+        Resource is expecting a analysis UUID.
+      operationId: get_analysis_status
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: analysis_id
+          in: path
+          description: Required. Analysis UUID.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. Info about an analysis, including the status is
+            returned.
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+              organization:
+                type: string
+              status:
+                type: string
+              user:
+                type: string
+          examples:
+            application/json:
+              {
+                "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "organization": "default_org",
+                "status": "created",
+                "user": "00000000-0000-0000-0000-000000000000"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        user = request.args['user'],
+        organization = request.args['organization'],
+        workflow_id = analysis_id
+
+        response, http_response = rwc_api_client.api.get_workflow_status(
+            user=request.args['user'],
+            organization=request.args['organization'],
+            workflow_id=analysis_id).result()
 
         return jsonify(response), http_response.status_code
     except KeyError as e:

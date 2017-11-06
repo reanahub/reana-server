@@ -185,6 +185,96 @@
         "summary": "Create workflow and its workspace."
       }
     },
+    "/api/workflows/{workflow_id}/status": {
+      "get": {
+        "description": "This resource reports the status of workflow.",
+        "operationId": "get_workflow_status",
+        "parameters": [
+          {
+            "description": "Required. Organization which the workflow belongs to.",
+            "in": "query",
+            "name": "organization",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Workflow UUID.",
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. Info about workflow, including the status is returned.",
+            "examples": {
+              "application/json": {
+                "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "organization": "default_org",
+                "status": "running",
+                "user": "00000000-0000-0000-0000-000000000000"
+              }
+            },
+            "schema": {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "organization": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "user": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Malformed request."
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. Either User or Workflow doesn't exist.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 doesn't exist"
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Get workflow status."
+      }
+    },
     "/api/workflows/{workflow_id}/workspace": {
       "post": {
         "consumes": [
