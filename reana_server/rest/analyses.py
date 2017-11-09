@@ -20,7 +20,7 @@
 # submit itself to any jurisdiction.
 
 """Reana-Server analysis-functionality Flask-Blueprint."""
-
+from bravado.exception import HTTPForbidden, HTTPBadRequest, HTTPNotFound
 from flask import current_app as app
 from flask import Blueprint, jsonify, request
 
@@ -378,5 +378,113 @@ def analysis_status(analysis_id):  # noqa
         return jsonify(response), http_response.status_code
     except KeyError as e:
         return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/analyses/<analysis_id>/status', methods=['PUT'])
+def set_analysis_status(analysis_id):  # noqa
+    r"""Set analysis status.
+    ---
+    put:
+      summary: Set status of an analysis.
+      description: >-
+        This resource reports the status of an analysis.
+        Resource is expecting a analysis UUID.
+      operationId: set_analysis_status
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: analysis_id
+          in: path
+          description: Required. Analysis UUID.
+          required: true
+          type: string
+        - name: status
+          in: body
+          description: Required. New analysis status.
+          required: true
+          schema:
+            type: string
+            description: Required. New status.
+      responses:
+        200:
+          description: >-
+            Request succeeded. Info about an analysis, including the status is
+            returned.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+              organization:
+                type: string
+              status:
+                type: string
+              user:
+                type: string
+          examples:
+            application/json:
+              {
+                "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "organization": "default_org",
+                "status": "created",
+                "user": "00000000-0000-0000-0000-000000000000"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        user = request.args['user']
+        organization = request.args['organization']
+        workflow_id = analysis_id
+        status = request.json
+
+        response, http_response = rwc_api_client.api.set_workflow_status(
+            user=user,
+            organization=organization,
+            workflow_id=workflow_id,
+            status=status).result()
+
+        return jsonify(response), http_response.status_code
+    except (KeyError, HTTPBadRequest) as e:
+        return jsonify({"message": str(e)}), 400
+    except HTTPForbidden as e:
+        return jsonify({"message": str(e)}), 403
+    except HTTPNotFound as e:
+        return jsonify({"message": str(e)}), 404
     except Exception as e:
         return jsonify({"message": str(e)}), 500
