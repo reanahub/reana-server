@@ -474,7 +474,7 @@ def set_analysis_status(analysis_id):  # noqa
             user=user,
             organization=organization,
             workflow_id=workflow_id,
-        status=status).result()
+            status=status).result()
 
         return jsonify(response), http_response.status_code
     except KeyError as e:
