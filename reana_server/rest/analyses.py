@@ -20,7 +20,7 @@
 # submit itself to any jurisdiction.
 
 """Reana-Server analysis-functionality Flask-Blueprint."""
-
+from bravado.exception import HTTPForbidden, HTTPBadRequest, HTTPNotFound
 from flask import current_app as app
 from flask import Blueprint, jsonify, request
 
@@ -418,6 +418,7 @@ def set_analysis_status(analysis_id):  # noqa
           required: true
           schema:
             type: string
+            description: Required. New status.
       responses:
         200:
           description: >-
@@ -426,7 +427,9 @@ def set_analysis_status(analysis_id):  # noqa
           schema:
             type: object
             properties:
-              id:
+              message:
+                type: string
+              workflow_id:
                 type: string
               organization:
                 type: string
@@ -477,7 +480,11 @@ def set_analysis_status(analysis_id):  # noqa
             status=status).result()
 
         return jsonify(response), http_response.status_code
-    except KeyError as e:
+    except (KeyError, HTTPBadRequest) as e:
         return jsonify({"message": str(e)}), 400
+    except HTTPForbidden as e:
+        return jsonify({"message": str(e)}), 403
+    except HTTPNotFound as e:
+        return jsonify({"message": str(e)}), 404
     except Exception as e:
         return jsonify({"message": str(e)}), 500

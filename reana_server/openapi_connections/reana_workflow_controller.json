@@ -458,6 +458,7 @@
             "name": "status",
             "required": true,
             "schema": {
+              "description": "Required. New status.",
               "type": "string"
             }
           }
@@ -470,15 +471,16 @@
             "description": "Request succeeded. Info about workflow, including the status is returned.",
             "examples": {
               "application/json": {
-                "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "message": "Workflow successfully launched",
                 "organization": "default_org",
                 "status": "running",
-                "user": "00000000-0000-0000-0000-000000000000"
+                "user": "00000000-0000-0000-0000-000000000000",
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
             },
             "schema": {
               "properties": {
-                "id": {
+                "message": {
                   "type": "string"
                 },
                 "organization": {
@@ -488,6 +490,9 @@
                   "type": "string"
                 },
                 "user": {
+                  "type": "string"
+                },
+                "workflow_id": {
                   "type": "string"
                 }
               },
