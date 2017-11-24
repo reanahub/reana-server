@@ -290,6 +290,94 @@ def seed_analysis(analysis_id):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
+@blueprint.route('/analyses/<analysis_id>/logs', methods=['GET'])
+def get_analysis_logs(analysis_id):  # noqa
+    r"""Get analysis logs.
+
+    ---
+    get:
+      summary: Get workflow logs of an analysis.
+      description: >-
+        This resource reports the status of an analysis.
+        Resource is expecting a analysis UUID.
+      operationId: get_analysis_logs
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the worklow belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of workflow owner.
+          required: true
+          type: string
+        - name: analysis_id
+          in: path
+          description: Required. Analysis UUID.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. Info about an analysis, including the status is
+            returned.
+          schema:
+            type: object
+            properties:
+              workflow_id:
+                type: string
+              organization:
+                type: string
+              logs:
+                type: string
+              user:
+                type: string
+          examples:
+            application/json:
+              {
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "organization": "default_org",
+                "logs": "<Workflow engine log output>",
+                "user": "00000000-0000-0000-0000-000000000000"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        response, http_response = rwc_api_client.api.get_workflow_logs(
+            user=request.args['user'],
+            organization=request.args['organization'],
+            workflow_id=analysis_id).result()
+
+        return jsonify(response), http_response.status_code
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
 @blueprint.route('/analyses/<analysis_id>/status', methods=['GET'])
 def analysis_status(analysis_id):  # noqa
     r"""Get analysis status.
