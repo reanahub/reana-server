@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017 CERN.
+# Copyright (C) 2017, 2018 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -20,9 +20,11 @@
 # submit itself to any jurisdiction.
 
 """Reana-Server analysis-functionality Flask-Blueprint."""
-from bravado.exception import HTTPForbidden, HTTPBadRequest, HTTPNotFound
+import io
+
+from bravado.exception import HTTPBadRequest, HTTPForbidden, HTTPNotFound
 from flask import current_app as app
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 
 from ..api_client import create_openapi_client
 
@@ -488,3 +490,90 @@ def set_analysis_status(analysis_id):  # noqa
         return jsonify({"message": str(e)}), 404
     except Exception as e:
         return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route(
+    '/analyses/<analysis_id>/workspace/outputs/<path:file_name>',
+    methods=['GET'])
+def get_analysis_outputs_file(analysis_id, file_name):  # noqa
+    r"""Get analysis status.
+
+    ---
+    get:
+      summary: Returns the requested file.
+      description: >-
+        This resource is expecting a workflow UUID and a file name to return
+        its content.
+      operationId: get_analysis_outputs_file
+      produces:
+        - multipart/form-data
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the analysis belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of analysis owner.
+          required: true
+          type: string
+        - name: analysis_id
+          in: path
+          description: Required. analysis UUID.
+          required: true
+          type: string
+        - name: file_name
+          in: path
+          description: Required. Name (or path) of the file to be downloaded.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The file has been downloaded.
+          schema:
+            type: file
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+        404:
+          description: >-
+            Request failed. `file_name` does not exist .
+          examples:
+            application/json:
+              {
+                "message": "input.csv does not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Either organization or user doesn't exist."
+              }
+    """
+    try:
+        user = request.args['user'],
+        organization = request.args['organization'],
+        workflow_id = analysis_id
+
+        response, http_response = rwc_api_client.api.get_workflow_outputs_file(
+            user=request.args['user'],
+            organization=request.args['organization'],
+            workflow_id=analysis_id,
+            file_name=file_name).result()
+
+        return send_file(
+            io.BytesIO(http_response.raw_bytes),
+            attachment_filename=file_name,
+            mimetype='multipart/form-data'), 200
+    except (KeyError, HTTPBadRequest) as e:
+        return jsonify({"message": str(e)}), 400
+    except HTTPForbidden as e:
+        return jsonify(e.response.json()), 403
+    except HTTPNotFound as e:
+        return jsonify(e.response.json()), 404
+    except Exception as e:
+        return jsonify(e.response.json()), 500

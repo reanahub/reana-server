@@ -652,10 +652,10 @@
             "description": "Request failed. The incoming data specification seems malformed."
           },
           "404": {
-            "description": "Request failed. User doesn't exist.",
+            "description": "Request failed. `file_name` does not exist.",
             "examples": {
               "application/json": {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't exist"
+                "message": "input.csv does not exist"
               }
             }
           },
