@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2017 CERN.
+# Copyright (C) 2017, 2018 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -19,9 +19,19 @@
 # submit itself to any jurisdiction.
 
 FROM python:3.5
+
+ENV TERM=xterm
+RUN apt-get update && \
+    apt-get install -y vim-tiny
+
 ADD . /code
 WORKDIR /code
-RUN pip install -e .[all]
+
+# Debug off by default
+ARG DEBUG=false
+
+RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip install -e .[all]; else pip install .[all]; fi;
+
 RUN adduser --uid 1000 --disabled-password --gecos '' reanauser && \
     chown -R reanauser:reanauser /code
 USER reanauser
