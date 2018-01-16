@@ -18,7 +18,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-FROM python:3.5
+FROM python:3.6
 
 ENV TERM=xterm
 RUN apt-get update && \
