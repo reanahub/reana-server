@@ -577,3 +577,87 @@ def get_analysis_outputs_file(analysis_id, file_name):  # noqa
         return jsonify(e.response.json()), 404
     except Exception as e:
         return jsonify(e.response.json()), 500
+
+
+@blueprint.route('/analyses/<analysis_id>/workspace/inputs/', methods=['GET'])
+def get_analysis_inputs_list(analysis_id):  # noqa
+    r"""List all analysis input files.
+
+    ---
+    get:
+      summary: Returns the list of input files for a specific analysis.
+      description: >-
+        This resource is expecting an analysis UUID to return its list of
+        input files.
+      operationId: get_analysis_inputs
+      produces:
+       - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the analysis belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of analysis owner.
+          required: true
+          type: string
+        - name: analysis_id
+          in: path
+          description: Required. analysis UUID.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The list of input files has been retrieved.
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                last-modified:
+                  type: string
+                  format: date-time
+                size:
+                  type: integer
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+        404:
+          description: >-
+            Request failed. Analysis does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Analysis 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
+                            not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Either organization or user doesn't exist."
+              }
+    """
+    try:
+        response, http_response = rwc_api_client.api.get_workflow_inputs(
+            user=request.args.get('user'),
+            organization=request.args.get('organization'),
+            workflow_id=analysis_id).result()
+
+        return jsonify(http_response.json()), http_response.status_code
+    except (KeyError, HTTPBadRequest) as e:
+        return jsonify({"message": str(e)}), 400
+    except HTTPForbidden as e:
+        return jsonify(e.response.json()), 403
+    except HTTPNotFound as e:
+        return jsonify({"message": "Analysis {0} does not exist".
+                        format(analysis_id)}), 404
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
