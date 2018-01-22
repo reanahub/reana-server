@@ -293,6 +293,83 @@ def seed_analysis_input(analysis_id):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
+@blueprint.route('/analyses/<analysis_id>/workspace/code', methods=['POST'])
+def seed_analysis_code(analysis_id):  # noqa
+    r"""Seed analysis with code files.
+
+    ---
+    post:
+      summary: Seeds the analysis workspace with the provided file.
+      description: >-
+        This resource expects a file which will be placed in the analysis
+        workspace identified by the UUID `analysis_id`.
+      operationId: seed_analysis_code
+      consumes:
+        - multipart/form-data
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the analysis belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of analysis owner.
+          required: true
+          type: string
+        - name: analysis_id
+          in: path
+          description: Required. Analysis UUID.
+          required: true
+          type: string
+        - name: file_content
+          in: formData
+          description: >-
+            Required. File to be transferred to the analysis workspace.
+          required: true
+          type: file
+        - name: file_name
+          in: query
+          description: Required. File name.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. File successfully trasferred.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "File successfully transferred",
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed
+    """
+    try:
+        file_ = request.files['file_content'].stream.read()
+        response, http_response = rwc_api_client.api.seed_workflow_files(
+            user=request.args['user'],
+            organization=request.args['organization'],
+            workflow_id=analysis_id,
+            file_content=file_,
+            file_name=request.args['file_name'],
+            file_type='code').result()
+
+        return jsonify(response), http_response.status_code
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
 @blueprint.route('/analyses/<analysis_id>/status', methods=['GET'])
 def analysis_status(analysis_id):  # noqa
     r"""Get analysis status.
