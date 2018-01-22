@@ -216,9 +216,9 @@ def create_analysis():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id>/workspace', methods=['POST'])
-def seed_analysis(analysis_id):  # noqa
-    r"""Seed analysis with files.
+@blueprint.route('/analyses/<analysis_id>/workspace/inputs', methods=['POST'])
+def seed_analysis_input(analysis_id):  # noqa
+    r"""Seed analysis with input files.
 
     ---
     post:
@@ -226,7 +226,7 @@ def seed_analysis(analysis_id):  # noqa
       description: >-
         This resource expects a file which will be placed in the analysis
         workspace identified by the UUID `analysis_id`.
-      operationId: seed_analysis
+      operationId: seed_analysis_inputs
       consumes:
         - multipart/form-data
       produces:
@@ -278,12 +278,13 @@ def seed_analysis(analysis_id):  # noqa
     """
     try:
         file_ = request.files['file_content'].stream.read()
-        response, http_response = rwc_api_client.api.seed_workflow(
+        response, http_response = rwc_api_client.api.seed_workflow_files(
             user=request.args['user'],
             organization=request.args['organization'],
             workflow_id=analysis_id,
             file_content=file_,
-            file_name=request.args['file_name']).result()
+            file_name=request.args['file_name'],
+            file_type='input').result()
 
         return jsonify(response), http_response.status_code
     except KeyError as e:
@@ -646,10 +647,11 @@ def get_analysis_inputs_list(analysis_id):  # noqa
               }
     """
     try:
-        response, http_response = rwc_api_client.api.get_workflow_inputs(
+        response, http_response = rwc_api_client.api.get_workflow_files(
             user=request.args.get('user'),
             organization=request.args.get('organization'),
-            workflow_id=analysis_id).result()
+            workflow_id=analysis_id,
+            file_type='input').result()
 
         return jsonify(http_response.json()), http_response.status_code
     except (KeyError, HTTPBadRequest) as e:
@@ -730,10 +732,11 @@ def get_analysis_outputs_list(analysis_id):  # noqa
               }
     """
     try:
-        response, http_response = rwc_api_client.api.get_workflow_outputs(
+        response, http_response = rwc_api_client.api.get_workflow_files(
             user=request.args.get('user'),
             organization=request.args.get('organization'),
-            workflow_id=analysis_id).result()
+            workflow_id=analysis_id,
+            file_type='output').result()
 
         return jsonify(http_response.json()), http_response.status_code
     except (KeyError, HTTPBadRequest) as e:

@@ -346,13 +346,13 @@
         "summary": "Set status of an analysis."
       }
     },
-    "/api/analyses/{analysis_id}/workspace": {
+    "/api/analyses/{analysis_id}/workspace/inputs": {
       "post": {
         "consumes": [
           "multipart/form-data"
         ],
         "description": "This resource expects a file which will be placed in the analysis workspace identified by the UUID `analysis_id`.",
-        "operationId": "seed_analysis",
+        "operationId": "seed_analysis_inputs",
         "parameters": [
           {
             "description": "Required. Organization which the analysis belongs to.",
