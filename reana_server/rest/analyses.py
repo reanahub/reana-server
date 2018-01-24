@@ -177,7 +177,7 @@ def create_analysis():  # noqa
               }
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed
+            Request failed. The incoming payload seems malformed
         500:
           description: >-
             Request failed. Internal controller error.
@@ -274,7 +274,7 @@ def seed_analysis_input(analysis_id):  # noqa
               }
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed
+            Request failed. The incoming payload seems malformed
     """
     try:
         file_ = request.files['file_content'].stream.read()
@@ -351,7 +351,7 @@ def seed_analysis_code(analysis_id):  # noqa
               }
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed
+            Request failed. The incoming payload seems malformed
     """
     try:
         file_ = request.files['file_content'].stream.read()
@@ -425,7 +425,7 @@ def analysis_status(analysis_id):  # noqa
               }
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed.
+            Request failed. The incoming payload seems malformed.
           examples:
             application/json:
               {
@@ -527,7 +527,7 @@ def set_analysis_status(analysis_id):  # noqa
               }
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed.
+            Request failed. The incoming payload seems malformed.
           examples:
             application/json:
               {
@@ -614,7 +614,7 @@ def get_analysis_outputs_file(analysis_id, file_name):  # noqa
             type: file
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed.
+            Request failed. The incoming payload seems malformed.
         404:
           description: >-
             Request failed. `file_name` does not exist .
@@ -704,7 +704,7 @@ def get_analysis_inputs_list(analysis_id):  # noqa
                   type: integer
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed.
+            Request failed. The incoming payload seems malformed.
         404:
           description: >-
             Request failed. Analysis does not exist.
@@ -789,7 +789,7 @@ def get_analysis_code_list(analysis_id):  # noqa
                   type: integer
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed.
+            Request failed. The incoming payload seems malformed.
         404:
           description: >-
             Request failed. Analysis does not exist.
@@ -874,7 +874,7 @@ def get_analysis_outputs_list(analysis_id):  # noqa
                   type: integer
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed.
+            Request failed. The incoming payload seems malformed.
         404:
           description: >-
             Request failed. Analysis does not exist.

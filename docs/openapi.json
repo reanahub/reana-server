@@ -156,7 +156,7 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming data specification seems malformed"
+            "description": "Request failed. The incoming payload seems malformed"
           },
           "500": {
             "description": "Request failed. Internal controller error."
@@ -228,7 +228,7 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming data specification seems malformed.",
+            "description": "Request failed. The incoming payload seems malformed.",
             "examples": {
               "application/json": {
                 "message": "Malformed request."
@@ -324,7 +324,7 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming data specification seems malformed.",
+            "description": "Request failed. The incoming payload seems malformed.",
             "examples": {
               "application/json": {
                 "message": "Malformed request."
@@ -411,7 +411,7 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming data specification seems malformed"
+            "description": "Request failed. The incoming payload seems malformed"
           }
         },
         "summary": "Seeds the analysis workspace with the provided file."
@@ -470,7 +470,7 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming data specification seems malformed."
+            "description": "Request failed. The incoming payload seems malformed."
           },
           "404": {
             "description": "Request failed. Analysis does not exist.",
@@ -557,7 +557,7 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming data specification seems malformed"
+            "description": "Request failed. The incoming payload seems malformed"
           }
         },
         "summary": "Seeds the analysis workspace with the provided file."
@@ -616,7 +616,7 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming data specification seems malformed."
+            "description": "Request failed. The incoming payload seems malformed."
           },
           "404": {
             "description": "Request failed. Analysis does not exist.",
@@ -691,7 +691,7 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming data specification seems malformed."
+            "description": "Request failed. The incoming payload seems malformed."
           },
           "404": {
             "description": "Request failed. Analysis does not exist.",
@@ -758,7 +758,7 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming data specification seems malformed."
+            "description": "Request failed. The incoming payload seems malformed."
           },
           "404": {
             "description": "Request failed. `file_name` does not exist .",
