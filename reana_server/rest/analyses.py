@@ -202,7 +202,7 @@ def create_analysis():  # noqa
 
         response, http_response = rwc_api_client.api.create_workflow(
             workflow={
-                'parameters': reana_spec_file['parameters'],
+                'parameters': reana_spec_file['inputs']['parameters'],
                 'specification': reana_spec_file['workflow']['spec'],
                 'type': reana_spec_file['workflow']['type'],
             },
