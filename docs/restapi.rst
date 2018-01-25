@@ -1,3 +1,5 @@
+.. _restapi:
+
 REST API
 ========
 
