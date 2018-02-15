@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017 CERN.
+# Copyright (C) 2017, 2018 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -20,9 +20,11 @@
 # submit itself to any jurisdiction.
 
 """Reana-Server analysis-functionality Flask-Blueprint."""
-from bravado.exception import HTTPForbidden, HTTPBadRequest, HTTPNotFound
+import io
+
+from bravado.exception import HTTPBadRequest, HTTPForbidden, HTTPNotFound
 from flask import current_app as app
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 
 from ..api_client import create_openapi_client
 
@@ -175,7 +177,7 @@ def create_analysis():  # noqa
               }
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed
+            Request failed. The incoming payload seems malformed
         500:
           description: >-
             Request failed. Internal controller error.
@@ -200,7 +202,7 @@ def create_analysis():  # noqa
 
         response, http_response = rwc_api_client.api.create_workflow(
             workflow={
-                'parameters': reana_spec_file['parameters'],
+                'parameters': reana_spec_file['inputs']['parameters'],
                 'specification': reana_spec_file['workflow']['spec'],
                 'type': reana_spec_file['workflow']['type'],
             },
@@ -214,9 +216,9 @@ def create_analysis():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id>/workspace', methods=['POST'])
-def seed_analysis(analysis_id):  # noqa
-    r"""Seed analysis with files.
+@blueprint.route('/analyses/<analysis_id>/workspace/inputs', methods=['POST'])
+def seed_analysis_input(analysis_id):  # noqa
+    r"""Seed analysis with input files.
 
     ---
     post:
@@ -224,7 +226,7 @@ def seed_analysis(analysis_id):  # noqa
       description: >-
         This resource expects a file which will be placed in the analysis
         workspace identified by the UUID `analysis_id`.
-      operationId: seed_analysis
+      operationId: seed_analysis_inputs
       consumes:
         - multipart/form-data
       produces:
@@ -272,16 +274,94 @@ def seed_analysis(analysis_id):  # noqa
               }
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed
+            Request failed. The incoming payload seems malformed
     """
     try:
         file_ = request.files['file_content'].stream.read()
-        response, http_response = rwc_api_client.api.seed_workflow(
+        response, http_response = rwc_api_client.api.seed_workflow_files(
             user=request.args['user'],
             organization=request.args['organization'],
             workflow_id=analysis_id,
             file_content=file_,
-            file_name=request.args['file_name']).result()
+            file_name=request.args['file_name'],
+            file_type='input').result()
+
+        return jsonify(response), http_response.status_code
+    except KeyError as e:
+        return jsonify({"message": str(e)}), 400
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/analyses/<analysis_id>/workspace/code', methods=['POST'])
+def seed_analysis_code(analysis_id):  # noqa
+    r"""Seed analysis with code files.
+
+    ---
+    post:
+      summary: Seeds the analysis workspace with the provided file.
+      description: >-
+        This resource expects a file which will be placed in the analysis
+        workspace identified by the UUID `analysis_id`.
+      operationId: seed_analysis_code
+      consumes:
+        - multipart/form-data
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the analysis belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of analysis owner.
+          required: true
+          type: string
+        - name: analysis_id
+          in: path
+          description: Required. Analysis UUID.
+          required: true
+          type: string
+        - name: file_content
+          in: formData
+          description: >-
+            Required. File to be transferred to the analysis workspace.
+          required: true
+          type: file
+        - name: file_name
+          in: query
+          description: Required. File name.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. File successfully trasferred.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "File successfully transferred",
+              }
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed
+    """
+    try:
+        file_ = request.files['file_content'].stream.read()
+        response, http_response = rwc_api_client.api.seed_workflow_files(
+            user=request.args['user'],
+            organization=request.args['organization'],
+            workflow_id=analysis_id,
+            file_content=file_,
+            file_name=request.args['file_name'],
+            file_type='code').result()
 
         return jsonify(response), http_response.status_code
     except KeyError as e:
@@ -433,7 +513,7 @@ def analysis_status(analysis_id):  # noqa
               }
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed.
+            Request failed. The incoming payload seems malformed.
           examples:
             application/json:
               {
@@ -535,7 +615,7 @@ def set_analysis_status(analysis_id):  # noqa
               }
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed.
+            Request failed. The incoming payload seems malformed.
           examples:
             application/json:
               {
@@ -574,5 +654,347 @@ def set_analysis_status(analysis_id):  # noqa
         return jsonify({"message": str(e)}), 403
     except HTTPNotFound as e:
         return jsonify({"message": str(e)}), 404
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route(
+    '/analyses/<analysis_id>/workspace/outputs/<path:file_name>',
+    methods=['GET'])
+def get_analysis_outputs_file(analysis_id, file_name):  # noqa
+    r"""Get analysis status.
+
+    ---
+    get:
+      summary: Returns the requested file.
+      description: >-
+        This resource is expecting a workflow UUID and a file name to return
+        its content.
+      operationId: get_analysis_outputs_file
+      produces:
+        - multipart/form-data
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the analysis belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of analysis owner.
+          required: true
+          type: string
+        - name: analysis_id
+          in: path
+          description: Required. analysis UUID.
+          required: true
+          type: string
+        - name: file_name
+          in: path
+          description: Required. Name (or path) of the file to be downloaded.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The file has been downloaded.
+          schema:
+            type: file
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+        404:
+          description: >-
+            Request failed. `file_name` does not exist .
+          examples:
+            application/json:
+              {
+                "message": "input.csv does not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Either organization or user doesn't exist."
+              }
+    """
+    try:
+        user = request.args['user'],
+        organization = request.args['organization'],
+        workflow_id = analysis_id
+
+        response, http_response = rwc_api_client.api.get_workflow_outputs_file(
+            user=request.args['user'],
+            organization=request.args['organization'],
+            workflow_id=analysis_id,
+            file_name=file_name).result()
+
+        return send_file(
+            io.BytesIO(http_response.raw_bytes),
+            attachment_filename=file_name,
+            mimetype='multipart/form-data'), 200
+    except (KeyError, HTTPBadRequest) as e:
+        return jsonify({"message": str(e)}), 400
+    except HTTPForbidden as e:
+        return jsonify(e.response.json()), 403
+    except HTTPNotFound as e:
+        return jsonify(e.response.json()), 404
+    except Exception as e:
+        return jsonify(e.response.json()), 500
+
+
+@blueprint.route('/analyses/<analysis_id>/workspace/inputs/', methods=['GET'])
+def get_analysis_inputs_list(analysis_id):  # noqa
+    r"""List all analysis input files.
+
+    ---
+    get:
+      summary: Returns the list of input files for a specific analysis.
+      description: >-
+        This resource is expecting an analysis UUID to return its list of
+        input files.
+      operationId: get_analysis_inputs
+      produces:
+       - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the analysis belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of analysis owner.
+          required: true
+          type: string
+        - name: analysis_id
+          in: path
+          description: Required. analysis UUID.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The list of input files has been retrieved.
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                last-modified:
+                  type: string
+                  format: date-time
+                size:
+                  type: integer
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+        404:
+          description: >-
+            Request failed. Analysis does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Analysis 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
+                            not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Either organization or user doesn't exist."
+              }
+    """
+    try:
+        response, http_response = rwc_api_client.api.get_workflow_files(
+            user=request.args.get('user'),
+            organization=request.args.get('organization'),
+            workflow_id=analysis_id,
+            file_type='input').result()
+
+        return jsonify(http_response.json()), http_response.status_code
+    except (KeyError, HTTPBadRequest) as e:
+        return jsonify({"message": str(e)}), 400
+    except HTTPForbidden as e:
+        return jsonify(e.response.json()), 403
+    except HTTPNotFound as e:
+        return jsonify({"message": "Analysis {0} does not exist".
+                        format(analysis_id)}), 404
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/analyses/<analysis_id>/workspace/code/', methods=['GET'])
+def get_analysis_code_list(analysis_id):  # noqa
+    r"""List all code files for a given analysis.
+
+    ---
+    get:
+      summary: Returns the list of code files for a specific analysis.
+      description: >-
+        This resource is expecting an analysis UUID to return its list of
+        code files.
+      operationId: get_analysis_code
+      produces:
+       - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the analysis belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of analysis owner.
+          required: true
+          type: string
+        - name: analysis_id
+          in: path
+          description: Required. analysis UUID.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The list of code files has been retrieved.
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                last-modified:
+                  type: string
+                  format: date-time
+                size:
+                  type: integer
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+        404:
+          description: >-
+            Request failed. Analysis does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Analysis 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
+                            not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Either organization or user doesn't exist."
+              }
+    """
+    try:
+        response, http_response = rwc_api_client.api.get_workflow_files(
+            user=request.args.get('user'),
+            organization=request.args.get('organization'),
+            workflow_id=analysis_id,
+            file_type='code').result()
+
+        return jsonify(http_response.json()), http_response.status_code
+    except (KeyError, HTTPBadRequest) as e:
+        return jsonify({"message": str(e)}), 400
+    except HTTPForbidden as e:
+        return jsonify(e.response.json()), 403
+    except HTTPNotFound as e:
+        return jsonify({"message": "Analysis {0} does not exist".
+                        format(analysis_id)}), 404
+    except Exception as e:
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/analyses/<analysis_id>/workspace/outputs/', methods=['GET'])
+def get_analysis_outputs_list(analysis_id):  # noqa
+    r"""List all analysis output files.
+
+    ---
+    get:
+      summary: Returns the list of output files for a specific analysis.
+      description: >-
+        This resource is expecting an analysis UUID to return its list of
+        output files.
+      operationId: get_analysis_outputs
+      produces:
+       - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the analysis belongs to.
+          required: true
+          type: string
+        - name: user
+          in: query
+          description: Required. UUID of analysis owner.
+          required: true
+          type: string
+        - name: analysis_id
+          in: path
+          description: Required. analysis UUID.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The list of output files has been retrieved.
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                last-modified:
+                  type: string
+                  format: date-time
+                size:
+                  type: integer
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+        404:
+          description: >-
+            Request failed. Analysis does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Analysis 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
+                            not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          examples:
+            application/json:
+              {
+                "message": "Either organization or user doesn't exist."
+              }
+    """
+    try:
+        response, http_response = rwc_api_client.api.get_workflow_files(
+            user=request.args.get('user'),
+            organization=request.args.get('organization'),
+            workflow_id=analysis_id,
+            file_type='output').result()
+
+        return jsonify(http_response.json()), http_response.status_code
+    except (KeyError, HTTPBadRequest) as e:
+        return jsonify({"message": str(e)}), 400
+    except HTTPForbidden as e:
+        return jsonify(e.response.json()), 403
+    except HTTPNotFound as e:
+        return jsonify({"message": "Analysis {0} does not exist".
+                        format(analysis_id)}), 404
     except Exception as e:
         return jsonify({"message": str(e)}), 500
