@@ -87,7 +87,6 @@
         "summary": "Creates a new cwl workflow from a remote repository."
       }
     },
-    "/api/seed": {},
     "/api/workflows": {
       "get": {
         "description": "This resource is expecting an organization name and an user UUID. The information related to all workflows for a given user will be served as JSON",
