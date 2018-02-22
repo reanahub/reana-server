@@ -7,6 +7,86 @@
   },
   "parameters": {},
   "paths": {
+    "/api/cwl/remote": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "This resource is expecting JSON data with all the necessary information to instantiate a cwl workflow from a remote repository.",
+        "operationId": "run_cwl_workflow_from_remote",
+        "parameters": [
+          {
+            "description": "Required. Organization which the worklow belongs to.",
+            "in": "query",
+            "name": "organization",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Workflow information in JSON format with all the necessary data to instantiate a cwl workflow from a remote repository such as GitHub.",
+            "in": "body",
+            "name": "workflow_data",
+            "required": true,
+            "schema": {
+              "properties": {
+                "nparallel": {
+                  "type": "integer"
+                },
+                "preset_pars": {
+                  "description": "Workflow parameters.",
+                  "type": "object"
+                },
+                "toplevel": {
+                  "description": "cwl toplevel argument. It represents the remote repository where the workflow should be pulled from.",
+                  "type": "string"
+                },
+                "workflow": {
+                  "description": "cwl workflow parameter. It represents the name of the workflow spec file name inside the remote repository.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The workflow has been instantiated.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow successfully launched",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "workflow_id": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed"
+          }
+        },
+        "summary": "Creates a new cwl workflow from a remote repository."
+      }
+    },
     "/api/workflows": {
       "get": {
         "description": "This resource is expecting an organization name and an user UUID. The information related to all workflows for a given user will be served as JSON",
@@ -183,6 +263,88 @@
           }
         },
         "summary": "Create workflow and its workspace."
+      }
+    },
+    "/api/workflows/{workflow_id}/logs": {
+      "get": {
+        "description": "This resource is expecting a workflow UUID and a filename to return its outputs.",
+        "operationId": "get_workflow_logs",
+        "parameters": [
+          {
+            "description": "Required. Organization which the worklow belongs to.",
+            "in": "query",
+            "name": "organization",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. UUID of workflow owner.",
+            "in": "query",
+            "name": "user",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Workflow UUID.",
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. Info about workflow, including the status is returned.",
+            "examples": {
+              "application/json": {
+                "logs": "<Workflow engine log output>",
+                "organization": "default_org",
+                "user": "00000000-0000-0000-0000-000000000000",
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            },
+            "schema": {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "logs": {
+                  "type": "string"
+                },
+                "organization": {
+                  "type": "string"
+                },
+                "user": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed."
+          },
+          "404": {
+            "description": "Request failed. User doesn't exist.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 doesn't exist"
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Either organization or user doesn't exist."
+              }
+            }
+          }
+        },
+        "summary": "Returns logs of a specific workflow from a workflow engine."
       }
     },
     "/api/workflows/{workflow_id}/status": {

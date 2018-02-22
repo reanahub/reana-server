@@ -23,7 +23,7 @@
 
 import logging
 
-from .factory import create_app
+from reana_server.factory import create_app
 
 # Needed for flask.with_appcontext decorator to work.
 app = create_app()
