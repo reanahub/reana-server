@@ -81,3 +81,6 @@ target/
 # IntelliJ project files
 .idea
 *.iml
+
+# Visual Studio Code files
+.vscode

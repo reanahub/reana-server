@@ -22,7 +22,8 @@
 """Reana-Server analysis-functionality Flask-Blueprint."""
 import io
 
-from bravado.exception import HTTPBadRequest, HTTPForbidden, HTTPNotFound
+from bravado.exception import (HTTPBadRequest, HTTPConflict, HTTPForbidden,
+                               HTTPNotFound, HTTPNotImplemented)
 from flask import current_app as app
 from flask import Blueprint, jsonify, request, send_file
 
@@ -631,9 +632,37 @@ def set_analysis_status(analysis_id):  # noqa
                             is not allowed to access workflow
                             256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+        404:
+          description: >-
+            Request failed. Either User or Workflow doesn't exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            does not exist"
+              }
+        409:
+          description: >-
+            Request failed. The workflow could not be started due to a
+            conflict.
+          examples:
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            could not be started because it is already
+                            running."
+              }
         500:
           description: >-
             Request failed. Internal controller error.
+        501:
+          description: >-
+            Request failed. The specified status change is not implemented.
+          examples:
+            application/json:
+              {
+                "message": "Status resume is not supported yet."
+              }
     """
     try:
         user = request.args['user']
@@ -648,12 +677,18 @@ def set_analysis_status(analysis_id):  # noqa
             status=status).result()
 
         return jsonify(response), http_response.status_code
-    except (KeyError, HTTPBadRequest) as e:
+    except KeyError as e:
         return jsonify({"message": str(e)}), 400
+    except HTTPBadRequest as e:
+        return jsonify({"message": e.response.json().get('message')}), 400
     except HTTPForbidden as e:
-        return jsonify({"message": str(e)}), 403
+        return jsonify({"message": e.response.json().get('message')}), 403
     except HTTPNotFound as e:
-        return jsonify({"message": str(e)}), 404
+        return jsonify({"message": e.response.json().get('message')}), 404
+    except HTTPConflict as e:
+        return jsonify({"message": e.response.json().get('message')}), 409
+    except HTTPNotImplemented as e:
+        return jsonify({"message": e.response.json().get('message')}), 501
     except Exception as e:
         return jsonify({"message": str(e)}), 500
 
