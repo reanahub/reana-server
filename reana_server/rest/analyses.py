@@ -21,9 +21,10 @@
 
 """Reana-Server analysis-functionality Flask-Blueprint."""
 import io
+import logging
+import traceback
 
-from bravado.exception import (HTTPBadRequest, HTTPConflict, HTTPForbidden,
-                               HTTPNotFound, HTTPNotImplemented)
+from bravado.exception import HTTPError
 from flask import current_app as app
 from flask import Blueprint, jsonify, request, send_file
 
@@ -101,13 +102,25 @@ def get_analyses():  # noqa
                   "user": "00000000-0000-0000-0000-000000000000"
                 }
               ]
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+        404:
+          description: >-
+            Request failed. User does not exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 does not
+                            exist."
+              }
         500:
           description: >-
             Request failed. Internal controller error.
           examples:
             application/json:
               {
-                "message": "Either organization or user doesn't exist."
+                "message": "Either organization or user does not exist."
               }
     """
     try:
@@ -116,7 +129,11 @@ def get_analyses():  # noqa
             organization=request.args.get('organization')).result()
 
         return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
     except Exception as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
 
 
@@ -179,6 +196,15 @@ def create_analysis():  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed
+        404:
+          description: >-
+            Request failed. User does not exist.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000 does not
+                            exist."
+              }
         500:
           description: >-
             Request failed. Internal controller error.
@@ -211,9 +237,14 @@ def create_analysis():  # noqa
             organization=request.args.get('organization')).result()
 
         return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
     except KeyError as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
     except Exception as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
 
 
@@ -276,6 +307,18 @@ def seed_analysis_input(analysis_id):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed
+        404:
+          description: >-
+            Request failed. User does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
     """
     try:
         file_ = request.files['file_content'].stream.read()
@@ -288,9 +331,14 @@ def seed_analysis_input(analysis_id):  # noqa
             file_type='input').result()
 
         return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
     except KeyError as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
     except Exception as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
 
 
@@ -353,6 +401,18 @@ def seed_analysis_code(analysis_id):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed
+        404:
+          description: >-
+            Request failed. User does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
     """
     try:
         file_ = request.files['file_content'].stream.read()
@@ -365,9 +425,14 @@ def seed_analysis_code(analysis_id):  # noqa
             file_type='code').result()
 
         return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
     except KeyError as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
     except Exception as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
 
 
@@ -442,6 +507,15 @@ def get_analysis_logs(analysis_id):  # noqa
                             is not allowed to access workflow
                             256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+        404:
+          description: >-
+            Request failed. User does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist"
+              }
         500:
           description: >-
             Request failed. Internal controller error.
@@ -453,9 +527,14 @@ def get_analysis_logs(analysis_id):  # noqa
             workflow_id=analysis_id).result()
 
         return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
     except KeyError as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
     except Exception as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
 
 
@@ -530,6 +609,15 @@ def analysis_status(analysis_id):  # noqa
                             is not allowed to access workflow
                             256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+        404:
+          description: >-
+            Request failed. Either User or Analysis does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Analysis 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
+                            not exist."
+              }
         500:
           description: >-
             Request failed. Internal controller error.
@@ -545,9 +633,14 @@ def analysis_status(analysis_id):  # noqa
             workflow_id=analysis_id).result()
 
         return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
     except KeyError as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
     except Exception as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
 
 
@@ -634,7 +727,7 @@ def set_analysis_status(analysis_id):  # noqa
               }
         404:
           description: >-
-            Request failed. Either User or Workflow doesn't exist.
+            Request failed. Either User or Workflow does not exist.
           examples:
             application/json:
               {
@@ -677,19 +770,14 @@ def set_analysis_status(analysis_id):  # noqa
             status=status).result()
 
         return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
     except KeyError as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
-    except HTTPBadRequest as e:
-        return jsonify({"message": e.response.json().get('message')}), 400
-    except HTTPForbidden as e:
-        return jsonify({"message": e.response.json().get('message')}), 403
-    except HTTPNotFound as e:
-        return jsonify({"message": e.response.json().get('message')}), 404
-    except HTTPConflict as e:
-        return jsonify({"message": e.response.json().get('message')}), 409
-    except HTTPNotImplemented as e:
-        return jsonify({"message": e.response.json().get('message')}), 501
     except Exception as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
 
 
@@ -752,7 +840,7 @@ def get_analysis_outputs_file(analysis_id, file_name):  # noqa
           examples:
             application/json:
               {
-                "message": "Either organization or user doesn't exist."
+                "message": "Either organization or user does not exist."
               }
     """
     try:
@@ -770,13 +858,14 @@ def get_analysis_outputs_file(analysis_id, file_name):  # noqa
             io.BytesIO(http_response.raw_bytes),
             attachment_filename=file_name,
             mimetype='multipart/form-data'), 200
-    except (KeyError, HTTPBadRequest) as e:
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except KeyError as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
-    except HTTPForbidden as e:
-        return jsonify(e.response.json()), 403
-    except HTTPNotFound as e:
-        return jsonify(e.response.json()), 404
     except Exception as e:
+        logging.error(traceback.format_exc())
         return jsonify(e.response.json()), 500
 
 
@@ -843,7 +932,7 @@ def get_analysis_inputs_list(analysis_id):  # noqa
           examples:
             application/json:
               {
-                "message": "Either organization or user doesn't exist."
+                "message": "Either organization or user does not exist."
               }
     """
     try:
@@ -854,14 +943,14 @@ def get_analysis_inputs_list(analysis_id):  # noqa
             file_type='input').result()
 
         return jsonify(http_response.json()), http_response.status_code
-    except (KeyError, HTTPBadRequest) as e:
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except KeyError as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
-    except HTTPForbidden as e:
-        return jsonify(e.response.json()), 403
-    except HTTPNotFound as e:
-        return jsonify({"message": "Analysis {0} does not exist".
-                        format(analysis_id)}), 404
     except Exception as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
 
 
@@ -928,7 +1017,7 @@ def get_analysis_code_list(analysis_id):  # noqa
           examples:
             application/json:
               {
-                "message": "Either organization or user doesn't exist."
+                "message": "Either organization or user does not exist."
               }
     """
     try:
@@ -939,14 +1028,14 @@ def get_analysis_code_list(analysis_id):  # noqa
             file_type='code').result()
 
         return jsonify(http_response.json()), http_response.status_code
-    except (KeyError, HTTPBadRequest) as e:
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except KeyError as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
-    except HTTPForbidden as e:
-        return jsonify(e.response.json()), 403
-    except HTTPNotFound as e:
-        return jsonify({"message": "Analysis {0} does not exist".
-                        format(analysis_id)}), 404
     except Exception as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
 
 
@@ -1013,7 +1102,7 @@ def get_analysis_outputs_list(analysis_id):  # noqa
           examples:
             application/json:
               {
-                "message": "Either organization or user doesn't exist."
+                "message": "Either organization or user does not exist."
               }
     """
     try:
@@ -1024,12 +1113,12 @@ def get_analysis_outputs_list(analysis_id):  # noqa
             file_type='output').result()
 
         return jsonify(http_response.json()), http_response.status_code
-    except (KeyError, HTTPBadRequest) as e:
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except KeyError as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
-    except HTTPForbidden as e:
-        return jsonify(e.response.json()), 403
-    except HTTPNotFound as e:
-        return jsonify({"message": "Analysis {0} does not exist".
-                        format(analysis_id)}), 404
     except Exception as e:
+        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500

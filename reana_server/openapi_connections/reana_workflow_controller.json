@@ -166,10 +166,10 @@
             "description": "Request failed. The incoming data specification seems malformed."
           },
           "404": {
-            "description": "Request failed. User doesn't exist.",
+            "description": "Request failed. User does not exist.",
             "examples": {
               "application/json": {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't exist"
+                "message": "User 00000000-0000-0000-0000-000000000000 does not exist"
               }
             }
           },
@@ -177,7 +177,7 @@
             "description": "Request failed. Internal controller error.",
             "examples": {
               "application/json": {
-                "message": "Either organization or user doesn't exist."
+                "message": "Either organization or user does not exist."
               }
             }
           }
@@ -254,10 +254,10 @@
             "description": "Request failed. The incoming data specification seems malformed"
           },
           "404": {
-            "description": "Request failed. User doesn't exist.",
+            "description": "Request failed. User does not exist.",
             "examples": {
               "application/json": {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't exist"
+                "message": "User 00000000-0000-0000-0000-000000000000 does not exist"
               }
             }
           }
@@ -328,10 +328,10 @@
             "description": "Request failed. The incoming data specification seems malformed."
           },
           "404": {
-            "description": "Request failed. User doesn't exist.",
+            "description": "Request failed. User does not exist.",
             "examples": {
               "application/json": {
-                "message": "User 00000000-0000-0000-0000-000000000000 doesn't exist"
+                "message": "User 00000000-0000-0000-0000-000000000000 does not exist"
               }
             }
           },
@@ -339,7 +339,7 @@
             "description": "Request failed. Internal controller error.",
             "examples": {
               "application/json": {
-                "message": "Either organization or user doesn't exist."
+                "message": "Either organization or user does not exist."
               }
             }
           }
@@ -423,10 +423,10 @@
             }
           },
           "404": {
-            "description": "Request failed. Either User or Workflow doesn't exist.",
+            "description": "Request failed. Either User or Workflow does not exist.",
             "examples": {
               "application/json": {
-                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 doesn't exist"
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist"
               }
             }
           },
@@ -525,7 +525,7 @@
             }
           },
           "404": {
-            "description": "Request failed. Either User or Workflow doesn't exist.",
+            "description": "Request failed. Either User or Workflow does not exist.",
             "examples": {
               "application/json": {
                 "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist"
@@ -629,7 +629,7 @@
             "description": "Request failed. Internal controller error.",
             "examples": {
               "application/json": {
-                "message": "Either organization or user doesn't exist."
+                "message": "Either organization or user does not exist."
               }
             }
           }
@@ -794,7 +794,7 @@
             "description": "Request failed. Internal controller error.",
             "examples": {
               "application/json": {
-                "message": "Either organization or user doesn't exist."
+                "message": "Either organization or user does not exist."
               }
             }
           }
