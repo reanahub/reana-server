@@ -65,7 +65,8 @@
             "examples": {
               "application/json": {
                 "message": "Workflow successfully launched",
-                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest-1"
               }
             },
             "schema": {
@@ -74,6 +75,9 @@
                   "type": "string"
                 },
                 "workflow_id": {
+                  "type": "string"
+                },
+                "workflow_name": {
                   "type": "string"
                 }
               },
@@ -117,24 +121,28 @@
               "application/json": [
                 {
                   "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                  "name": "mytest-1",
                   "organization": "default_org",
                   "status": "running",
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
+                  "name": "mytest-2",
                   "organization": "default_org",
                   "status": "finished",
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
+                  "name": "mytest-3",
                   "organization": "default_org",
                   "status": "waiting",
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
+                  "name": "mytest-4",
                   "organization": "default_org",
                   "status": "waiting",
                   "user": "00000000-0000-0000-0000-000000000000"
@@ -145,6 +153,9 @@
               "items": {
                 "properties": {
                   "id": {
+                    "type": "string"
+                  },
+                  "name": {
                     "type": "string"
                   },
                   "organization": {
@@ -209,6 +220,10 @@
             "required": true,
             "schema": {
               "properties": {
+                "name": {
+                  "description": "Workflow name. If empty name will be generated.",
+                  "type": "string"
+                },
                 "parameters": {
                   "description": "Workflow parameters.",
                   "type": "object"
@@ -235,7 +250,8 @@
             "examples": {
               "application/json": {
                 "message": "Workflow workspace has been created.",
-                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest-1"
               }
             },
             "schema": {
@@ -244,6 +260,9 @@
                   "type": "string"
                 },
                 "workflow_id": {
+                  "type": "string"
+                },
+                "workflow_name": {
                   "type": "string"
                 }
               },
@@ -265,7 +284,7 @@
         "summary": "Create workflow and its workspace."
       }
     },
-    "/api/workflows/{workflow_id}/logs": {
+    "/api/workflows/{workflow_id_or_name}/logs": {
       "get": {
         "description": "This resource is expecting a workflow UUID and a filename to return its outputs.",
         "operationId": "get_workflow_logs",
@@ -285,9 +304,9 @@
             "type": "string"
           },
           {
-            "description": "Required. Workflow UUID.",
+            "description": "Required. Workflow UUID or name.",
             "in": "path",
-            "name": "workflow_id",
+            "name": "workflow_id_or_name",
             "required": true,
             "type": "string"
           }
@@ -303,14 +322,12 @@
                 "logs": "<Workflow engine log output>",
                 "organization": "default_org",
                 "user": "00000000-0000-0000-0000-000000000000",
-                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1"
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest-1"
               }
             },
             "schema": {
               "properties": {
-                "id": {
-                  "type": "string"
-                },
                 "logs": {
                   "type": "string"
                 },
@@ -318,6 +335,12 @@
                   "type": "string"
                 },
                 "user": {
+                  "type": "string"
+                },
+                "workflow_id": {
+                  "type": "string"
+                },
+                "workflow_name": {
                   "type": "string"
                 }
               },
@@ -347,7 +370,7 @@
         "summary": "Returns logs of a specific workflow from a workflow engine."
       }
     },
-    "/api/workflows/{workflow_id}/status": {
+    "/api/workflows/{workflow_id_or_name}/status": {
       "get": {
         "description": "This resource reports the status of workflow.",
         "operationId": "get_workflow_status",
@@ -367,9 +390,9 @@
             "type": "string"
           },
           {
-            "description": "Required. Workflow UUID.",
+            "description": "Required. Workflow UUID or name.",
             "in": "path",
-            "name": "workflow_id",
+            "name": "workflow_id_or_name",
             "required": true,
             "type": "string"
           }
@@ -383,6 +406,7 @@
             "examples": {
               "application/json": {
                 "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "name": "mytest-1",
                 "organization": "default_org",
                 "status": "running",
                 "user": "00000000-0000-0000-0000-000000000000"
@@ -391,6 +415,9 @@
             "schema": {
               "properties": {
                 "id": {
+                  "type": "string"
+                },
+                "name": {
                   "type": "string"
                 },
                 "organization": {
@@ -455,9 +482,9 @@
             "type": "string"
           },
           {
-            "description": "Required. Workflow UUID.",
+            "description": "Required. Workflow UUID or name.",
             "in": "path",
-            "name": "workflow_id",
+            "name": "workflow_id_or_name",
             "required": true,
             "type": "string"
           },
@@ -484,7 +511,8 @@
                 "organization": "default_org",
                 "status": "running",
                 "user": "00000000-0000-0000-0000-000000000000",
-                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1"
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest-1"
               }
             },
             "schema": {
@@ -502,6 +530,9 @@
                   "type": "string"
                 },
                 "workflow_id": {
+                  "type": "string"
+                },
+                "workflow_name": {
                   "type": "string"
                 }
               },
@@ -555,7 +586,7 @@
         "summary": "Set workflow status."
       }
     },
-    "/api/workflows/{workflow_id}/workspace": {
+    "/api/workflows/{workflow_id_or_name}/workspace": {
       "get": {
         "description": "This resource is expecting a workflow UUID and a filename to return its list of code|input|output files.",
         "operationId": "get_workflow_files",
@@ -575,9 +606,9 @@
             "type": "string"
           },
           {
-            "description": "Required. Workflow UUID.",
+            "description": "Required. Workflow UUID or name.",
             "in": "path",
-            "name": "workflow_id",
+            "name": "workflow_id_or_name",
             "required": true,
             "type": "string"
           },
@@ -658,9 +689,9 @@
             "type": "string"
           },
           {
-            "description": "Required. Workflow UUID.",
+            "description": "Required. Workflow UUID or name.",
             "in": "path",
-            "name": "workflow_id",
+            "name": "workflow_id_or_name",
             "required": true,
             "type": "string"
           },
@@ -701,9 +732,6 @@
               "properties": {
                 "message": {
                   "type": "string"
-                },
-                "workflow_id": {
-                  "type": "string"
                 }
               },
               "type": "object"
@@ -735,7 +763,7 @@
         "summary": "Adds a file to the workflow workspace."
       }
     },
-    "/api/workflows/{workflow_id}/workspace/outputs/{file_name}": {
+    "/api/workflows/{workflow_id_or_name}/workspace/outputs/{file_name}": {
       "get": {
         "description": "This resource is expecting a workflow UUID and a filename to return its content.",
         "operationId": "get_workflow_outputs_file",
@@ -755,9 +783,9 @@
             "type": "string"
           },
           {
-            "description": "Required. Workflow UUID.",
+            "description": "Required. Workflow UUID or name",
             "in": "path",
-            "name": "workflow_id",
+            "name": "workflow_id_or_name",
             "required": true,
             "type": "string"
           },
@@ -860,7 +888,8 @@
             "examples": {
               "application/json": {
                 "message": "Workflow successfully launched",
-                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest-1"
               }
             },
             "schema": {
@@ -869,6 +898,9 @@
                   "type": "string"
                 },
                 "workflow_id": {
+                  "type": "string"
+                },
+                "workflow_name": {
                   "type": "string"
                 }
               },
@@ -933,7 +965,8 @@
             "examples": {
               "application/json": {
                 "message": "Workflow successfully launched",
-                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest-1"
               }
             },
             "schema": {
@@ -942,6 +975,9 @@
                   "type": "string"
                 },
                 "workflow_id": {
+                  "type": "string"
+                },
+                "workflow_name": {
                   "type": "string"
                 }
               },
