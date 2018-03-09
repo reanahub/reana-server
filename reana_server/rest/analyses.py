@@ -28,6 +28,7 @@ from bravado.exception import HTTPError
 from flask import current_app as app
 from flask import Blueprint, jsonify, request, send_file
 
+from reana_server.utils import is_uuid_v4
 from ..api_client import create_openapi_client
 
 blueprint = Blueprint('analyses', __name__)
@@ -68,6 +69,8 @@ def get_analyses():  # noqa
               properties:
                 id:
                   type: string
+                name:
+                  type: string
                 organization:
                   type: string
                 status:
@@ -79,24 +82,28 @@ def get_analyses():  # noqa
               [
                 {
                   "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                  "name": "mytest-1",
                   "organization": "default_org",
                   "status": "running",
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
+                  "name": "mytest-2",
                   "organization": "default_org",
                   "status": "finished",
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
+                  "name": "mytest-3",
                   "organization": "default_org",
                   "status": "waiting",
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
+                  "name": "mytest-4",
                   "organization": "default_org",
                   "status": "waiting",
                   "user": "00000000-0000-0000-0000-000000000000"
@@ -163,6 +170,12 @@ def create_analysis():  # noqa
           description: Required. UUID of workflow owner.
           required: true
           type: string
+        - name: workflow_name
+          in: query
+          description: Name of the workflow to be created. If not provided
+            name will be generated.
+          required: true
+          type: string
         - name: spec
           in: query
           description: Remote repository which contains a valid REANA
@@ -187,11 +200,14 @@ def create_analysis():  # noqa
                 type: string
               workflow_id:
                 type: string
+              workflow_name:
+                type: string
           examples:
             application/json:
               {
                 "message": "The workflow has been successfully created.",
-                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac"
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest-1"
               }
         400:
           description: >-
@@ -218,7 +234,6 @@ def create_analysis():  # noqa
             reana_spec_file = request.json
             workflow_engine = reana_spec_file['workflow']['type']
         elif request.args.get('spec'):
-            # TODO implement load reana spec from remote
             return jsonify('Not implemented'), 501
         else:
             raise Exception('Either remote repository or a reana spec need to \
@@ -227,11 +242,19 @@ def create_analysis():  # noqa
         if workflow_engine not in app.config['AVAILABLE_WORKFLOW_ENGINES']:
             raise Exception('Unknown workflow type.')
 
+        workflow_name = request.args.get('workflow_name', '')
+
+        if is_uuid_v4(workflow_name):
+            return jsonify({'message':
+                            'Workflow name cannot be a valid UUIDv4.'}), \
+                400
+
         response, http_response = rwc_api_client.api.create_workflow(
             workflow={
                 'parameters': reana_spec_file['inputs']['parameters'],
                 'specification': reana_spec_file['workflow']['spec'],
                 'type': reana_spec_file['workflow']['type'],
+                'name': workflow_name
             },
             user=request.args.get('user'),
             organization=request.args.get('organization')).result()
@@ -248,8 +271,9 @@ def create_analysis():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id>/workspace/inputs', methods=['POST'])
-def seed_analysis_input(analysis_id):  # noqa
+@blueprint.route('/analyses/<analysis_id_or_name>/workspace/inputs',
+                 methods=['POST'])
+def seed_analysis_input(analysis_id_or_name):  # noqa
     r"""Seed analysis with input files.
 
     ---
@@ -274,9 +298,9 @@ def seed_analysis_input(analysis_id):  # noqa
           description: Required. UUID of analysis owner.
           required: true
           type: string
-        - name: analysis_id
+        - name: analysis_id_or_name
           in: path
-          description: Required. Analysis UUID.
+          description: Required. Analysis UUID or name
           required: true
           type: string
         - name: file_content
@@ -321,11 +345,16 @@ def seed_analysis_input(analysis_id):  # noqa
             Request failed. Internal controller error.
     """
     try:
+        workflow_id_or_name = analysis_id_or_name
+
+        if not workflow_id_or_name:
+            raise KeyError("analysis_id_or_name is not supplied")
+
         file_ = request.files['file_content'].stream.read()
         response, http_response = rwc_api_client.api.seed_workflow_files(
             user=request.args['user'],
             organization=request.args['organization'],
-            workflow_id=analysis_id,
+            workflow_id_or_name=analysis_id_or_name,
             file_content=file_,
             file_name=request.args['file_name'],
             file_type='input').result()
@@ -342,8 +371,9 @@ def seed_analysis_input(analysis_id):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id>/workspace/code', methods=['POST'])
-def seed_analysis_code(analysis_id):  # noqa
+@blueprint.route('/analyses/<analysis_id_or_name>/workspace/code',
+                 methods=['POST'])
+def seed_analysis_code(analysis_id_or_name):  # noqa
     r"""Seed analysis with code files.
 
     ---
@@ -368,9 +398,9 @@ def seed_analysis_code(analysis_id):  # noqa
           description: Required. UUID of analysis owner.
           required: true
           type: string
-        - name: analysis_id
+        - name: analysis_id_or_name
           in: path
-          description: Required. Analysis UUID.
+          description: Required. Analysis UUID or name.
           required: true
           type: string
         - name: file_content
@@ -387,7 +417,7 @@ def seed_analysis_code(analysis_id):  # noqa
       responses:
         200:
           description: >-
-            Request succeeded. File successfully trasferred.
+            Request succeeded. File successfully transferred.
           schema:
             type: object
             properties:
@@ -415,11 +445,16 @@ def seed_analysis_code(analysis_id):  # noqa
             Request failed. Internal controller error.
     """
     try:
+        workflow_id_or_name = analysis_id_or_name
+
+        if not workflow_id_or_name:
+            raise KeyError("analysis_id_or_name is not supplied")
+
         file_ = request.files['file_content'].stream.read()
         response, http_response = rwc_api_client.api.seed_workflow_files(
             user=request.args['user'],
             organization=request.args['organization'],
-            workflow_id=analysis_id,
+            workflow_id_or_name=analysis_id_or_name,
             file_content=file_,
             file_name=request.args['file_name'],
             file_type='code').result()
@@ -436,8 +471,8 @@ def seed_analysis_code(analysis_id):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id>/logs', methods=['GET'])
-def get_analysis_logs(analysis_id):  # noqa
+@blueprint.route('/analyses/<analysis_id_or_name>/logs', methods=['GET'])
+def get_analysis_logs(analysis_id_or_name):  # noqa
     r"""Get analysis logs.
 
     ---
@@ -460,9 +495,9 @@ def get_analysis_logs(analysis_id):  # noqa
           description: Required. UUID of workflow owner.
           required: true
           type: string
-        - name: analysis_id
+        - name: analysis_id_or_name
           in: path
-          description: Required. Analysis UUID.
+          description: Required. Analysis UUID or name.
           required: true
           type: string
       responses:
@@ -475,6 +510,8 @@ def get_analysis_logs(analysis_id):  # noqa
             properties:
               workflow_id:
                 type: string
+              workflow_name:
+                type: string
               organization:
                 type: string
               logs:
@@ -485,6 +522,7 @@ def get_analysis_logs(analysis_id):  # noqa
             application/json:
               {
                 "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest-1",
                 "organization": "default_org",
                 "logs": "<Workflow engine log output>",
                 "user": "00000000-0000-0000-0000-000000000000"
@@ -521,10 +559,17 @@ def get_analysis_logs(analysis_id):  # noqa
             Request failed. Internal controller error.
     """
     try:
+        user = request.args['user']
+        organization = request.args['organization']
+        workflow_id_or_name = analysis_id_or_name
+
+        if not workflow_id_or_name:
+            raise KeyError("analysis_id_or_name is not supplied")
+
         response, http_response = rwc_api_client.api.get_workflow_logs(
-            user=request.args['user'],
-            organization=request.args['organization'],
-            workflow_id=analysis_id).result()
+            user=user,
+            organization=organization,
+            workflow_id_or_name=analysis_id_or_name).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -538,8 +583,8 @@ def get_analysis_logs(analysis_id):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id>/status', methods=['GET'])
-def analysis_status(analysis_id):  # noqa
+@blueprint.route('/analyses/<analysis_id_or_name>/status', methods=['GET'])
+def analysis_status(analysis_id_or_name):  # noqa
     r"""Get analysis status.
 
     ---
@@ -562,9 +607,9 @@ def analysis_status(analysis_id):  # noqa
           description: Required. UUID of workflow owner.
           required: true
           type: string
-        - name: analysis_id
+        - name: analysis_id_or_name
           in: path
-          description: Required. Analysis UUID.
+          description: Required. Analysis UUID or name.
           required: true
           type: string
       responses:
@@ -577,6 +622,8 @@ def analysis_status(analysis_id):  # noqa
             properties:
               id:
                 type: string
+              name:
+                type: string
               organization:
                 type: string
               status:
@@ -587,6 +634,7 @@ def analysis_status(analysis_id):  # noqa
             application/json:
               {
                 "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "name": "mytest-1",
                 "organization": "default_org",
                 "status": "created",
                 "user": "00000000-0000-0000-0000-000000000000"
@@ -623,14 +671,17 @@ def analysis_status(analysis_id):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = request.args['user'],
-        organization = request.args['organization'],
-        workflow_id = analysis_id
+        user = request.args['user']
+        organization = request.args['organization']
+        workflow_id_or_name = analysis_id_or_name
+
+        if not workflow_id_or_name:
+            raise KeyError("analysis_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_status(
-            user=request.args['user'],
-            organization=request.args['organization'],
-            workflow_id=analysis_id).result()
+            user=user,
+            organization=organization,
+            workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -644,8 +695,8 @@ def analysis_status(analysis_id):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id>/status', methods=['PUT'])
-def set_analysis_status(analysis_id):  # noqa
+@blueprint.route('/analyses/<analysis_id_or_name>/status', methods=['PUT'])
+def set_analysis_status(analysis_id_or_name):  # noqa
     r"""Set analysis status.
     ---
     put:
@@ -669,9 +720,9 @@ def set_analysis_status(analysis_id):  # noqa
           description: Required. UUID of workflow owner.
           required: true
           type: string
-        - name: analysis_id
+        - name: analysis_id_or_name
           in: path
-          description: Required. Analysis UUID.
+          description: Required. Analysis UUID or name.
           required: true
           type: string
         - name: status
@@ -693,6 +744,8 @@ def set_analysis_status(analysis_id):  # noqa
                 type: string
               workflow_id:
                 type: string
+              workflow_name:
+                type: string
               organization:
                 type: string
               status:
@@ -702,7 +755,9 @@ def set_analysis_status(analysis_id):  # noqa
           examples:
             application/json:
               {
+                "message": "Workflow successfully launched",
                 "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest-1",
                 "organization": "default_org",
                 "status": "created",
                 "user": "00000000-0000-0000-0000-000000000000"
@@ -760,13 +815,17 @@ def set_analysis_status(analysis_id):  # noqa
     try:
         user = request.args['user']
         organization = request.args['organization']
-        workflow_id = analysis_id
+        workflow_id_or_name = analysis_id_or_name
+
+        if not workflow_id_or_name:
+            raise KeyError("analysis_id_or_name is not supplied")
+
         status = request.json
 
         response, http_response = rwc_api_client.api.set_workflow_status(
             user=user,
             organization=organization,
-            workflow_id=workflow_id,
+            workflow_id_or_name=workflow_id_or_name,
             status=status).result()
 
         return jsonify(response), http_response.status_code
@@ -782,9 +841,9 @@ def set_analysis_status(analysis_id):  # noqa
 
 
 @blueprint.route(
-    '/analyses/<analysis_id>/workspace/outputs/<path:file_name>',
+    '/analyses/<analysis_id_or_name>/workspace/outputs/<path:file_name>',
     methods=['GET'])
-def get_analysis_outputs_file(analysis_id, file_name):  # noqa
+def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
     r"""Get analysis status.
 
     ---
@@ -807,9 +866,9 @@ def get_analysis_outputs_file(analysis_id, file_name):  # noqa
           description: Required. UUID of analysis owner.
           required: true
           type: string
-        - name: analysis_id
+        - name: analysis_id_or_name
           in: path
-          description: Required. analysis UUID.
+          description: Required. analysis UUID or name.
           required: true
           type: string
         - name: file_name
@@ -846,12 +905,15 @@ def get_analysis_outputs_file(analysis_id, file_name):  # noqa
     try:
         user = request.args['user'],
         organization = request.args['organization'],
-        workflow_id = analysis_id
+        workflow_id_or_name = analysis_id_or_name
+
+        if not workflow_id_or_name:
+            raise KeyError("analysis_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_outputs_file(
-            user=request.args['user'],
-            organization=request.args['organization'],
-            workflow_id=analysis_id,
+            user=user,
+            organization=organization,
+            workflow_id_or_name=workflow_id_or_name,
             file_name=file_name).result()
 
         return send_file(
@@ -869,8 +931,9 @@ def get_analysis_outputs_file(analysis_id, file_name):  # noqa
         return jsonify(e.response.json()), 500
 
 
-@blueprint.route('/analyses/<analysis_id>/workspace/inputs/', methods=['GET'])
-def get_analysis_inputs_list(analysis_id):  # noqa
+@blueprint.route('/analyses/<analysis_id_or_name>/workspace/inputs/',
+                 methods=['GET'])
+def get_analysis_inputs_list(analysis_id_or_name):  # noqa
     r"""List all analysis input files.
 
     ---
@@ -893,9 +956,9 @@ def get_analysis_inputs_list(analysis_id):  # noqa
           description: Required. UUID of analysis owner.
           required: true
           type: string
-        - name: analysis_id
+        - name: analysis_id_or_name
           in: path
-          description: Required. analysis UUID.
+          description: Required. Analysis UUID or name.
           required: true
           type: string
       responses:
@@ -936,10 +999,15 @@ def get_analysis_inputs_list(analysis_id):  # noqa
               }
     """
     try:
+        workflow_id_or_name = analysis_id_or_name
+
+        if not workflow_id_or_name:
+            raise KeyError("analysis_id_or_name is not supplied")
+
         response, http_response = rwc_api_client.api.get_workflow_files(
             user=request.args.get('user'),
             organization=request.args.get('organization'),
-            workflow_id=analysis_id,
+            workflow_id_or_name=analysis_id_or_name,
             file_type='input').result()
 
         return jsonify(http_response.json()), http_response.status_code
@@ -954,8 +1022,9 @@ def get_analysis_inputs_list(analysis_id):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id>/workspace/code/', methods=['GET'])
-def get_analysis_code_list(analysis_id):  # noqa
+@blueprint.route('/analyses/<analysis_id_or_name>/workspace/code/',
+                 methods=['GET'])
+def get_analysis_code_list(analysis_id_or_name):  # noqa
     r"""List all code files for a given analysis.
 
     ---
@@ -978,9 +1047,9 @@ def get_analysis_code_list(analysis_id):  # noqa
           description: Required. UUID of analysis owner.
           required: true
           type: string
-        - name: analysis_id
+        - name: analysis_id_or_name
           in: path
-          description: Required. analysis UUID.
+          description: Required. Analysis UUID or name.
           required: true
           type: string
       responses:
@@ -1021,10 +1090,15 @@ def get_analysis_code_list(analysis_id):  # noqa
               }
     """
     try:
+        workflow_id_or_name = analysis_id_or_name
+
+        if not workflow_id_or_name:
+            raise KeyError("analysis_id_or_name is not supplied")
+
         response, http_response = rwc_api_client.api.get_workflow_files(
             user=request.args.get('user'),
             organization=request.args.get('organization'),
-            workflow_id=analysis_id,
+            workflow_id_or_name=analysis_id_or_name,
             file_type='code').result()
 
         return jsonify(http_response.json()), http_response.status_code
@@ -1039,8 +1113,9 @@ def get_analysis_code_list(analysis_id):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id>/workspace/outputs/', methods=['GET'])
-def get_analysis_outputs_list(analysis_id):  # noqa
+@blueprint.route('/analyses/<analysis_id_or_name>/workspace/outputs/',
+                 methods=['GET'])
+def get_analysis_outputs_list(analysis_id_or_name):  # noqa
     r"""List all analysis output files.
 
     ---
@@ -1063,9 +1138,9 @@ def get_analysis_outputs_list(analysis_id):  # noqa
           description: Required. UUID of analysis owner.
           required: true
           type: string
-        - name: analysis_id
+        - name: analysis_id_or_name
           in: path
-          description: Required. analysis UUID.
+          description: Required. Analysis UUID or name.
           required: true
           type: string
       responses:
@@ -1106,10 +1181,15 @@ def get_analysis_outputs_list(analysis_id):  # noqa
               }
     """
     try:
+        workflow_id_or_name = analysis_id_or_name
+
+        if not workflow_id_or_name:
+            raise KeyError("analysis_id_or_name is not supplied")
+
         response, http_response = rwc_api_client.api.get_workflow_files(
             user=request.args.get('user'),
             organization=request.args.get('organization'),
-            workflow_id=analysis_id,
+            workflow_id_or_name=analysis_id_or_name,
             file_type='output').result()
 
         return jsonify(http_response.json()), http_response.status_code
