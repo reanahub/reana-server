@@ -1,6 +1,13 @@
 Changes
 =======
 
+Version 0.2.0 (2018-04-19)
+--------------------------
+
+- Adds support of Common Workflow Language workflows.
+- Adds support of specifying workflow names in REST API requests.
+- Improves error messages and information.
+
 Version 0.1.0 (2018-01-30)
 --------------------------
 
