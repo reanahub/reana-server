@@ -903,8 +903,8 @@ def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
               }
     """
     try:
-        user = request.args['user'],
-        organization = request.args['organization'],
+        user = request.args['user']
+        organization = request.args['organization']
         workflow_id_or_name = analysis_id_or_name
 
         if not workflow_id_or_name:
