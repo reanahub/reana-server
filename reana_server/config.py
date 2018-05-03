@@ -34,6 +34,7 @@ COMPONENTS_DATA = {
 
 AVAILABLE_WORKFLOW_ENGINES = [
     'yadage',
-    'cwl'
+    'cwl',
+    'serial'
 ]
 """Available workflow engines."""
