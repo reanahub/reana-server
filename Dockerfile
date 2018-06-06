@@ -24,6 +24,8 @@ ENV TERM=xterm
 RUN apt-get update && \
     apt-get install -y vim-tiny
 
+RUN pip install -e git://github.com/dinosk/reana-commons.git@api-key#egg=reana-commons
+
 ADD . /code
 WORKDIR /code
 
@@ -32,9 +34,7 @@ ARG DEBUG=false
 
 RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip install -e .[all]; else pip install .[all]; fi;
 
-RUN adduser --uid 1000 --disabled-password --gecos '' reanauser && \
-    chown -R reanauser:reanauser /code
-USER reanauser
 EXPOSE 5000
 ENV FLASK_APP=/code/reana_server/app.py
-CMD ["flask", "run", "--host=0.0.0.0"]
+CMD flask users create info@reana.io &&\
+	flask run --host=0.0.0.0

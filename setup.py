@@ -66,9 +66,18 @@ setup_requires = [
 ]
 
 install_requires = [
+    'fs>=2.0',
     'click>=6.7',
     'Flask>=0.11',
     'bravado>=9.0.6',
+    'marshmallow>=2.13',
+    'requests==2.11.1',
+    'pyOpenSSL==17.3.0',  # FIXME remove once yadage-schemas solves deps.
+    'rfc3987==1.3.7',  # FIXME remove once yadage-schemas solves deps.
+    'strict-rfc3339==0.7',  # FIXME remove once yadage-schemas solves deps.
+    'tablib>=0.12.1',
+    'webcolors==1.7',  # FIXME remove once yadage-schemas solves deps.
+    'reana-commons>=0.1.0',
 ]
 
 packages = find_packages()
@@ -91,6 +100,11 @@ setup(
     url='https://github.com/reanahub/reana-server',
     packages=['reana_server'],
     zip_safe=False,
+    entry_points={
+        'flask.commands': [
+            'users = reana_server.cli:users',
+        ]
+    },
     include_package_data=True,
     extras_require=extras_require,
     install_requires=install_requires,

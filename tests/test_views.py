@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018 CERN.
+# Copyright (C) 2017 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
@@ -19,29 +19,26 @@
 # In applying this license, CERN does not waive the privileges and immunities
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
-"""REANA-Server utils."""
 
-from uuid import UUID
+"""Test server views."""
 
-import fs
-from flask import current_app as app
-from reana_commons.utils import get_user_analyses_dir
+import pytest
+from reana_commons.models import User, UserOrganization
 
 
-def is_uuid_v4(uuid_or_name):
-    """Check if given string is a valid UUIDv4."""
-    # Based on https://gist.github.com/ShawnMilo/7777304
-    try:
-        uuid = UUID(uuid_or_name, version=4)
-    except Exception:
-        return False
-
-    return uuid.hex == uuid_or_name.replace('-', '')
-
-
-def create_user_space(user_id, org):
-    """Create analyses directory for `user_id`."""
-    reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
-    user_analyses_dir = get_user_analyses_dir(org, user_id)
-    if not reana_fs.exists(user_analyses_dir):
-        reana_fs.makedirs(user_analyses_dir)
+@pytest.fixture()
+def default_user(app, session, default_organization):
+    """Create users."""
+    default_user_id = '00000000-0000-0000-0000-000000000000'
+    user = User.query.filter_by(
+        id_=default_user_id).first()
+    if not user:
+        user = User(id_=default_user_id,
+                    email='info@reana.io', api_key='secretkey')
+        session.add(user)
+        session.commit()
+        user_org = UserOrganization(user_id=default_user_id,
+                                    name='default')
+        session.add(user_org)
+        session.commit()
+    return user

@@ -31,8 +31,9 @@ def create_app():
     app.secret_key = "hyper secret key"
 
     # Register API routes
-    from .rest import ping, analyses  # noqa
+    from .rest import ping, analyses, users  # noqa
     app.register_blueprint(ping.blueprint, url_prefix='/api')
     app.register_blueprint(analyses.blueprint, url_prefix='/api')
+    app.register_blueprint(users.blueprint, url_prefix='/api')
 
     return app
