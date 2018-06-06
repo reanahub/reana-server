@@ -630,6 +630,10 @@ def analysis_status(analysis_id_or_name):  # noqa
                 type: string
               user:
                 type: string
+              progress:
+                type: object
+              logs:
+                type: string
           examples:
             application/json:
               {
