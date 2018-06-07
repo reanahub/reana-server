@@ -1,3 +1,4 @@
 wdb
 ipdb
 Flask-DebugToolbar
+git+git://github.com/reanahub/reana-commons.git#egg=reana-commons

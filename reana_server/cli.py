@@ -44,13 +44,11 @@ def users():
               default='default')
 @click.option('-i', '--id', 'id_',
               default=config.ADMIN_USER_ID)
-@click.option('-k', '--key', 'key', default=secrets.token_urlsafe())
 @with_appcontext
-def users_create_default(email, organization_name, id_, key):
+def users_create_default(email, organization_name, id_):
     """Create new user."""
     user_characteristics = {"id_": id_,
                             "email": email,
-                            "api_key": key
                             }
     user_organization_characteristics = {"user_id": id_,
                                          "name": organization_name}
@@ -66,16 +64,17 @@ def users_create_default(email, organization_name, id_, key):
             Session.add(organization)
             Session.commit()
         if not user:
+            user_characteristics['api_key'] = secrets.token_urlsafe()
             user = User(**user_characteristics)
             create_user_space(id_, organization_name)
             Session.add(user)
             Session.commit()
-            click.echo('Created 1st user with api_key: {}'.format(key))
+            click.echo('Created 1st user with api_key: {}'.
+                       format(user_characteristics['api_key']))
         if not user_organization:
             user_organization = UserOrganization(
                 **user_organization_characteristics)
             Session.add(user_organization)
             Session.commit()
-        click.echo(user.id_)
     except Exception as e:
         click.echo('Something went wrong: {0}'.format(e))

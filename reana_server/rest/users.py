@@ -36,7 +36,7 @@ blueprint = Blueprint('users', __name__)
 
 @blueprint.route('/users', methods=['GET'])
 def get_user():  # noqa
-    r"""Endpoint to get user info from the server.
+    r"""Endpoint to get user information from the server.
     ---
     get:
       summary: Get user information. Requires the admin api key.
@@ -51,7 +51,7 @@ def get_user():  # noqa
           description: Required. The email of the user.
           required: true
           type: string
-        - name: user_id
+        - name: id_
           in: query
           description: Not required. UUID of the user.
           required: false
@@ -64,11 +64,11 @@ def get_user():  # noqa
       responses:
         200:
           description: >-
-            User was found. Returns all user info stored.
+            User was found. Returns all stored user information.
           schema:
             type: object
             properties:
-              id:
+              id_:
                 type: string
               email:
                 type: string
@@ -81,7 +81,7 @@ def get_user():  # noqa
                 "email": "user@reana.info",
                 "api_key": "Drmhze6EPcv0fN_81Bj-nA",
               }
-        400:
+        403:
           description: >-
             Request failed. The incoming payload seems malformed.
         404:
@@ -95,7 +95,7 @@ def get_user():  # noqa
               }
         500:
           description: >-
-            Request failed. Internal controller error.
+            Request failed. Internal server error.
           examples:
             application/json:
               {
@@ -103,12 +103,12 @@ def get_user():  # noqa
               }
     """
     try:
-        user_id = request.args.get('id')
+        user_id = request.args.get('id_')
         user_email = request.args.get('email')
         api_key = request.args.get('api_key')
         admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
         if api_key != admin.api_key:
-            return jsonify({"message": "Action not permitted."}), 400
+            return jsonify({"message": "Action not permitted."}), 403
         search_criteria = dict()
         if user_id:
             search_criteria['id_'] = user_id
@@ -116,7 +116,7 @@ def get_user():  # noqa
             search_criteria['email'] = user_email
         user = Session.query(User).filter_by(**search_criteria).one_or_none()
         if user:
-            return jsonify(id=user.id_,
+            return jsonify(id_=user.id_,
                            email=user.email,
                            api_key=user.api_key), 200
         else:
@@ -135,7 +135,7 @@ def create_user(): # noqa
     post:
       summary: Creates a new user with the provided information.
       description: >-
-        This resource creates a new user with the proviced
+        This resource creates a new user with the provided
         information (email, id). Requires the admin api key.
       operationId: create_user
       produces:
@@ -152,13 +152,13 @@ def create_user(): # noqa
           required: true
           type: string
       responses:
-        200:
+        201:
           description: >-
             User created successfully. Returns the api_key and a message.
           schema:
             type: object
             properties:
-              id:
+              id_:
                 type: string
               email:
                 type: string
@@ -167,20 +167,20 @@ def create_user(): # noqa
           examples:
             application/json:
               {
-                "id": "00000000-0000-0000-0000-000000000000",
+                "id_": "00000000-0000-0000-0000-000000000000",
                 "email": "user@reana.info",
                 "api_key": "Drmhze6EPcv0fN_81Bj-nA"
               }
-        400:
+        403:
           description: >-
             Request failed. The incoming payload seems malformed.
         500:
           description: >-
-            Request failed. Internal controller error.
+            Request failed. Internal server error.
           examples:
             application/json:
               {
-                "message": "Error while querying."
+                "message": "Internal server error."
               }
     """
     try:
@@ -188,7 +188,7 @@ def create_user(): # noqa
         api_key = request.args.get('api_key')
         admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
         if api_key != admin.api_key:
-            return jsonify({"message": "Action not permitted."}), 400
+            return jsonify({"message": "Action not permitted."}), 403
         user_parameters = dict(api_key=secrets.token_urlsafe())
         user_parameters['email'] = user_email
         user = User(**user_parameters)
@@ -196,9 +196,9 @@ def create_user(): # noqa
         Session.commit()
 
         return jsonify({"message": "User was successfully created.",
-                        "id": user.id_,
+                        "id_": user.id_,
                         "email": user.email,
-                        "api_key": user.api_key}), 200
+                        "api_key": user.api_key}), 201
 
     except Exception as e:
         logging.error(traceback.format_exc())
