@@ -56,7 +56,7 @@ def get_user():  # noqa
           description: Not required. UUID of the user.
           required: false
           type: string
-        - name: api_key
+        - name: token
           in: query
           description: Required. API key of the admin.
           required: true
@@ -72,14 +72,14 @@ def get_user():  # noqa
                 type: string
               email:
                 type: string
-              api_key:
+              token:
                 type: string
           examples:
             application/json:
               {
                 "id": "00000000-0000-0000-0000-000000000000",
                 "email": "user@reana.info",
-                "api_key": "Drmhze6EPcv0fN_81Bj-nA",
+                "token": "Drmhze6EPcv0fN_81Bj-nA",
               }
         403:
           description: >-
@@ -105,9 +105,9 @@ def get_user():  # noqa
     try:
         user_id = request.args.get('id_')
         user_email = request.args.get('email')
-        api_key = request.args.get('api_key')
+        token = request.args.get('token')
         admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
-        if api_key != admin.api_key:
+        if token != admin.api_key:
             return jsonify({"message": "Action not permitted."}), 403
         search_criteria = dict()
         if user_id:
@@ -118,7 +118,7 @@ def get_user():  # noqa
         if user:
             return jsonify(id_=user.id_,
                            email=user.email,
-                           api_key=user.api_key), 200
+                           token=user.api_key), 200
         else:
             return jsonify({"message": "User {} does not exist.".
                            format(user_id)}, 404)
@@ -146,7 +146,7 @@ def create_user(): # noqa
           description: Required. The email of the user.
           required: true
           type: string
-        - name: api_key
+        - name: token
           in: query
           description: Required. API key of the admin.
           required: true
@@ -154,7 +154,7 @@ def create_user(): # noqa
       responses:
         201:
           description: >-
-            User created successfully. Returns the api_key and a message.
+            User created successfully. Returns the token and a message.
           schema:
             type: object
             properties:
@@ -162,14 +162,14 @@ def create_user(): # noqa
                 type: string
               email:
                 type: string
-              api_key:
+              token:
                 type: string
           examples:
             application/json:
               {
                 "id_": "00000000-0000-0000-0000-000000000000",
                 "email": "user@reana.info",
-                "api_key": "Drmhze6EPcv0fN_81Bj-nA"
+                "token": "Drmhze6EPcv0fN_81Bj-nA"
               }
         403:
           description: >-
@@ -185,9 +185,9 @@ def create_user(): # noqa
     """
     try:
         user_email = request.args.get('email')
-        api_key = request.args.get('api_key')
+        token = request.args.get('token')
         admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
-        if api_key != admin.api_key:
+        if token != admin.api_key:
             return jsonify({"message": "Action not permitted."}), 403
         user_parameters = dict(api_key=secrets.token_urlsafe())
         user_parameters['email'] = user_email
@@ -198,7 +198,7 @@ def create_user(): # noqa
         return jsonify({"message": "User was successfully created.",
                         "id_": user.id_,
                         "email": user.email,
-                        "api_key": user.api_key}), 201
+                        "token": user.api_key}), 201
 
     except Exception as e:
         logging.error(traceback.format_exc())

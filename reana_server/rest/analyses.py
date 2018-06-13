@@ -28,7 +28,7 @@ from bravado.exception import HTTPError
 from flask import current_app as app
 from flask import Blueprint, jsonify, request, send_file
 
-from reana_server.utils import is_uuid_v4
+from reana_server.utils import is_uuid_v4, validate_token
 from ..api_client import create_openapi_client
 
 blueprint = Blueprint('analyses', __name__)
@@ -57,6 +57,10 @@ def get_analyses():  # noqa
           in: query
           description: Required. UUID of analysis owner.
           required: true
+          type: string
+        - name: token
+          in: query
+          description: Required. The API token of analysis owner.
           type: string
       responses:
         200:
@@ -112,6 +116,16 @@ def get_analyses():  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
         404:
           description: >-
             Request failed. User does not exist.
@@ -131,6 +145,7 @@ def get_analyses():  # noqa
               }
     """
     try:
+        validate_token(request.args.get('token'))
         response, http_response = rwc_api_client.api.get_workflows(
             user=request.args.get('user'),
             organization=request.args.get('organization')).result()
@@ -139,6 +154,9 @@ def get_analyses():  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
@@ -189,6 +207,10 @@ def create_analysis():  # noqa
           required: false
           schema:
             type: object
+        - name: token
+          in: query
+          description: Required. The API token of analysis owner.
+          type: string
       responses:
         201:
           description: >-
@@ -212,6 +234,16 @@ def create_analysis():  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
         404:
           description: >-
             Request failed. User does not exist.
@@ -229,6 +261,7 @@ def create_analysis():  # noqa
             Request failed. Not implemented.
     """
     try:
+        validate_token(request.args.get('token'))
         if request.json:
             # validate against schema
             reana_spec_file = request.json
@@ -266,6 +299,9 @@ def create_analysis():  # noqa
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
@@ -314,6 +350,10 @@ def seed_analysis_input(analysis_id_or_name):  # noqa
           description: Required. File name.
           required: true
           type: string
+        - name: token
+          in: query
+          description: Required. The API token of analysis owner.
+          type: string
       responses:
         200:
           description: >-
@@ -331,6 +371,16 @@ def seed_analysis_input(analysis_id_or_name):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
         404:
           description: >-
             Request failed. User does not exist.
@@ -345,6 +395,7 @@ def seed_analysis_input(analysis_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
+        validate_token(request.args.get('token'))
         workflow_id_or_name = analysis_id_or_name
 
         if not workflow_id_or_name:
@@ -366,6 +417,9 @@ def seed_analysis_input(analysis_id_or_name):  # noqa
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
@@ -414,6 +468,10 @@ def seed_analysis_code(analysis_id_or_name):  # noqa
           description: Required. File name.
           required: true
           type: string
+        - name: token
+          in: query
+          description: Required. The API token of analysis owner.
+          type: string
       responses:
         200:
           description: >-
@@ -431,6 +489,16 @@ def seed_analysis_code(analysis_id_or_name):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
         404:
           description: >-
             Request failed. User does not exist.
@@ -445,6 +513,7 @@ def seed_analysis_code(analysis_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
+        validate_token(request.args.get('token'))
         workflow_id_or_name = analysis_id_or_name
 
         if not workflow_id_or_name:
@@ -466,6 +535,9 @@ def seed_analysis_code(analysis_id_or_name):  # noqa
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
@@ -578,6 +650,9 @@ def get_analysis_logs(analysis_id_or_name):  # noqa
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
@@ -611,6 +686,10 @@ def analysis_status(analysis_id_or_name):  # noqa
           in: path
           description: Required. Analysis UUID or name.
           required: true
+          type: string
+        - name: token
+          in: query
+          description: Required. The API token of analysis owner.
           type: string
       responses:
         200:
@@ -675,6 +754,7 @@ def analysis_status(analysis_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
+        validate_token(request.args.get('token'))
         user = request.args['user']
         organization = request.args['organization']
         workflow_id_or_name = analysis_id_or_name
@@ -694,6 +774,9 @@ def analysis_status(analysis_id_or_name):  # noqa
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
@@ -736,6 +819,10 @@ def set_analysis_status(analysis_id_or_name):  # noqa
           schema:
             type: string
             description: Required. New status.
+        - name: token
+          in: query
+          description: Required. The API token of analysis owner.
+          type: string
       responses:
         200:
           description: >-
@@ -817,6 +904,7 @@ def set_analysis_status(analysis_id_or_name):  # noqa
               }
     """
     try:
+        validate_token(request.args.get('token'))
         user = request.args['user']
         organization = request.args['organization']
         workflow_id_or_name = analysis_id_or_name
@@ -839,6 +927,9 @@ def set_analysis_status(analysis_id_or_name):  # noqa
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
@@ -880,6 +971,10 @@ def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
           description: Required. Name (or path) of the file to be downloaded.
           required: true
           type: string
+        - name: token
+          in: query
+          description: Required. The API token of analysis owner.
+          type: string
       responses:
         200:
           description: >-
@@ -889,6 +984,16 @@ def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
         404:
           description: >-
             Request failed. `file_name` does not exist .
@@ -907,6 +1012,7 @@ def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
               }
     """
     try:
+        validate_token(request.args.get('token'))
         user = request.args['user']
         organization = request.args['organization']
         workflow_id_or_name = analysis_id_or_name
@@ -930,6 +1036,9 @@ def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), 500
@@ -965,6 +1074,10 @@ def get_analysis_inputs_list(analysis_id_or_name):  # noqa
           description: Required. Analysis UUID or name.
           required: true
           type: string
+        - name: token
+          in: query
+          description: Required. The API token of analysis owner.
+          type: string
       responses:
         200:
           description: >-
@@ -984,6 +1097,16 @@ def get_analysis_inputs_list(analysis_id_or_name):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
         404:
           description: >-
             Request failed. Analysis does not exist.
@@ -1003,6 +1126,7 @@ def get_analysis_inputs_list(analysis_id_or_name):  # noqa
               }
     """
     try:
+        validate_token(request.args.get('token'))
         workflow_id_or_name = analysis_id_or_name
 
         if not workflow_id_or_name:
@@ -1021,6 +1145,9 @@ def get_analysis_inputs_list(analysis_id_or_name):  # noqa
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
@@ -1056,6 +1183,10 @@ def get_analysis_code_list(analysis_id_or_name):  # noqa
           description: Required. Analysis UUID or name.
           required: true
           type: string
+        - name: token
+          in: query
+          description: Required. The API token of analysis owner.
+          type: string
       responses:
         200:
           description: >-
@@ -1075,6 +1206,16 @@ def get_analysis_code_list(analysis_id_or_name):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
         404:
           description: >-
             Request failed. Analysis does not exist.
@@ -1094,6 +1235,7 @@ def get_analysis_code_list(analysis_id_or_name):  # noqa
               }
     """
     try:
+        validate_token(request.args.get('token'))
         workflow_id_or_name = analysis_id_or_name
 
         if not workflow_id_or_name:
@@ -1112,6 +1254,9 @@ def get_analysis_code_list(analysis_id_or_name):  # noqa
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
@@ -1147,6 +1292,10 @@ def get_analysis_outputs_list(analysis_id_or_name):  # noqa
           description: Required. Analysis UUID or name.
           required: true
           type: string
+        - name: token
+          in: query
+          description: Required. The API token of analysis owner.
+          type: string
       responses:
         200:
           description: >-
@@ -1166,6 +1315,16 @@ def get_analysis_outputs_list(analysis_id_or_name):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
         404:
           description: >-
             Request failed. Analysis does not exist.
@@ -1185,6 +1344,7 @@ def get_analysis_outputs_list(analysis_id_or_name):  # noqa
               }
     """
     try:
+        validate_token(request.args.get('token'))
         workflow_id_or_name = analysis_id_or_name
 
         if not workflow_id_or_name:
@@ -1203,6 +1363,9 @@ def get_analysis_outputs_list(analysis_id_or_name):  # noqa
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500

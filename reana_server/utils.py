@@ -26,6 +26,8 @@ from uuid import UUID
 import fs
 from flask import current_app as app
 from reana_commons.utils import get_user_analyses_dir
+from reana_commons.models import User
+from reana_commons.database import Session
 
 
 def is_uuid_v4(uuid_or_name):
@@ -45,3 +47,11 @@ def create_user_space(user_id, org):
     user_analyses_dir = get_user_analyses_dir(org, user_id)
     if not reana_fs.exists(user_analyses_dir):
         reana_fs.makedirs(user_analyses_dir)
+
+
+def validate_token(token):
+    """Validate that the token provided is valid."""
+    token_found = Session.query(User).filter_by(api_key=token).one_or_none()
+    if not token_found:
+        raise ValueError('Token not valid.')
+    return True
