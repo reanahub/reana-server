@@ -49,9 +49,9 @@ def create_user_space(user_id, org):
         reana_fs.makedirs(user_analyses_dir)
 
 
-def validate_token(token):
+def get_user_from_token(token):
     """Validate that the token provided is valid."""
-    token_found = Session.query(User).filter_by(api_key=token).one_or_none()
-    if not token_found:
+    user = Session.query(User).filter_by(api_key=token).one_or_none()
+    if not user:
         raise ValueError('Token not valid.')
-    return True
+    return str(user.id_)

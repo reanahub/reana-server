@@ -28,7 +28,7 @@ from bravado.exception import HTTPError
 from flask import current_app as app
 from flask import Blueprint, jsonify, request, send_file
 
-from reana_server.utils import is_uuid_v4, validate_token
+from reana_server.utils import is_uuid_v4, get_user_from_token
 from ..api_client import create_openapi_client
 
 blueprint = Blueprint('analyses', __name__)
@@ -53,14 +53,10 @@ def get_analyses():  # noqa
           description: Required. Organization which the analysis belongs to.
           required: true
           type: string
-        - name: user
-          in: query
-          description: Required. UUID of analysis owner.
-          required: true
-          type: string
         - name: token
           in: query
           description: Required. The API token of analysis owner.
+          required: true
           type: string
       responses:
         200:
@@ -145,9 +141,9 @@ def get_analyses():  # noqa
               }
     """
     try:
-        validate_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('token'))
         response, http_response = rwc_api_client.api.get_workflows(
-            user=request.args.get('user'),
+            user=user_id,
             organization=request.args.get('organization')).result()
 
         return jsonify(response), http_response.status_code
@@ -183,11 +179,6 @@ def create_analysis():  # noqa
           description: Required. Organization which the worklow belongs to.
           required: true
           type: string
-        - name: user
-          in: query
-          description: Required. UUID of workflow owner.
-          required: true
-          type: string
         - name: workflow_name
           in: query
           description: Name of the workflow to be created. If not provided
@@ -210,6 +201,7 @@ def create_analysis():  # noqa
         - name: token
           in: query
           description: Required. The API token of analysis owner.
+          required: true
           type: string
       responses:
         201:
@@ -261,7 +253,7 @@ def create_analysis():  # noqa
             Request failed. Not implemented.
     """
     try:
-        validate_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('token'))
         if request.json:
             # validate against schema
             reana_spec_file = request.json
@@ -289,7 +281,7 @@ def create_analysis():  # noqa
                 'type': reana_spec_file['workflow']['type'],
                 'name': workflow_name
             },
-            user=request.args.get('user'),
+            user=user_id,
             organization=request.args.get('organization')).result()
 
         return jsonify(response), http_response.status_code
@@ -329,11 +321,6 @@ def seed_analysis_input(analysis_id_or_name):  # noqa
           description: Required. Organization which the analysis belongs to.
           required: true
           type: string
-        - name: user
-          in: query
-          description: Required. UUID of analysis owner.
-          required: true
-          type: string
         - name: analysis_id_or_name
           in: path
           description: Required. Analysis UUID or name
@@ -353,6 +340,7 @@ def seed_analysis_input(analysis_id_or_name):  # noqa
         - name: token
           in: query
           description: Required. The API token of analysis owner.
+          required: true
           type: string
       responses:
         200:
@@ -395,7 +383,7 @@ def seed_analysis_input(analysis_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        validate_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('token'))
         workflow_id_or_name = analysis_id_or_name
 
         if not workflow_id_or_name:
@@ -403,7 +391,7 @@ def seed_analysis_input(analysis_id_or_name):  # noqa
 
         file_ = request.files['file_content'].stream.read()
         response, http_response = rwc_api_client.api.seed_workflow_files(
-            user=request.args['user'],
+            user=user_id,
             organization=request.args['organization'],
             workflow_id_or_name=analysis_id_or_name,
             file_content=file_,
@@ -447,11 +435,6 @@ def seed_analysis_code(analysis_id_or_name):  # noqa
           description: Required. Organization which the analysis belongs to.
           required: true
           type: string
-        - name: user
-          in: query
-          description: Required. UUID of analysis owner.
-          required: true
-          type: string
         - name: analysis_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -471,6 +454,7 @@ def seed_analysis_code(analysis_id_or_name):  # noqa
         - name: token
           in: query
           description: Required. The API token of analysis owner.
+          required: true
           type: string
       responses:
         200:
@@ -513,7 +497,7 @@ def seed_analysis_code(analysis_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        validate_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('token'))
         workflow_id_or_name = analysis_id_or_name
 
         if not workflow_id_or_name:
@@ -521,7 +505,7 @@ def seed_analysis_code(analysis_id_or_name):  # noqa
 
         file_ = request.files['file_content'].stream.read()
         response, http_response = rwc_api_client.api.seed_workflow_files(
-            user=request.args['user'],
+            user=user_id,
             organization=request.args['organization'],
             workflow_id_or_name=analysis_id_or_name,
             file_content=file_,
@@ -562,9 +546,9 @@ def get_analysis_logs(analysis_id_or_name):  # noqa
           description: Required. Organization which the worklow belongs to.
           required: true
           type: string
-        - name: user
+        - name: token
           in: query
-          description: Required. UUID of workflow owner.
+          description: Required. API token of workflow owner.
           required: true
           type: string
         - name: analysis_id_or_name
@@ -631,7 +615,7 @@ def get_analysis_logs(analysis_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = request.args['user']
+        user_id = get_user_from_token(request.args.get('token'))
         organization = request.args['organization']
         workflow_id_or_name = analysis_id_or_name
 
@@ -639,7 +623,7 @@ def get_analysis_logs(analysis_id_or_name):  # noqa
             raise KeyError("analysis_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_logs(
-            user=user,
+            user=user_id,
             organization=organization,
             workflow_id_or_name=analysis_id_or_name).result()
 
@@ -677,11 +661,6 @@ def analysis_status(analysis_id_or_name):  # noqa
           description: Required. Organization which the worklow belongs to.
           required: true
           type: string
-        - name: user
-          in: query
-          description: Required. UUID of workflow owner.
-          required: true
-          type: string
         - name: analysis_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -690,6 +669,7 @@ def analysis_status(analysis_id_or_name):  # noqa
         - name: token
           in: query
           description: Required. The API token of analysis owner.
+          required: true
           type: string
       responses:
         200:
@@ -705,6 +685,8 @@ def analysis_status(analysis_id_or_name):  # noqa
                 type: string
               organization:
                 type: string
+              created:
+                type: string
               status:
                 type: string
               user:
@@ -719,6 +701,7 @@ def analysis_status(analysis_id_or_name):  # noqa
                 "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                 "name": "mytest-1",
                 "organization": "default_org",
+                "created": "2018-06-13 09:47:35.660977",
                 "status": "created",
                 "user": "00000000-0000-0000-0000-000000000000"
               }
@@ -754,8 +737,7 @@ def analysis_status(analysis_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        validate_token(request.args.get('token'))
-        user = request.args['user']
+        user_id = get_user_from_token(request.args.get('token'))
         organization = request.args['organization']
         workflow_id_or_name = analysis_id_or_name
 
@@ -763,7 +745,7 @@ def analysis_status(analysis_id_or_name):  # noqa
             raise KeyError("analysis_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_status(
-            user=user,
+            user=user_id,
             organization=organization,
             workflow_id_or_name=workflow_id_or_name).result()
 
@@ -802,11 +784,6 @@ def set_analysis_status(analysis_id_or_name):  # noqa
           description: Required. Organization which the worklow belongs to.
           required: true
           type: string
-        - name: user
-          in: query
-          description: Required. UUID of workflow owner.
-          required: true
-          type: string
         - name: analysis_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -822,6 +799,7 @@ def set_analysis_status(analysis_id_or_name):  # noqa
         - name: token
           in: query
           description: Required. The API token of analysis owner.
+          required: true
           type: string
       responses:
         200:
@@ -904,8 +882,7 @@ def set_analysis_status(analysis_id_or_name):  # noqa
               }
     """
     try:
-        validate_token(request.args.get('token'))
-        user = request.args['user']
+        user_id = get_user_from_token(request.args.get('token'))
         organization = request.args['organization']
         workflow_id_or_name = analysis_id_or_name
 
@@ -915,7 +892,7 @@ def set_analysis_status(analysis_id_or_name):  # noqa
         status = request.json
 
         response, http_response = rwc_api_client.api.set_workflow_status(
-            user=user,
+            user=user_id,
             organization=organization,
             workflow_id_or_name=workflow_id_or_name,
             status=status).result()
@@ -956,11 +933,6 @@ def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
           description: Required. Organization which the analysis belongs to.
           required: true
           type: string
-        - name: user
-          in: query
-          description: Required. UUID of analysis owner.
-          required: true
-          type: string
         - name: analysis_id_or_name
           in: path
           description: Required. analysis UUID or name.
@@ -974,6 +946,7 @@ def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
         - name: token
           in: query
           description: Required. The API token of analysis owner.
+          required: true
           type: string
       responses:
         200:
@@ -1012,8 +985,7 @@ def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
               }
     """
     try:
-        validate_token(request.args.get('token'))
-        user = request.args['user']
+        user_id = get_user_from_token(request.args.get('token'))
         organization = request.args['organization']
         workflow_id_or_name = analysis_id_or_name
 
@@ -1021,7 +993,7 @@ def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
             raise KeyError("analysis_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_outputs_file(
-            user=user,
+            user=user_id,
             organization=organization,
             workflow_id_or_name=workflow_id_or_name,
             file_name=file_name).result()
@@ -1064,11 +1036,6 @@ def get_analysis_inputs_list(analysis_id_or_name):  # noqa
           description: Required. Organization which the analysis belongs to.
           required: true
           type: string
-        - name: user
-          in: query
-          description: Required. UUID of analysis owner.
-          required: true
-          type: string
         - name: analysis_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -1077,6 +1044,7 @@ def get_analysis_inputs_list(analysis_id_or_name):  # noqa
         - name: token
           in: query
           description: Required. The API token of analysis owner.
+          required: true
           type: string
       responses:
         200:
@@ -1126,14 +1094,14 @@ def get_analysis_inputs_list(analysis_id_or_name):  # noqa
               }
     """
     try:
-        validate_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('token'))
         workflow_id_or_name = analysis_id_or_name
 
         if not workflow_id_or_name:
             raise KeyError("analysis_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_files(
-            user=request.args.get('user'),
+            user=user_id,
             organization=request.args.get('organization'),
             workflow_id_or_name=analysis_id_or_name,
             file_type='input').result()
@@ -1173,11 +1141,6 @@ def get_analysis_code_list(analysis_id_or_name):  # noqa
           description: Required. Organization which the analysis belongs to.
           required: true
           type: string
-        - name: user
-          in: query
-          description: Required. UUID of analysis owner.
-          required: true
-          type: string
         - name: analysis_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -1186,6 +1149,7 @@ def get_analysis_code_list(analysis_id_or_name):  # noqa
         - name: token
           in: query
           description: Required. The API token of analysis owner.
+          required: true
           type: string
       responses:
         200:
@@ -1235,14 +1199,14 @@ def get_analysis_code_list(analysis_id_or_name):  # noqa
               }
     """
     try:
-        validate_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('token'))
         workflow_id_or_name = analysis_id_or_name
 
         if not workflow_id_or_name:
             raise KeyError("analysis_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_files(
-            user=request.args.get('user'),
+            user=user_id,
             organization=request.args.get('organization'),
             workflow_id_or_name=analysis_id_or_name,
             file_type='code').result()
@@ -1282,11 +1246,6 @@ def get_analysis_outputs_list(analysis_id_or_name):  # noqa
           description: Required. Organization which the analysis belongs to.
           required: true
           type: string
-        - name: user
-          in: query
-          description: Required. UUID of analysis owner.
-          required: true
-          type: string
         - name: analysis_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -1295,6 +1254,7 @@ def get_analysis_outputs_list(analysis_id_or_name):  # noqa
         - name: token
           in: query
           description: Required. The API token of analysis owner.
+          required: true
           type: string
       responses:
         200:
@@ -1344,14 +1304,14 @@ def get_analysis_outputs_list(analysis_id_or_name):  # noqa
               }
     """
     try:
-        validate_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('token'))
         workflow_id_or_name = analysis_id_or_name
 
         if not workflow_id_or_name:
             raise KeyError("analysis_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_files(
-            user=request.args.get('user'),
+            user=user_id,
             organization=request.args.get('organization'),
             workflow_id_or_name=analysis_id_or_name,
             file_type='output').result()
