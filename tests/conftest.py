@@ -28,7 +28,7 @@ import os
 import shutil
 
 import pytest
-from reana_commons.models import Base, Organization
+from reana_commons.models import Base, Organization, User, UserOrganization
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy_utils import create_database, database_exists, drop_database
@@ -106,3 +106,21 @@ def default_organization(app, session):
         session.add(org)
         session.commit()
     return org
+
+
+@pytest.fixture()
+def default_user(app, session, default_organization):
+    """Create users."""
+    default_user_id = '00000000-0000-0000-0000-000000000000'
+    user = User.query.filter_by(
+        id_=default_user_id).first()
+    if not user:
+        user = User(id_=default_user_id,
+                    email='info@reana.io', api_key='secretkey')
+        session.add(user)
+        session.commit()
+        user_org = UserOrganization(user_id=default_user_id,
+                                    name='default')
+        session.add(user_org)
+        session.commit()
+    return user
