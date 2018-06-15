@@ -203,3 +203,75 @@ def create_user(): # noqa
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/register', methods=['POST'])
+def register_user(): # noqa
+    r"""Endpoint to register users.
+
+    ---
+    post:
+      summary: Registers a new user with the provided information.
+      description: >-
+        This resource registers a new user with the provided
+        information email.
+      operationId: register_user
+      produces:
+        - application/json
+      parameters:
+        - name: email
+          in: query
+          description: Required. The email of the user.
+          required: true
+          type: string
+      responses:
+        201:
+          description: >-
+            User registered successfully. Returns the token and a message.
+          schema:
+            type: object
+            properties:
+              id_:
+                type: string
+              email:
+                type: string
+              token:
+                type: string
+          examples:
+            application/json:
+              {
+                "id_": "00000000-0000-0000-0000-000000000000",
+                "email": "user@reana.info",
+                "token": "Drmhze6EPcv0fN_81Bj-nA"
+              }
+        403:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+        500:
+          description: >-
+            Request failed. Internal server error.
+          examples:
+            application/json:
+              {
+                "message": "Internal server error."
+              }
+    """
+    try:
+        user_email = request.args.get('email')
+        existing_user = Session.query(User).filter_by(email=user_email).one_or_none()
+        if existing_user:
+            return jsonify({"message": "Email already exists."}), 400
+        user_parameters = dict(api_key=secrets.token_urlsafe())
+        user_parameters['email'] = user_email
+        user = User(**user_parameters)
+        Session.add(user)
+        Session.commit()
+
+        return jsonify({"message": "User was successfully created.",
+                        "id_": user.id_,
+                        "email": user.email,
+                        "token": user.api_key}), 201
+
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
