@@ -20,7 +20,6 @@
 
 FROM python:3.6
 
-ENV TERM=xterm
 RUN apt-get update && \
     apt-get install -y vim-tiny
 
@@ -34,8 +33,19 @@ ARG DEBUG=false
 
 RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip install -e .[all]; else pip install .[all]; fi;
 
-EXPOSE 5000
+ARG UWSGI_PROCESSES=2
+ENV UWSGI_PROCESSES ${UWSGI_PROCESSES:-2}
+ARG UWSGI_THREADS=2
+ENV UWSGI_THREADS ${UWSGI_THREADS:-2}
+ENV TERM=xterm
 ENV FLASK_APP=/code/reana_server/app.py
-CMD flask db init &&\
+
+EXPOSE 5000
+
+CMD flask db init && \
     flask users create info@reana.io &&\
-    flask run --host=0.0.0.0
+    uwsgi --module reana_server.app:app \
+    --http-socket 0.0.0.0:5000 --master \
+    --processes ${UWSGI_PROCESSES} --threads ${UWSGI_THREADS} \
+    --stats /tmp/stats.socket \
+    --wsgi-disable-file-wrapper

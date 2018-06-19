@@ -66,18 +66,21 @@ setup_requires = [
 ]
 
 install_requires = [
-    'fs>=2.0',
+    'bravado>=9.0.6',
     'click>=6.7',
     'Flask>=0.11',
-    'bravado>=9.0.6',
+    'fs>=2.0',
     'marshmallow>=2.13',
-    'requests==2.11.1',
     'pyOpenSSL==17.3.0',  # FIXME remove once yadage-schemas solves deps.
+    'reana-commons>=0.1.0',
+    'requests==2.11.1',
     'rfc3987==1.3.7',  # FIXME remove once yadage-schemas solves deps.
     'strict-rfc3339==0.7',  # FIXME remove once yadage-schemas solves deps.
     'tablib>=0.12.1',
+    'uWSGI>=2.0.17',
+    'uwsgi-tools>=1.1.1',
+    'uwsgitop>=0.10',
     'webcolors==1.7',  # FIXME remove once yadage-schemas solves deps.
-    'reana-commons>=0.1.0',
 ]
 
 packages = find_packages()
