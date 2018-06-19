@@ -22,6 +22,7 @@
 """Flask-application factory for Reana-Server."""
 
 from flask import Flask
+from reana_commons.database import Session
 
 
 def create_app():
@@ -36,4 +37,5 @@ def create_app():
     app.register_blueprint(analyses.blueprint, url_prefix='/api')
     app.register_blueprint(users.blueprint, url_prefix='/api')
 
+    app.session = Session
     return app
