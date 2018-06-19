@@ -24,7 +24,7 @@ ENV TERM=xterm
 RUN apt-get update && \
     apt-get install -y vim-tiny
 
-RUN pip install -e git://github.com/dinosk/reana-commons.git@user-mgmt#egg=reana-commons
+RUN pip install -e git://github.com/reanahub/reana-commons.git@master#egg=reana-commons
 
 ADD . /code
 WORKDIR /code

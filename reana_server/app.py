@@ -30,6 +30,7 @@ from reana_server.factory import create_app
 # Needed for flask.with_appcontext decorator to work.
 app = create_app()
 
+
 @app.teardown_appcontext
 def shutdown_session(response_or_exc):
     """Close session on app teardown."""

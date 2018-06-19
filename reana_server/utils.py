@@ -25,9 +25,9 @@ from uuid import UUID
 
 import fs
 from flask import current_app as app
-from reana_commons.utils import get_user_analyses_dir
-from reana_commons.models import User
 from reana_commons.database import Session
+from reana_commons.models import User
+from reana_commons.utils import get_user_analyses_dir
 
 
 def is_uuid_v4(uuid_or_name):

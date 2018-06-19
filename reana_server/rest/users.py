@@ -128,7 +128,7 @@ def get_user():  # noqa
 
 
 @blueprint.route('/users', methods=['POST'])
-def create_user(): # noqa
+def create_user():  # noqa
     r"""Endpoint to create users.
 
     ---
@@ -206,7 +206,7 @@ def create_user(): # noqa
 
 
 @blueprint.route('/register', methods=['POST'])
-def register_user(): # noqa
+def register_user():  # noqa
     r"""Endpoint to register users.
 
     ---
@@ -258,7 +258,8 @@ def register_user(): # noqa
     """
     try:
         user_email = request.args.get('email')
-        existing_user = Session.query(User).filter_by(email=user_email).one_or_none()
+        existing_user = Session.query(User).filter_by(
+          email=user_email).one_or_none()
         if existing_user:
             return jsonify({"message": "Email already exists."}), 400
         user_parameters = dict(api_key=secrets.token_urlsafe())

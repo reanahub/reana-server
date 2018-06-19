@@ -22,11 +22,12 @@
 
 """REANA Workflow Controller command line interface."""
 
+import secrets
+
 import click
 from flask.cli import with_appcontext
 from reana_commons.database import Session
 from reana_commons.models import Organization, User, UserOrganization
-import secrets
 
 from reana_server import config
 from reana_server.utils import create_user_space

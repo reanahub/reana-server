@@ -33,7 +33,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy_utils import create_database, database_exists, drop_database
 
-from reana_workflow_controller.factory import create_app
+from reana_server.factory import create_app
 
 
 @pytest.fixture(scope='module')
