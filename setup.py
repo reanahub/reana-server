@@ -102,6 +102,7 @@ setup(
     zip_safe=False,
     entry_points={
         'flask.commands': [
+            'db = reana_server.cli:db',
             'users = reana_server.cli:users',
         ]
     },

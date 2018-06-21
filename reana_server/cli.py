@@ -26,11 +26,26 @@ import secrets
 
 import click
 from flask.cli import with_appcontext
-from reana_commons.database import Session
+from reana_commons.database import Session, init_db
 from reana_commons.models import Organization, User, UserOrganization
 
 from reana_server import config
 from reana_server.utils import create_user_space
+
+
+@click.group()
+def db():
+    """Database management commands."""
+
+
+@db.command('init')
+def db_init():
+    """Initialise database."""
+    try:
+        init_db()
+        click.echo(click.style('DB Created.', fg='green'))
+    except Exception as e:
+        click.echo('Something went wrong: {0}'.format(e))
 
 
 @click.group()
