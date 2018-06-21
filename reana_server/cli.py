@@ -23,6 +23,7 @@
 """REANA Workflow Controller command line interface."""
 
 import secrets
+import sys
 
 import click
 from flask.cli import with_appcontext
@@ -46,6 +47,7 @@ def db_init():
         click.echo(click.style('DB Created.', fg='green'))
     except Exception as e:
         click.echo('Something went wrong: {0}'.format(e))
+        sys.exit(1)
 
 
 @click.group()
@@ -94,3 +96,4 @@ def users_create_default(email, organization_name, id_):
             Session.commit()
     except Exception as e:
         click.echo('Something went wrong: {0}'.format(e))
+        sys.exit(1)
