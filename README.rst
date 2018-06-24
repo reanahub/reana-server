@@ -1,6 +1,6 @@
-============
-REANA Server
-============
+==============
+ REANA-Server
+==============
 
 .. image:: https://img.shields.io/travis/reanahub/reana-server.svg
    :target: https://travis-ci.org/reanahub/reana-server
@@ -23,9 +23,9 @@ REANA Server
 About
 -----
 
-REANA-Server is a component of the `REANA <http://reanahub.io/>`_ reusable
-analysis platform. It implements the API Server that takes and performs REST API
-calls issued by REANA clients.
+REANA-Server is a component of the `REANA <http://www.reana.io/>`_ reusable and
+reproducible research data analysis platform. It implements the API Server that
+takes and performs REST API calls issued by REANA clients.
 
 Features
 --------
@@ -46,4 +46,5 @@ Useful links
 - `source code <https://github.com/reanahub/reana-server>`_
 
 For more information about the REANA reusable analysis platform, please see the
-general `REANA documentation <http://reana.readthedocs.io/>`_.
+`REANA project <http://www.reana.io>`_ home page and the general `REANA
+documentation <http://reana.readthedocs.io/>`_ pages.
