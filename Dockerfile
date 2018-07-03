@@ -25,13 +25,19 @@ RUN apt-get update && \
 
 RUN pip install -e git://github.com/reanahub/reana-commons.git@master#egg=reana-commons
 
-ADD . /code
+COPY CHANGES.rst README.rst setup.py /code/
+COPY reana_server/version.py /code/reana_server/
 WORKDIR /code
+RUN pip install --no-cache-dir requirements-builder && \
+    requirements-builder -e all -l pypi setup.py | pip install --no-cache-dir -r /dev/stdin && \
+    pip uninstall -y requirements-builder
+
+COPY . /code
 
 # Debug off by default
 ARG DEBUG=false
 
-RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip install -e .[all]; else pip install .[all]; fi;
+RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip install -e .; else pip install .; fi;
 
 ARG UWSGI_PROCESSES=2
 ENV UWSGI_PROCESSES ${UWSGI_PROCESSES:-2}
