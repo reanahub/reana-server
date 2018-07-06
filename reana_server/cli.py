@@ -21,17 +21,21 @@
 # submit itself to any jurisdiction.
 
 """REANA Workflow Controller command line interface."""
-
+import logging
+import os
 import secrets
 import sys
+import traceback
 
 import click
+import tablib
 from flask.cli import with_appcontext
 from reana_commons.database import Session, init_db
 from reana_commons.models import Organization, User, UserOrganization
+from reana_commons.utils import click_table_printer
 
 from reana_server import config
-from reana_server.utils import create_user_space
+from reana_server.utils import _create_user, _get_users, create_user_space
 
 
 @click.group()
@@ -50,12 +54,15 @@ def db_init():
         sys.exit(1)
 
 
-@click.group()
-def users():
-    """Record management commands."""
+@click.group(
+    help='All interaction related to user management on REANA cloud.')
+@click.pass_context
+def users(ctx):
+    """Top level wrapper for user related interaction."""
+    logging.debug(ctx.info_name)
 
 
-@users.command('create')
+@users.command('create_default')
 @click.argument('email')
 @click.option('-o', '--organization', 'organization_name',
               type=click.Choice(config.ORGANIZATIONS),
@@ -97,3 +104,92 @@ def users_create_default(email, organization_name, id_):
     except Exception as e:
         click.echo('Something went wrong: {0}'.format(e))
         sys.exit(1)
+
+
+@users.command(
+    'get',
+    help='Get information of users matching search criteria.')
+@click.option(
+    '--id',
+    help='The id of the user.')
+@click.option(
+    '-e',
+    '--email',
+    help='The email of the user.')
+@click.option(
+    '-ut',
+    '--user-token',
+    help='The REANA_ACCESS_TOKEN of the user.')
+@click.option(
+    '-t',
+    '--token',
+    default=os.environ.get('REANA_TOKEN', None),
+    help='The api key of an administrator.')
+@click.option(
+    '--json',
+    'output_format',
+    flag_value='json',
+    default=None,
+    help='Get output in JSON format.')
+@click.pass_context
+def get_users(ctx, id, email, user_token, token, output_format):
+    """Return user information."""
+    try:
+        response = _get_users(id, email, user_token, token)
+        headers = ['id', 'email', 'token']
+        data = []
+        for user in response:
+            data.append((str(user.id_), user.email, user.api_key))
+        if output_format:
+            tablib_data = tablib.Dataset()
+            tablib_data.headers = headers
+            for row in data:
+                tablib_data.append(row)
+
+            click.echo(tablib_data.export(output_format))
+        else:
+            click_table_printer(headers, [], data)
+
+    except Exception as e:
+        logging.debug(traceback.format_exc())
+        logging.debug(str(e))
+        click.echo(
+            click.style('User could not be retrieved: \n{}'
+                        .format(str(e)), fg='red'),
+            err=True)
+
+
+@users.command(
+    'create',
+    help='Create a new user.')
+@click.option(
+    '-e',
+    '--email',
+    help='The email of the user.')
+@click.option(
+    '-ut',
+    '--user-token',
+    help='The REANA_ACCESS_TOKEN of the user.')
+@click.option(
+    '-t',
+    '--token',
+    default=os.environ.get('REANA_TOKEN', None),
+    help='The api key of an administrator.')
+@click.pass_context
+def create_user(ctx, email, user_token, token):
+    """Create a new user."""
+    try:
+        response = _create_user(email, user_token, token)
+        headers = ['id', 'email', 'token']
+        data = [(str(response.id_), response.email, response.api_key)]
+        click.echo(
+            click.style('User was successfully created.', fg='green'))
+        click_table_printer(headers, [], data)
+
+    except Exception as e:
+        logging.debug(traceback.format_exc())
+        logging.debug(str(e))
+        click.echo(
+            click.style('User could not be created: \n{}'
+                        .format(str(e)), fg='red'),
+            err=True)

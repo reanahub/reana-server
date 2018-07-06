@@ -21,6 +21,7 @@
 # submit itself to any jurisdiction.
 """REANA-Server utils."""
 
+import secrets
 from uuid import UUID
 
 import fs
@@ -28,6 +29,8 @@ from flask import current_app as app
 from reana_commons.database import Session
 from reana_commons.models import User
 from reana_commons.utils import get_user_analyses_dir
+
+from reana_server.config import ADMIN_USER_ID
 
 
 def is_uuid_v4(uuid_or_name):
@@ -55,3 +58,34 @@ def get_user_from_token(token):
     if not user:
         raise ValueError('Token not valid.')
     return str(user.id_)
+
+
+def _get_users(_id, email, user_token, token):
+    """Return all users matching search criteria."""
+    admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
+    if token != admin.api_key:
+        raise ValueError('Admin token invalid.')
+    search_criteria = dict()
+    if _id:
+        search_criteria['id_'] = _id
+    if email:
+        search_criteria['email'] = email
+    if user_token:
+        search_criteria['api_key'] = user_token
+    users = Session.query(User).filter_by(**search_criteria).all()
+    return users
+
+
+def _create_user(email, user_token, token):
+    """Create user with provided credentials."""
+    admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
+    if token != admin.api_key:
+        raise ValueError('Admin token invalid.')
+    if not user_token:
+        user_token = secrets.token_urlsafe(16)
+    user_parameters = dict(api_key=user_token)
+    user_parameters['email'] = email
+    user = User(**user_parameters)
+    Session.add(user)
+    Session.commit()
+    return user

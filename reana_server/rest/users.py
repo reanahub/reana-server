@@ -23,13 +23,13 @@
 
 from flask import Blueprint, jsonify, request
 import logging
-import secrets
 import traceback
 
 from reana_commons.database import Session
 from reana_commons.models import User
 
 from reana_server.config import ADMIN_USER_ID
+from reana_server.utils import _get_users, _create_user
 
 blueprint = Blueprint('users', __name__)
 
@@ -48,12 +48,17 @@ def get_user():  # noqa
       parameters:
         - name: email
           in: query
-          description: Required. The email of the user.
-          required: true
+          description: Not required. The email of the user.
+          required: false
           type: string
         - name: id_
           in: query
           description: Not required. UUID of the user.
+          required: false
+          type: string
+        - name: user_token
+          in: query
+          description: Not required. API key of the admin.
           required: false
           type: string
         - name: token
@@ -64,23 +69,33 @@ def get_user():  # noqa
       responses:
         200:
           description: >-
-            User was found. Returns all stored user information.
+            Users matching criteria were found.
+            Returns all stored user information.
           schema:
-            type: object
-            properties:
-              id_:
-                type: string
-              email:
-                type: string
-              token:
-                type: string
+            type: array
+            items:
+              type: object
+              properties:
+                id_:
+                  type: string
+                email:
+                  type: string
+                token:
+                  type: string
           examples:
             application/json:
-              {
-                "id": "00000000-0000-0000-0000-000000000000",
-                "email": "user@reana.info",
-                "token": "Drmhze6EPcv0fN_81Bj-nA",
-              }
+              [
+                {
+                  "id": "00000000-0000-0000-0000-000000000000",
+                  "email": "user@reana.info",
+                  "token": "Drmhze6EPcv0fN_81Bj-nA",
+                },
+                {
+                  "id": "00000000-0000-0000-0000-000000000001",
+                  "email": "user2@reana.info",
+                  "token": "Drmhze6EPcv0fN_81Bj-nB",
+                },
+              ]
         403:
           description: >-
             Request failed. The incoming payload seems malformed.
@@ -105,23 +120,22 @@ def get_user():  # noqa
     try:
         user_id = request.args.get('id_')
         user_email = request.args.get('email')
+        user_token = request.args.get('user_token')
         token = request.args.get('token')
-        admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
-        if token != admin.api_key:
-            return jsonify({"message": "Action not permitted."}), 403
-        search_criteria = dict()
-        if user_id:
-            search_criteria['id_'] = user_id
-        if user_email:
-            search_criteria['email'] = user_email
-        user = Session.query(User).filter_by(**search_criteria).one_or_none()
-        if user:
-            return jsonify(id_=user.id_,
-                           email=user.email,
-                           token=user.api_key), 200
+        users = _get_users(user_id, user_email, user_token, token)
+        if users:
+            users_response = []
+            for user in users:
+                user_response = dict(id_=user.id_,
+                                     email=user.email,
+                                     token=user.api_key)
+                users_response.append(user_response)
+            return jsonify(users_response), 200
         else:
             return jsonify({"message": "User {} does not exist.".
-                           format(user_id)}, 404)
+                            format(user_id)}, 404)
+    except ValueError:
+        return jsonify({"message": "Action not permitted."}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
@@ -145,6 +159,11 @@ def create_user():  # noqa
           in: query
           description: Required. The email of the user.
           required: true
+          type: string
+        - name: user_token
+          in: query
+          description: Required. API key of the user.
+          required: false
           type: string
         - name: token
           in: query
@@ -185,21 +204,15 @@ def create_user():  # noqa
     """
     try:
         user_email = request.args.get('email')
+        user_token = request.args.get('user_token')
         token = request.args.get('token')
-        admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
-        if token != admin.api_key:
-            return jsonify({"message": "Action not permitted."}), 403
-        user_parameters = dict(api_key=secrets.token_urlsafe())
-        user_parameters['email'] = user_email
-        user = User(**user_parameters)
-        Session.add(user)
-        Session.commit()
-
+        user = _create_user(user_email, user_token, token)
         return jsonify({"message": "User was successfully created.",
                         "id_": user.id_,
                         "email": user.email,
                         "token": user.api_key}), 201
-
+    except ValueError:
+        return jsonify({"message": "Action not permitted."}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500

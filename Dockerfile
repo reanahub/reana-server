@@ -49,7 +49,7 @@ ENV FLASK_APP=/code/reana_server/app.py
 EXPOSE 5000
 
 CMD flask db init && \
-    flask users create info@reana.io &&\
+    flask users create_default info@reana.io &&\
     uwsgi --module reana_server.app:app \
     --http-socket 0.0.0.0:5000 --master \
     --processes ${UWSGI_PROCESSES} --threads ${UWSGI_THREADS} \
