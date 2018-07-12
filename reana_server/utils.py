@@ -28,7 +28,7 @@ import fs
 from flask import current_app as app
 from reana_commons.database import Session
 from reana_commons.models import User
-from reana_commons.utils import get_user_analyses_dir
+from reana_commons.utils import get_user_workflows_dir
 
 from reana_server.config import ADMIN_USER_ID
 
@@ -45,11 +45,11 @@ def is_uuid_v4(uuid_or_name):
 
 
 def create_user_space(user_id, org):
-    """Create analyses directory for `user_id`."""
+    """Create workflows directory for `user_id`."""
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
-    user_analyses_dir = get_user_analyses_dir(org, user_id)
-    if not reana_fs.exists(user_analyses_dir):
-        reana_fs.makedirs(user_analyses_dir)
+    user_workflows_dir = get_user_workflows_dir(org, user_id)
+    if not reana_fs.exists(user_workflows_dir):
+        reana_fs.makedirs(user_workflows_dir)
 
 
 def get_user_from_token(token):

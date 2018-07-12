@@ -34,7 +34,7 @@ Features
 - transmits REST API requests to appropriate REANA cloud components
 - REST API to run research analysis workflows on compute clouds
 - REST API to seed analysis workspace with input code and data
-- REST API to list submitted analyses and enquire about their statuses
+- REST API to list submitted workflows and enquire about their statuses
 - REST API to download results of finished analysis workflows
 
 Useful links

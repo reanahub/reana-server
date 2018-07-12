@@ -19,7 +19,7 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-"""Reana-Server analysis-functionality Flask-Blueprint."""
+"""Reana-Server workflow-functionality Flask-Blueprint."""
 import io
 import logging
 import traceback
@@ -31,37 +31,37 @@ from flask import Blueprint, jsonify, request, send_file
 from reana_server.utils import is_uuid_v4, get_user_from_token
 from ..api_client import create_openapi_client
 
-blueprint = Blueprint('analyses', __name__)
+blueprint = Blueprint('workflows', __name__)
 rwc_api_client = create_openapi_client('reana-workflow-controller')
 
 
-@blueprint.route('/analyses', methods=['GET'])
-def get_analyses():  # noqa
-    r"""Get all current analyses in REANA.
+@blueprint.route('/workflows', methods=['GET'])
+def get_workflows():  # noqa
+    r"""Get all current workflows in REANA.
 
     ---
     get:
-      summary: Returns list of all current analyses in REANA.
+      summary: Returns list of all current workflows in REANA.
       description: >-
-        This resource return all current analyses in JSON format.
-      operationId: get_analyses
+        This resource return all current workflows in JSON format.
+      operationId: get_workflows
       produces:
        - application/json
       parameters:
         - name: organization
           in: query
-          description: Required. Organization which the analysis belongs to.
+          description: Required. Organization which the workflow belongs to.
           required: true
           type: string
         - name: token
           in: query
-          description: Required. The API token of analysis owner.
+          description: Required. The API token of workflow owner.
           required: true
           type: string
       responses:
         200:
           description: >-
-            Request succeeded. The response contains the list of all analyses.
+            Request succeeded. The response contains the list of all workflows.
           schema:
             type: array
             items:
@@ -158,9 +158,9 @@ def get_analyses():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses', methods=['POST'])
-def create_analysis():  # noqa
-    r"""Create a analysis.
+@blueprint.route('/workflows', methods=['POST'])
+def create_workflow():  # noqa
+    r"""Create a workflow.
 
     ---
     post:
@@ -168,7 +168,7 @@ def create_analysis():  # noqa
       description: >-
         This resource is expecting a REANA specification in JSON format with
         all the necessary information to instantiate a workflow.
-      operationId: create_analysis
+      operationId: create_workflow
       consumes:
         - application/json
       produces:
@@ -194,13 +194,13 @@ def create_analysis():  # noqa
         - name: reana_spec
           in: body
           description: REANA specification with necessary data to instantiate
-            an analysis.
+            a workflow.
           required: false
           schema:
             type: object
         - name: token
           in: query
-          description: Required. The API token of analysis owner.
+          description: Required. The API token of workflow owner.
           required: true
           type: string
       responses:
@@ -299,18 +299,18 @@ def create_analysis():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id_or_name>/workspace/inputs',
+@blueprint.route('/workflows/<workflow_id_or_name>/workspace/inputs',
                  methods=['POST'])
-def seed_analysis_input(analysis_id_or_name):  # noqa
-    r"""Seed analysis with input files.
+def seed_workflow_input(workflow_id_or_name):  # noqa
+    r"""Seed workflow with input files.
 
     ---
     post:
-      summary: Seeds the analysis workspace with the provided file.
+      summary: Seeds the workflow workspace with the provided file.
       description: >-
-        This resource expects a file which will be placed in the analysis
-        workspace identified by the UUID `analysis_id`.
-      operationId: seed_analysis_inputs
+        This resource expects a file which will be placed in the workflow
+        workspace identified by the UUID `workflow_id`.
+      operationId: seed_workflow_inputs
       consumes:
         - multipart/form-data
       produces:
@@ -318,10 +318,10 @@ def seed_analysis_input(analysis_id_or_name):  # noqa
       parameters:
         - name: organization
           in: query
-          description: Required. Organization which the analysis belongs to.
+          description: Required. Organization which the workflow belongs to.
           required: true
           type: string
-        - name: analysis_id_or_name
+        - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name
           required: true
@@ -329,7 +329,7 @@ def seed_analysis_input(analysis_id_or_name):  # noqa
         - name: file_content
           in: formData
           description: >-
-            Required. File to be transferred to the analysis workspace.
+            Required. File to be transferred to the workflow workspace.
           required: true
           type: file
         - name: file_name
@@ -339,7 +339,7 @@ def seed_analysis_input(analysis_id_or_name):  # noqa
           type: string
         - name: token
           in: query
-          description: Required. The API token of analysis owner.
+          description: Required. The API token of workflow owner.
           required: true
           type: string
       responses:
@@ -384,16 +384,16 @@ def seed_analysis_input(analysis_id_or_name):  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('token'))
-        workflow_id_or_name = analysis_id_or_name
+        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("analysis_id_or_name is not supplied")
+            raise KeyError("workflow_id_or_name is not supplied")
 
         file_ = request.files['file_content'].stream.read()
         response, http_response = rwc_api_client.api.seed_workflow_files(
             user=user_id,
             organization=request.args['organization'],
-            workflow_id_or_name=analysis_id_or_name,
+            workflow_id_or_name=workflow_id_or_name,
             file_content=file_,
             file_name=request.args['file_name'],
             file_type='input').result()
@@ -413,18 +413,18 @@ def seed_analysis_input(analysis_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id_or_name>/workspace/code',
+@blueprint.route('/workflows/<workflow_id_or_name>/workspace/code',
                  methods=['POST'])
-def seed_analysis_code(analysis_id_or_name):  # noqa
-    r"""Seed analysis with code files.
+def seed_workflow_code(workflow_id_or_name):  # noqa
+    r"""Seed workflow with code files.
 
     ---
     post:
-      summary: Seeds the analysis workspace with the provided file.
+      summary: Seeds the workflow workspace with the provided file.
       description: >-
-        This resource expects a file which will be placed in the analysis
-        workspace identified by the UUID `analysis_id`.
-      operationId: seed_analysis_code
+        This resource expects a file which will be placed in the workflow
+        workspace identified by the UUID `workflow_id`.
+      operationId: seed_workflow_code
       consumes:
         - multipart/form-data
       produces:
@@ -432,10 +432,10 @@ def seed_analysis_code(analysis_id_or_name):  # noqa
       parameters:
         - name: organization
           in: query
-          description: Required. Organization which the analysis belongs to.
+          description: Required. Organization which the workflow belongs to.
           required: true
           type: string
-        - name: analysis_id_or_name
+        - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
           required: true
@@ -443,7 +443,7 @@ def seed_analysis_code(analysis_id_or_name):  # noqa
         - name: file_content
           in: formData
           description: >-
-            Required. File to be transferred to the analysis workspace.
+            Required. File to be transferred to the workflow workspace.
           required: true
           type: file
         - name: file_name
@@ -453,7 +453,7 @@ def seed_analysis_code(analysis_id_or_name):  # noqa
           type: string
         - name: token
           in: query
-          description: Required. The API token of analysis owner.
+          description: Required. The API token of workflow owner.
           required: true
           type: string
       responses:
@@ -498,16 +498,16 @@ def seed_analysis_code(analysis_id_or_name):  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('token'))
-        workflow_id_or_name = analysis_id_or_name
+        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("analysis_id_or_name is not supplied")
+            raise KeyError("workflow_id_or_name is not supplied")
 
         file_ = request.files['file_content'].stream.read()
         response, http_response = rwc_api_client.api.seed_workflow_files(
             user=user_id,
             organization=request.args['organization'],
-            workflow_id_or_name=analysis_id_or_name,
+            workflow_id_or_name=workflow_id_or_name,
             file_content=file_,
             file_name=request.args['file_name'],
             file_type='code').result()
@@ -527,17 +527,17 @@ def seed_analysis_code(analysis_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id_or_name>/logs', methods=['GET'])
-def get_analysis_logs(analysis_id_or_name):  # noqa
-    r"""Get analysis logs.
+@blueprint.route('/workflows/<workflow_id_or_name>/logs', methods=['GET'])
+def get_workflow_logs(workflow_id_or_name):  # noqa
+    r"""Get workflow logs.
 
     ---
     get:
-      summary: Get workflow logs of an analysis.
+      summary: Get workflow logs of a workflow.
       description: >-
-        This resource reports the status of an analysis.
-        Resource is expecting a analysis UUID.
-      operationId: get_analysis_logs
+        This resource reports the status of a workflow.
+        Resource is expecting a workflow UUID.
+      operationId: get_workflow_logs
       produces:
         - application/json
       parameters:
@@ -551,7 +551,7 @@ def get_analysis_logs(analysis_id_or_name):  # noqa
           description: Required. API token of workflow owner.
           required: true
           type: string
-        - name: analysis_id_or_name
+        - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
           required: true
@@ -559,7 +559,7 @@ def get_analysis_logs(analysis_id_or_name):  # noqa
       responses:
         200:
           description: >-
-            Request succeeded. Info about an analysis, including the status is
+            Request succeeded. Info about a workflow, including the status is
             returned.
           schema:
             type: object
@@ -617,15 +617,15 @@ def get_analysis_logs(analysis_id_or_name):  # noqa
     try:
         user_id = get_user_from_token(request.args.get('token'))
         organization = request.args['organization']
-        workflow_id_or_name = analysis_id_or_name
+        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("analysis_id_or_name is not supplied")
+            raise KeyError("workflow_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_logs(
             user=user_id,
             organization=organization,
-            workflow_id_or_name=analysis_id_or_name).result()
+            workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -642,17 +642,17 @@ def get_analysis_logs(analysis_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id_or_name>/status', methods=['GET'])
-def analysis_status(analysis_id_or_name):  # noqa
-    r"""Get analysis status.
+@blueprint.route('/workflows/<workflow_id_or_name>/status', methods=['GET'])
+def workflow_status(workflow_id_or_name):  # noqa
+    r"""Get workflow status.
 
     ---
     get:
-      summary: Get status of an analysis.
+      summary: Get status of a workflow.
       description: >-
-        This resource reports the status of an analysis.
-        Resource is expecting a analysis UUID.
-      operationId: get_analysis_status
+        This resource reports the status of a workflow.
+        Resource is expecting a workflow UUID.
+      operationId: get_workflow_status
       produces:
         - application/json
       parameters:
@@ -661,20 +661,20 @@ def analysis_status(analysis_id_or_name):  # noqa
           description: Required. Organization which the worklow belongs to.
           required: true
           type: string
-        - name: analysis_id_or_name
+        - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
           required: true
           type: string
         - name: token
           in: query
-          description: Required. The API token of analysis owner.
+          description: Required. The API token of workflow owner.
           required: true
           type: string
       responses:
         200:
           description: >-
-            Request succeeded. Info about an analysis, including the status is
+            Request succeeded. Info about a workflow, including the status is
             returned.
           schema:
             type: object
@@ -739,10 +739,10 @@ def analysis_status(analysis_id_or_name):  # noqa
     try:
         user_id = get_user_from_token(request.args.get('token'))
         organization = request.args['organization']
-        workflow_id_or_name = analysis_id_or_name
+        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("analysis_id_or_name is not supplied")
+            raise KeyError("workflow_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_status(
             user=user_id,
@@ -764,16 +764,16 @@ def analysis_status(analysis_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id_or_name>/status', methods=['PUT'])
-def set_analysis_status(analysis_id_or_name):  # noqa
-    r"""Set analysis status.
+@blueprint.route('/workflows/<workflow_id_or_name>/status', methods=['PUT'])
+def set_workflow_status(workflow_id_or_name):  # noqa
+    r"""Set workflow status.
     ---
     put:
-      summary: Set status of an analysis.
+      summary: Set status of a workflow.
       description: >-
-        This resource reports the status of an analysis.
-        Resource is expecting a analysis UUID.
-      operationId: set_analysis_status
+        This resource reports the status of a workflow.
+        Resource is expecting a workflow UUID.
+      operationId: set_workflow_status
       consumes:
         - application/json
       produces:
@@ -784,27 +784,27 @@ def set_analysis_status(analysis_id_or_name):  # noqa
           description: Required. Organization which the worklow belongs to.
           required: true
           type: string
-        - name: analysis_id_or_name
+        - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
           required: true
           type: string
         - name: status
           in: body
-          description: Required. New analysis status.
+          description: Required. New workflow status.
           required: true
           schema:
             type: string
             description: Required. New status.
         - name: token
           in: query
-          description: Required. The API token of analysis owner.
+          description: Required. The API token of workflow owner.
           required: true
           type: string
       responses:
         200:
           description: >-
-            Request succeeded. Info about an analysis, including the status is
+            Request succeeded. Info about a workflow, including the status is
             returned.
           schema:
             type: object
@@ -884,10 +884,10 @@ def set_analysis_status(analysis_id_or_name):  # noqa
     try:
         user_id = get_user_from_token(request.args.get('token'))
         organization = request.args['organization']
-        workflow_id_or_name = analysis_id_or_name
+        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("analysis_id_or_name is not supplied")
+            raise KeyError("workflow_id_or_name is not supplied")
 
         status = request.json
 
@@ -913,10 +913,10 @@ def set_analysis_status(analysis_id_or_name):  # noqa
 
 
 @blueprint.route(
-    '/analyses/<analysis_id_or_name>/workspace/outputs/<path:file_name>',
+    '/workflows/<workflow_id_or_name>/workspace/outputs/<path:file_name>',
     methods=['GET'])
-def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
-    r"""Get analysis status.
+def get_workflow_outputs_file(workflow_id_or_name, file_name):  # noqa
+    r"""Get workflow status.
 
     ---
     get:
@@ -924,18 +924,18 @@ def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
       description: >-
         This resource is expecting a workflow UUID and a file name to return
         its content.
-      operationId: get_analysis_outputs_file
+      operationId: get_workflow_outputs_file
       produces:
         - multipart/form-data
       parameters:
         - name: organization
           in: query
-          description: Required. Organization which the analysis belongs to.
+          description: Required. Organization which the workflow belongs to.
           required: true
           type: string
-        - name: analysis_id_or_name
+        - name: workflow_id_or_name
           in: path
-          description: Required. analysis UUID or name.
+          description: Required. workflow UUID or name.
           required: true
           type: string
         - name: file_name
@@ -945,7 +945,7 @@ def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
           type: string
         - name: token
           in: query
-          description: Required. The API token of analysis owner.
+          description: Required. The API token of workflow owner.
           required: true
           type: string
       responses:
@@ -987,10 +987,10 @@ def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
     try:
         user_id = get_user_from_token(request.args.get('token'))
         organization = request.args['organization']
-        workflow_id_or_name = analysis_id_or_name
+        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("analysis_id_or_name is not supplied")
+            raise KeyError("workflow_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_outputs_file(
             user=user_id,
@@ -1016,34 +1016,34 @@ def get_analysis_outputs_file(analysis_id_or_name, file_name):  # noqa
         return jsonify(e.response.json()), 500
 
 
-@blueprint.route('/analyses/<analysis_id_or_name>/workspace/inputs/',
+@blueprint.route('/workflows/<workflow_id_or_name>/workspace/inputs/',
                  methods=['GET'])
-def get_analysis_inputs_list(analysis_id_or_name):  # noqa
-    r"""List all analysis input files.
+def get_workflow_inputs_list(workflow_id_or_name):  # noqa
+    r"""List all workflow input files.
 
     ---
     get:
-      summary: Returns the list of input files for a specific analysis.
+      summary: Returns the list of input files for a specific workflow.
       description: >-
-        This resource is expecting an analysis UUID to return its list of
+        This resource is expecting a workflow UUID to return its list of
         input files.
-      operationId: get_analysis_inputs
+      operationId: get_workflow_inputs
       produces:
        - application/json
       parameters:
         - name: organization
           in: query
-          description: Required. Organization which the analysis belongs to.
+          description: Required. Organization which the workflow belongs to.
           required: true
           type: string
-        - name: analysis_id_or_name
+        - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
           required: true
           type: string
         - name: token
           in: query
-          description: Required. The API token of analysis owner.
+          description: Required. The API token of workflow owner.
           required: true
           type: string
       responses:
@@ -1095,15 +1095,15 @@ def get_analysis_inputs_list(analysis_id_or_name):  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('token'))
-        workflow_id_or_name = analysis_id_or_name
+        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("analysis_id_or_name is not supplied")
+            raise KeyError("workflow_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_files(
             user=user_id,
             organization=request.args.get('organization'),
-            workflow_id_or_name=analysis_id_or_name,
+            workflow_id_or_name=workflow_id_or_name,
             file_type='input').result()
 
         return jsonify(http_response.json()), http_response.status_code
@@ -1121,34 +1121,34 @@ def get_analysis_inputs_list(analysis_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id_or_name>/workspace/code/',
+@blueprint.route('/workflows/<workflow_id_or_name>/workspace/code/',
                  methods=['GET'])
-def get_analysis_code_list(analysis_id_or_name):  # noqa
-    r"""List all code files for a given analysis.
+def get_workflow_code_list(workflow_id_or_name):  # noqa
+    r"""List all code files for a given workflow.
 
     ---
     get:
-      summary: Returns the list of code files for a specific analysis.
+      summary: Returns the list of code files for a specific workflow.
       description: >-
-        This resource is expecting an analysis UUID to return its list of
+        This resource is expecting a workflow UUID to return its list of
         code files.
-      operationId: get_analysis_code
+      operationId: get_workflow_code
       produces:
        - application/json
       parameters:
         - name: organization
           in: query
-          description: Required. Organization which the analysis belongs to.
+          description: Required. Organization which the workflow belongs to.
           required: true
           type: string
-        - name: analysis_id_or_name
+        - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
           required: true
           type: string
         - name: token
           in: query
-          description: Required. The API token of analysis owner.
+          description: Required. The API token of workflow owner.
           required: true
           type: string
       responses:
@@ -1200,15 +1200,15 @@ def get_analysis_code_list(analysis_id_or_name):  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('token'))
-        workflow_id_or_name = analysis_id_or_name
+        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("analysis_id_or_name is not supplied")
+            raise KeyError("workflow_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_files(
             user=user_id,
             organization=request.args.get('organization'),
-            workflow_id_or_name=analysis_id_or_name,
+            workflow_id_or_name=workflow_id_or_name,
             file_type='code').result()
 
         return jsonify(http_response.json()), http_response.status_code
@@ -1226,34 +1226,34 @@ def get_analysis_code_list(analysis_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/analyses/<analysis_id_or_name>/workspace/outputs/',
+@blueprint.route('/workflows/<workflow_id_or_name>/workspace/outputs/',
                  methods=['GET'])
-def get_analysis_outputs_list(analysis_id_or_name):  # noqa
-    r"""List all analysis output files.
+def get_workflow_outputs_list(workflow_id_or_name):  # noqa
+    r"""List all workflow output files.
 
     ---
     get:
-      summary: Returns the list of output files for a specific analysis.
+      summary: Returns the list of output files for a specific workflow.
       description: >-
-        This resource is expecting an analysis UUID to return its list of
+        This resource is expecting a workflow UUID to return its list of
         output files.
-      operationId: get_analysis_outputs
+      operationId: get_workflow_outputs
       produces:
        - application/json
       parameters:
         - name: organization
           in: query
-          description: Required. Organization which the analysis belongs to.
+          description: Required. Organization which the workflow belongs to.
           required: true
           type: string
-        - name: analysis_id_or_name
+        - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
           required: true
           type: string
         - name: token
           in: query
-          description: Required. The API token of analysis owner.
+          description: Required. The API token of workflow owner.
           required: true
           type: string
       responses:
@@ -1305,15 +1305,15 @@ def get_analysis_outputs_list(analysis_id_or_name):  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('token'))
-        workflow_id_or_name = analysis_id_or_name
+        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("analysis_id_or_name is not supplied")
+            raise KeyError("workflow_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_workflow_files(
             user=user_id,
             organization=request.args.get('organization'),
-            workflow_id_or_name=analysis_id_or_name,
+            workflow_id_or_name=workflow_id_or_name,
             file_type='output').result()
 
         return jsonify(http_response.json()), http_response.status_code
