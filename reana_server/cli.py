@@ -80,8 +80,8 @@ def users_create_default(email, id_):
             create_user_workspace(user.get_user_workspace())
             Session.add(user)
             Session.commit()
-            click.echo('Created 1st user with api_key: {}'.
-                       format(user_characteristics['api_key']))
+            click.echo('Created 1st user with access_token: {}'.
+                       format(user_characteristics['access_token']))
     except Exception as e:
         click.echo('Something went wrong: {0}'.format(e))
         sys.exit(1)

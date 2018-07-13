@@ -28,7 +28,7 @@ import os
 import shutil
 
 import pytest
-from reana_commons.models import Base, Organization, User, UserOrganization
+from reana_commons.models import Base, User
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy_utils import create_database, database_exists, drop_database
@@ -58,7 +58,6 @@ def base_app(tmp_shared_volume_path):
         'SQLALCHEMY_DATABASE_URI':
         'sqlite:///',
         'SQLALCHEMY_TRACK_MODIFICATIONS': False,
-        'ORGANIZATIONS': ['default'],
     }
     app_ = create_app(config_mapping)
     return app_
