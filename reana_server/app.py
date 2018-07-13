@@ -37,6 +37,7 @@ def shutdown_session(response_or_exc):
     current_app.session.remove()
     return response_or_exc
 
+
 if __name__ == '__main__':
 
     logging.basicConfig(

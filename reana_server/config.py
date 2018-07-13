@@ -39,10 +39,6 @@ AVAILABLE_WORKFLOW_ENGINES = [
 ]
 """Available workflow engines."""
 
-ORGANIZATIONS = ['atlas', 'alice', 'cms', 'default', 'lhcb']
-
-
 ADMIN_USER_ID = "00000000-0000-0000-0000-000000000000"
-
 
 SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/reana')

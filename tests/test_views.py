@@ -23,11 +23,11 @@
 """Test server views."""
 
 import pytest
-from reana_commons.models import User, UserOrganization
+from reana_commons.models import User
 
 
 @pytest.fixture()
-def default_user(app, session, default_organization):
+def default_user(app, session):
     """Create users."""
     default_user_id = '00000000-0000-0000-0000-000000000000'
     user = User.query.filter_by(
@@ -36,9 +36,5 @@ def default_user(app, session, default_organization):
         user = User(id_=default_user_id,
                     email='info@reana.io', access_token='secretkey')
         session.add(user)
-        session.commit()
-        user_org = UserOrganization(user_id=default_user_id,
-                                    name='default')
-        session.add(user_org)
         session.commit()
     return user

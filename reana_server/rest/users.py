@@ -25,10 +25,6 @@ from flask import Blueprint, jsonify, request
 import logging
 import traceback
 
-from reana_commons.database import Session
-from reana_commons.models import User
-
-from reana_server.config import ADMIN_USER_ID
 from reana_server.utils import _get_users, _create_user
 
 blueprint = Blueprint('users', __name__)
