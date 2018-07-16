@@ -299,234 +299,6 @@ def create_workflow():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/workspace/inputs',
-                 methods=['POST'])
-def seed_workflow_input(workflow_id_or_name):  # noqa
-    r"""Seed workflow with input files.
-
-    ---
-    post:
-      summary: Seeds the workflow workspace with the provided file.
-      description: >-
-        This resource expects a file which will be placed in the workflow
-        workspace identified by the UUID `workflow_id`.
-      operationId: seed_workflow_inputs
-      consumes:
-        - multipart/form-data
-      produces:
-        - application/json
-      parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the workflow belongs to.
-          required: true
-          type: string
-        - name: workflow_id_or_name
-          in: path
-          description: Required. Analysis UUID or name
-          required: true
-          type: string
-        - name: file_content
-          in: formData
-          description: >-
-            Required. File to be transferred to the workflow workspace.
-          required: true
-          type: file
-        - name: file_name
-          in: query
-          description: Required. File name.
-          required: true
-          type: string
-        - name: access_token
-          in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
-          type: string
-      responses:
-        200:
-          description: >-
-            Request succeeded. File successfully trasferred.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "File successfully transferred",
-              }
-        400:
-          description: >-
-            Request failed. The incoming payload seems malformed
-        403:
-          description: >-
-            Request failed. User is not allowed to access workflow.
-          examples:
-            application/json:
-              {
-                "message": "User 00000000-0000-0000-0000-000000000000
-                            is not allowed to access workflow
-                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
-              }
-        404:
-          description: >-
-            Request failed. User does not exist.
-          examples:
-            application/json:
-              {
-                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
-                            not exist"
-              }
-        500:
-          description: >-
-            Request failed. Internal controller error.
-    """
-    try:
-        user_id = get_user_from_token(request.args.get('access_token'))
-        workflow_id_or_name = workflow_id_or_name
-
-        if not workflow_id_or_name:
-            raise KeyError("workflow_id_or_name is not supplied")
-
-        file_ = request.files['file_content'].stream.read()
-        response, http_response = rwc_api_client.api.seed_workflow_files(
-            user=user_id,
-            organization=request.args['organization'],
-            workflow_id_or_name=workflow_id_or_name,
-            file_content=file_,
-            file_name=request.args['file_name'],
-            file_type='input').result()
-
-        return jsonify(response), http_response.status_code
-    except HTTPError as e:
-        logging.error(traceback.format_exc())
-        return jsonify(e.response.json()), e.response.status_code
-    except KeyError as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 400
-    except ValueError as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 403
-    except Exception as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 500
-
-
-@blueprint.route('/workflows/<workflow_id_or_name>/workspace/code',
-                 methods=['POST'])
-def seed_workflow_code(workflow_id_or_name):  # noqa
-    r"""Seed workflow with code files.
-
-    ---
-    post:
-      summary: Seeds the workflow workspace with the provided file.
-      description: >-
-        This resource expects a file which will be placed in the workflow
-        workspace identified by the UUID `workflow_id`.
-      operationId: seed_workflow_code
-      consumes:
-        - multipart/form-data
-      produces:
-        - application/json
-      parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the workflow belongs to.
-          required: true
-          type: string
-        - name: workflow_id_or_name
-          in: path
-          description: Required. Analysis UUID or name.
-          required: true
-          type: string
-        - name: file_content
-          in: formData
-          description: >-
-            Required. File to be transferred to the workflow workspace.
-          required: true
-          type: file
-        - name: file_name
-          in: query
-          description: Required. File name.
-          required: true
-          type: string
-        - name: access_token
-          in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
-          type: string
-      responses:
-        200:
-          description: >-
-            Request succeeded. File successfully transferred.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "File successfully transferred",
-              }
-        400:
-          description: >-
-            Request failed. The incoming payload seems malformed
-        403:
-          description: >-
-            Request failed. User is not allowed to access workflow.
-          examples:
-            application/json:
-              {
-                "message": "User 00000000-0000-0000-0000-000000000000
-                            is not allowed to access workflow
-                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
-              }
-        404:
-          description: >-
-            Request failed. User does not exist.
-          examples:
-            application/json:
-              {
-                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
-                            not exist"
-              }
-        500:
-          description: >-
-            Request failed. Internal controller error.
-    """
-    try:
-        user_id = get_user_from_token(request.args.get('access_token'))
-        workflow_id_or_name = workflow_id_or_name
-
-        if not workflow_id_or_name:
-            raise KeyError("workflow_id_or_name is not supplied")
-
-        file_ = request.files['file_content'].stream.read()
-        response, http_response = rwc_api_client.api.seed_workflow_files(
-            user=user_id,
-            organization=request.args['organization'],
-            workflow_id_or_name=workflow_id_or_name,
-            file_content=file_,
-            file_name=request.args['file_name'],
-            file_type='code').result()
-
-        return jsonify(response), http_response.status_code
-    except HTTPError as e:
-        logging.error(traceback.format_exc())
-        return jsonify(e.response.json()), e.response.status_code
-    except KeyError as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 400
-    except ValueError as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 403
-    except Exception as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 500
-
-
 @blueprint.route('/workflows/<workflow_id_or_name>/logs', methods=['GET'])
 def get_workflow_logs(workflow_id_or_name):  # noqa
     r"""Get workflow logs.
@@ -912,19 +684,131 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
+@blueprint.route('/workflows/<workflow_id_or_name>/workspace',
+                 methods=['POST'])
+def upload_file(workflow_id_or_name):  # noqa
+    r"""Upload file to workspace.
+
+    ---
+    post:
+      summary: Adds a file to the workspace.
+      description: >-
+        This resource is expecting a file to place in the workspace.
+      operationId: upload_file
+      consumes:
+        - multipart/form-data
+      produces:
+        - application/json
+      parameters:
+        - name: organization
+          in: query
+          description: Required. Organization which the workflow belongs to.
+          required: true
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+        - name: file_content
+          in: formData
+          description: >-
+            Required. File to be transferred to the workflow workspace.
+          required: true
+          type: file
+        - name: file_name
+          in: query
+          description: Required. File name.
+          required: true
+          type: string
+        - name: access_token
+          in: query
+          description: Required. The API access_token of workflow owner.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. File successfully transferred.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "File successfully transferred",
+              }
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. User does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        user_id = get_user_from_token(request.args.get('access_token'))
+        workflow_id_or_name = workflow_id_or_name
+
+        if not workflow_id_or_name:
+            raise KeyError("workflow_id_or_name is not supplied")
+
+        file_ = request.files['file_content'].stream.read()
+        response, http_response = rwc_api_client.api.upload_file(
+            user=user_id,
+            organization=request.args['organization'],
+            workflow_id_or_name=workflow_id_or_name,
+            file_content=file_,
+            file_name=request.args['file_name']).result()
+
+        return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except KeyError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
+
+
 @blueprint.route(
-    '/workflows/<workflow_id_or_name>/workspace/outputs/<path:file_name>',
+    '/workflows/<workflow_id_or_name>/workspace/<path:file_name>',
     methods=['GET'])
-def get_workflow_outputs_file(workflow_id_or_name, file_name):  # noqa
-    r"""Get workflow status.
+def download_file(workflow_id_or_name, file_name):  # noqa
+    r"""Download a file from the workspace.
 
     ---
     get:
       summary: Returns the requested file.
       description: >-
-        This resource is expecting a workflow UUID and a file name to return
-        its content.
-      operationId: get_workflow_outputs_file
+        This resource is expecting a workflow UUID and a file name existing
+        inside the workspace to return its content.
+      operationId: download_file
       produces:
         - multipart/form-data
       parameters:
@@ -992,7 +876,7 @@ def get_workflow_outputs_file(workflow_id_or_name, file_name):  # noqa
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
 
-        response, http_response = rwc_api_client.api.get_workflow_outputs_file(
+        response, http_response = rwc_api_client.api.download_file(
             user=user_id,
             organization=organization,
             workflow_id_or_name=workflow_id_or_name,
@@ -1013,128 +897,23 @@ def get_workflow_outputs_file(workflow_id_or_name, file_name):  # noqa
         return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
-        return jsonify(e.response.json()), 500
-
-
-@blueprint.route('/workflows/<workflow_id_or_name>/workspace/inputs/',
-                 methods=['GET'])
-def get_workflow_inputs_list(workflow_id_or_name):  # noqa
-    r"""List all workflow input files.
-
-    ---
-    get:
-      summary: Returns the list of input files for a specific workflow.
-      description: >-
-        This resource is expecting a workflow UUID to return its list of
-        input files.
-      operationId: get_workflow_inputs
-      produces:
-       - application/json
-      parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the workflow belongs to.
-          required: true
-          type: string
-        - name: workflow_id_or_name
-          in: path
-          description: Required. Analysis UUID or name.
-          required: true
-          type: string
-        - name: access_token
-          in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
-          type: string
-      responses:
-        200:
-          description: >-
-            Requests succeeded. The list of input files has been retrieved.
-          schema:
-            type: array
-            items:
-              type: object
-              properties:
-                name:
-                  type: string
-                last-modified:
-                  type: string
-                  format: date-time
-                size:
-                  type: integer
-        400:
-          description: >-
-            Request failed. The incoming payload seems malformed.
-        403:
-          description: >-
-            Request failed. User is not allowed to access workflow.
-          examples:
-            application/json:
-              {
-                "message": "User 00000000-0000-0000-0000-000000000000
-                            is not allowed to access workflow
-                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
-              }
-        404:
-          description: >-
-            Request failed. Analysis does not exist.
-          examples:
-            application/json:
-              {
-                "message": "Analysis 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
-                            not exist."
-              }
-        500:
-          description: >-
-            Request failed. Internal controller error.
-          examples:
-            application/json:
-              {
-                "message": "Either organization or user does not exist."
-              }
-    """
-    try:
-        user_id = get_user_from_token(request.args.get('access_token'))
-        workflow_id_or_name = workflow_id_or_name
-
-        if not workflow_id_or_name:
-            raise KeyError("workflow_id_or_name is not supplied")
-
-        response, http_response = rwc_api_client.api.get_workflow_files(
-            user=user_id,
-            organization=request.args.get('organization'),
-            workflow_id_or_name=workflow_id_or_name,
-            file_type='input').result()
-
-        return jsonify(http_response.json()), http_response.status_code
-    except HTTPError as e:
-        logging.error(traceback.format_exc())
-        return jsonify(e.response.json()), e.response.status_code
-    except KeyError as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 400
-    except ValueError as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 403
-    except Exception as e:
-        logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/workspace/code/',
+@blueprint.route('/workflows/<workflow_id_or_name>/workspace',
                  methods=['GET'])
-def get_workflow_code_list(workflow_id_or_name):  # noqa
-    r"""List all code files for a given workflow.
+def get_files(workflow_id_or_name):  # noqa
+    r"""List all files contained in a workspace.
 
     ---
     get:
-      summary: Returns the list of code files for a specific workflow.
+      summary: Returns the workspace file list.
       description: >-
-        This resource is expecting a workflow UUID to return its list of
-        code files.
-      operationId: get_workflow_code
+        This resource retrieves the file list of a workspace, given
+        its workflow UUID.
+      operationId: get_files
       produces:
-       - application/json
+        - application/json
       parameters:
         - name: organization
           in: query
@@ -1154,7 +933,7 @@ def get_workflow_code_list(workflow_id_or_name):  # noqa
       responses:
         200:
           description: >-
-            Requests succeeded. The list of code files has been retrieved.
+            Requests succeeded. The list of files has been retrieved.
           schema:
             type: array
             items:
@@ -1205,116 +984,10 @@ def get_workflow_code_list(workflow_id_or_name):  # noqa
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
 
-        response, http_response = rwc_api_client.api.get_workflow_files(
+        response, http_response = rwc_api_client.api.get_files(
             user=user_id,
             organization=request.args.get('organization'),
-            workflow_id_or_name=workflow_id_or_name,
-            file_type='code').result()
-
-        return jsonify(http_response.json()), http_response.status_code
-    except HTTPError as e:
-        logging.error(traceback.format_exc())
-        return jsonify(e.response.json()), e.response.status_code
-    except KeyError as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 400
-    except ValueError as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 403
-    except Exception as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 500
-
-
-@blueprint.route('/workflows/<workflow_id_or_name>/workspace/outputs/',
-                 methods=['GET'])
-def get_workflow_outputs_list(workflow_id_or_name):  # noqa
-    r"""List all workflow output files.
-
-    ---
-    get:
-      summary: Returns the list of output files for a specific workflow.
-      description: >-
-        This resource is expecting a workflow UUID to return its list of
-        output files.
-      operationId: get_workflow_outputs
-      produces:
-       - application/json
-      parameters:
-        - name: organization
-          in: query
-          description: Required. Organization which the workflow belongs to.
-          required: true
-          type: string
-        - name: workflow_id_or_name
-          in: path
-          description: Required. Analysis UUID or name.
-          required: true
-          type: string
-        - name: access_token
-          in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
-          type: string
-      responses:
-        200:
-          description: >-
-            Requests succeeded. The list of output files has been retrieved.
-          schema:
-            type: array
-            items:
-              type: object
-              properties:
-                name:
-                  type: string
-                last-modified:
-                  type: string
-                  format: date-time
-                size:
-                  type: integer
-        400:
-          description: >-
-            Request failed. The incoming payload seems malformed.
-        403:
-          description: >-
-            Request failed. User is not allowed to access workflow.
-          examples:
-            application/json:
-              {
-                "message": "User 00000000-0000-0000-0000-000000000000
-                            is not allowed to access workflow
-                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
-              }
-        404:
-          description: >-
-            Request failed. Analysis does not exist.
-          examples:
-            application/json:
-              {
-                "message": "Analysis 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
-                            not exist."
-              }
-        500:
-          description: >-
-            Request failed. Internal controller error.
-          examples:
-            application/json:
-              {
-                "message": "Either organization or user does not exist."
-              }
-    """
-    try:
-        user_id = get_user_from_token(request.args.get('access_token'))
-        workflow_id_or_name = workflow_id_or_name
-
-        if not workflow_id_or_name:
-            raise KeyError("workflow_id_or_name is not supplied")
-
-        response, http_response = rwc_api_client.api.get_workflow_files(
-            user=user_id,
-            organization=request.args.get('organization'),
-            workflow_id_or_name=workflow_id_or_name,
-            file_type='output').result()
+            workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(http_response.json()), http_response.status_code
     except HTTPError as e:

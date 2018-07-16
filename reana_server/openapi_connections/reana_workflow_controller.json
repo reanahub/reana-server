@@ -120,7 +120,7 @@
             "examples": {
               "application/json": [
                 {
-                  "created": "2018-06-13 09:47:35.66097",
+                  "created": "2018-06-13T09:47:35.66097",
                   "finished": "2018-06-13 09:49:35.66097",
                   "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                   "name": "mytest-1",
@@ -130,7 +130,7 @@
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
-                  "created": "2018-06-13 09:47:35.66097",
+                  "created": "2018-06-13T09:47:35.66097",
                   "finished": "2018-06-13 09:49:35.66097",
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
                   "name": "mytest-2",
@@ -140,7 +140,7 @@
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
-                  "created": "2018-06-13 09:47:35.66097",
+                  "created": "2018-06-13T09:47:35.66097",
                   "finished": "2018-06-13 09:49:35.66097",
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
                   "name": "mytest-3",
@@ -150,7 +150,7 @@
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
-                  "created": "2018-06-13 09:47:35.66097",
+                  "created": "2018-06-13T09:47:35.66097",
                   "finished": "No",
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
                   "name": "mytest-4",
@@ -217,7 +217,7 @@
         "summary": "Returns all workflows."
       },
       "post": {
-        "description": "This resource expects a POST call to create a new workflow workspace.",
+        "description": "This resource expects all necessary data to represent a workflow so it is stored in database and its workspace is created.",
         "operationId": "create_workflow",
         "parameters": [
           {
@@ -426,7 +426,7 @@
             "description": "Request succeeded. Info about workflow, including the status is returned.",
             "examples": {
               "application/json": {
-                "created": "2018-06-13 09:47:35.66097",
+                "created": "2018-06-13T09:47:35.66097",
                 "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                 "name": "mytest-1",
                 "organization": "default_org",
@@ -619,8 +619,8 @@
     },
     "/api/workflows/{workflow_id_or_name}/workspace": {
       "get": {
-        "description": "This resource is expecting a workflow UUID and a filename to return its list of code|input|output files.",
-        "operationId": "get_workflow_files",
+        "description": "This resource retrieves the file list of a workspace, given its workflow UUID.",
+        "operationId": "get_files",
         "parameters": [
           {
             "description": "Required. Organization which the worklow belongs to.",
@@ -641,13 +641,6 @@
             "in": "path",
             "name": "workflow_id_or_name",
             "required": true,
-            "type": "string"
-          },
-          {
-            "description": "Required. The file will be retrieved from the corresponding directory `workspace/<file_type>`. Possible values are `code`, `input` and `output`. `input` is the default value.",
-            "in": "query",
-            "name": "file_type",
-            "required": false,
             "type": "string"
           }
         ],
@@ -696,14 +689,14 @@
             }
           }
         },
-        "summary": "Returns the list of code|input|output files for a specific workflow."
+        "summary": "Returns the workspace file list."
       },
       "post": {
         "consumes": [
           "multipart/form-data"
         ],
-        "description": "This resource is expecting a workflow UUID and a file to place in the workflow workspace.",
-        "operationId": "seed_workflow_files",
+        "description": "This resource is expecting a workflow UUID and a file to place in the workspace.",
+        "operationId": "upload_file",
         "parameters": [
           {
             "description": "Required. Organization which the worklow belongs to.",
@@ -727,7 +720,7 @@
             "type": "string"
           },
           {
-            "description": "Required. File to add to the workflow workspace.",
+            "description": "Required. File to add to the workspace.",
             "in": "formData",
             "name": "file_content",
             "required": true,
@@ -739,13 +732,6 @@
             "name": "file_name",
             "required": true,
             "type": "string"
-          },
-          {
-            "description": "Required. If set to `input`, the file will be placed under `workspace/inputs/` whereas if it is of type `code` it will live under `workspace/code/`. By default it set to `input`.",
-            "in": "query",
-            "name": "file_type",
-            "required": false,
-            "type": "string"
           }
         ],
         "produces": [
@@ -756,7 +742,7 @@
             "description": "Request succeeded. The file has been added to the workspace.",
             "examples": {
               "application/json": {
-                "message": "input.csv has been successfully transferred."
+                "message": "`file_name` has been successfully uploaded."
               }
             },
             "schema": {
@@ -791,13 +777,13 @@
             "description": "Request failed. Internal controller error."
           }
         },
-        "summary": "Adds a file to the workflow workspace."
+        "summary": "Adds a file to the workspace."
       }
     },
-    "/api/workflows/{workflow_id_or_name}/workspace/outputs/{file_name}": {
+    "/api/workflows/{workflow_id_or_name}/workspace/{file_name}": {
       "get": {
-        "description": "This resource is expecting a workflow UUID and a filename to return its content.",
-        "operationId": "get_workflow_outputs_file",
+        "description": "This resource is expecting a workflow UUID and a filename existing inside the workspace to return its content.",
+        "operationId": "download_file",
         "parameters": [
           {
             "description": "Required. Organization which the worklow belongs to.",
