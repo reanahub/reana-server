@@ -35,7 +35,7 @@ from reana_commons.models import Organization, User, UserOrganization
 from reana_commons.utils import click_table_printer
 
 from reana_server import config
-from reana_server.utils import _create_user, _get_users, create_user_space
+from reana_server.utils import _create_user, _get_users, create_user_workspace
 
 
 @click.group()
@@ -91,7 +91,7 @@ def users_create_default(email, organization_name, id_):
         if not user:
             user_characteristics['access_token'] = secrets.token_urlsafe()
             user = User(**user_characteristics)
-            create_user_space(id_, organization_name)
+            create_user_workspace(user.get_user_workspace())
             Session.add(user)
             Session.commit()
             click.echo('Created 1st user with access_token: {}'.

@@ -28,7 +28,6 @@ import fs
 from flask import current_app as app
 from reana_commons.database import Session
 from reana_commons.models import User
-from reana_commons.utils import get_user_workflows_dir
 
 from reana_server.config import ADMIN_USER_ID
 
@@ -44,12 +43,11 @@ def is_uuid_v4(uuid_or_name):
     return uuid.hex == uuid_or_name.replace('-', '')
 
 
-def create_user_space(user_id, org):
-    """Create workflows directory for `user_id`."""
+def create_user_workspace(user_workspace_path):
+    """Create user workspace directory."""
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
-    user_workflows_dir = get_user_workflows_dir(org, user_id)
-    if not reana_fs.exists(user_workflows_dir):
-        reana_fs.makedirs(user_workflows_dir)
+    if not reana_fs.exists(user_workspace_path):
+        reana_fs.makedirs(user_workspace_path)
 
 
 def get_user_from_token(access_token):
