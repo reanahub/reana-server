@@ -130,7 +130,8 @@ def users_create_default(email, organization_name, id_):
     default=None,
     help='Get output in JSON format.')
 @click.pass_context
-def get_users(ctx, id, email, user_access_token, admin_access_token, output_format):
+def get_users(ctx, id, email, user_access_token, admin_access_token,
+              output_format):
     """Return user information."""
     try:
         response = _get_users(id, email, user_access_token, admin_access_token)

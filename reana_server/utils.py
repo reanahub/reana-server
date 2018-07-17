@@ -52,38 +52,39 @@ def create_user_space(user_id, org):
         reana_fs.makedirs(user_workflows_dir)
 
 
-def get_user_from_token(token):
+def get_user_from_token(access_token):
     """Validate that the token provided is valid."""
-    user = Session.query(User).filter_by(access_token=token).one_or_none()
+    user = Session.query(User).filter_by(access_token=access_token).\
+        one_or_none()
     if not user:
         raise ValueError('Token not valid.')
     return str(user.id_)
 
 
-def _get_users(_id, email, user_token, token):
+def _get_users(_id, email, user_access_token, admin_access_token):
     """Return all users matching search criteria."""
     admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
-    if token != admin.access_token:
-        raise ValueError('Admin token invalid.')
+    if admin_access_token != admin.access_token:
+        raise ValueError('Admin access token invalid.')
     search_criteria = dict()
     if _id:
         search_criteria['id_'] = _id
     if email:
         search_criteria['email'] = email
-    if user_token:
-        search_criteria['access_token'] = user_token
+    if user_access_token:
+        search_criteria['access_token'] = user_access_token
     users = Session.query(User).filter_by(**search_criteria).all()
     return users
 
 
-def _create_user(email, user_token, token):
+def _create_user(email, user_access_token, admin_access_token):
     """Create user with provided credentials."""
     admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
-    if token != admin.access_token:
-        raise ValueError('Admin token invalid.')
-    if not user_token:
-        user_token = secrets.token_urlsafe(16)
-    user_parameters = dict(access_token=user_token)
+    if admin_access_token != admin.access_token:
+        raise ValueError('Admin access token invalid.')
+    if not user_access_token:
+        user_access_token = secrets.token_urlsafe(16)
+    user_parameters = dict(access_token=user_access_token)
     user_parameters['email'] = email
     user = User(**user_parameters)
     Session.add(user)

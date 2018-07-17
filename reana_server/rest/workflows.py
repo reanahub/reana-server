@@ -53,9 +53,9 @@ def get_workflows():  # noqa
           description: Required. Organization which the workflow belongs to.
           required: true
           type: string
-        - name: token
+        - name: access_token
           in: query
-          description: Required. The API token of workflow owner.
+          description: Required. The API access_token of workflow owner.
           required: true
           type: string
       responses:
@@ -141,7 +141,7 @@ def get_workflows():  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('access_token'))
         response, http_response = rwc_api_client.api.get_workflows(
             user=user_id,
             organization=request.args.get('organization')).result()
@@ -198,9 +198,9 @@ def create_workflow():  # noqa
           required: false
           schema:
             type: object
-        - name: token
+        - name: access_token
           in: query
-          description: Required. The API token of workflow owner.
+          description: Required. The API access_token of workflow owner.
           required: true
           type: string
       responses:
@@ -253,7 +253,7 @@ def create_workflow():  # noqa
             Request failed. Not implemented.
     """
     try:
-        user_id = get_user_from_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('access_token'))
         if request.json:
             # validate against schema
             reana_spec_file = request.json
@@ -337,9 +337,9 @@ def seed_workflow_input(workflow_id_or_name):  # noqa
           description: Required. File name.
           required: true
           type: string
-        - name: token
+        - name: access_token
           in: query
-          description: Required. The API token of workflow owner.
+          description: Required. The API access_token of workflow owner.
           required: true
           type: string
       responses:
@@ -383,7 +383,7 @@ def seed_workflow_input(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user_id = get_user_from_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('access_token'))
         workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
@@ -451,9 +451,9 @@ def seed_workflow_code(workflow_id_or_name):  # noqa
           description: Required. File name.
           required: true
           type: string
-        - name: token
+        - name: access_token
           in: query
-          description: Required. The API token of workflow owner.
+          description: Required. The API access_token of workflow owner.
           required: true
           type: string
       responses:
@@ -497,7 +497,7 @@ def seed_workflow_code(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user_id = get_user_from_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('access_token'))
         workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
@@ -546,9 +546,9 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
           description: Required. Organization which the worklow belongs to.
           required: true
           type: string
-        - name: token
+        - name: access_token
           in: query
-          description: Required. API token of workflow owner.
+          description: Required. API access_token of workflow owner.
           required: true
           type: string
         - name: workflow_id_or_name
@@ -615,7 +615,7 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user_id = get_user_from_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('access_token'))
         organization = request.args['organization']
         workflow_id_or_name = workflow_id_or_name
 
@@ -666,9 +666,9 @@ def workflow_status(workflow_id_or_name):  # noqa
           description: Required. Analysis UUID or name.
           required: true
           type: string
-        - name: token
+        - name: access_token
           in: query
-          description: Required. The API token of workflow owner.
+          description: Required. The API access_token of workflow owner.
           required: true
           type: string
       responses:
@@ -737,7 +737,7 @@ def workflow_status(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user_id = get_user_from_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('access_token'))
         organization = request.args['organization']
         workflow_id_or_name = workflow_id_or_name
 
@@ -796,9 +796,9 @@ def set_workflow_status(workflow_id_or_name):  # noqa
           schema:
             type: string
             description: Required. New status.
-        - name: token
+        - name: access_token
           in: query
-          description: Required. The API token of workflow owner.
+          description: Required. The API access_token of workflow owner.
           required: true
           type: string
       responses:
@@ -882,7 +882,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('access_token'))
         organization = request.args['organization']
         workflow_id_or_name = workflow_id_or_name
 
@@ -943,9 +943,9 @@ def get_workflow_outputs_file(workflow_id_or_name, file_name):  # noqa
           description: Required. Name (or path) of the file to be downloaded.
           required: true
           type: string
-        - name: token
+        - name: access_token
           in: query
-          description: Required. The API token of workflow owner.
+          description: Required. The API access_token of workflow owner.
           required: true
           type: string
       responses:
@@ -985,7 +985,7 @@ def get_workflow_outputs_file(workflow_id_or_name, file_name):  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('access_token'))
         organization = request.args['organization']
         workflow_id_or_name = workflow_id_or_name
 
@@ -1041,9 +1041,9 @@ def get_workflow_inputs_list(workflow_id_or_name):  # noqa
           description: Required. Analysis UUID or name.
           required: true
           type: string
-        - name: token
+        - name: access_token
           in: query
-          description: Required. The API token of workflow owner.
+          description: Required. The API access_token of workflow owner.
           required: true
           type: string
       responses:
@@ -1094,7 +1094,7 @@ def get_workflow_inputs_list(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('access_token'))
         workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
@@ -1146,9 +1146,9 @@ def get_workflow_code_list(workflow_id_or_name):  # noqa
           description: Required. Analysis UUID or name.
           required: true
           type: string
-        - name: token
+        - name: access_token
           in: query
-          description: Required. The API token of workflow owner.
+          description: Required. The API access_token of workflow owner.
           required: true
           type: string
       responses:
@@ -1199,7 +1199,7 @@ def get_workflow_code_list(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('access_token'))
         workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
@@ -1251,9 +1251,9 @@ def get_workflow_outputs_list(workflow_id_or_name):  # noqa
           description: Required. Analysis UUID or name.
           required: true
           type: string
-        - name: token
+        - name: access_token
           in: query
-          description: Required. The API token of workflow owner.
+          description: Required. The API access_token of workflow owner.
           required: true
           type: string
       responses:
@@ -1304,7 +1304,7 @@ def get_workflow_outputs_list(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('token'))
+        user_id = get_user_from_token(request.args.get('access_token'))
         workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
