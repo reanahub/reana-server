@@ -116,7 +116,7 @@ def default_user(app, session, default_organization):
         id_=default_user_id).first()
     if not user:
         user = User(id_=default_user_id,
-                    email='info@reana.io', api_key='secretkey')
+                    email='info@reana.io', access_token='secretkey')
         session.add(user)
         session.commit()
         user_org = UserOrganization(user_id=default_user_id,

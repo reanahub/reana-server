@@ -128,7 +128,7 @@ def get_user():  # noqa
             for user in users:
                 user_response = dict(id_=user.id_,
                                      email=user.email,
-                                     token=user.api_key)
+                                     token=user.access_token)
                 users_response.append(user_response)
             return jsonify(users_response), 200
         else:
@@ -210,7 +210,7 @@ def create_user():  # noqa
         return jsonify({"message": "User was successfully created.",
                         "id_": user.id_,
                         "email": user.email,
-                        "token": user.api_key}), 201
+                        "token": user.access_token}), 201
     except ValueError:
         return jsonify({"message": "Action not permitted."}), 403
     except Exception as e:

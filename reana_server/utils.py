@@ -54,7 +54,7 @@ def create_user_space(user_id, org):
 
 def get_user_from_token(token):
     """Validate that the token provided is valid."""
-    user = Session.query(User).filter_by(api_key=token).one_or_none()
+    user = Session.query(User).filter_by(access_token=token).one_or_none()
     if not user:
         raise ValueError('Token not valid.')
     return str(user.id_)
@@ -63,7 +63,7 @@ def get_user_from_token(token):
 def _get_users(_id, email, user_token, token):
     """Return all users matching search criteria."""
     admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
-    if token != admin.api_key:
+    if token != admin.access_token:
         raise ValueError('Admin token invalid.')
     search_criteria = dict()
     if _id:
@@ -71,7 +71,7 @@ def _get_users(_id, email, user_token, token):
     if email:
         search_criteria['email'] = email
     if user_token:
-        search_criteria['api_key'] = user_token
+        search_criteria['access_token'] = user_token
     users = Session.query(User).filter_by(**search_criteria).all()
     return users
 
@@ -79,11 +79,11 @@ def _get_users(_id, email, user_token, token):
 def _create_user(email, user_token, token):
     """Create user with provided credentials."""
     admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
-    if token != admin.api_key:
+    if token != admin.access_token:
         raise ValueError('Admin token invalid.')
     if not user_token:
         user_token = secrets.token_urlsafe(16)
-    user_parameters = dict(api_key=user_token)
+    user_parameters = dict(access_token=user_token)
     user_parameters['email'] = email
     user = User(**user_parameters)
     Session.add(user)

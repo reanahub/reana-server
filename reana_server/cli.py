@@ -89,13 +89,13 @@ def users_create_default(email, organization_name, id_):
             Session.add(organization)
             Session.commit()
         if not user:
-            user_characteristics['api_key'] = secrets.token_urlsafe()
+            user_characteristics['access_token'] = secrets.token_urlsafe()
             user = User(**user_characteristics)
             create_user_space(id_, organization_name)
             Session.add(user)
             Session.commit()
-            click.echo('Created 1st user with api_key: {}'.
-                       format(user_characteristics['api_key']))
+            click.echo('Created 1st user with access_token: {}'.
+                       format(user_characteristics['access_token']))
         if not user_organization:
             user_organization = UserOrganization(
                 **user_organization_characteristics)
@@ -117,14 +117,12 @@ def users_create_default(email, organization_name, id_):
     '--email',
     help='The email of the user.')
 @click.option(
-    '-ut',
-    '--user-token',
-    help='The REANA_ACCESS_TOKEN of the user.')
+    '--user-access-token',
+    help='The access token of the user.')
 @click.option(
-    '-t',
-    '--token',
-    default=os.environ.get('REANA_TOKEN', None),
-    help='The api key of an administrator.')
+    '--admin-access-token',
+    default=os.environ.get('REANA_ACCESS_TOKEN', None),
+    help='The access token of an administrator.')
 @click.option(
     '--json',
     'output_format',
@@ -132,14 +130,14 @@ def users_create_default(email, organization_name, id_):
     default=None,
     help='Get output in JSON format.')
 @click.pass_context
-def get_users(ctx, id, email, user_token, token, output_format):
+def get_users(ctx, id, email, user_access_token, admin_access_token, output_format):
     """Return user information."""
     try:
-        response = _get_users(id, email, user_token, token)
-        headers = ['id', 'email', 'token']
+        response = _get_users(id, email, user_access_token, admin_access_token)
+        headers = ['id', 'email', 'access_token']
         data = []
         for user in response:
-            data.append((str(user.id_), user.email, user.api_key))
+            data.append((str(user.id_), user.email, user.access_token))
         if output_format:
             tablib_data = tablib.Dataset()
             tablib_data.headers = headers
@@ -167,21 +165,19 @@ def get_users(ctx, id, email, user_token, token, output_format):
     '--email',
     help='The email of the user.')
 @click.option(
-    '-ut',
-    '--user-token',
-    help='The REANA_ACCESS_TOKEN of the user.')
+    '--user-access-token',
+    help='The access token of the user.')
 @click.option(
-    '-t',
-    '--token',
-    default=os.environ.get('REANA_TOKEN', None),
-    help='The api key of an administrator.')
+    '--admin-access-token',
+    default=os.environ.get('REANA_ACCESS_TOKEN', None),
+    help='The access token of an administrator.')
 @click.pass_context
-def create_user(ctx, email, user_token, token):
+def create_user(ctx, email, user_access_token, admin_access_token):
     """Create a new user."""
     try:
-        response = _create_user(email, user_token, token)
-        headers = ['id', 'email', 'token']
-        data = [(str(response.id_), response.email, response.api_key)]
+        response = _create_user(email, user_access_token, admin_access_token)
+        headers = ['id', 'email', 'access_token']
+        data = [(str(response.id_), response.email, response.access_token)]
         click.echo(
             click.style('User was successfully created.', fg='green'))
         click_table_printer(headers, [], data)
