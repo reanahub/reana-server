@@ -247,14 +247,14 @@
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
                   "name": "mytest-3",
                   "organization": "default_org",
-                  "status": "waiting",
+                  "status": "created",
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
                   "name": "mytest-4",
                   "organization": "default_org",
-                  "status": "waiting",
+                  "status": "created",
                   "user": "00000000-0000-0000-0000-000000000000"
                 }
               ]
@@ -321,7 +321,7 @@
         "operationId": "create_workflow",
         "parameters": [
           {
-            "description": "Required. Organization which the worklow belongs to.",
+            "description": "Required. Organization which the workflow belongs to.",
             "in": "query",
             "name": "organization",
             "required": true,
@@ -421,7 +421,7 @@
         "operationId": "get_workflow_logs",
         "parameters": [
           {
-            "description": "Required. Organization which the worklow belongs to.",
+            "description": "Required. Organization which the workflow belongs to.",
             "in": "query",
             "name": "organization",
             "required": true,
@@ -515,7 +515,7 @@
         "operationId": "get_workflow_status",
         "parameters": [
           {
-            "description": "Required. Organization which the worklow belongs to.",
+            "description": "Required. Organization which the workflow belongs to.",
             "in": "query",
             "name": "organization",
             "required": true,
@@ -620,7 +620,7 @@
         "operationId": "set_workflow_status",
         "parameters": [
           {
-            "description": "Required. Organization which the worklow belongs to.",
+            "description": "Required. Organization which the workflow belongs to.",
             "in": "query",
             "name": "organization",
             "required": true,

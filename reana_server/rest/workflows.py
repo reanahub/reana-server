@@ -98,14 +98,14 @@ def get_workflows():  # noqa
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
                   "name": "mytest-3",
                   "organization": "default_org",
-                  "status": "waiting",
+                  "status": "created",
                   "user": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
                   "name": "mytest-4",
                   "organization": "default_org",
-                  "status": "waiting",
+                  "status": "created",
                   "user": "00000000-0000-0000-0000-000000000000"
                 }
               ]
@@ -176,7 +176,7 @@ def create_workflow():  # noqa
       parameters:
         - name: organization
           in: query
-          description: Required. Organization which the worklow belongs to.
+          description: Required. Organization which the workflow belongs to.
           required: true
           type: string
         - name: workflow_name
@@ -315,7 +315,7 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
       parameters:
         - name: organization
           in: query
-          description: Required. Organization which the worklow belongs to.
+          description: Required. Organization which the workflow belongs to.
           required: true
           type: string
         - name: access_token
@@ -430,7 +430,7 @@ def workflow_status(workflow_id_or_name):  # noqa
       parameters:
         - name: organization
           in: query
-          description: Required. Organization which the worklow belongs to.
+          description: Required. Organization which the workflow belongs to.
           required: true
           type: string
         - name: workflow_id_or_name
@@ -553,7 +553,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
       parameters:
         - name: organization
           in: query
-          description: Required. Organization which the worklow belongs to.
+          description: Required. Organization which the workflow belongs to.
           required: true
           type: string
         - name: workflow_id_or_name
