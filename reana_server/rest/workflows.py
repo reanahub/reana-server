@@ -256,14 +256,16 @@ def create_workflow():  # noqa
             return jsonify({'message':
                             'Workflow name cannot be a valid UUIDv4.'}), \
                 400
-
+        workflow_dict = {'specification': reana_spec_file['workflow']['spec'],
+                         'type': reana_spec_file['workflow']['type'],
+                         'name': workflow_name}
+        parameters = None
+        if 'inputs' in reana_spec_file:
+            if 'parameters' in reana_spec_file['inputs']:
+                parameters = reana_spec_file['inputs']['parameters']
+        workflow_dict['parameters'] = parameters
         response, http_response = rwc_api_client.api.create_workflow(
-            workflow={
-                'parameters': reana_spec_file['inputs']['parameters'],
-                'specification': reana_spec_file['workflow']['spec'],
-                'type': reana_spec_file['workflow']['type'],
-                'name': workflow_name
-            },
+            workflow=workflow_dict,
             user=user_id).result()
 
         return jsonify(response), http_response.status_code
