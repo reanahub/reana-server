@@ -70,6 +70,7 @@ install_requires = [
     'click>=6.7',
     'Flask>=0.11',
     'fs>=2.0',
+    'flask-cors>=3.0.6',
     'marshmallow>=2.13',
     'pyOpenSSL==17.3.0',  # FIXME remove once yadage-schemas solves deps.
     'reana-commons>=0.1.0',

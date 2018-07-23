@@ -22,6 +22,7 @@
 """Flask-application factory for Reana-Server."""
 
 from flask import Flask
+from flask_cors import CORS
 from reana_commons.database import Session
 
 
@@ -38,4 +39,5 @@ def create_app():
     app.register_blueprint(users.blueprint, url_prefix='/api')
 
     app.session = Session
+    CORS(app)
     return app
