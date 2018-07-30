@@ -259,11 +259,8 @@ def create_workflow():  # noqa
         workflow_dict = {'specification': reana_spec_file['workflow']['spec'],
                          'type': reana_spec_file['workflow']['type'],
                          'name': workflow_name}
-        parameters = None
-        if 'inputs' in reana_spec_file:
-            if 'parameters' in reana_spec_file['inputs']:
-                parameters = reana_spec_file['inputs']['parameters']
-        workflow_dict['parameters'] = parameters
+        workflow_dict['parameters'] = \
+            reana_spec_file.get('inputs', {}).get('parameters', {})
         response, http_response = rwc_api_client.api.create_workflow(
             workflow=workflow_dict,
             user=user_id).result()
