@@ -386,7 +386,7 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
 
 
 @blueprint.route('/workflows/<workflow_id_or_name>/status', methods=['GET'])
-def workflow_status(workflow_id_or_name):  # noqa
+def get_workflow_status(workflow_id_or_name):  # noqa
     r"""Get workflow status.
 
     ---
