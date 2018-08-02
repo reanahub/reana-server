@@ -30,9 +30,9 @@ import traceback
 import click
 import tablib
 from flask.cli import with_appcontext
+from reana_commons.utils import click_table_printer
 from reana_db.database import Session, init_db
 from reana_db.models import User
-from reana_commons.utils import click_table_printer
 
 from reana_server import config
 from reana_server.utils import _create_user, _get_users, create_user_workspace

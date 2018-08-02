@@ -28,7 +28,8 @@ from bravado.exception import HTTPError
 from flask import current_app as app
 from flask import Blueprint, jsonify, request, send_file
 
-from reana_server.utils import is_uuid_v4, get_user_from_token
+from reana_server.utils import get_user_from_token, is_uuid_v4
+
 from ..api_client import create_openapi_client
 
 blueprint = Blueprint('workflows', __name__)

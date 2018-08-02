@@ -23,7 +23,6 @@
 
 from flask import Blueprint, jsonify
 
-
 blueprint = Blueprint('ping', __name__)
 
 
