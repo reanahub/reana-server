@@ -21,11 +21,12 @@
 
 """Reana-Server User Endpoints."""
 
-from flask import Blueprint, jsonify, request
 import logging
 import traceback
 
-from reana_server.utils import _get_users, _create_user
+from flask import Blueprint, jsonify, request
+
+from reana_server.utils import _create_user, _get_users
 
 blueprint = Blueprint('users', __name__)
 
