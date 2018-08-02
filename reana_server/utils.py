@@ -26,8 +26,8 @@ from uuid import UUID
 
 import fs
 from flask import current_app as app
-from reana_commons.database import Session
-from reana_commons.models import User
+from reana_db.database import Session
+from reana_db.models import User
 
 from reana_server.config import ADMIN_USER_ID
 

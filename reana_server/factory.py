@@ -23,7 +23,7 @@
 
 from flask import Flask
 from flask_cors import CORS
-from reana_commons.database import Session
+from reana_db.database import Session
 
 
 def create_app():

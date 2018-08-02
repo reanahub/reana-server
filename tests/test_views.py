@@ -23,7 +23,7 @@
 """Test server views."""
 
 import pytest
-from reana_commons.models import User
+from reana_db.models import User
 
 
 @pytest.fixture()

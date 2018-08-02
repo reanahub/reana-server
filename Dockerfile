@@ -23,7 +23,9 @@ FROM python:3.6
 RUN apt-get update && \
     apt-get install -y vim-tiny
 
-RUN pip install -e git://github.com/reanahub/reana-commons.git@master#egg=reana-commons
+RUN pip install -e git://github.com/diegodelemos/reana-commons.git@extract-db-to-reana-db#egg=reana-commons
+RUN pip install -e git://github.com/diegodelemos/reana-db.git@initial-db-moved-from-commons#egg=reana-db
+
 
 COPY CHANGES.rst README.rst setup.py /code/
 COPY reana_server/version.py /code/reana_server/
