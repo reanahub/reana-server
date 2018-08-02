@@ -24,12 +24,14 @@
 import logging
 
 from flask import current_app
+from flask_jwt import JWT
 
+from reana_server.rest.users import authenticate, identity
 from reana_server.factory import create_app
 
 # Needed for flask.with_appcontext decorator to work.
 app = create_app()
-
+jwt = JWT(app, authenticate, identity)
 
 @app.teardown_appcontext
 def shutdown_session(response_or_exc):

@@ -21,17 +21,39 @@
 
 """Reana-Server User Endpoints."""
 
+from flask import Blueprint, jsonify, request, current_app
+from flask_jwt import jwt_required, current_identity
+from werkzeug.security import safe_str_cmp
 import logging
 import traceback
+from reana_commons.database import Session
+from reana_commons.models import User
 
 from flask import Blueprint, jsonify, request
 
 from reana_server.utils import _create_user, _get_users
+from reana_server.config import ADMIN_USER_ID
 
 blueprint = Blueprint('users', __name__)
 
+def authenticate(username, password):
+    user = _get_users(None, username, password)
+    user = user[0]
+    if user and safe_str_cmp(user.access_token, password):
+        # flask-jwt default request handler requires that the user
+        # object has an 'id' attribute that is JSON serializable
+        user.id = str(user.id_)
+        return user
+
+
+def identity(payload):
+    user_id = payload['identity']
+    user = _get_users(user_id, None, None)
+    return user
+
 
 @blueprint.route('/users', methods=['GET'])
+@jwt_required()
 def get_user():  # noqa
     r"""Endpoint to get user information from the server.
     ---
@@ -117,9 +139,14 @@ def get_user():  # noqa
     try:
         user_id = request.args.get('id_')
         user_email = request.args.get('email')
-        user_token = request.args.get('user_token')
-        access_token = request.args.get('access_token')
-        users = _get_users(user_id, user_email, user_token, access_token)
+        user_access_token = request.args.get('user_token')
+        admin_access_token = request.args.get('access_token')
+        # admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
+        # if admin_access_token != admin.access_token:
+        #     raise ValueError('Admin access token invalid.')
+        users = _get_users(user_id,
+                           user_email,
+                           user_access_token)
         if users:
             users_response = []
             for user in users:

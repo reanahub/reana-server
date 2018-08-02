@@ -23,6 +23,7 @@
 
 from flask import Flask
 from flask_cors import CORS
+from flask_jwt import JWT
 from reana_db.database import Session
 
 

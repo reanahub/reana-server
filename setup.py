@@ -69,6 +69,7 @@ install_requires = [
     'bravado>=9.0.6',
     'click>=6.7',
     'Flask>=0.11',
+    'Flask-JWT>=0.3.2',
     'fs>=2.0',
     'flask-cors>=3.0.6',
     'marshmallow>=2.13',
