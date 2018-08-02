@@ -18,5 +18,6 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
--e git+git://github.com/reanahub/reana-commons.git#egg=reana-commons
--e .[all]
+git+git://github.com/diegodelemos/reana-commons.git@extract-db-to-reana-db#egg=reana-commons
+git+git://github.com/diegodelemos/reana-db.git@initial-db-moved-from-commons#egg=reana-db
+.[all]
