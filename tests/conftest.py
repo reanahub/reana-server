@@ -28,7 +28,7 @@ import os
 import shutil
 
 import pytest
-from reana_commons.models import Base, User
+from reana_db.models import Base, User
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy_utils import create_database, database_exists, drop_database
@@ -79,7 +79,7 @@ def session(db_engine):
                                           autoflush=False,
                                           bind=db_engine))
     Base.query = Session.query_property()
-    from reana_commons.database import Session as _Session
+    from reana_db.database import Session as _Session
     _Session.configure(bind=db_engine)
     yield Session
 
@@ -88,7 +88,7 @@ def session(db_engine):
 def app(base_app, db_engine, session):
     """Flask application fixture."""
     with base_app.app_context():
-        import reana_commons.models
+        import reana_db.models
         Base.metadata.create_all(bind=db_engine)
         yield base_app
         for table in reversed(Base.metadata.sorted_tables):
