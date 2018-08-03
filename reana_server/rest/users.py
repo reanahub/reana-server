@@ -37,6 +37,7 @@ from reana_server.config import ADMIN_USER_ID
 blueprint = Blueprint('users', __name__)
 
 def authenticate(username, password):
+    """Flask-JWT specific method to authenticate users."""
     user = _get_users(None, username, password)
     user = user[0]
     if user and safe_str_cmp(user.access_token, password):
@@ -47,6 +48,7 @@ def authenticate(username, password):
 
 
 def identity(payload):
+    """Flask-JWT specific method to return the user with provided user_id."""
     user_id = payload['identity']
     user = _get_users(user_id, None, None)
     return user

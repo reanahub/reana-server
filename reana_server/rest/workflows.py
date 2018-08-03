@@ -27,6 +27,7 @@ import traceback
 from bravado.exception import HTTPError
 from flask import current_app as app
 from flask import Blueprint, jsonify, request, send_file
+from flask_jwt import jwt_required, current_identity
 
 from reana_server.utils import get_user_from_token, is_uuid_v4
 
@@ -37,6 +38,7 @@ rwc_api_client = create_openapi_client('reana-workflow-controller')
 
 
 @blueprint.route('/workflows', methods=['GET'])
+@jwt_required()
 def get_workflows():  # noqa
     r"""Get all current workflows in REANA.
 
@@ -131,7 +133,13 @@ def get_workflows():  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        if not request.args.get('access_token'):
+            if current_identity:
+                user_id = str(current_identity[0].id_)
+            else:
+                raise ValueError
+        else:
+            user_id = get_user_from_token(request.args.get('access_token'))
         response, http_response = rwc_api_client.api.get_workflows(
             user=user_id).result()
 
