@@ -49,13 +49,9 @@ def get_workflows():  # noqa
         This resource return all current workflows in JSON format.
       operationId: get_workflows
       produces:
-       - application/json
-      parameters:
-        - name: access_token
-          in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
-          type: string
+        - application/json
+      security:
+        - JWT: []
       responses:
         200:
           description: >-
@@ -170,6 +166,8 @@ def create_workflow():  # noqa
         - application/json
       produces:
         - application/json
+      security:
+        - JWT: []
       parameters:
         - name: workflow_name
           in: query
@@ -407,6 +405,8 @@ def get_workflow_status(workflow_id_or_name):  # noqa
       operationId: get_workflow_status
       produces:
         - application/json
+      security:
+        - JWT: []
       parameters:
         - name: workflow_id_or_name
           in: path

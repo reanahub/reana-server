@@ -26,8 +26,8 @@ from flask_jwt import jwt_required, current_identity
 from werkzeug.security import safe_str_cmp
 import logging
 import traceback
-from reana_commons.database import Session
-from reana_commons.models import User
+from reana_db.database import Session
+from reana_db.models import User
 
 from flask import Blueprint, jsonify, request
 
@@ -39,12 +39,13 @@ blueprint = Blueprint('users', __name__)
 def authenticate(username, password):
     """Flask-JWT specific method to authenticate users."""
     user = _get_users(None, username, password)
-    user = user[0]
-    if user and safe_str_cmp(user.access_token, password):
-        # flask-jwt default request handler requires that the user
-        # object has an 'id' attribute that is JSON serializable
-        user.id = str(user.id_)
-        return user
+    if user:
+        user = user[0]
+        if safe_str_cmp(user.access_token, password):
+            # flask-jwt default request handler requires that the user
+            # object has an 'id' attribute that is JSON serializable
+            user.id = str(user.id_)
+            return user
 
 
 def identity(payload):

@@ -46,6 +46,16 @@ __api_version__ = "0.1"
 # Filepath where the OpenAPI specification file should be written to.
 __output_path__ = "temp_openapi.json"
 
+# Security scheme definitions.
+__security_definitions__ = {
+                            "JWT": {
+                                "description": "",
+                                "type": "apiKey",
+                                "name": "Authorization",
+                                "in": "header"
+                            }
+                        }
+
 
 @click.command()
 @with_appcontext
@@ -57,11 +67,14 @@ def build_openapi_spec():
     package = __title__
     desc = __api_description__
     ver = __api_version__
+    security_definitions = __security_definitions__
+    
 
     # Create OpenAPI specification object
     spec = APISpec(
         title=package,
         version=ver,
+        securityDefinitons=security_definitions,
         info=dict(
             description=desc
         ),
