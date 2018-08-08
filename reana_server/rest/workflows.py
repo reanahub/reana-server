@@ -519,17 +519,21 @@ def set_workflow_status(workflow_id_or_name):  # noqa
           required: true
           type: string
         - name: status
-          in: body
+          in: query
           description: Required. New workflow status.
           required: true
-          schema:
-            type: string
-            description: Required. New status.
+          type: string
         - name: access_token
           in: query
           description: Required. The API access_token of workflow owner.
           required: true
           type: string
+        - name: parameters
+          in: body
+          description: Optional. Extra parameters for workflow status.
+          required: false
+          schema:
+            type: object
       responses:
         200:
           description: >-
@@ -613,13 +617,14 @@ def set_workflow_status(workflow_id_or_name):  # noqa
 
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
-
-        status = request.json
+        status = request.args.get('status')
+        parameters = request.json
 
         response, http_response = rwc_api_client.api.set_workflow_status(
             user=user_id,
             workflow_id_or_name=workflow_id_or_name,
-            status=status).result()
+            status=status,
+            parameters=parameters).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:

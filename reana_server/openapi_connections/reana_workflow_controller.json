@@ -469,12 +469,18 @@
           },
           {
             "description": "Required. New status.",
-            "in": "body",
+            "in": "query",
             "name": "status",
             "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Optional. Extra parameters for workflow status.",
+            "in": "body",
+            "name": "parameters",
+            "required": false,
             "schema": {
-              "description": "Required. New status.",
-              "type": "string"
+              "type": "object"
             }
           }
         ],
