@@ -21,13 +21,14 @@
 # submit itself to any jurisdiction.
 
 """
-The REANA Server offers a command line interface for management
-of user accounts. Specifically, from the cli an administrator
+The REANA Server offers a CLI for user account operations.
+
+Specifically, from the CLI an administrator
 can create new user accounts, and retrieve users based on given filters.
 
 By default the server docker image is set to create the administrator account
-on startup, which has the email ``info@reana.io`` and a token which is generated
-using the ``secrets`` python library.
+on startup, which has the email ``info@reana.io`` and a token which is
+generated using the ``secrets`` python library.
 
 To retrieve the administrator token you can run:
 
@@ -46,7 +47,7 @@ access the Postgresql database:
 .. code-block:: bash
 
     $ psql -U reana
-    
+
 and get all users:
 
 .. code-block:: sql
@@ -57,13 +58,13 @@ With the administrator access token, new user creation is allowed with:
 
 .. code-block :: bash
 
-    $ flask  users create --email=<email_address> --admin-access-token=<admin_access_token>
+    $ flask  users create --e=<email> --admin-access-token=<token>
 
 Similarly, to retrieve information for all users:
 
 .. code-block :: bash
 
-    $ flask users get --admin-access-token=<admin_access_token>
+    $ flask users get --admin-access-token=<token>
 """
 import logging
 import os
@@ -112,9 +113,11 @@ def users(ctx):
               default=config.ADMIN_USER_ID)
 @with_appcontext
 def users_create_default(email, id_):
-    """Create default user. This user has the administrator role
-        and can retrieve other user information as well as create
-        new users.
+    """Create default user.
+
+    This user has the administrator role
+    and can retrieve other user information as well as create
+    new users.
     """
     user_characteristics = {"id_": id_,
                             "email": email,

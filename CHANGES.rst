@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 0.3.0 (2018-08-10)
+--------------------------
+
+- Adds support of Serial workflows.
+- Adds API protection with API tokens.
+
 Version 0.2.0 (2018-04-19)
 --------------------------
 
