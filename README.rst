@@ -5,6 +5,9 @@
 .. image:: https://img.shields.io/travis/reanahub/reana-server.svg
    :target: https://travis-ci.org/reanahub/reana-server
 
+.. image:: https://img.shields.io/pypi/pyversions/reana-server.svg
+   :target: https://pypi.org/pypi/reana-server
+
 .. image:: https://img.shields.io/coveralls/reanahub/reana-server.svg
    :target: https://coveralls.io/r/reanahub/reana-server
 
