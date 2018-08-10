@@ -10,6 +10,7 @@
 
    introduction
    restapi
+   cli
    contributing
    changes
    license

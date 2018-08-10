@@ -20,7 +20,51 @@
 # granted to it by virtue of its status as an Intergovernmental Organization or
 # submit itself to any jurisdiction.
 
-"""REANA Workflow Controller command line interface."""
+"""
+The REANA Server offers a command line interface for management
+of user accounts. Specifically, from the cli an administrator
+can create new user accounts, and retrieve users based on given filters.
+
+By default the server docker image is set to create the administrator account
+on startup, which has the email ``info@reana.io`` and a token which is generated
+using the ``secrets`` python library.
+
+To retrieve the administrator token you can run:
+
+.. code-block:: bash
+
+    $ reana-cluster env --all
+
+or enter the database pod:
+
+.. code-block:: bash
+
+    $ kubectl exec -ti <db-pod-name> /bin/bash
+
+access the Postgresql database:
+
+.. code-block:: bash
+
+    $ psql -U reana
+    
+and get all users:
+
+.. code-block:: sql
+
+    > SELECT * FROM user_;
+
+With the administrator access token, new user creation is allowed with:
+
+.. code-block :: bash
+
+    $ flask  users create --email=<email_address> --admin-access-token=<admin_access_token>
+
+Similarly, to retrieve information for all users:
+
+.. code-block :: bash
+
+    $ flask users get --admin-access-token=<admin_access_token>
+"""
 import logging
 import os
 import secrets
@@ -68,7 +112,10 @@ def users(ctx):
               default=config.ADMIN_USER_ID)
 @with_appcontext
 def users_create_default(email, id_):
-    """Create new user."""
+    """Create default user. This user has the administrator role
+        and can retrieve other user information as well as create
+        new users.
+    """
     user_characteristics = {"id_": id_,
                             "email": email,
                             }
@@ -113,7 +160,7 @@ def users_create_default(email, id_):
 @click.pass_context
 def get_users(ctx, id, email, user_access_token, admin_access_token,
               output_format):
-    """Return user information."""
+    """Return user information. Requires the token of an administrator."""
     try:
         response = _get_users(id, email, user_access_token, admin_access_token)
         headers = ['id', 'email', 'access_token']
@@ -155,7 +202,7 @@ def get_users(ctx, id, email, user_access_token, admin_access_token,
     help='The access token of an administrator.')
 @click.pass_context
 def create_user(ctx, email, user_access_token, admin_access_token):
-    """Create a new user."""
+    """Create a new user. Requires the token of an administrator."""
     try:
         response = _create_user(email, user_access_token, admin_access_token)
         headers = ['id', 'email', 'access_token']
