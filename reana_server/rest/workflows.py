@@ -71,6 +71,8 @@ def get_workflows():  # noqa
                   type: string
                 user:
                   type: string
+                created:
+                  type: string
           examples:
             application/json:
               [
@@ -78,25 +80,29 @@ def get_workflows():  # noqa
                   "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                   "name": "mytest-1",
                   "status": "running",
-                  "user": "00000000-0000-0000-0000-000000000000"
+                  "user": "00000000-0000-0000-0000-000000000000",
+                  "created": "2018-06-13T09:47:35.66097",
                 },
                 {
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
                   "name": "mytest-2",
                   "status": "finished",
-                  "user": "00000000-0000-0000-0000-000000000000"
+                  "user": "00000000-0000-0000-0000-000000000000",
+                  "created": "2018-06-13T09:47:35.66097",
                 },
                 {
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
                   "name": "mytest-3",
                   "status": "created",
-                  "user": "00000000-0000-0000-0000-000000000000"
+                  "user": "00000000-0000-0000-0000-000000000000",
+                  "created": "2018-06-13T09:47:35.66097",
                 },
                 {
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
                   "name": "mytest-4",
                   "status": "created",
-                  "user": "00000000-0000-0000-0000-000000000000"
+                  "user": "00000000-0000-0000-0000-000000000000",
+                  "created": "2018-06-13T09:47:35.66097",
                 }
               ]
         400:
@@ -437,7 +443,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
               {
                 "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                 "name": "mytest-1",
-                "created": "2018-06-13 09:47:35.660977",
+                "created": "2018-06-13T09:47:35.66097",
                 "status": "created",
                 "user": "00000000-0000-0000-0000-000000000000"
               }
@@ -882,7 +888,6 @@ def get_files(workflow_id_or_name):  # noqa
                   type: string
                 last-modified:
                   type: string
-                  format: date-time
                 size:
                   type: integer
         400:
