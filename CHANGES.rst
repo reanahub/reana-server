@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 0.3.1 (2018-09-07)
+--------------------------
+
+- Harmonises date and time outputs amongst various REST API endpoints.
+- Pins REANA-Commons, REANA-DB and Bravado dependencies.
+
 Version 0.3.0 (2018-08-10)
 --------------------------
 
