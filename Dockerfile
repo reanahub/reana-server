@@ -22,6 +22,7 @@ FROM python:3.6
 
 RUN apt-get update && \
     apt-get install -y vim-tiny
+RUN pip install -e git://github.com/dinosk/reana-db.git@reana-yaml-in-models#egg=reana-db
 
 COPY CHANGES.rst README.rst setup.py /code/
 COPY reana_server/version.py /code/reana_server/
@@ -29,7 +30,6 @@ WORKDIR /code
 RUN pip install --no-cache-dir requirements-builder && \
     requirements-builder -e all -l pypi setup.py | pip install --no-cache-dir -r /dev/stdin && \
     pip uninstall -y requirements-builder
-
 COPY . /code
 
 # Debug off by default
@@ -45,7 +45,6 @@ ENV TERM=xterm
 ENV FLASK_APP=/code/reana_server/app.py
 
 EXPOSE 5000
-
 CMD set -e && flask db init && \
     flask users create_default info@reana.io &&\
     uwsgi --module reana_server.app:app \

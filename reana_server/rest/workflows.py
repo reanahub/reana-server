@@ -265,7 +265,8 @@ def create_workflow():  # noqa
                 400
         workflow_dict = {'specification': reana_spec_file['workflow']['spec'],
                          'type': reana_spec_file['workflow']['type'],
-                         'name': workflow_name}
+                         'name': workflow_name,
+                         'reana_yaml': reana_spec_file}
         workflow_dict['parameters'] = \
             reana_spec_file.get('inputs', {}).get('parameters', {})
         response, http_response = rwc_api_client.api.create_workflow(
@@ -730,7 +731,6 @@ def upload_file(workflow_id_or_name):  # noqa
 
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
-
         file_ = request.files['file_content'].stream.read()
         response, http_response = rwc_api_client.api.upload_file(
             user=user_id,
@@ -929,6 +929,99 @@ def get_files(workflow_id_or_name):  # noqa
             raise KeyError("workflow_id_or_name is not supplied")
 
         response, http_response = rwc_api_client.api.get_files(
+            user=user_id,
+            workflow_id_or_name=workflow_id_or_name).result()
+
+        return jsonify(http_response.json()), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except KeyError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/workflows/<workflow_id_or_name>/workspace/output',
+                 methods=['GET'])
+def get_output_files(workflow_id_or_name):  # noqa
+    r"""List all files contained in a workspace.
+
+    ---
+    get:
+      summary: Returns the output file list of a workflow.
+      description: >-
+        This resource retrieves the output file list of a workflow,
+        given its workflow UUID.
+      operationId: get_output_files
+      produces:
+        - application/json
+      parameters:
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+        - name: access_token
+          in: query
+          description: Required. The API access_token of workflow owner.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The list of output files has been retrieved.
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Workflow does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
+                            not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal server error.
+          examples:
+            application/json:
+              {
+                "message": "Internal server error."
+              }
+    """
+    try:
+        user_id = get_user_from_token(request.args.get('access_token'))
+        workflow_id_or_name = workflow_id_or_name
+        
+        if not workflow_id_or_name:
+            raise KeyError("workflow_id_or_name is not supplied")
+
+        response, http_response = rwc_api_client.api.get_output_files(
             user=user_id,
             workflow_id_or_name=workflow_id_or_name).result()
 

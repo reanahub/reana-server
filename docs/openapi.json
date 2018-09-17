@@ -853,6 +853,75 @@
         "summary": "Adds a file to the workspace."
       }
     },
+    "/api/workflows/{workflow_id_or_name}/workspace/output": {
+      "get": {
+        "description": "This resource retrieves the output file list of a workflow, given its workflow UUID.",
+        "operationId": "get_output_files",
+        "parameters": [
+          {
+            "description": "Required. Analysis UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. The API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Requests succeeded. The list of output files has been retrieved.",
+            "schema": {
+              "items": {
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming payload seems malformed."
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. Workflow does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal server error."
+              }
+            }
+          }
+        },
+        "summary": "Returns the output file list of a workflow."
+      }
+    },
     "/api/workflows/{workflow_id_or_name}/workspace/{file_name}": {
       "get": {
         "description": "This resource is expecting a workflow UUID and a file name existing inside the workspace to return its content.",
