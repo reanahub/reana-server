@@ -729,12 +729,7 @@
             "description": "Requests succeeded. The list of output files has been retrieved.",
             "schema": {
               "items": {
-                "properties": {
-                  "name": {
-                    "type": "string"
-                  }
-                },
-                "type": "object"
+                "type": "string"
               },
               "type": "array"
             }

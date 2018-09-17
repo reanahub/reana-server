@@ -979,10 +979,7 @@ def get_output_files(workflow_id_or_name):  # noqa
           schema:
             type: array
             items:
-              type: object
-              properties:
-                name:
-                  type: string
+              type: string
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
