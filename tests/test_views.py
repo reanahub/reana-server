@@ -10,65 +10,19 @@
 
 import json
 
-import pytest
+from flask import url_for
 from jsonschema.exceptions import ValidationError
-from mock import MagicMock, Mock
-from reana_db.models import User
-
-from reana_server.api_client import create_openapi_client, get_spec
-from reana_server.config import COMPONENTS_DATA
 
 
-@pytest.fixture()
-def default_user(app, session):
-    """Create users."""
-    default_user_id = '00000000-0000-0000-0000-000000000000'
-    user = User.query.filter_by(
-        id_=default_user_id).first()
-    if not user:
-        user = User(id_=default_user_id,
-                    email='info@reana.io', access_token='secretkey')
-        session.add(user)
-        session.commit()
-    return user
+def test_get_workflows(app, default_user):
+    """Test get_workflows view."""
+    with app.test_client() as client:
+        res = client.get(url_for('workflows.get_workflows'),
+                         query_string={"user_id":
+                                       default_user.id_})
+        assert res.status_code == 403
 
-
-@pytest.fixture()
-def mock_rwc_client(app):
-    """."""
-    mock_rwc_client = create_openapi_client('reana-workflow-controller',
-                                            Mock())
-    return mock_rwc_client
-
-
-def test_swagger_stub(app, default_user, mock_rwc_client):
-    with pytest.raises(ValidationError):
-        res = mock_rwc_client.api.create_workflow(
-            workflow={'specification': {},
-                      # 'type': 'serial',
-                      'name': 'test'},
-            user=str(default_user.id_)).result()
-
-    res = mock_rwc_client.api.create_workflow(
-        workflow={'specification': {},
-                  'type': 'serial',
-                  'name': 'test'},
-        user=str(default_user.id_)).result()
-
-
-def test_prism_server(app, default_user):
-    """."""
-    rwc_api_client = create_openapi_client('reana-workflow-controller')
-    with pytest.raises(ValidationError):
-        res = rwc_api_client.api.create_workflow(
-            workflow={'specification': {},
-                      # 'type': 'serial',
-                      'name': 'test'},
-            user=str(default_user.id_)).result()
-
-    _, res = rwc_api_client.api.create_workflow(
-        workflow={'specification': {},
-                  'type': 'serial',
-                  'name': 'test'},
-        user=str(default_user.id_)).result()
-    assert res.status_code == 201
+        res = client.get(url_for('workflows.get_workflows'),
+                         query_string={"access_token":
+                                       default_user.access_token})
+        assert res.status_code == 200
