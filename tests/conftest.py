@@ -28,6 +28,8 @@ import os
 import shutil
 
 import pytest
+from flask import Flask
+from reana_db.database import Session
 from reana_db.models import Base, User
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
@@ -37,30 +39,30 @@ from reana_server.factory import create_app
 
 
 @pytest.fixture(scope='module')
-def tmp_shared_volume_path(tmpdir_factory):
-    """Fixture temporary file system database."""
-    temp_path = str(tmpdir_factory.mktemp('data').join('reana'))
-    shutil.copytree(os.path.join(os.path.dirname(__file__), "data"),
-                    temp_path)
-
-    yield temp_path
-    shutil.rmtree(temp_path)
-
-
-@pytest.fixture(scope='module')
-def base_app(tmp_shared_volume_path):
+def base_app():
     """Flask application fixture."""
     config_mapping = {
+        'AVAILABLE_WORKFLOW_ENGINES': 'serial',
         'SERVER_NAME': 'localhost:5000',
         'SECRET_KEY': 'SECRET_KEY',
         'TESTING': True,
-        'SHARED_VOLUME_PATH': tmp_shared_volume_path,
+        'SHARED_VOLUME_PATH': '/tmp/test',
         'SQLALCHEMY_DATABASE_URI':
         'sqlite:///',
         'SQLALCHEMY_TRACK_MODIFICATIONS': False,
     }
-    app_ = create_app(config_mapping)
-    return app_
+    app = Flask(__name__)
+    app.config.from_mapping(config_mapping)
+    app.secret_key = "hyper secret key"
+
+    # Register API routes
+    from reana_server.rest import ping, workflows, users  # noqa
+    app.register_blueprint(ping.blueprint, url_prefix='/api')
+    app.register_blueprint(workflows.blueprint, url_prefix='/api')
+    app.register_blueprint(users.blueprint, url_prefix='/api')
+
+    app.session = Session
+    return app
 
 
 @pytest.fixture(scope='module')

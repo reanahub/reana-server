@@ -44,13 +44,14 @@ def get_spec(spec_file):
     return json_spec
 
 
-def create_openapi_client(component):
+def create_openapi_client(component, http_client=None):
     """Create a OpenAPI client for a given spec."""
     try:
         address, spec_file = COMPONENTS_DATA[component]
         json_spec = get_spec(spec_file)
         client = SwaggerClient.from_spec(
             json_spec,
+            http_client=http_client,
             config={'also_return_response': True})
         client.swagger_spec.api_url = address
         return client
