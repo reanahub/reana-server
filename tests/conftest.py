@@ -29,12 +29,12 @@ import shutil
 
 import pytest
 from flask import Flask
-from reana_db.database import Session
-from reana_db.models import Base, User
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy_utils import create_database, database_exists, drop_database
 
+from reana_db.database import Session
+from reana_db.models import Base, User
 from reana_server.factory import create_app
 
 
@@ -50,6 +50,13 @@ def base_app():
         'SQLALCHEMY_DATABASE_URI':
         'sqlite:///',
         'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+        'COMPONENTS_DATA': {
+            'reana-workflow-controller': 
+            (
+                'http://localhost:4010',
+                'reana_workflow_controller.json'
+            )
+        }
     }
     app = Flask(__name__)
     app.config.from_mapping(config_mapping)
