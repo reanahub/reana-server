@@ -11,18 +11,21 @@
 import json
 
 from flask import url_for
+from mock import Mock, PropertyMock, patch
 from jsonschema.exceptions import ValidationError
 
 
-def test_get_workflows(app, default_user):
+def test_get_workflows(app, default_user, mock_rwc_api_client):
     """Test get_workflows view."""
     with app.test_client() as client:
-        res = client.get(url_for('workflows.get_workflows'),
-                         query_string={"user_id":
-                                       default_user.id_})
-        assert res.status_code == 403
+        with patch('reana_server.rest.workflows.current_rwc_api_client',
+                   mock_rwc_api_client):
+            res = client.get(url_for('workflows.get_workflows'),
+                             query_string={"user_id":
+                                           default_user.id_})
+            assert res.status_code == 403
 
-        res = client.get(url_for('workflows.get_workflows'),
-                         query_string={"access_token":
-                                       default_user.access_token})
-        assert res.status_code == 200
+            res = client.get(url_for('workflows.get_workflows'),
+                             query_string={"access_token":
+                                           default_user.access_token})
+            assert res.status_code == 200
