@@ -99,15 +99,3 @@ def default_user(app, session):
         session.add(user)
         session.commit()
     return user
-
-
-@pytest.fixture()
-def mock_rwc_api_client():
-    mock_http_client, mock_result, mock_response = Mock(), Mock(), Mock()
-    mock_response.status_code = 200
-    mock_result.result.return_value = ('_', mock_response)
-    mock_http_client.request.return_value = mock_result
-    mock_rwc_api_client = BaseAPIClient('reana_server',
-                                        'reana-workflow-controller',
-                                        http_client=mock_http_client)
-    return mock_rwc_api_client._client
