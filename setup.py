@@ -60,6 +60,7 @@ install_requires = [
     'marshmallow>=2.13',
     'pyOpenSSL==17.3.0',  # FIXME remove once yadage-schemas solves deps.
     'reana-commons>=0.3.1,<0.4.0',
+    'reana-pytest-commons',
     'reana-db>=0.3.0,<0.4.0',
     'requests==2.11.1',
     'rfc3987==1.3.7',  # FIXME remove once yadage-schemas solves deps.

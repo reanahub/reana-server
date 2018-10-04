@@ -14,7 +14,7 @@ import pytest
 from flask import url_for
 from mock import Mock, PropertyMock, patch
 from jsonschema.exceptions import ValidationError
-from reana_commons.test_utils import make_mock_api_client
+from reana_pytest_commons.test_utils import make_mock_api_client
 
 from reana_server.config import COMPONENTS_DATA
 
