@@ -483,9 +483,10 @@ def get_workflow_status(workflow_id_or_name):  # noqa
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
 
-        response, http_response = current_rwc_api_client.api.get_workflow_status(
-            user=user_id,
-            workflow_id_or_name=workflow_id_or_name).result()
+        response, http_response = current_rwc_api_client.api.\
+            get_workflow_status(
+                user=user_id,
+                workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -624,11 +625,12 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         status = request.args.get('status')
         parameters = request.json
 
-        response, http_response = current_rwc_api_client.api.set_workflow_status(
-            user=user_id,
-            workflow_id_or_name=workflow_id_or_name,
-            status=status,
-            parameters=parameters).result()
+        response, http_response = current_rwc_api_client.api.\
+            set_workflow_status(
+                user=user_id,
+                workflow_id_or_name=workflow_id_or_name,
+                status=status,
+                parameters=parameters).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
