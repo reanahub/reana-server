@@ -22,19 +22,63 @@
 
 """Test server views."""
 
+import json
 import pytest
-from reana_db.models import User
+
+from flask import url_for
+from mock import Mock, PropertyMock, patch
+from jsonschema.exceptions import ValidationError
+from reana_pytest_commons.test_utils import make_mock_api_client
+
+from reana_server.config import COMPONENTS_DATA
 
 
-@pytest.fixture()
-def default_user(app, session):
-    """Create users."""
-    default_user_id = '00000000-0000-0000-0000-000000000000'
-    user = User.query.filter_by(
-        id_=default_user_id).first()
-    if not user:
-        user = User(id_=default_user_id,
-                    email='info@reana.io', access_token='secretkey')
-        session.add(user)
-        session.commit()
-    return user
+def test_get_workflows(app, default_user):
+    """Test get_workflows view."""
+    with app.test_client() as client:
+        with patch('reana_server.rest.workflows.current_rwc_api_client',
+                   make_mock_api_client(
+                       'reana_server',
+                       COMPONENTS_DATA['reana-workflow-controller'])):
+            res = client.get(url_for('workflows.get_workflows'),
+                             query_string={"user_id":
+                                           default_user.id_})
+            assert res.status_code == 403
+
+            res = client.get(url_for('workflows.get_workflows'),
+                             query_string={"access_token":
+                                           default_user.access_token})
+            assert res.status_code == 200
+
+
+def test_create_workflow(app, default_user):
+    """Test create_workflow view."""
+    with app.test_client() as client:
+        with patch('reana_server.rest.workflows.current_rwc_api_client',
+                   make_mock_api_client(
+                       'reana_server',
+                       COMPONENTS_DATA['reana-workflow-controller'])):
+            res = client.post(url_for('workflows.create_workflow'),
+                              query_string={"user_id":
+                                            default_user.id_})
+            assert res.status_code == 403
+
+            # workflow_data with incorrect spec type
+            workflow_data = {'workflow': {'spec': 0,
+                                          'type': 'serial'},
+                             'workflow_name': 'test'}
+            res = client.post(url_for('workflows.create_workflow'),
+                              headers={'Content-Type': 'application/json'},
+                              query_string={"access_token":
+                                            default_user.access_token},
+                              data=json.dumps(workflow_data))
+            assert res.status_code == 500
+
+            # corrected workflow_data
+            workflow_data['workflow']['spec'] = {}
+            res = client.post(url_for('workflows.create_workflow'),
+                              headers={'Content-Type': 'application/json'},
+                              query_string={"access_token":
+                                            default_user.access_token},
+                              data=json.dumps(workflow_data))
+            assert res.status_code == 200

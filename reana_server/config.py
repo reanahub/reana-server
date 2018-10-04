@@ -28,7 +28,7 @@ COMPONENTS_DATA = {
         'http://{address}:{port}'.format(
             address=os.getenv('WORKFLOW_CONTROLLER_SERVICE_HOST', '0.0.0.0'),
             port=os.getenv('WORKFLOW_CONTROLLER_SERVICE_PORT_HTTP', '5000')),
-        'reana_workflow_controller.json')
+        'reana_workflow_controller.json'),
 }
 """REANA Workflow Controller address."""
 
