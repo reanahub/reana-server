@@ -53,7 +53,6 @@ setup_requires = [
 ]
 
 install_requires = [
-    'bravado>=9.0.6,<10.2',
     'click>=6.7',
     'Flask>=0.11',
     'fs>=2.0',

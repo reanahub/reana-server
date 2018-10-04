@@ -17,10 +17,9 @@ from flask import Blueprint, jsonify, request, send_file
 
 from reana_server.utils import get_user_from_token, is_uuid_v4
 
-from ..api_client import create_openapi_client
+from ..api_client import current_rwc_api_client
 
 blueprint = Blueprint('workflows', __name__)
-rwc_api_client = create_openapi_client('reana-workflow-controller')
 
 
 @blueprint.route('/workflows', methods=['GET'])
@@ -125,8 +124,9 @@ def get_workflows():  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('access_token'))
-        response, http_response = rwc_api_client.api.get_workflows(
-            user=user_id).result()
+        response, http_response = current_rwc_api_client.api.\
+            get_workflows(
+                user=user_id).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -255,8 +255,9 @@ def create_workflow():  # noqa
                          'name': workflow_name}
         workflow_dict['parameters'] = \
             reana_spec_file.get('inputs', {}).get('parameters', {})
-        response, http_response = rwc_api_client.api.create_workflow(
-            workflow=workflow_dict,
+        response, http_response = current_rwc_api_client.api.\
+            create_workflow(
+                workflow=workflow_dict,
             user=user_id).result()
 
         return jsonify(response), http_response.status_code
@@ -360,8 +361,9 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
 
-        response, http_response = rwc_api_client.api.get_workflow_logs(
-            user=user_id,
+        response, http_response = current_rwc_api_client.api.\
+            get_workflow_logs(
+                user=user_id,
             workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
@@ -472,9 +474,10 @@ def get_workflow_status(workflow_id_or_name):  # noqa
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
 
-        response, http_response = rwc_api_client.api.get_workflow_status(
-            user=user_id,
-            workflow_id_or_name=workflow_id_or_name).result()
+        response, http_response = current_rwc_api_client.api.\
+            get_workflow_status(
+                user=user_id,
+                workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -613,11 +616,12 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         status = request.args.get('status')
         parameters = request.json
 
-        response, http_response = rwc_api_client.api.set_workflow_status(
-            user=user_id,
-            workflow_id_or_name=workflow_id_or_name,
-            status=status,
-            parameters=parameters).result()
+        response, http_response = current_rwc_api_client.api.\
+            set_workflow_status(
+                user=user_id,
+                workflow_id_or_name=workflow_id_or_name,
+                status=status,
+                parameters=parameters).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -719,11 +723,12 @@ def upload_file(workflow_id_or_name):  # noqa
             raise KeyError("workflow_id_or_name is not supplied")
 
         file_ = request.files['file_content'].stream.read()
-        response, http_response = rwc_api_client.api.upload_file(
-            user=user_id,
-            workflow_id_or_name=workflow_id_or_name,
-            file_content=file_,
-            file_name=request.args['file_name']).result()
+        response, http_response = current_rwc_api_client.api.\
+            upload_file(
+                user=user_id,
+                workflow_id_or_name=workflow_id_or_name,
+                file_content=file_,
+                file_name=request.args['file_name']).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -814,10 +819,11 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
 
-        response, http_response = rwc_api_client.api.download_file(
-            user=user_id,
-            workflow_id_or_name=workflow_id_or_name,
-            file_name=file_name).result()
+        response, http_response = current_rwc_api_client.api.\
+            download_file(
+                user=user_id,
+                workflow_id_or_name=workflow_id_or_name,
+                file_name=file_name).result()
 
         return send_file(
             io.BytesIO(http_response.raw_bytes),
@@ -915,9 +921,10 @@ def get_files(workflow_id_or_name):  # noqa
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
 
-        response, http_response = rwc_api_client.api.get_files(
-            user=user_id,
-            workflow_id_or_name=workflow_id_or_name).result()
+        response, http_response = current_rwc_api_client.api.\
+            get_files(
+                user=user_id,
+                workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(http_response.json()), http_response.status_code
     except HTTPError as e:

@@ -20,6 +20,10 @@ python:
 services:
   - docker
 
+before_script:
+- curl https://raw.githubusercontent.com/stoplightio/prism/master/install.sh | sudo sh
+- prism run --mock --list --spec /home/travis/build/dinosk/reana-server/reana_server/openapi_connections/reana_workflow_controller.json &
+
 before_install:
   - pip install -r requirements-dev.txt
   - travis_retry pip install --upgrade pip setuptools py
