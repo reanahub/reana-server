@@ -16,14 +16,11 @@ from flask import current_app
 from werkzeug.local import LocalProxy
 
 from reana_commons.api_client import BaseAPIClient
-from .config import COMPONENTS_DATA
 
 
 def _get_current_rwc_api_client():
     """Return current state of the search extension."""
-    rwc_api_client = BaseAPIClient(
-        'reana_server',
-        COMPONENTS_DATA['reana-workflow-controller'])
+    rwc_api_client = BaseAPIClient('reana-workflow-controller')
     return rwc_api_client._client
 
 
