@@ -13,9 +13,8 @@ import os
 
 import pkg_resources
 from flask import current_app
-from werkzeug.local import LocalProxy
-
 from reana_commons.api_client import BaseAPIClient
+from werkzeug.local import LocalProxy
 
 
 def _get_current_rwc_api_client():

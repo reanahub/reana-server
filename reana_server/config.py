@@ -10,7 +10,6 @@
 
 import os
 
-
 AVAILABLE_WORKFLOW_ENGINES = [
     'yadage',
     'cwl',

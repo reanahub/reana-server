@@ -9,23 +9,19 @@
 """Test server views."""
 
 import json
+
 import pytest
-
 from flask import url_for
-from mock import Mock, PropertyMock, patch
 from jsonschema.exceptions import ValidationError
+from mock import Mock, PropertyMock, patch
 from reana_pytest_commons.test_utils import make_mock_api_client
-
-from reana_server.config import COMPONENTS_DATA
 
 
 def test_get_workflows(app, default_user):
     """Test get_workflows view."""
     with app.test_client() as client:
         with patch('reana_server.rest.workflows.current_rwc_api_client',
-                   make_mock_api_client(
-                       'reana_server',
-                       COMPONENTS_DATA['reana-workflow-controller'])):
+                   make_mock_api_client('reana-workflow-controller')):
             res = client.get(url_for('workflows.get_workflows'),
                              query_string={"user_id":
                                            default_user.id_})
@@ -41,9 +37,7 @@ def test_create_workflow(app, default_user):
     """Test create_workflow view."""
     with app.test_client() as client:
         with patch('reana_server.rest.workflows.current_rwc_api_client',
-                   make_mock_api_client(
-                       'reana_server',
-                       COMPONENTS_DATA['reana-workflow-controller'])):
+                   make_mock_api_client('reana-workflow-controller')):
             res = client.post(url_for('workflows.create_workflow'),
                               query_string={"user_id":
                                             default_user.id_})

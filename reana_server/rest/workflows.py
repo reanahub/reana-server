@@ -258,7 +258,7 @@ def create_workflow():  # noqa
         response, http_response = current_rwc_api_client.api.\
             create_workflow(
                 workflow=workflow_dict,
-            user=user_id).result()
+                user=user_id).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -364,7 +364,7 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
         response, http_response = current_rwc_api_client.api.\
             get_workflow_logs(
                 user=user_id,
-            workflow_id_or_name=workflow_id_or_name).result()
+                workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
