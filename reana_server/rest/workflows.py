@@ -162,13 +162,14 @@ def create_workflow():  # noqa
             name will be generated.
           required: true
           type: string
+        # probably need to rename this to something more specific
         - name: spec
           in: query
           description: Remote repository which contains a valid REANA
             specification.
           required: false
           type: string
-        - name: reana_spec
+        - name: reana_specification
           in: body
           description: REANA specification with necessary data to instantiate
             a workflow.
@@ -250,10 +251,9 @@ def create_workflow():  # noqa
             return jsonify({'message':
                             'Workflow name cannot be a valid UUIDv4.'}), \
                 400
-        workflow_dict = {'specification': reana_spec_file['workflow']['spec'],
-                         'type': reana_spec_file['workflow']['type'],
-                         'name': workflow_name}
-        workflow_dict['parameters'] = \
+        workflow_dict = {'reana_specification': reana_spec_file,
+                         'workflow_name': workflow_name}
+        workflow_dict['operational_parameters'] = \
             reana_spec_file.get('inputs', {}).get('parameters', {})
         response, http_response = current_rwc_api_client.api.\
             create_workflow(

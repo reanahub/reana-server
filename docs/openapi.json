@@ -330,7 +330,7 @@
           {
             "description": "REANA specification with necessary data to instantiate a workflow.",
             "in": "body",
-            "name": "reana_spec",
+            "name": "reana_specification",
             "required": false,
             "schema": {
               "type": "object"
