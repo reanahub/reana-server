@@ -14,7 +14,7 @@ import pytest
 from flask import url_for
 from jsonschema.exceptions import ValidationError
 from mock import Mock, PropertyMock, patch
-from reana_pytest_commons.test_utils import make_mock_api_client
+from pytest_reana.test_utils import make_mock_api_client
 
 
 def test_get_workflows(app, default_user):

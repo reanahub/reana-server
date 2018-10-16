@@ -28,6 +28,7 @@ tests_require = [
     'pytest-cache>=1.0',
     'pytest-cov>=1.8.0',
     'pytest-pep8>=1.0.6',
+    'pytest-reana>=0.4.0.dev20181016,<0.5.0',
     'pytest>=2.8.0',
     'swagger_spec_validator>=2.1.0'
 ]
@@ -53,14 +54,13 @@ setup_requires = [
 ]
 
 install_requires = [
-    'click>=6.7',
+    'click>=7.0,<8.0',
     'Flask>=0.11',
     'fs>=2.0',
     'flask-cors>=3.0.6',
     'marshmallow>=2.13',
     'pyOpenSSL==17.3.0',  # FIXME remove once yadage-schemas solves deps.
-    'reana-commons>=0.4.0.dev20181012,<0.5.0',
-    'reana-pytest-commons>=0.4.0.dev20181012,<0.5.0',
+    'reana-commons>=0.4.0.dev20181016,<0.5.0',
     'reana-db>=0.3.0,<0.4.0',
     'requests==2.11.1',
     'rfc3987==1.3.7',  # FIXME remove once yadage-schemas solves deps.
