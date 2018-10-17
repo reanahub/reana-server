@@ -53,27 +53,6 @@ def base_app():
     return app
 
 
-@pytest.fixture(scope='module')
-def db_engine(base_app):
-    test_db_engine = create_engine(
-        base_app.config['SQLALCHEMY_DATABASE_URI'])
-    if not database_exists(test_db_engine.url):
-        create_database(test_db_engine.url)
-    yield test_db_engine
-    drop_database(test_db_engine.url)
-
-
-@pytest.fixture()
-def session(db_engine):
-    Session = scoped_session(sessionmaker(autocommit=False,
-                                          autoflush=False,
-                                          bind=db_engine))
-    Base.query = Session.query_property()
-    from reana_db.database import Session as _Session
-    _Session.configure(bind=db_engine)
-    yield Session
-
-
 @pytest.fixture()
 def app(base_app, db_engine, session):
     """Flask application fixture."""
@@ -83,17 +62,3 @@ def app(base_app, db_engine, session):
         yield base_app
         for table in reversed(Base.metadata.sorted_tables):
             db_engine.execute(table.delete())
-
-
-@pytest.fixture()
-def default_user(app, session):
-    """Create users."""
-    default_user_id = '00000000-0000-0000-0000-000000000000'
-    user = User.query.filter_by(
-        id_=default_user_id).first()
-    if not user:
-        user = User(id_=default_user_id,
-                    email='info@reana.io', access_token='secretkey')
-        session.add(user)
-        session.commit()
-    return user

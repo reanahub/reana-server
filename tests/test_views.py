@@ -14,6 +14,7 @@ import pytest
 from flask import url_for
 from jsonschema.exceptions import ValidationError
 from mock import Mock, PropertyMock, patch
+from pytest_reana.fixtures import default_user
 from pytest_reana.test_utils import make_mock_api_client
 
 
@@ -44,18 +45,9 @@ def test_create_workflow(app, default_user):
             assert res.status_code == 403
 
             # workflow_data with incorrect spec type
-            workflow_data = {'workflow': {'spec': 0,
+            workflow_data = {'workflow': {'specification': {},
                                           'type': 'serial'},
                              'workflow_name': 'test'}
-            res = client.post(url_for('workflows.create_workflow'),
-                              headers={'Content-Type': 'application/json'},
-                              query_string={"access_token":
-                                            default_user.access_token},
-                              data=json.dumps(workflow_data))
-            assert res.status_code == 500
-
-            # corrected workflow_data
-            workflow_data['workflow']['spec'] = {}
             res = client.post(url_for('workflows.create_workflow'),
                               headers={'Content-Type': 'application/json'},
                               query_string={"access_token":
