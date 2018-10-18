@@ -41,7 +41,19 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.viewcode',
     'sphinxcontrib.httpdomain',
-    'sphinxcontrib.openapi'
+    'sphinxcontrib.openapi',
+    'sphinxcontrib.redoc',
+]
+
+redoc = [
+    {
+        'page': '_static/api',
+        'spec': 'openapi.json',
+        'embed': True,
+        'opts': {
+            'hide-loading': True,
+         }
+    }
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -198,3 +210,44 @@ texinfo_documents = [
      author, 'reana', 'One line description of project.',
      'Miscellaneous'),
 ]
+
+# This value contains a list of modules to be mocked up. This is useful when
+# some external dependencies are not met at build time and break the building.
+# readthedocs.org uses python3.5, which has no secerts module and that leads
+# build failures.
+autodoc_mock_imports = ["secrets"]
+
+rest_api_modules = [
+    'reana_server.rest.ping',
+    'reana_server.rest.users',
+    'reana_server.rest.workflows',
+]
+
+
+def get_name(full_module_name):
+    """
+    Pull out the class/function name from the full_module_name
+    """
+    #split the full_module_name by "."'s
+    module_name = ".".join(full_module_name.split(".")[:3])
+    function_name = full_module_name.split('.')[-1]
+    return module_name, function_name
+
+
+def process_docstring(app, what, name, obj, options, lines):
+    """
+    Deletes unnecessary docstring, saves summary and formats a hyperlink
+    to redocs.
+    """
+    module_name,function_name = get_name(name)
+    if what != "module" and module_name in rest_api_modules:
+        description = lines[0]
+        url = "`%s <_static/api.html#operation/%s>`_ "%(description,function_name)
+        #clearing the list of docstrings
+        del lines[:]
+        #adding back description
+        lines.append(url)
+
+
+def setup(app):
+    app.connect('autodoc-process-docstring', process_docstring)
