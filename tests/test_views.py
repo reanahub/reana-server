@@ -9,10 +9,10 @@
 """Test server views."""
 
 import json
+from io import BytesIO
+from uuid import uuid4
 
 import pytest
-from uuid import uuid4
-from io import BytesIO
 from flask import url_for
 from jsonschema.exceptions import ValidationError
 from mock import Mock, PropertyMock, patch
@@ -305,10 +305,10 @@ def test_get_files(app, default_user):
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = dict(key='value')
-
         with patch(
             "reana_server.rest.workflows.current_rwc_api_client",
-            make_mock_api_client("reana-workflow-controller")(mock_response),
+            make_mock_api_client("reana-workflow-controller")(
+                mock_http_response=mock_response),
         ):
             res = client.get(
                 url_for("workflows.get_files",
@@ -316,3 +316,51 @@ def test_get_files(app, default_user):
                 query_string={"access_token": default_user.access_token},
             )
             assert res.status_code == 200
+
+
+def test_get_user(app, default_user):
+    """Test get_user view."""
+    with app.test_client() as client:
+        res = client.get(
+            url_for("users.get_user"),
+            query_string={"id_": default_user.id_,
+                          "email": default_user.email,
+                          "user_token": default_user.access_token},
+        )
+        assert res.status_code == 403
+
+        res = client.get(
+            url_for("users.get_user"),
+            query_string={"id_": default_user.id_,
+                          "email": default_user.email,
+                          "access_token": default_user.access_token},
+        )
+        assert res.status_code == 200
+
+
+def test_create_user(app, default_user):
+    """Test create_user view."""
+    with app.test_client() as client:
+        res = client.post(
+            url_for("users.create_user"),
+            query_string={"id_": default_user.id_,
+                          "email": default_user.email,
+                          "user_token": default_user.access_token},
+        )
+        assert res.status_code == 403
+
+        res = client.post(
+            url_for("users.create_user"),
+            query_string={"id_": default_user.id_,
+                          "email": default_user.email,
+                          "access_token": default_user.access_token},
+        )
+        assert res.status_code == 403
+
+    with app.test_client() as client:
+        res = client.post(
+            url_for("users.create_user"),
+            query_string={"email": "test_email",
+                          "access_token": default_user.access_token},
+        )
+        assert res.status_code == 201

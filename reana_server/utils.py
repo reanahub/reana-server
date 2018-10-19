@@ -14,6 +14,7 @@ import fs
 from flask import current_app as app
 from reana_db.database import Session
 from reana_db.models import User
+from sqlalchemy.exc import IntegrityError, InvalidRequestError
 
 from reana_server.config import ADMIN_USER_ID
 
@@ -63,14 +64,19 @@ def _get_users(_id, email, user_access_token, admin_access_token):
 
 def _create_user(email, user_access_token, admin_access_token):
     """Create user with provided credentials."""
-    admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
-    if admin_access_token != admin.access_token:
-        raise ValueError('Admin access token invalid.')
-    if not user_access_token:
-        user_access_token = secrets.token_urlsafe(16)
-    user_parameters = dict(access_token=user_access_token)
-    user_parameters['email'] = email
-    user = User(**user_parameters)
-    Session.add(user)
-    Session.commit()
+    try:
+        admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
+        if admin_access_token != admin.access_token:
+            raise ValueError('Admin access token invalid.')
+        if not user_access_token:
+            user_access_token = secrets.token_urlsafe(16)
+        user_parameters = dict(access_token=user_access_token)
+        user_parameters['email'] = email
+        user = User(**user_parameters)
+        Session.add(user)
+        Session.commit()
+    except (InvalidRequestError, IntegrityError) as e:
+        Session.rollback()
+        raise ValueError('Could not create user, '
+                         'possible constraint violation')
     return user
