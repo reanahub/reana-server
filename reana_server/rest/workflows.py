@@ -356,10 +356,9 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('access_token'))
-        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("workflow_id_or_name is not supplied")
+            raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             get_workflow_logs(
@@ -370,9 +369,6 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
-    except KeyError as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 400
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
@@ -479,10 +475,9 @@ def get_workflow_status(workflow_id_or_name):  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('access_token'))
-        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("workflow_id_or_name is not supplied")
+            raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             get_workflow_status(
@@ -493,9 +488,6 @@ def get_workflow_status(workflow_id_or_name):  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
-    except KeyError as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 400
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
@@ -619,10 +611,9 @@ def set_workflow_status(workflow_id_or_name):  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('access_token'))
-        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("workflow_id_or_name is not supplied")
+            raise ValueError("workflow_id_or_name is not supplied")
         status = request.args.get('status')
         parameters = request.json
 
@@ -637,9 +628,6 @@ def set_workflow_status(workflow_id_or_name):  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
-    except KeyError as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 400
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
@@ -727,10 +715,9 @@ def upload_file(workflow_id_or_name):  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('access_token'))
-        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("workflow_id_or_name is not supplied")
+            raise ValueError("workflow_id_or_name is not supplied")
 
         file_ = request.files['file_content'].stream.read()
         response, http_response = current_rwc_api_client.api.\
@@ -824,10 +811,9 @@ def download_file(workflow_id_or_name, file_name):  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('access_token'))
-        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("workflow_id_or_name is not supplied")
+            raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             download_file(
@@ -842,9 +828,6 @@ def download_file(workflow_id_or_name, file_name):  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
-    except KeyError as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 400
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
@@ -926,10 +909,9 @@ def get_files(workflow_id_or_name):  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('access_token'))
-        workflow_id_or_name = workflow_id_or_name
 
         if not workflow_id_or_name:
-            raise KeyError("workflow_id_or_name is not supplied")
+            raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             get_files(
@@ -940,9 +922,6 @@ def get_files(workflow_id_or_name):  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
-    except KeyError as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 400
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
