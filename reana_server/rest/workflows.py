@@ -64,28 +64,28 @@ def get_workflows():  # noqa
               [
                 {
                   "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
-                  "name": "mytest-1",
+                  "name": "mytest.1",
                   "status": "running",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
                 {
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
-                  "name": "mytest-2",
+                  "name": "mytest.2",
                   "status": "finished",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
                 {
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
-                  "name": "mytest-3",
+                  "name": "mytest.3",
                   "status": "created",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
                 {
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
-                  "name": "mytest-4",
+                  "name": "mytest.4",
                   "status": "created",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
@@ -199,7 +199,7 @@ def create_workflow():  # noqa
               {
                 "message": "The workflow has been successfully created.",
                 "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
-                "workflow_name": "mytest-1"
+                "workflow_name": "mytest.1"
               }
         400:
           description: >-
@@ -319,7 +319,7 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
             application/json:
               {
                 "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
-                "workflow_name": "mytest-1",
+                "workflow_name": "mytest.1",
                 "logs": "<Workflow engine log output>",
                 "user": "00000000-0000-0000-0000-000000000000"
               }
@@ -430,10 +430,20 @@ def get_workflow_status(workflow_id_or_name):  # noqa
           examples:
             application/json:
               {
-                "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
-                "name": "mytest-1",
-                "created": "2018-06-13T09:47:35.66097",
-                "status": "created",
+                "created": "2018-10-29T12:50:12",
+                "id": "4e576cf9-a946-4346-9cde-7712f8dcbb3f",
+                "logs": "",
+                "name": "mytest.1",
+                "progress": {
+                  "current_command": None,
+                  "current_step_name": None,
+                  "failed": {"job_ids": [], "total": 0},
+                  "finished": {"job_ids": [], "total": 0},
+                  "run_started_at": "2018-10-29T12:51:04",
+                  "running": {"job_ids": [], "total": 0},
+                  "total": {"job_ids": [], "total": 1}
+                },
+                "status": "running",
                 "user": "00000000-0000-0000-0000-000000000000"
               }
         400:
@@ -553,7 +563,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
               {
                 "message": "Workflow successfully launched",
                 "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
-                "workflow_name": "mytest-1",
+                "workflow_name": "mytest.1",
                 "status": "created",
                 "user": "00000000-0000-0000-0000-000000000000"
               }

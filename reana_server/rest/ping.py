@@ -19,6 +19,7 @@ def ping():  # noqa
     ---
     get:
       summary: Ping the server (healthcheck)
+      operationId: ping
       description: >-
         Ping the server.
       produces:

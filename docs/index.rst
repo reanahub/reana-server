@@ -9,8 +9,8 @@
    :numbered:
 
    introduction
-   restapi
    cli
+   restapi
    contributing
    changes
    license
