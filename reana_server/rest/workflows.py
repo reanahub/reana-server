@@ -115,7 +115,7 @@ def get_workflows():  # noqa
               }
         500:
           description: >-
-            Request failed. Internal controller error.
+            Request failed. Internal server error.
           examples:
             application/json:
               {
@@ -225,7 +225,7 @@ def create_workflow():  # noqa
               }
         500:
           description: >-
-            Request failed. Internal controller error.
+            Request failed. Internal server error.
         501:
           description: >-
             Request failed. Not implemented.
@@ -352,7 +352,7 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
               }
         500:
           description: >-
-            Request failed. Internal controller error.
+            Request failed. Internal server error.
     """
     try:
         user_id = get_user_from_token(request.args.get('access_token'))
@@ -465,7 +465,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
               }
         500:
           description: >-
-            Request failed. Internal controller error.
+            Request failed. Internal server error.
     """
     try:
         user_id = get_user_from_token(request.args.get('access_token'))
@@ -597,7 +597,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
               }
         500:
           description: >-
-            Request failed. Internal controller error.
+            Request failed. Internal server error.
         501:
           description: >-
             Request failed. The specified status change is not implemented.
@@ -933,6 +933,131 @@ def get_files(workflow_id_or_name):  # noqa
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/workflows',
+                 methods=['DELETE'])
+def delete_workflow():  # noqa
+    r"""Delete a workflow.
+
+    ---
+    delete:
+      summary: Deletes a workflow run.
+      description: >-
+        This resource deletes a workflow run,
+        or all runs of a given workflow.
+      operationId: delete_workflows
+      produces:
+       - application/json
+      parameters:
+        - name: access_token
+          in: query
+          description: Required. The API access_token of workflow owner.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. The response contains the list
+            of all workflow runs that were deleted.
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                message:
+                  type: string
+                created:
+                  type: string
+          examples:
+            application/json:
+              [
+                {
+                  "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                  "name": "myanalysis.1",
+                  "message": "Run deleted.",
+                  "created": "2018-06-13T09:47:35.66097",
+                },
+                {
+                  "id": "256b25f4-4cfb-4684-b7a8-asdas123fsaf",
+                  "name": "myanalysis.2",
+                  "message": "Run deleted.",
+                  "created": "2018-06-13T09:47:35.66097",
+                },
+                {
+                  "id": "256b25f4-4cfb-4684-b7a8-73872rft52f9",
+                  "name": "myanalysis.3",
+                  "message": "Run deleted.",
+                  "created": "2018-06-13T09:47:35.66097",
+                },
+                {
+                  "id": "73872e4-4cfb-4684-b7a8-73872ef44684a",
+                  "name": "myanalysis.4",
+                  "message": "Run deleted.",
+                  "created": "2018-06-13T09:47:35.66097",
+                }
+              ]
+        400:
+          description: >-
+            Request failed. The specified workflow run(s) could not be deleted.
+        403:
+          description: >-
+            Request failed. User is not allowed to delete workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to delete workflow run
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Workflow does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow 00000000-0000-0000-0000-000000000000
+                            does not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal server error.
+          examples:
+            application/json:
+              {
+                "message": "Something went wrong."
+              }
+    """
+    try:
+        user_id = get_user_from_token(request.args.get('access_token'))
+        all_runs = request.args.get('all_runs')
+        hard_delete = request.args.get('hard_delete')
+        workflow_id_or_name = request.args.get('workflow_id_or_name')
+
+        if not workflow_id_or_name:
+            raise KeyError("workflow_id_or_name is not supplied")
+
+        response, http_response = current_rwc_api_client.api.\
+            delete_workflow(
+                user=user_id,
+                workflow_id_or_name=workflow_id_or_name,
+                all_runs=all_runs,
+                hard_delete=hard_delete).result()
+
+        return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
