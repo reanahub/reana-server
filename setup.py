@@ -60,10 +60,10 @@ install_requires = [
     'fs>=2.0',
     'flask-cors>=3.0.6',
     'marshmallow>=2.13',
-    'pyOpenSSL==17.3.0',  # FIXME remove once yadage-schemas solves deps.
-    'reana-commons>=0.4.0.dev20181016,<0.5.0',
-    'reana-db>=0.4.0.dev201810181,<0.5.0',
-    'requests==2.11.1',
+    'pyOpenSSL==17.5.0',  # FIXME remove once yadage-schemas solves deps.
+    'reana-commons>=0.4.0,<0.5.0',
+    'reana-db>=0.4.0,<0.5.0',
+    'requests==2.20.0',
     'rfc3987==1.3.7',  # FIXME remove once yadage-schemas solves deps.
     'strict-rfc3339==0.7',  # FIXME remove once yadage-schemas solves deps.
     'tablib>=0.12.1',

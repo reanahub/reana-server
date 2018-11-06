@@ -1,6 +1,13 @@
 Changes
 =======
 
+Version 0.4.0 (2018-11-06)
+--------------------------
+
+- Improves REST API documentation rendering.
+- Enhances test suite and increases code coverage.
+- Changes license to MIT.
+
 Version 0.3.1 (2018-09-07)
 --------------------------
 
