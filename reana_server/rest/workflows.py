@@ -253,8 +253,8 @@ def create_workflow():  # noqa
                 400
         workflow_dict = {'reana_specification': reana_spec_file,
                          'workflow_name': workflow_name}
-        workflow_dict['operational_parameters'] = \
-            reana_spec_file.get('inputs', {}).get('parameters', {})
+        workflow_dict['operational_options'] = \
+            reana_spec_file.get('inputs', {}).get('options', {})
         response, http_response = current_rwc_api_client.api.\
             create_workflow(
                 workflow=workflow_dict,
@@ -528,7 +528,8 @@ def set_workflow_status(workflow_id_or_name):  # noqa
           type: string
         - name: parameters
           in: body
-          description: Optional. Extra parameters for workflow status.
+          description: >-
+            Optional. Additional input parameters and operational options.
           required: false
           schema:
             type: object
@@ -616,7 +617,6 @@ def set_workflow_status(workflow_id_or_name):  # noqa
             raise ValueError("workflow_id_or_name is not supplied")
         status = request.args.get('status')
         parameters = request.json
-
         response, http_response = current_rwc_api_client.api.\
             set_workflow_status(
                 user=user_id,
@@ -919,6 +919,109 @@ def get_files(workflow_id_or_name):  # noqa
                 workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(http_response.json()), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/workflows/<workflow_id_or_name>/parameters',
+                 methods=['GET'])
+def get_workflow_parameters(workflow_id_or_name):  # noqa
+    r"""Get workflow input parameters.
+
+    ---
+    get:
+      summary: Get parameters of a workflow.
+      description: >-
+        This resource reports the input parameters of a workflow.
+        Resource is expecting a workflow UUID.
+      operationId: get_workflow_parameters
+      produces:
+        - application/json
+      parameters:
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+        - name: access_token
+          in: query
+          description: Required. The API access_token of workflow owner.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. Workflow input parameters, including the status
+            are returned.
+          schema:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              parameters:
+                type: object
+          examples:
+            application/json:
+              {
+                'id': 'dd4e93cf-e6d0-4714-a601-301ed97eec60',
+                'name': 'workflow.24',
+                'parameters': {'helloworld': 'code/helloworld.py',
+                               'inputfile': 'data/names.txt',
+                               'outputfile': 'results/greetings.txt',
+                               'sleeptime': 2}
+              }
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Either User or Analysis does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Analysis 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
+                            not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        user_id = get_user_from_token(request.args.get('access_token'))
+
+        if not workflow_id_or_name:
+            raise ValueError("workflow_id_or_name is not supplied")
+
+        response, http_response = current_rwc_api_client.api.\
+            get_workflow_parameters(
+                user=user_id,
+                workflow_id_or_name=workflow_id_or_name).result()
+
+        return jsonify(response), http_response.status_code
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
