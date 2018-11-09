@@ -485,6 +485,90 @@
         "summary": "Get workflow logs of a workflow."
       }
     },
+    "/api/workflows/{workflow_id_or_name}/parameters": {
+      "get": {
+        "description": "This resource reports the input parameters of a workflow. Resource is expecting a workflow UUID.",
+        "operationId": "get_workflow_parameters",
+        "parameters": [
+          {
+            "description": "Required. Analysis UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. The API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. Workflow input parameters, including the status are returned.",
+            "examples": {
+              "application/json": {
+                "id": "dd4e93cf-e6d0-4714-a601-301ed97eec60",
+                "name": "workflow.24",
+                "parameters": {
+                  "helloworld": "code/helloworld.py",
+                  "inputfile": "data/names.txt",
+                  "outputfile": "results/greetings.txt",
+                  "sleeptime": 2
+                }
+              }
+            },
+            "schema": {
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "parameters": {
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming payload seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Malformed request."
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. Either User or Analysis does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Analysis 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Get parameters of a workflow."
+      }
+    },
     "/api/workflows/{workflow_id_or_name}/status": {
       "get": {
         "description": "This resource reports the status of a workflow. Resource is expecting a workflow UUID.",
@@ -628,7 +712,7 @@
             "type": "string"
           },
           {
-            "description": "Optional. Extra parameters for workflow status.",
+            "description": "Optional. Additional input and operational parameters.",
             "in": "body",
             "name": "parameters",
             "required": false,
