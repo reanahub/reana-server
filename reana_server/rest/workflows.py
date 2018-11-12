@@ -1119,3 +1119,125 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/workflows/<workflow_id_or_name_a>/diff/'
+                 '<workflow_id_or_name_b>', methods=['GET'])
+def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
+    r"""Get differences between two workflows.
+
+    ---
+    get:
+      summary: Get diff between two workflows.
+      description: >-
+        This resource shows the differences between
+        the assets of two workflows.
+        Resource is expecting two workflow UUIDs or names.
+      operationId: get_workflow_diff
+      produces:
+        - application/json
+      parameters:
+        - name: workflow_id_or_name_a
+          in: path
+          description: Required. Analysis UUID or name of the first workflow.
+          required: true
+          type: string
+        - name: workflow_id_or_name_b
+          in: path
+          description: Required. Analysis UUID or name of the second workflow.
+          required: true
+          type: string
+        - name: brief
+          in: query
+          description: Optional flag. If set, file contents are examined.
+          required: false
+          type: boolean
+          default: false
+        - name: context_lines
+          in: query
+          description: Optional parameter. Sets number of context lines
+                       for workspace diff output.
+          required: false
+          type: string
+          default: '5'
+        - name: access_token
+          in: query
+          description: Required. The API access_token of workflow owner.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. Info about a workflow, including the status is
+            returned.
+          schema:
+            type: object
+            properties:
+              reana_specification:
+                type: string
+              workspace_listing:
+                type: string
+          examples:
+            application/json:
+              {
+                "reana_specification":
+                ["- nevents: 100000\n+ nevents: 200000"],
+                "workspace_listing": {"Only in workspace a: code"}
+              }
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Either user or workflow does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
+                            not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        user_id = get_user_from_token(request.args.get('access_token'))
+        brief = request.args.get('brief', False)
+        brief = True if brief == 'true' else False
+        context_lines = request.args.get('context_lines', 5)
+        if not workflow_id_or_name_a or not workflow_id_or_name_b:
+            raise ValueError("Workflow id or name is not supplied")
+
+        response, http_response = current_rwc_api_client.api. \
+            get_workflow_diff(
+                user=user_id,
+                brief=brief,
+                context_lines=context_lines,
+                workflow_id_or_name_a=workflow_id_or_name_a,
+                workflow_id_or_name_b=workflow_id_or_name_b).result()
+
+        return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500

@@ -402,6 +402,108 @@
         "summary": "Creates a new workflow based on a REANA specification file."
       }
     },
+    "/api/workflows/{workflow_id_or_name_a}/diff/{workflow_id_or_name_b}": {
+      "get": {
+        "description": "This resource shows the differences between the assets of two workflows. Resource is expecting two workflow UUIDs or names.",
+        "operationId": "get_workflow_diff",
+        "parameters": [
+          {
+            "description": "Required. Analysis UUID or name of the first workflow.",
+            "in": "path",
+            "name": "workflow_id_or_name_a",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Analysis UUID or name of the second workflow.",
+            "in": "path",
+            "name": "workflow_id_or_name_b",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "default": false,
+            "description": "Optional flag. If set, file contents are examined.",
+            "in": "query",
+            "name": "brief",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "default": "5",
+            "description": "Optional parameter. Sets number of context lines for workspace diff output.",
+            "in": "query",
+            "name": "context_lines",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Required. The API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. Info about a workflow, including the status is returned.",
+            "examples": {
+              "application/json": {
+                "reana_specification": [
+                  "- nevents: 100000\n+ nevents: 200000"
+                ],
+                "workspace_listing": {
+                  "Only in workspace a: code": null
+                }
+              }
+            },
+            "schema": {
+              "properties": {
+                "reana_specification": {
+                  "type": "string"
+                },
+                "workspace_listing": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming payload seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Malformed request."
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. Either user or workflow does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Get diff between two workflows."
+      }
+    },
     "/api/workflows/{workflow_id_or_name}/logs": {
       "get": {
         "description": "This resource reports the status of a workflow. Resource is expecting a workflow UUID.",
