@@ -11,6 +11,7 @@
 
 import json
 import os
+import shutil
 
 import click
 from apispec import APISpec
@@ -35,8 +36,15 @@ __output_path__ = "temp_openapi.json"
 
 
 @click.command()
+@click.option(
+    '-p', '--publish',
+    help='Optional parameters if set, will pass generated and '
+         'validated openapi specifications to reana-commons module. '
+         'E.g. --publish.',
+    count=True
+)
 @with_appcontext
-def build_openapi_spec():
+def build_openapi_spec(publish):
     """Creates an OpenAPI definition of Flask application,
     check conformity of generated definition against OpenAPI 2.0 specification
     and writes it into a file."""
@@ -89,8 +97,35 @@ def build_openapi_spec():
         click.echo(
             click.style('OpenAPI specification validated successfully',
                         fg='green'))
+        if publish:
+            copy_openapi_specs()
 
     return spec.to_dict()
+
+
+def copy_openapi_specs():
+    """Copy generated and validated openapi specs to reana-commons module."""
+    if os.environ.get('REANA_SRCDIR'):
+        reana_srcdir = os.environ.get('REANA_SRCDIR')
+    else:
+        reana_srcdir = os.path.join('..')
+    try:
+        reana_commons_specs_path = os.path.join(
+            reana_srcdir,
+            'reana-commons',
+            'reana_commons',
+            'openapi_specifications')
+        if os.path.exists(reana_commons_specs_path):
+            if os.path.isfile(__output_path__):
+                shutil.copy(__output_path__,
+                            os.path.join(reana_commons_specs_path,
+                                         'reana_server.json'))
+                # copy openapi specs file as well to docs
+                shutil.copy(__output_path__,
+                            os.path.join('docs', 'openapi.json'))
+    except Exception as e:
+        click.echo('Something went wrong, could not copy openapi '
+                   'specifications to reana-commons \n{0}'.format(e))
 
 
 if __name__ == '__main__':
