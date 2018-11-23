@@ -1055,6 +1055,8 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
                 type: string
               name:
                 type: string
+              type:
+                type: string
               parameters:
                 type: object
           examples:
@@ -1062,6 +1064,7 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
               {
                 'id': 'dd4e93cf-e6d0-4714-a601-301ed97eec60',
                 'name': 'workflow.24',
+                'type': 'serial',
                 'parameters': {'helloworld': 'code/helloworld.py',
                                'inputfile': 'data/names.txt',
                                'outputfile': 'results/greetings.txt',

@@ -622,7 +622,8 @@
                   "inputfile": "data/names.txt",
                   "outputfile": "results/greetings.txt",
                   "sleeptime": 2
-                }
+                },
+                "type": "serial"
               }
             },
             "schema": {
@@ -635,6 +636,9 @@
                 },
                 "parameters": {
                   "type": "object"
+                },
+                "type": {
+                  "type": "string"
                 }
               },
               "type": "object"
