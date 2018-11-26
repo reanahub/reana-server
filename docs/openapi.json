@@ -3,7 +3,7 @@
   "info": {
     "description": "Submit workflows to be run on REANA Cloud",
     "title": "REANA Server",
-    "version": "0.1"
+    "version": "0.5.0.dev20181120"
   },
   "parameters": {},
   "paths": {
@@ -961,6 +961,69 @@
       }
     },
     "/api/workflows/{workflow_id_or_name}/workspace/{file_name}": {
+      "delete": {
+        "description": "This resource is expecting a workflow UUID and a filename existing inside the workspace to be deleted.",
+        "operationId": "delete_file",
+        "parameters": [
+          {
+            "description": "Required. Workflow UUID or name",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Name (or path) of the file to be deleted.",
+            "in": "path",
+            "name": "file_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. The API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Requests succeeded. The file has been downloaded.",
+            "schema": {
+              "type": "file"
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. `file_name` does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "input.csv does not exist"
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal server error."
+              }
+            }
+          }
+        },
+        "summary": "Delete the specified file."
+      },
       "get": {
         "description": "This resource is expecting a workflow UUID and a file name existing inside the workspace to return its content.",
         "operationId": "download_file",

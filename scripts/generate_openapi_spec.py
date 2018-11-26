@@ -19,6 +19,8 @@ from flask import current_app
 from flask.cli import with_appcontext
 from swagger_spec_validator.validator20 import validate_json
 
+from reana_server.version import __version__
+
 # Import your marshmallow schemas here
 # from example_package.schemas import Example_schema,
 
@@ -27,9 +29,6 @@ __title__ = "REANA Server"
 
 # Short description of the API. Supports GitHub Flavored Markdown.
 __api_description__ = "Submit workflows to be run on REANA Cloud"
-
-# Version of the API provides, not version of the OpenAPI specification.
-__api_version__ = "0.1"
 
 # Filepath where the OpenAPI specification file should be written to.
 __output_path__ = "temp_openapi.json"
@@ -51,7 +50,7 @@ def build_openapi_spec(publish):
 
     package = __title__
     desc = __api_description__
-    ver = __api_version__
+    ver = __version__
 
     # Create OpenAPI specification object
     spec = APISpec(

@@ -281,6 +281,29 @@ def test_download_file(app, default_user):
             assert res.status_code == 200
 
 
+def test_delete_file(app, default_user):
+    """Test delete_file view."""
+    with app.test_client() as client:
+        with patch(
+            "reana_server.rest.workflows.current_rwc_api_client",
+            make_mock_api_client("reana-workflow-controller")(),
+        ):
+            res = client.get(
+                url_for("workflows.delete_file",
+                        workflow_id_or_name="1",
+                        file_name="test_delete.txt"),
+                query_string={"user_id": default_user.id_})
+            assert res.status_code == 403
+
+            res = client.get(
+                url_for("workflows.delete_file",
+                        workflow_id_or_name="1",
+                        file_name="test_delete.txt"),
+                query_string={"access_token": default_user.access_token},
+            )
+            assert res.status_code == 200
+
+
 def test_get_files(app, default_user):
     """Test get_files view."""
     with app.test_client() as client:

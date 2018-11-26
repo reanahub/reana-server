@@ -836,6 +836,94 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
+@blueprint.route(
+    '/workflows/<workflow_id_or_name>/workspace/<path:file_name>',
+    methods=['DELETE'])
+def delete_file(workflow_id_or_name, file_name):  # noqa
+    r"""Delete a file from the workspace.
+
+    ---
+    delete:
+      summary: Delete the specified file.
+      description: >-
+        This resource is expecting a workflow UUID and a filename existing
+        inside the workspace to be deleted.
+      operationId: delete_file
+      produces:
+        - application/json
+      parameters:
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Workflow UUID or name
+          required: true
+          type: string
+        - name: file_name
+          in: path
+          description: Required. Name (or path) of the file to be deleted.
+          required: true
+          type: string
+        - name: access_token
+          in: query
+          description: Required. The API access_token of workflow owner.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Requests succeeded. The file has been downloaded.
+          schema:
+            type: file
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. `file_name` does not exist.
+          examples:
+            application/json:
+              {
+                "message": "input.csv does not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal server error.
+          examples:
+            application/json:
+              {
+                "message": "Internal server error."
+              }
+    """
+    try:
+        user_id = get_user_from_token(request.args.get('access_token'))
+
+        if not workflow_id_or_name:
+            raise ValueError("workflow_id_or_name is not supplied")
+
+        response, http_response = current_rwc_api_client.api.\
+            delete_file(
+                user=user_id,
+                workflow_id_or_name=workflow_id_or_name,
+                file_name=file_name).result()
+
+        return jsonify(http_response.json()), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
+
+
 @blueprint.route('/workflows/<workflow_id_or_name>/workspace',
                  methods=['GET'])
 def get_files(workflow_id_or_name):  # noqa
