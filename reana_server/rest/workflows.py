@@ -12,12 +12,12 @@ import logging
 import traceback
 
 from bravado.exception import HTTPError
+from flask import Blueprint
 from flask import current_app as app
-from flask import Blueprint, jsonify, request, send_file
+from flask import jsonify, request, send_file
 
+from reana_server.api_client import current_rwc_api_client
 from reana_server.utils import get_user_from_token, is_uuid_v4
-
-from ..api_client import current_rwc_api_client
 
 blueprint = Blueprint('workflows', __name__)
 
