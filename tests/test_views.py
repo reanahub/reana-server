@@ -192,7 +192,7 @@ def test_set_workflow_status(app, default_user):
                         workflow_id_or_name="1"),
                 headers={"Content-Type": "application/json"},
                 query_string={"access_token": default_user.access_token,
-                              "status": 0},
+                              "status": "stop"},
                 data=json.dumps(dict(parameters=None))
             )
             assert res.status_code == 200
