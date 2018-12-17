@@ -675,6 +675,121 @@
         "summary": "Get parameters of a workflow."
       }
     },
+    "/api/workflows/{workflow_id_or_name}/start": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "This resource starts the workflow execution process. Resource is expecting a workflow UUID.",
+        "operationId": "start_workflow",
+        "parameters": [
+          {
+            "description": "Required. Analysis UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. The API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Optional. Additional input parameters and operational options.",
+            "in": "body",
+            "name": "parameters",
+            "required": false,
+            "schema": {
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. Info about a workflow, including the execution status is returned.",
+            "examples": {
+              "application/json": {
+                "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "message": "Workflow submitted",
+                "status": "queued",
+                "user": "00000000-0000-0000-0000-000000000000",
+                "workflow_name": "mytest.1"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "user": {
+                  "type": "string"
+                },
+                "workflow_id": {
+                  "type": "string"
+                },
+                "workflow_name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming payload seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Malformed request."
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. Either User or Workflow does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist"
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed. The workflow could not be started due to a conflict.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 could not be started because it is already running."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          },
+          "501": {
+            "description": "Request failed. The specified status change is not implemented.",
+            "examples": {
+              "application/json": {
+                "message": "Status resume is not supported yet."
+              }
+            }
+          }
+        },
+        "summary": "Start workflow."
+      }
+    },
     "/api/workflows/{workflow_id_or_name}/status": {
       "get": {
         "description": "This resource reports the status of a workflow. Resource is expecting a workflow UUID.",

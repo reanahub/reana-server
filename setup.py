@@ -28,7 +28,7 @@ tests_require = [
     'pytest-cache>=1.0',
     'pytest-cov>=1.8.0',
     'pytest-pep8>=1.0.6',
-    'pytest-reana>=0.5.0.dev20181203',
+    'pytest-reana>=0.5.0.dev20190116',
     'pytest>=2.8.0',
     'swagger_spec_validator>=2.1.0'
 ]
@@ -38,7 +38,7 @@ extras_require = {
         'Sphinx>=1.4.4,<1.6',
         'sphinx-rtd-theme>=0.1.9',
         'sphinxcontrib-httpdomain>=1.5.0',
-        'sphinxcontrib-openapi>=0.3.0',
+        'sphinxcontrib-openapi>=0.3.0,<0.4.0',
         'sphinxcontrib-redoc>=1.5.1',
     ],
     'tests': tests_require,
@@ -61,8 +61,8 @@ install_requires = [
     'flask-cors>=3.0.6',
     'marshmallow>=2.13',
     'pyOpenSSL==17.5.0',  # FIXME remove once yadage-schemas solves deps.
-    'reana-commons>=0.5.0.dev20181210,<0.6.0',
-    'reana-db>=0.5.0.dev20181126,<0.6.0',
+    'reana-commons[kubernetes]>=0.5.0.dev20190116,<0.6.0',
+    'reana-db>=0.5.0.dev20190116,<0.6.0',
     'requests==2.20.0',
     'rfc3987==1.3.7',  # FIXME remove once yadage-schemas solves deps.
     'strict-rfc3339==0.7',  # FIXME remove once yadage-schemas solves deps.
@@ -97,6 +97,7 @@ setup(
         'flask.commands': [
             'db = reana_server.cli:db',
             'users = reana_server.cli:users',
+            'start-scheduler = reana_server.cli:start_scheduler',
         ]
     },
     include_package_data=True,

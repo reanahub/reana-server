@@ -66,6 +66,7 @@ from reana_db.database import Session, init_db
 from reana_db.models import User
 
 from reana_server import config
+from reana_server.scheduler import WorkflowExecutionScheduler
 from reana_server.utils import _create_user, _get_users, create_user_workspace
 
 
@@ -207,3 +208,14 @@ def create_user(ctx, email, user_access_token, admin_access_token):
             click.style('User could not be created: \n{}'
                         .format(str(e)), fg='red'),
             err=True)
+
+
+@click.command('start-scheduler')
+def start_scheduler():
+    """Start a workflow execution scheduler process."""
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(threadName)s - %(levelname)s: %(message)s'
+    )
+    scheduler = WorkflowExecutionScheduler()
+    scheduler.run()

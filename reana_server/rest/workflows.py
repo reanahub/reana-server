@@ -15,8 +15,12 @@ from bravado.exception import HTTPError
 from flask import Blueprint
 from flask import current_app as app
 from flask import jsonify, request, send_file
+from reana_db.database import Session
+from reana_db.models import Workflow, WorkflowStatus
+from reana_db.utils import _get_workflow_with_uuid_or_name
 
-from reana_server.api_client import current_rwc_api_client
+from reana_server.api_client import current_rwc_api_client, \
+    current_workflow_submission_publisher
 from reana_server.utils import get_user_from_token, is_uuid_v4
 
 blueprint = Blueprint('workflows', __name__)
@@ -485,6 +489,149 @@ def get_workflow_status(workflow_id_or_name):  # noqa
                 workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/workflows/<workflow_id_or_name>/start', methods=['POST'])
+def start_workflow(workflow_id_or_name):  # noqa
+    r"""Start workflow.
+    ---
+    post:
+      summary: Start workflow.
+      description: >-
+        This resource starts the workflow execution process.
+        Resource is expecting a workflow UUID.
+      operationId: start_workflow
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+        - name: access_token
+          in: query
+          description: Required. The API access_token of workflow owner.
+          required: true
+          type: string
+        - name: parameters
+          in: body
+          description: >-
+            Optional. Additional input parameters and operational options.
+          required: false
+          schema:
+            type: object
+      responses:
+        200:
+          description: >-
+            Request succeeded. Info about a workflow, including the execution
+            status is returned.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+              workflow_name:
+                type: string
+              status:
+                type: string
+              user:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow submitted",
+                "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest.1",
+                "status": "queued",
+                "user": "00000000-0000-0000-0000-000000000000"
+              }
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Either User or Workflow does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            does not exist"
+              }
+        409:
+          description: >-
+            Request failed. The workflow could not be started due to a
+            conflict.
+          examples:
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            could not be started because it is already
+                            running."
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+        501:
+          description: >-
+            Request failed. The specified status change is not implemented.
+          examples:
+            application/json:
+              {
+                "message": "Status resume is not supported yet."
+              }
+    """
+    try:
+        user_id = get_user_from_token(request.args.get('access_token'))
+
+        if not workflow_id_or_name:
+            raise ValueError("workflow_id_or_name is not supplied")
+        parameters = request.json
+        workflow = _get_workflow_with_uuid_or_name(
+            workflow_id_or_name, user_id)
+        if workflow.status != WorkflowStatus.created:
+            raise ValueError("Workflow cannot be started again.")
+        Workflow.update_workflow_status(Session, workflow.id_,
+                                        WorkflowStatus.queued)
+        current_workflow_submission_publisher.publish_workflow_submission(
+            user_id=user_id,
+            workflow_id_or_name=workflow_id_or_name,
+            parameters=parameters
+        )
+        response = {'message': 'Workflow submitted.',
+                    'workflow_id': workflow_id_or_name,
+                    'workflow_name': workflow_id_or_name,
+                    'status': WorkflowStatus.queued.name,
+                    'user': user_id}
+        return jsonify(response), 200
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code

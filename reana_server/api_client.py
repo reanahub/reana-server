@@ -10,7 +10,11 @@
 from functools import partial
 
 from reana_commons.api_client import get_current_api_client
+from reana_commons.config import MQ_DEFAULT_QUEUES
+from reana_commons.publisher import WorkflowSubmissionPublisher
 from werkzeug.local import LocalProxy
 
 current_rwc_api_client = LocalProxy(
     partial(get_current_api_client, component='reana-workflow-controller'))
+
+current_workflow_submission_publisher = LocalProxy(WorkflowSubmissionPublisher)
