@@ -11,6 +11,7 @@ RUN apt-get update && \
 
 COPY CHANGES.rst README.rst setup.py /code/
 COPY reana_server/version.py /code/reana_server/
+RUN pip install -e git://github.com/reanahub/reana-commons.git@238-disk-usage#egg=reana-commons
 WORKDIR /code
 RUN pip install --no-cache-dir requirements-builder && \
     requirements-builder -e all -l pypi setup.py | pip install --no-cache-dir -r /dev/stdin && \

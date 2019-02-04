@@ -9,18 +9,22 @@
 """Reana-Server workflow-functionality Flask-Blueprint."""
 import io
 import logging
+import subprocess
 import traceback
 
+import fs
 from bravado.exception import HTTPError
 from flask import Blueprint
 from flask import current_app as app
 from flask import jsonify, request, send_file
+from reana_commons.utils import get_workspace_disk_usage
 from reana_db.database import Session
 from reana_db.models import Workflow, WorkflowStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
 from reana_server.api_client import current_rwc_api_client, \
     current_workflow_submission_publisher
+from reana_server.config import SHARED_VOLUME_PATH
 from reana_server.utils import get_user_from_token, is_uuid_v4
 
 blueprint = Blueprint('workflows', __name__)
@@ -44,6 +48,11 @@ def get_workflows():  # noqa
           description: Required. The API access_token of workflow owner.
           required: true
           type: string
+        - name: verbose
+          in: query
+          description: Optional flag to show more information.
+          required: false
+          type: boolean
       responses:
         200:
           description: >-
@@ -59,6 +68,8 @@ def get_workflows():  # noqa
                   type: string
                 status:
                   type: string
+                size:
+                  type: string
                 user:
                   type: string
                 created:
@@ -70,6 +81,7 @@ def get_workflows():  # noqa
                   "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                   "name": "mytest.1",
                   "status": "running",
+                  "size": "10M",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
@@ -77,6 +89,7 @@ def get_workflows():  # noqa
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
                   "name": "mytest.2",
                   "status": "finished",
+                  "size": "12M",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
@@ -84,6 +97,7 @@ def get_workflows():  # noqa
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
                   "name": "mytest.3",
                   "status": "created",
+                  "size": "180K",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
@@ -91,6 +105,7 @@ def get_workflows():  # noqa
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
                   "name": "mytest.4",
                   "status": "created",
+                  "size": "1G",
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 }
@@ -128,9 +143,11 @@ def get_workflows():  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('access_token'))
+        verbose = request.args.get('verbose', False)
         response, http_response = current_rwc_api_client.api.\
             get_workflows(
-                user=user_id).result()
+                user=user_id,
+                verbose=bool(verbose)).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -1612,6 +1629,133 @@ def move_files(workflow_id_or_name):  # noqa
                 target=target).result()
 
         return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/workflows/<workflow_id_or_name>/disk_usage', methods=['GET'])
+def get_workflow_disk_usage(workflow_id_or_name):  # noqa
+    r"""Get workflow disk usage.
+
+    ---
+    get:
+      summary: Get disk usage of a workflow.
+      description: >-
+        This resource reports the disk usage of a workflow.
+        Resource is expecting a workflow UUID and some parameters .
+      operationId: get_workflow_disk_usage
+      produces:
+        - application/json
+      parameters:
+        - name: access_token
+          in: query
+          description: Required. API access_token of workflow owner.
+          required: true
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+        - name: parameters
+          in: body
+          description: >-
+            Optional. Additional input parameters and operational options.
+          required: false
+          schema:
+            type: object
+      responses:
+        200:
+          description: >-
+            Request succeeded. Info about the disk usage is
+            returned.
+          schema:
+            type: object
+            properties:
+              workflow_id:
+                type: string
+              workflow_name:
+                type: string
+              disk_usage_info:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    size:
+                      type: string
+          examples:
+            application/json:
+              {
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest.1",
+                "disk_usage_info": [{'name': 'file1.txt',
+                                     'size': '12KB'},
+                                    {'name': 'plot.png',
+                                     'size': '100KB'}]
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. User does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        user_id = get_user_from_token(request.args.get('access_token'))
+        parameters = request.json or {}
+
+        if not workflow_id_or_name:
+            raise ValueError("workflow_id_or_name is not supplied")
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
+                                                   user_id)
+        summarize = bool(parameters.get('summarize', False))
+        reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
+        if reana_fs.exists(workflow.get_workspace()):
+            absolute_workspace_path = reana_fs.getospath(
+                workflow.get_workspace())
+            disk_usage_info = get_workspace_disk_usage(absolute_workspace_path,
+                                                       summarize=summarize)
+        else:
+            raise ValueError('Workspace does not exist.')
+
+        response = {'workflow_id': workflow.id_,
+                    'workflow_name': workflow.name,
+                    'disk_usage_info': disk_usage_info}
+
+        return jsonify(response), 200
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
