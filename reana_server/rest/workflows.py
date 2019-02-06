@@ -1391,3 +1391,119 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/workflows/<workflow_id_or_name>/open',
+                 methods=['POST'])
+def open_interactive_session(workflow_id_or_name):  # noqa
+    r"""Start an interactive session inside the workflow workspace.
+
+    ---
+    post:
+      summary: Start an interactive session inside the workflow workspace.
+      description: >-
+        This resource is expecting a workflow to start an interactive session
+        within its workspace.
+      operationId: open_interactive_session
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Workflow UUID or name.
+          required: true
+          type: string
+        - name: access_token
+          in: query
+          description: Required. The API access_token of workflow owner.
+          required: true
+          type: string
+        - name: interactive_environment
+          in: body
+          description: >-
+            Optional. Image to use when spawning the interactive session along
+            with the needed port.
+          required: false
+          schema:
+            type: object
+            properties:
+              image:
+                type: string
+              port:
+                type: integer
+      responses:
+        200:
+          description: >-
+            Request succeeded. The interactive session has been opened.
+          schema:
+            type: object
+            properties:
+              path:
+                type: string
+          examples:
+            application/json:
+              {
+                "path": "/dd4e93cf-e6d0-4714-a601-301ed97eec60",
+              }
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Either user or workflow does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
+                            not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        user_id = get_user_from_token(request.args.get('access_token'))
+
+        if not workflow_id_or_name:
+            raise KeyError("workflow_id_or_name is not supplied")
+
+        if request.json and not request.json.get("image"):
+            raise KeyError("If process_environment payload is sent, it˛"
+                           "should contain the property image.")
+
+        response, http_response = current_rwc_api_client.api.\
+            open_interactive_session(
+                user=user_id,
+                workflow_id_or_name=workflow_id_or_name,
+                interactive_environment=request.json).result()
+
+        return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except KeyError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500

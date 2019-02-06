@@ -587,6 +587,97 @@
         "summary": "Get workflow logs of a workflow."
       }
     },
+    "/api/workflows/{workflow_id_or_name}/open": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "This resource is expecting a workflow to start an interactive session within its workspace.",
+        "operationId": "open_interactive_session",
+        "parameters": [
+          {
+            "description": "Required. Workflow UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. The API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Optional. Image to use when spawning the interactive session along with the needed port.",
+            "in": "body",
+            "name": "interactive_environment",
+            "required": false,
+            "schema": {
+              "properties": {
+                "image": {
+                  "type": "string"
+                },
+                "port": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The interactive session has been opened.",
+            "examples": {
+              "application/json": {
+                "path": "/dd4e93cf-e6d0-4714-a601-301ed97eec60"
+              }
+            },
+            "schema": {
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming payload seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Malformed request."
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. Either user or workflow does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Start an interactive session inside the workflow workspace."
+      }
+    },
     "/api/workflows/{workflow_id_or_name}/parameters": {
       "get": {
         "description": "This resource reports the input parameters of a workflow. Resource is expecting a workflow UUID.",
