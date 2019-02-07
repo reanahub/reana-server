@@ -1507,3 +1507,117 @@ def open_interactive_session(workflow_id_or_name):  # noqa
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/workflows/move_files/<workflow_id_or_name>',
+                 methods=['PUT'])
+def move_files(workflow_id_or_name):  # noqa
+    r"""Move files within workspace.
+    ---
+    put:
+      summary: Move files within workspace.
+      description: >-
+        This resource moves files within the workspace. Resource is expecting
+        a workflow UUID.
+      operationId: move_files
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+        - name: source
+          in: query
+          description: Required. Source file(s).
+          required: true
+          type: string
+        - name: target
+          in: query
+          description: Required. Target file(s).
+          required: true
+          type: string
+        - name: access_token
+          in: query
+          description: Required. The API access_token of workflow owner.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. Message about successfully moved files is
+            returned.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+              workflow_name:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Files were successfully moved",
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest.1",
+              }
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Either User or Workflow does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
+                            does not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        user_id = get_user_from_token(request.args.get('access_token'))
+
+        if not workflow_id_or_name:
+            raise ValueError("workflow_id_or_name is not supplied")
+        source = request.args.get('source')
+        target = request.args.get('target')
+        response, http_response = current_rwc_api_client.api.\
+            move_files(
+                user=user_id,
+                workflow_id_or_name=workflow_id_or_name,
+                source=source,
+                target=target).result()
+
+        return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500

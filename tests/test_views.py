@@ -387,3 +387,37 @@ def test_create_user(app, default_user):
                           "access_token": default_user.access_token},
         )
         assert res.status_code == 201
+
+
+def test_move_files(app, default_user):
+    """Test move_files view."""
+    with app.test_client() as client:
+        with patch(
+            "reana_server.rest.workflows.current_rwc_api_client",
+            make_mock_api_client("reana-workflow-controller")(),
+        ):
+            res = client.put(
+                url_for("workflows.move_files",
+                        workflow_id_or_name="1"),
+                query_string={"user": default_user.id_,
+                              "source": "source.txt",
+                              "target": "target.txt",
+                              })
+            assert res.status_code == 403
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = dict(key='value')
+        with patch(
+            "reana_server.rest.workflows.current_rwc_api_client",
+            make_mock_api_client("reana-workflow-controller")(
+                mock_http_response=mock_response),
+        ):
+            res = client.put(
+                url_for("workflows.move_files",
+                        workflow_id_or_name="1"),
+                query_string={"access_token": default_user.access_token,
+                              "source": "source.txt",
+                              "target": "target.txt",
+                              })
+            assert res.status_code == 200

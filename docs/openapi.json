@@ -402,6 +402,102 @@
         "summary": "Creates a new workflow based on a REANA specification file."
       }
     },
+    "/api/workflows/move_files/{workflow_id_or_name}": {
+      "put": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "This resource moves files within the workspace. Resource is expecting a workflow UUID.",
+        "operationId": "move_files",
+        "parameters": [
+          {
+            "description": "Required. Analysis UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Source file(s).",
+            "in": "query",
+            "name": "source",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. Target file(s).",
+            "in": "query",
+            "name": "target",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. The API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. Message about successfully moved files is returned.",
+            "examples": {
+              "application/json": {
+                "message": "Files were successfully moved",
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest.1"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "workflow_id": {
+                  "type": "string"
+                },
+                "workflow_name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming payload seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Malformed request."
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. Either User or Workflow does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist"
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Move files within workspace."
+      }
+    },
     "/api/workflows/{workflow_id_or_name_a}/diff/{workflow_id_or_name_b}": {
       "get": {
         "description": "This resource shows the differences between the assets of two workflows. Resource is expecting two workflow UUIDs or names.",
