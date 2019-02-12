@@ -1640,7 +1640,8 @@ def move_files(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/disk_usage', methods=['GET'])
+@blueprint.route('/workflows/<workflow_id_or_name>/disk_usage',
+                 methods=['GET'])
 def get_workflow_disk_usage(workflow_id_or_name):  # noqa
     r"""Get workflow disk usage.
 
@@ -1682,6 +1683,8 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
               workflow_id:
                 type: string
               workflow_name:
+                type: string
+              user:
                 type: string
               disk_usage_info:
                 type: array
@@ -1753,6 +1756,7 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
 
         response = {'workflow_id': workflow.id_,
                     'workflow_name': workflow.name,
+                    'user': user_id,
                     'disk_usage_info': disk_usage_info}
 
         return jsonify(response), 200
