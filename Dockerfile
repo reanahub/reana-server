@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2017, 2018 CERN.
+# Copyright (C) 2017, 2018, 2019 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -20,8 +20,11 @@ COPY . /code
 
 # Debug off by default
 ARG DEBUG=false
-
 RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip install -e .; else pip install .; fi;
+
+# Building with locally-checked-out shared modules?
+RUN if test -e modules/reana-commons; then pip install modules/reana-commons --upgrade; fi
+RUN if test -e modules/reana-db; then pip install modules/reana-db --upgrade; fi
 
 ARG UWSGI_PROCESSES=2
 ENV UWSGI_PROCESSES ${UWSGI_PROCESSES:-2}
