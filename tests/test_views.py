@@ -18,6 +18,7 @@ from jsonschema.exceptions import ValidationError
 from mock import Mock, PropertyMock, patch
 from pytest_reana.fixtures import default_user
 from pytest_reana.test_utils import make_mock_api_client
+from reana_commons.config import INTERACTIVE_SESSION_TYPES
 
 
 def test_get_workflows(app, default_user):
@@ -421,3 +422,27 @@ def test_move_files(app, default_user):
                               "target": "target.txt",
                               })
             assert res.status_code == 200
+
+
+@pytest.mark.parametrize(
+    ('interactive_session_type', 'expected_status_code'),
+    [(int_session_type, 200)
+     for int_session_type in INTERACTIVE_SESSION_TYPES] +
+    [('wrong-interactive-type', 404)])
+def test_open_interactive_session(app, default_user,
+                                  sample_serial_workflow_in_db,
+                                  interactive_session_type,
+                                  expected_status_code):
+    """Test open interactive session."""
+    with app.test_client() as client:
+            with patch(
+                "reana_server.rest.workflows.current_rwc_api_client",
+                make_mock_api_client("reana-workflow-controller")(),
+            ):
+                res = client.post(
+                    url_for(
+                        "workflows.open_interactive_session",
+                        workflow_id_or_name=sample_serial_workflow_in_db.id_,
+                        interactive_session_type=interactive_session_type),
+                    query_string={"access_token": default_user.access_token})
+                assert res.status_code == expected_status_code

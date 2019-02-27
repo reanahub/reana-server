@@ -808,7 +808,7 @@
         "summary": "Get workflow logs of a workflow."
       }
     },
-    "/api/workflows/{workflow_id_or_name}/open": {
+    "/api/workflows/{workflow_id_or_name}/open/{interactive_session_type}": {
       "post": {
         "consumes": [
           "application/json"
@@ -831,17 +831,22 @@
             "type": "string"
           },
           {
-            "description": "Optional. Image to use when spawning the interactive session along with the needed port.",
+            "description": "Type of interactive session to use.",
+            "in": "path",
+            "name": "interactive_session_type",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Interactive session configuration.",
             "in": "body",
-            "name": "interactive_environment",
+            "name": "interactive_session_configuration",
             "required": false,
             "schema": {
               "properties": {
                 "image": {
+                  "description": "Replaces the default Docker image of an interactive session.",
                   "type": "string"
-                },
-                "port": {
-                  "type": "integer"
                 }
               },
               "type": "object"
@@ -888,7 +893,7 @@
             "description": "Request failed. Either user or workflow does not exist.",
             "examples": {
               "application/json": {
-                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist."
+                "message": "Interactive session type jupiter not found, try with one of: [jupyter]."
               }
             }
           },

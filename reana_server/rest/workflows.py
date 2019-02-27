@@ -17,6 +17,7 @@ from bravado.exception import HTTPError
 from flask import Blueprint
 from flask import current_app as app
 from flask import jsonify, request, send_file
+from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_commons.utils import get_workspace_disk_usage
 from reana_db.database import Session
 from reana_db.models import Workflow, WorkflowStatus
@@ -1410,9 +1411,11 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/open',
+@blueprint.route('/workflows/<workflow_id_or_name>/open/'
+                 '<interactive_session_type>',
                  methods=['POST'])
-def open_interactive_session(workflow_id_or_name):  # noqa
+def open_interactive_session(workflow_id_or_name,
+                             interactive_session_type):  # noqa
     r"""Start an interactive session inside the workflow workspace.
 
     ---
@@ -1437,19 +1440,23 @@ def open_interactive_session(workflow_id_or_name):  # noqa
           description: Required. The API access_token of workflow owner.
           required: true
           type: string
-        - name: interactive_environment
+        - name: interactive_session_type
+          in: path
+          description: Type of interactive session to use.
+          required: true
+          type: string
+        - name: interactive_session_configuration
           in: body
           description: >-
-            Optional. Image to use when spawning the interactive session along
-            with the needed port.
+            Interactive session configuration.
           required: false
           schema:
             type: object
             properties:
               image:
                 type: string
-              port:
-                type: integer
+                description: >-
+                  Replaces the default Docker image of an interactive session.
       responses:
         200:
           description: >-
@@ -1488,8 +1495,8 @@ def open_interactive_session(workflow_id_or_name):  # noqa
           examples:
             application/json:
               {
-                "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does
-                            not exist."
+                "message": "Interactive session type jupiter not found, try
+                            with one of: [jupyter]."
               }
         500:
           description: >-
@@ -1497,19 +1504,21 @@ def open_interactive_session(workflow_id_or_name):  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('access_token'))
-
+        if interactive_session_type not in INTERACTIVE_SESSION_TYPES:
+            return jsonify({
+                "message": "Interactive session type {0} not found, try "
+                           "with one of: {1}".format(
+                               interactive_session_type,
+                               INTERACTIVE_SESSION_TYPES)}), 404
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
-
-        if request.json and not request.json.get("image"):
-            raise KeyError("If process_environment payload is sent, it˛"
-                           "should contain the property image.")
 
         response, http_response = current_rwc_api_client.api.\
             open_interactive_session(
                 user=user_id,
                 workflow_id_or_name=workflow_id_or_name,
-                interactive_environment=request.json).result()
+                interactive_session_type=interactive_session_type,
+                interactive_session_configuration=request.json or {}).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
