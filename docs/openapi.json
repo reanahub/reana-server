@@ -614,6 +614,80 @@
         "summary": "Get diff between two workflows."
       }
     },
+    "/api/workflows/{workflow_id_or_name}/close/": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "This resource is expecting a workflow to close an interactive session within its workspace.",
+        "operationId": "close_interactive_session",
+        "parameters": [
+          {
+            "description": "Required. Workflow UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. The API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The interactive session has been closed.",
+            "examples": {
+              "application/json": {
+                "message": "The interactive session has been closed"
+              }
+            },
+            "schema": {
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming payload seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Malformed request."
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. Either user or workflow does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Either user or workflow does not exist."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Close an interactive workflow session."
+      }
+    },
     "/api/workflows/{workflow_id_or_name}/disk_usage": {
       "get": {
         "description": "This resource reports the disk usage of a workflow. Resource is expecting a workflow UUID and some parameters .",

@@ -446,3 +446,22 @@ def test_open_interactive_session(app, default_user,
                         interactive_session_type=interactive_session_type),
                     query_string={"access_token": default_user.access_token})
                 assert res.status_code == expected_status_code
+
+
+@pytest.mark.parametrize(
+    ('expected_status_code'), [200])
+def test_close_interactive_session(app, default_user,
+                                   sample_serial_workflow_in_db,
+                                   expected_status_code):
+    """Test close an interactive session."""
+    with app.test_client() as client:
+            with patch(
+                "reana_server.rest.workflows.current_rwc_api_client",
+                make_mock_api_client("reana-workflow-controller")(),
+            ):
+                res = client.post(
+                    url_for(
+                        "workflows.close_interactive_session",
+                        workflow_id_or_name=sample_serial_workflow_in_db.id_),
+                    query_string={"access_token": default_user.access_token})
+                assert res.status_code == expected_status_code
