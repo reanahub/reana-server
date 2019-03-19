@@ -49,6 +49,11 @@ def get_workflows():  # noqa
           description: Required. The API access_token of workflow owner.
           required: true
           type: string
+        - name: type
+          in: query
+          description: Required. Type of workflows.
+          required: true
+          type: string
         - name: verbose
           in: query
           description: Optional flag to show more information.
@@ -144,10 +149,12 @@ def get_workflows():  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('access_token'))
+        type = request.args.get('type', 'batch')
         verbose = request.args.get('verbose', False)
         response, http_response = current_rwc_api_client.api.\
             get_workflows(
                 user=user_id,
+                type=type,
                 verbose=bool(verbose)).result()
 
         return jsonify(response), http_response.status_code

@@ -215,6 +215,13 @@
             "type": "string"
           },
           {
+            "description": "Required. Type of workflows.",
+            "in": "query",
+            "name": "type",
+            "required": true,
+            "type": "string"
+          },
+          {
             "description": "Optional flag to show more information.",
             "in": "query",
             "name": "verbose",

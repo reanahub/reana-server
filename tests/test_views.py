@@ -30,13 +30,15 @@ def test_get_workflows(app, default_user):
         ):
             res = client.get(
                 url_for("workflows.get_workflows"),
-                query_string={"user_id": default_user.id_},
+                query_string={"user_id": default_user.id_,
+                              "type": "batch"},
             )
             assert res.status_code == 403
 
             res = client.get(
                 url_for("workflows.get_workflows"),
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": default_user.access_token,
+                              "type": "batch"},
             )
             assert res.status_code == 200
 
