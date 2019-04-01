@@ -61,6 +61,7 @@ import traceback
 import click
 import tablib
 from flask.cli import with_appcontext
+from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 from reana_commons.utils import click_table_printer
 from reana_db.database import Session, init_db
 from reana_db.models import User
@@ -214,8 +215,8 @@ def create_user(ctx, email, user_access_token, admin_access_token):
 def start_scheduler():
     """Start a workflow execution scheduler process."""
     logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s - %(threadName)s - %(levelname)s: %(message)s'
+        level=REANA_LOG_LEVEL,
+        format=REANA_LOG_FORMAT
     )
     scheduler = WorkflowExecutionScheduler()
     scheduler.run()

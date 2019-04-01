@@ -8,13 +8,20 @@
 
 """Flask-application factory for Reana-Server."""
 
+import logging
+
 from flask import Flask
 from flask_cors import CORS
+from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 from reana_db.database import Session
 
 
 def create_app():
     """REANA Server application factory."""
+    logging.basicConfig(
+        level=REANA_LOG_LEVEL,
+        format=REANA_LOG_FORMAT
+    )
     app = Flask(__name__)
     app.config.from_object('reana_server.config')
     app.secret_key = "hyper secret key"
