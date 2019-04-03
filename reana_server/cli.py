@@ -68,7 +68,8 @@ from reana_db.models import User
 
 from reana_server import config
 from reana_server.scheduler import WorkflowExecutionScheduler
-from reana_server.utils import _create_user, _get_users, create_user_workspace
+from reana_server.utils import (_create_user, _export_users, _get_users,
+                                _import_users, create_user_workspace)
 
 
 @click.group()
@@ -209,6 +210,46 @@ def create_user(ctx, email, user_access_token, admin_access_token):
             click.style('User could not be created: \n{}'
                         .format(str(e)), fg='red'),
             err=True)
+
+
+@users.command('export')
+@click.option(
+    '--admin-access-token',
+    default=os.environ.get('REANA_ACCESS_TOKEN', None),
+    help='The access token of an administrator.')
+@click.pass_context
+def export_users(ctx, admin_access_token):
+    """Export all users in current REANA cluster."""
+    try:
+        csv_file = _export_users(admin_access_token)
+        click.echo(csv_file.getvalue(), nl=False)
+    except Exception as e:
+        click.secho(
+            'Something went wrong while importing users:\n{}'.format(e),
+            fg='red', err=True)
+
+
+@users.command('import')
+@click.option(
+    '--admin-access-token',
+    default=os.environ.get('REANA_ACCESS_TOKEN', None),
+    help='The access token of an administrator.')
+@click.option(
+    '-f',
+    '--file',
+    'file_',
+    help='A CSV file containing a list of REANA users.',
+    type=click.File())
+@click.pass_context
+def import_users(ctx, admin_access_token, file_):
+    """Import users from file."""
+    try:
+        _import_users(admin_access_token, file_)
+        click.secho('Users successfully imported.', fg='green')
+    except Exception as e:
+        click.secho(
+            'Something went wrong while importing users:\n{}'.format(e),
+            fg='red', err=True)
 
 
 @click.command('start-scheduler')

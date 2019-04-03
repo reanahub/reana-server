@@ -7,6 +7,8 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 """REANA-Server utils."""
 
+import csv
+import io
 import secrets
 from uuid import UUID
 
@@ -80,3 +82,39 @@ def _create_user(email, user_access_token, admin_access_token):
         raise ValueError('Could not create user, '
                          'possible constraint violation')
     return user
+
+
+def _export_users(admin_access_token):
+    """Export all users in database as csv.
+
+    :param admin_access_token: Admin access token.
+    :type admin_access_token: str
+    """
+    admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
+    if admin_access_token != admin.access_token:
+        raise ValueError('Admin access token invalid.')
+    csv_file_obj = io.StringIO()
+    csv_writer = csv.writer(csv_file_obj, dialect='unix')
+    for user in User.query.all():
+        csv_writer.writerow([user.id_, user.email, user.access_token])
+    return csv_file_obj
+
+
+def _import_users(admin_access_token, users_csv_file):
+    """Import list of users to database.
+
+    :param admin_access_token: Admin access token.
+    :type admin_access_token: str
+    :param users_csv_file: CSV file object containing a list of users.
+    :type users_csv_file: _io.TextIOWrapper
+    """
+    admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
+    if admin_access_token != admin.access_token:
+        raise ValueError('Admin access token invalid.')
+    csv_reader = csv.reader(users_csv_file)
+    users = []
+    for row in csv_reader:
+        user = User(id_=row[0], email=row[1], access_token=row[2])
+        Session.add(user)
+    Session.commit()
+    Session.remove()
