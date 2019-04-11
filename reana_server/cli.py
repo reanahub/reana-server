@@ -61,13 +61,15 @@ import traceback
 import click
 import tablib
 from flask.cli import with_appcontext
+from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 from reana_commons.utils import click_table_printer
 from reana_db.database import Session, init_db
 from reana_db.models import User
 
 from reana_server import config
 from reana_server.scheduler import WorkflowExecutionScheduler
-from reana_server.utils import _create_user, _get_users, create_user_workspace
+from reana_server.utils import (_create_user, _export_users, _get_users,
+                                _import_users, create_user_workspace)
 
 
 @click.group()
@@ -210,12 +212,52 @@ def create_user(ctx, email, user_access_token, admin_access_token):
             err=True)
 
 
+@users.command('export')
+@click.option(
+    '--admin-access-token',
+    default=os.environ.get('REANA_ACCESS_TOKEN', None),
+    help='The access token of an administrator.')
+@click.pass_context
+def export_users(ctx, admin_access_token):
+    """Export all users in current REANA cluster."""
+    try:
+        csv_file = _export_users(admin_access_token)
+        click.echo(csv_file.getvalue(), nl=False)
+    except Exception as e:
+        click.secho(
+            'Something went wrong while importing users:\n{}'.format(e),
+            fg='red', err=True)
+
+
+@users.command('import')
+@click.option(
+    '--admin-access-token',
+    default=os.environ.get('REANA_ACCESS_TOKEN', None),
+    help='The access token of an administrator.')
+@click.option(
+    '-f',
+    '--file',
+    'file_',
+    help='A CSV file containing a list of REANA users.',
+    type=click.File())
+@click.pass_context
+def import_users(ctx, admin_access_token, file_):
+    """Import users from file."""
+    try:
+        _import_users(admin_access_token, file_)
+        click.secho('Users successfully imported.', fg='green')
+    except Exception as e:
+        click.secho(
+            'Something went wrong while importing users:\n{}'.format(e),
+            fg='red', err=True)
+
+
 @click.command('start-scheduler')
 def start_scheduler():
     """Start a workflow execution scheduler process."""
     logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s - %(threadName)s - %(levelname)s: %(message)s'
+        level=REANA_LOG_LEVEL,
+        format=REANA_LOG_FORMAT
     )
     scheduler = WorkflowExecutionScheduler()
     scheduler.run()

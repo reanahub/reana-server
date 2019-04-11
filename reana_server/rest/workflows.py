@@ -49,6 +49,11 @@ def get_workflows():  # noqa
           description: Required. The API access_token of workflow owner.
           required: true
           type: string
+        - name: type
+          in: query
+          description: Required. Type of workflows.
+          required: true
+          type: string
         - name: verbose
           in: query
           description: Optional flag to show more information.
@@ -144,10 +149,12 @@ def get_workflows():  # noqa
     """
     try:
         user_id = get_user_from_token(request.args.get('access_token'))
+        type = request.args.get('type', 'batch')
         verbose = request.args.get('verbose', False)
         response, http_response = current_rwc_api_client.api.\
             get_workflows(
                 user=user_id,
+                type=type,
                 verbose=bool(verbose)).result()
 
         return jsonify(response), http_response.status_code
@@ -1519,6 +1526,101 @@ def open_interactive_session(workflow_id_or_name,
                 workflow_id_or_name=workflow_id_or_name,
                 interactive_session_type=interactive_session_type,
                 interactive_session_configuration=request.json or {}).result()
+
+        return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except KeyError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/workflows/<workflow_id_or_name>/close/',
+                 methods=['POST'])
+def close_interactive_session(workflow_id_or_name):  # noqa
+    r"""Close an interactive workflow session.
+
+    ---
+    post:
+      summary: Close an interactive workflow session.
+      description: >-
+        This resource is expecting a workflow to close an interactive session
+        within its workspace.
+      operationId: close_interactive_session
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Workflow UUID or name.
+          required: true
+          type: string
+        - name: access_token
+          in: query
+          description: Required. The API access_token of workflow owner.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. The interactive session has been closed.
+          schema:
+            type: object
+            properties:
+              path:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "The interactive session has been closed",
+              }
+        400:
+          description: >-
+            Request failed. The incoming payload seems malformed.
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. Either user or workflow does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Either user or workflow does not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        user_id = get_user_from_token(request.args.get('access_token'))
+        if not workflow_id_or_name:
+            raise KeyError("workflow_id_or_name is not supplied")
+        response, http_response = current_rwc_api_client.api.\
+            close_interactive_session(
+                user=user_id,
+                workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:

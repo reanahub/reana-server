@@ -22,13 +22,13 @@ tests_require = [
     'apispec>=0.21.0,<0.40',
     'check-manifest>=0.25',
     'coverage>=4.0',
-    'isort>=4.2.15',
+    'isort>=4.2.2,<4.3',
     'marshmallow>=2.13',
     'pydocstyle>=1.0.0',
     'pytest-cache>=1.0',
     'pytest-cov>=1.8.0',
     'pytest-pep8>=1.0.6',
-    'pytest-reana>=0.5.0.dev20190116',
+    'pytest-reana>=0.5.0.dev20190321',
     'pytest>=3.8.0,<4.0.0',
     'swagger_spec_validator>=2.1.0'
 ]
@@ -61,8 +61,8 @@ install_requires = [
     'flask-cors>=3.0.6',
     'marshmallow>=2.13',
     'pyOpenSSL==17.5.0',  # FIXME remove once yadage-schemas solves deps.
-    'reana-commons[kubernetes]>=0.5.0.dev20190306,<0.6.0',
-    'reana-db>=0.5.0.dev20190306,<0.6.0',
+    'reana-commons[kubernetes]>=0.5.0.dev20190408,<0.6.0',
+    'reana-db>=0.5.0.dev20190402,<0.6.0',
     'requests==2.20.0',
     'rfc3987==1.3.7',  # FIXME remove once yadage-schemas solves deps.
     'strict-rfc3339==0.7',  # FIXME remove once yadage-schemas solves deps.
