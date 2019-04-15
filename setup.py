@@ -29,7 +29,7 @@ tests_require = [
     'pytest-cov>=1.8.0',
     'pytest-pep8>=1.0.6',
     'pytest-reana>=0.5.0.dev20190321',
-    'pytest>=3.8.0,<4.0.0',
+    'pytest>=3.8.0',
     'swagger_spec_validator>=2.1.0'
 ]
 
@@ -55,7 +55,7 @@ setup_requires = [
 ]
 
 install_requires = [
-    'click>=7.0,<8.0',
+    'click>=7.0',
     'Flask>=0.11',
     'fs>=2.0',
     'flask-cors>=3.0.6',
