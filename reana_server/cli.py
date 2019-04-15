@@ -51,6 +51,19 @@ Similarly, to retrieve information for all users:
 .. code-block :: bash
 
     $ flask users get --admin-access-token=<token>
+
+To export, all users in current REANA cluster:
+
+.. code-block :: bash
+
+    # users will be exported in CSV format
+    $ flask export --admin-access-token=<token> > users.csv
+
+To import users to current REANA cluster:
+
+.. code-block :: bash
+
+    $ flask import --file users.csv --admin-access-token=<token>
 """
 import logging
 import os
