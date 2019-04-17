@@ -6,17 +6,21 @@
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 
-"""
-The REANA Server offers a CLI for user account operations.
+"""REANA Server command line tool.
 
-Specifically, from the CLI an administrator
-can create new user accounts, and retrieve users based on given filters.
+The REANA Server offers a command line tool for user account operations. An
+administrator can create new user accounts, retrieve users based on given
+filters and export/import all users.
+
+Retrieving administrator token
+------------------------------
 
 By default the server docker image is set to create the administrator account
 on startup, which has the email ``info@reana.io`` and a token which is
 generated using the ``secrets`` python library.
 
-To retrieve the administrator token you can run:
+To retrieve the administrator token you can use the
+`reana-cluster <https://github.com/reanahub/reana-cluster>`_ CLI:
 
 .. code-block:: bash
 
@@ -40,6 +44,9 @@ and get all users:
 
     > SELECT * FROM user_;
 
+Managing users
+--------------
+
 With the administrator access token, new user creation is allowed with:
 
 .. code-block :: bash
@@ -52,14 +59,14 @@ Similarly, to retrieve information for all users:
 
     $ flask users get --admin-access-token=<token>
 
-To export, all users in current REANA cluster:
+To export all users in current REANA cluster you can use:
 
 .. code-block :: bash
 
     # users will be exported in CSV format
     $ flask export --admin-access-token=<token> > users.csv
 
-To import users to current REANA cluster:
+And import them in a new cluster as follows:
 
 .. code-block :: bash
 

@@ -2,9 +2,6 @@
  REANA-Server
 ==============
 
-.. image:: https://img.shields.io/pypi/pyversions/reana-server.svg
-   :target: https://pypi.org/pypi/reana-server
-
 .. image:: https://img.shields.io/travis/reanahub/reana-server.svg
    :target: https://travis-ci.org/reanahub/reana-server
 
@@ -33,9 +30,10 @@ Features
 - offers rich REST API services for REANA clients
 - transmits REST API requests to appropriate REANA cloud components
 - REST API to run research analysis workflows on compute clouds
-- REST API to seed analysis workspace with input code and data
 - REST API to list submitted workflows and enquire about their statuses
+- REST API to manage analysis files
 - REST API to download results of finished analysis workflows
+- REST API to find the differences between two workflows (``git`` like output)
 
 Useful links
 ------------

@@ -28,7 +28,7 @@ tests_require = [
     'pytest-cache>=1.0',
     'pytest-cov>=1.8.0',
     'pytest-pep8>=1.0.6',
-    'pytest-reana>=0.5.0.dev20190321',
+    'pytest-reana>=0.5.0',
     'pytest>=3.8.0',
     'swagger_spec_validator>=2.1.0'
 ]
@@ -60,17 +60,17 @@ install_requires = [
     'fs>=2.0',
     'flask-cors>=3.0.6',
     'marshmallow>=2.13',
-    'pyOpenSSL==17.5.0',  # FIXME remove once yadage-schemas solves deps.
-    'reana-commons[kubernetes]>=0.5.0.dev20190408,<0.6.0',
-    'reana-db>=0.5.0.dev20190402,<0.6.0',
+    'pyOpenSSL==17.5.0',
+    'reana-commons[kubernetes]>=0.5.0,<0.6.0',
+    'reana-db>=0.5.0,<0.6.0',
     'requests==2.20.0',
-    'rfc3987==1.3.7',  # FIXME remove once yadage-schemas solves deps.
-    'strict-rfc3339==0.7',  # FIXME remove once yadage-schemas solves deps.
+    'rfc3987==1.3.7',
+    'strict-rfc3339==0.7',
     'tablib>=0.12.1',
     'uWSGI>=2.0.17',
     'uwsgi-tools>=1.1.1',
     'uwsgitop>=0.10',
-    'webcolors==1.7',  # FIXME remove once yadage-schemas solves deps.
+    'webcolors==1.7',
 ]
 
 packages = find_packages()
@@ -113,6 +113,7 @@ setup(
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: Implementation :: CPython',
         'Programming Language :: Python',
         'Programming Language :: Python',
