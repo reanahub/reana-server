@@ -45,7 +45,7 @@ def get_user_from_token(access_token):
         one_or_none()
     if not user:
         raise ValueError('Token not valid.')
-    return str(user.id_)
+    return user
 
 
 def _get_users(_id, email, user_access_token, admin_access_token):

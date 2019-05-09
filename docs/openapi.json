@@ -3,7 +3,7 @@
   "info": {
     "description": "Submit workflows to be run on REANA Cloud",
     "title": "REANA Server",
-    "version": "0.5.0"
+    "version": "0.6.0.dev20190603"
   },
   "parameters": {},
   "paths": {
@@ -37,6 +37,259 @@
           }
         },
         "summary": "Ping the server (healthcheck)"
+      }
+    },
+    "/api/secrets": {
+      "get": {
+        "description": "Get user secrets.",
+        "operationId": "get_secrets",
+        "parameters": [
+          {
+            "description": "Required. Secrets owner access token.",
+            "in": "query",
+            "name": "access_token",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "List of user secrets.",
+            "examples": {
+              "application/json": [
+                {
+                  "name": ".keytab",
+                  "value": "SGVsbG8gUkVBTkEh"
+                },
+                {
+                  "name": "username",
+                  "value": "reanauser"
+                }
+              ]
+            },
+            "schema": {
+              "items": {
+                "properties": {
+                  "name": {
+                    "description": "Secret name",
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "How will be the secret assigned to the jobs, either exported as an environment variable or mounted as a file.",
+                    "enum": [
+                      "env",
+                      "file"
+                    ],
+                    "type": "string"
+                  }
+                }
+              },
+              "type": "array"
+            }
+          },
+          "403": {
+            "description": "Request failed. Token is not valid.",
+            "examples": {
+              "application/json": {
+                "message": "Token is not valid"
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Error while querying."
+              }
+            }
+          }
+        },
+        "summary": "Get user secrets. Requires an user access token."
+      }
+    },
+    "/api/secrets/": {
+      "delete": {
+        "description": "This resource deletes the requested secrets.",
+        "operationId": "delete_secrets",
+        "parameters": [
+          {
+            "description": "Required. API key of the admin.",
+            "in": "query",
+            "name": "access_token",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Optional. List of secrets to be deleted.",
+            "in": "body",
+            "name": "secrets",
+            "required": true,
+            "schema": {
+              "description": "List of secret names to be deleted.",
+              "items": {
+                "description": "Secret name to be deleted.",
+                "type": "string"
+              },
+              "type": "array"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Secrets successfully deleted.",
+            "examples": {
+              "application/json": [
+                ".keytab",
+                "username"
+              ]
+            },
+            "schema": {
+              "description": "List of secret names that have been deleted.",
+              "items": {
+                "description": "Name of the secret that have been deleted.",
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "403": {
+            "description": "Request failed. Token is not valid.",
+            "examples": {
+              "application/json": {
+                "message": "Token is not valid"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. Secrets do not exist.",
+            "examples": {
+              "application/json": [
+                "certificate.pem",
+                "PASSWORD"
+              ]
+            },
+            "schema": {
+              "description": "List of secret names that could not be deleted.",
+              "items": {
+                "description": "Name of the secret which does not exist.",
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal server error."
+              }
+            }
+          }
+        },
+        "summary": "Deletes the specified secret(s)."
+      },
+      "post": {
+        "description": "This resource adds secrets for the authenticated user.",
+        "operationId": "add_secrets",
+        "parameters": [
+          {
+            "description": "Required. Secrets owner access token.",
+            "in": "query",
+            "name": "access_token",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Whether existing secret keys should be overwritten.",
+            "in": "query",
+            "name": "overwrite",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "Optional. List of secrets to be added.",
+            "in": "body",
+            "name": "secrets",
+            "required": true,
+            "schema": {
+              "additionalProperties": {
+                "description": "Secret definition.",
+                "properties": {
+                  "name": {
+                    "description": "Secret name",
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "How will be the secret assigned to the jobs, either exported as an environment variable or mounted as a file.",
+                    "enum": [
+                      "env",
+                      "file"
+                    ],
+                    "type": "string"
+                  },
+                  "value": {
+                    "description": "Secret value",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "201": {
+            "description": "Secrets successfully added.",
+            "examples": {
+              "application/json": {
+                "message": "Secret(s) successfully added."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. Token is not valid.",
+            "examples": {
+              "application/json": {
+                "message": "Token is not valid"
+              }
+            }
+          },
+          "409": {
+            "description": "Request failed. Secrets could not be added due to a conflict.",
+            "examples": {
+              "application/json": {
+                "message": "The submitted secrets api_key, password, username already exist."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal server error."
+              }
+            }
+          }
+        },
+        "summary": "Add user secrets to REANA."
       }
     },
     "/api/users": {

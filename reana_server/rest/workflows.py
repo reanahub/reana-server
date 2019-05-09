@@ -148,12 +148,12 @@ def get_workflows():  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
         type = request.args.get('type', 'batch')
         verbose = request.args.get('verbose', False)
         response, http_response = current_rwc_api_client.api.\
             get_workflows(
-                user=user_id,
+                user=str(user.id_),
                 type=type,
                 verbose=bool(verbose)).result()
 
@@ -260,7 +260,7 @@ def create_workflow():  # noqa
             Request failed. Not implemented.
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
         if request.json:
             # validate against schema
             reana_spec_file = request.json
@@ -287,7 +287,7 @@ def create_workflow():  # noqa
         response, http_response = current_rwc_api_client.api.\
             create_workflow(
                 workflow=workflow_dict,
-                user=user_id).result()
+                user=str(user.id_)).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -384,14 +384,14 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             get_workflow_logs(
-                user=user_id,
+                user=str(user.id_),
                 workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
@@ -503,14 +503,14 @@ def get_workflow_status(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             get_workflow_status(
-                user=user_id,
+                user=str(user.id_),
                 workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
@@ -635,19 +635,19 @@ def start_workflow(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
         parameters = request.json
         workflow = _get_workflow_with_uuid_or_name(
-            workflow_id_or_name, user_id)
+            workflow_id_or_name, str(user.id_))
         if workflow.status != WorkflowStatus.created:
             raise ValueError("Workflow cannot be started again.")
         Workflow.update_workflow_status(Session, workflow.id_,
                                         WorkflowStatus.queued)
         current_workflow_submission_publisher.publish_workflow_submission(
-            user_id=user_id,
+            user_id=str(user.id_),
             workflow_id_or_name=workflow_id_or_name,
             parameters=parameters
         )
@@ -655,7 +655,7 @@ def start_workflow(workflow_id_or_name):  # noqa
                     'workflow_id': workflow_id_or_name,
                     'workflow_name': workflow_id_or_name,
                     'status': WorkflowStatus.queued.name,
-                    'user': user_id}
+                    'user': str(user.id_)}
         return jsonify(response), 200
     except HTTPError as e:
         logging.error(traceback.format_exc())
@@ -783,7 +783,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -791,7 +791,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         parameters = request.json
         response, http_response = current_rwc_api_client.api.\
             set_workflow_status(
-                user=user_id,
+                user=str(user.id_),
                 workflow_id_or_name=workflow_id_or_name,
                 status=status,
                 parameters=parameters).result()
@@ -886,7 +886,7 @@ def upload_file(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -894,7 +894,7 @@ def upload_file(workflow_id_or_name):  # noqa
         file_ = request.files['file_content'].stream.read()
         response, http_response = current_rwc_api_client.api.\
             upload_file(
-                user=user_id,
+                user=str(user.id_),
                 workflow_id_or_name=workflow_id_or_name,
                 file_content=file_,
                 file_name=request.args['file_name']).result()
@@ -982,14 +982,14 @@ def download_file(workflow_id_or_name, file_name):  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             download_file(
-                user=user_id,
+                user=str(user.id_),
                 workflow_id_or_name=workflow_id_or_name,
                 file_name=file_name).result()
 
@@ -1073,14 +1073,14 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             delete_file(
-                user=user_id,
+                user=str(user.id_),
                 workflow_id_or_name=workflow_id_or_name,
                 file_name=file_name).result()
 
@@ -1168,14 +1168,14 @@ def get_files(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             get_files(
-                user=user_id,
+                user=str(user.id_),
                 workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(http_response.json()), http_response.status_code
@@ -1274,14 +1274,14 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             get_workflow_parameters(
-                user=user_id,
+                user=str(user.id_),
                 workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
@@ -1391,7 +1391,7 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
         brief = request.args.get('brief', False)
         brief = True if brief == 'true' else False
         context_lines = request.args.get('context_lines', 5)
@@ -1400,7 +1400,7 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
 
         response, http_response = current_rwc_api_client.api. \
             get_workflow_diff(
-                user=user_id,
+                user=str(user.id_),
                 brief=brief,
                 context_lines=context_lines,
                 workflow_id_or_name_a=workflow_id_or_name_a,
@@ -1510,7 +1510,7 @@ def open_interactive_session(workflow_id_or_name,
             Request failed. Internal controller error.
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
         if interactive_session_type not in INTERACTIVE_SESSION_TYPES:
             return jsonify({
                 "message": "Interactive session type {0} not found, try "
@@ -1522,7 +1522,7 @@ def open_interactive_session(workflow_id_or_name,
 
         response, http_response = current_rwc_api_client.api.\
             open_interactive_session(
-                user=user_id,
+                user=str(user.id_),
                 workflow_id_or_name=workflow_id_or_name,
                 interactive_session_type=interactive_session_type,
                 interactive_session_configuration=request.json or {}).result()
@@ -1614,12 +1614,12 @@ def close_interactive_session(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
         response, http_response = current_rwc_api_client.api.\
             close_interactive_session(
-                user=user_id,
+                user=str(user.id_),
                 workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
@@ -1726,7 +1726,7 @@ def move_files(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -1734,7 +1734,7 @@ def move_files(workflow_id_or_name):  # noqa
         target = request.args.get('target')
         response, http_response = current_rwc_api_client.api.\
             move_files(
-                user=user_id,
+                user=str(user.id_),
                 workflow_id_or_name=workflow_id_or_name,
                 source=source,
                 target=target).result()
@@ -1848,13 +1848,13 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user_id = get_user_from_token(request.args.get('access_token'))
+        user = get_user_from_token(request.args.get('access_token'))
         parameters = request.json or {}
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
-                                                   user_id)
+                                                   str(user.id_))
         summarize = bool(parameters.get('summarize', False))
         reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
         if reana_fs.exists(workflow.get_workspace()):
@@ -1867,7 +1867,7 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
 
         response = {'workflow_id': workflow.id_,
                     'workflow_name': workflow.name,
-                    'user': user_id,
+                    'user': str(user.id_),
                     'disk_usage_info': disk_usage_info}
 
         return jsonify(response), 200

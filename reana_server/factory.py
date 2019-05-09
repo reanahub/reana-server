@@ -27,10 +27,11 @@ def create_app():
     app.secret_key = "hyper secret key"
 
     # Register API routes
-    from .rest import ping, workflows, users  # noqa
+    from .rest import ping, secrets, users, workflows  # noqa
     app.register_blueprint(ping.blueprint, url_prefix='/api')
     app.register_blueprint(workflows.blueprint, url_prefix='/api')
     app.register_blueprint(users.blueprint, url_prefix='/api')
+    app.register_blueprint(secrets.blueprint, url_prefix='/api')
 
     app.session = Session
     CORS(app)
