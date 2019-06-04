@@ -61,7 +61,7 @@ install_requires = [
     'flask-cors>=3.0.6',
     'marshmallow>=2.13',
     'pyOpenSSL==17.5.0',
-    'reana-commons[kubernetes]>=0.5.0,<0.6.0',
+    'reana-commons[kubernetes]>=0.6.0.dev20190604,<0.7.0',
     'reana-db>=0.5.0,<0.6.0',
     'requests==2.20.0',
     'rfc3987==1.3.7',
