@@ -22,12 +22,15 @@ RUN pip install --no-cache-dir requirements-builder && \
 COPY . /code
 
 # Debug off by default
-ARG DEBUG=false
-RUN if [ "${DEBUG}" = "true" ]; then pip install -r requirements-dev.txt; pip install -e .; else pip install .; fi;
+ARG DEBUG=0
+RUN if [ "${DEBUG}" -gt 0 ]; then pip install -r requirements-dev.txt; pip install -e .; else pip install .; fi;
 
 # Building with locally-checked-out shared modules?
 RUN if test -e modules/reana-commons; then pip install modules/reana-commons --upgrade; fi
 RUN if test -e modules/reana-db; then pip install modules/reana-db --upgrade; fi
+
+# Check if there are broken requirements
+RUN pip check
 
 ARG UWSGI_PROCESSES=2
 ENV UWSGI_PROCESSES ${UWSGI_PROCESSES:-2}
