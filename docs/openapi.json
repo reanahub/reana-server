@@ -7,6 +7,34 @@
   },
   "parameters": {},
   "paths": {
+    "/api/login": {
+      "get": {
+        "description": "This resource provides guidance to the user on how to access a file. It tells the user to add the access token as an URL param.",
+        "operationId": "user_login",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Message is displayed on the browser.",
+            "examples": {
+              "application/json": {
+                "message": "Add your REANA_ACCESS_TOKEN as a param."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "TEMPORARY displays a message about how to access a resource."
+      }
+    },
     "/api/ping": {
       "get": {
         "description": "Ping the server.",

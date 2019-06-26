@@ -16,7 +16,7 @@ import fs
 from bravado.exception import HTTPError
 from flask import Blueprint
 from flask import current_app as app
-from flask import jsonify, request, send_file
+from flask import jsonify, redirect, request, send_file, url_for
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_commons.utils import get_workspace_disk_usage
 from reana_db.database import Session
@@ -1002,7 +1002,7 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         return jsonify(e.response.json()), e.response.status_code
     except ValueError as e:
         logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 403
+        return redirect(url_for('users.user_login'))
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500

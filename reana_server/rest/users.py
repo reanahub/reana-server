@@ -200,3 +200,36 @@ def create_user():  # noqa
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/login', methods=['GET'])
+def user_login():
+    r"""Endpoint to authenticate users.
+
+    ---
+    get:
+      summary: TEMPORARY displays a message about how to access a resource.
+      description: >-
+        This resource provides guidance to the user on how to access a file.
+        It tells the user to add the access token as an URL param.
+      operationId: user_login
+      produces:
+        - application/json
+      responses:
+        200:
+          description: >-
+            Message is displayed on the browser.
+          schema:
+              type: object
+              properties:
+                message:
+                  type: string
+          examples:
+            application/json:
+              {
+                "message": "Add your REANA_ACCESS_TOKEN as a param."
+              }
+    """
+    return jsonify({"message": "Add your REANA_ACCESS_TOKEN as a URL param " +
+                    "to access the resource. " +
+                    "RESOURCE_URL?access_token=REANA_ACCESS_TOKEN"}), 200

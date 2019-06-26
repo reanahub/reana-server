@@ -273,7 +273,7 @@ def test_download_file(app, default_user):
                 query_string={"user_id": default_user.id_,
                               "file_name": "test_upload.txt"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 302
 
             res = client.get(
                 url_for("workflows.download_file",
@@ -296,7 +296,7 @@ def test_delete_file(app, default_user):
                         workflow_id_or_name="1",
                         file_name="test_delete.txt"),
                 query_string={"user_id": default_user.id_})
-            assert res.status_code == 403
+            assert res.status_code == 302
 
             res = client.get(
                 url_for("workflows.delete_file",
@@ -390,6 +390,16 @@ def test_create_user(app, default_user):
                           "access_token": default_user.access_token},
         )
         assert res.status_code == 201
+
+
+def test_user_login(app, default_user):
+    """Test user_login view."""
+    with app.test_client() as client:
+        res = client.get(
+            url_for("users.user_login")
+        )
+        assert res.status_code == 200
+        assert json.loads(res.data)['message']
 
 
 def test_move_files(app, default_user):
