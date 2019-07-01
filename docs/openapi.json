@@ -7,6 +7,74 @@
   },
   "parameters": {},
   "paths": {
+    "/api/auth": {
+      "post": {
+        "description": "This resource looks for an user with the provided information (email, id) and, if there is such user, creates a JWT cookie on the user browser.",
+        "operationId": "auth_user",
+        "parameters": [
+          {
+            "description": "Required. The email of the user.",
+            "in": "query",
+            "name": "email",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. API key of the admin.",
+            "in": "query",
+            "name": "password",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "User authenticate successfully. Returns the JWT set cookie headers and a successful login boolean.",
+            "examples": {
+              "application/json": {
+                "login": true
+              }
+            },
+            "schema": {
+              "properties": {
+                "login": {
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Request failed. The data provided could authenticate the user.",
+            "examples": {
+              "application/json": {
+                "message": "Couldn't authenticate."
+              }
+            },
+            "schema": {
+              "properties": {
+                "login": {
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal server error."
+              }
+            }
+          }
+        },
+        "summary": "Authenticates the user with the provided information."
+      }
+    },
     "/api/login": {
       "get": {
         "description": "This resource provides guidance to the user on how to access a file. It tells the user to add the access token as an URL param.",

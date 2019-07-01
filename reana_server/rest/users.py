@@ -9,10 +9,14 @@
 """Reana-Server User Endpoints."""
 
 import logging
+import json
 import traceback
 
 from flask import Blueprint, jsonify, request
-
+from flask_jwt_extended import (
+    create_access_token, create_refresh_token,
+    set_access_cookies, set_refresh_cookies
+)
 from reana_server.utils import _create_user, _get_users
 
 blueprint = Blueprint('users', __name__)
@@ -233,3 +237,89 @@ def user_login():
     return jsonify({"message": "Add your REANA_ACCESS_TOKEN as a URL param " +
                     "to access the resource. " +
                     "RESOURCE_URL?access_token=REANA_ACCESS_TOKEN"}), 200
+
+
+@blueprint.route('/auth', methods=['POST'])
+def auth_user():
+    r"""Endpoint to authenticate users.
+
+    ---
+    post:
+      summary: Authenticates the user with the provided information.
+      description: >-
+        This resource looks for an user with the provided
+        information (email, id) and, if there is such user, creates
+        a JWT cookie on the user browser.
+      operationId: auth_user
+      produces:
+        - application/json
+      parameters:
+        - name: email
+          in: query
+          description: Required. The email of the user.
+          required: true
+          type: string
+        - name: password
+          in: query
+          description: Required. API key of the admin.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            User authenticate successfully. Returns the JWT set cookie
+            headers and a successful login boolean.
+          schema:
+            type: object
+            properties:
+              login:
+                type: boolean
+          examples:
+            application/json:
+              {
+                "login": true
+              }
+        401:
+          description: >-
+            Request failed. The data provided could authenticate
+            the user.
+          schema:
+            type: object
+            properties:
+              login:
+                type: boolean
+          examples:
+            application/json:
+              {
+                "message": "Couldn't authenticate."
+              }
+        500:
+          description: >-
+            Request failed. Internal server error.
+          examples:
+            application/json:
+              {
+                "message": "Internal server error."
+              }
+
+    """
+    try:
+        data = json.loads(request.data.decode('utf-8'))
+        user_email = data['username']
+        reana_access_token = data['password']
+        users = _get_users(None, user_email, None, reana_access_token)
+        if users:
+            user = users[0]
+            access_token = create_access_token(identity=user.id_)
+            refresh_token = create_refresh_token(identity=user.id_)
+
+            response = jsonify({'login': True})
+            set_access_cookies(response, access_token)
+            set_refresh_cookies(response, refresh_token)
+            return response, 200
+        else:
+            response = jsonify({'message': "Could not authenticate user."})
+            return response, 401
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500

@@ -17,6 +17,7 @@ from bravado.exception import HTTPError
 from flask import Blueprint
 from flask import current_app as app
 from flask import jsonify, redirect, request, send_file, url_for
+from flask_jwt_extended import jwt_optional, get_jwt_identity
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_commons.utils import get_workspace_disk_usage
 from reana_db.database import Session
@@ -32,6 +33,7 @@ blueprint = Blueprint('workflows', __name__)
 
 
 @blueprint.route('/workflows', methods=['GET'])
+@jwt_optional
 def get_workflows():  # noqa
     r"""Get all current workflows in REANA.
 
@@ -148,15 +150,17 @@ def get_workflows():  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
         type = request.args.get('type', 'batch')
         verbose = request.args.get('verbose', False)
         response, http_response = current_rwc_api_client.api.\
             get_workflows(
-                user=str(user.id_),
+                user=str(user),
                 type=type,
                 verbose=bool(verbose)).result()
-
         return jsonify(response), http_response.status_code
     except HTTPError as e:
         logging.error(traceback.format_exc())
@@ -170,6 +174,7 @@ def get_workflows():  # noqa
 
 
 @blueprint.route('/workflows', methods=['POST'])
+@jwt_optional
 def create_workflow():  # noqa
     r"""Create a workflow.
 
@@ -260,7 +265,10 @@ def create_workflow():  # noqa
             Request failed. Not implemented.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
         if request.json:
             # validate against schema
             reana_spec_file = request.json
@@ -287,7 +295,7 @@ def create_workflow():  # noqa
         response, http_response = current_rwc_api_client.api.\
             create_workflow(
                 workflow=workflow_dict,
-                user=str(user.id_)).result()
+                user=str(user)).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -305,6 +313,7 @@ def create_workflow():  # noqa
 
 
 @blueprint.route('/workflows/<workflow_id_or_name>/logs', methods=['GET'])
+@jwt_optional
 def get_workflow_logs(workflow_id_or_name):  # noqa
     r"""Get workflow logs.
 
@@ -384,14 +393,17 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             get_workflow_logs(
-                user=str(user.id_),
+                user=str(user),
                 workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
@@ -407,6 +419,7 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
 
 
 @blueprint.route('/workflows/<workflow_id_or_name>/status', methods=['GET'])
+@jwt_optional
 def get_workflow_status(workflow_id_or_name):  # noqa
     r"""Get workflow status.
 
@@ -503,14 +516,17 @@ def get_workflow_status(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             get_workflow_status(
-                user=str(user.id_),
+                user=str(user),
                 workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
@@ -526,6 +542,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
 
 
 @blueprint.route('/workflows/<workflow_id_or_name>/start', methods=['POST'])
+@jwt_optional
 def start_workflow(workflow_id_or_name):  # noqa
     r"""Start workflow.
     ---
@@ -635,19 +652,22 @@ def start_workflow(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
         parameters = request.json
         workflow = _get_workflow_with_uuid_or_name(
-            workflow_id_or_name, str(user.id_))
+            workflow_id_or_name, str(user))
         if workflow.status != WorkflowStatus.created:
             raise ValueError("Workflow cannot be started again.")
         Workflow.update_workflow_status(Session, workflow.id_,
                                         WorkflowStatus.queued)
         current_workflow_submission_publisher.publish_workflow_submission(
-            user_id=str(user.id_),
+            user_id=str(user),
             workflow_id_or_name=workflow_id_or_name,
             parameters=parameters
         )
@@ -655,7 +675,7 @@ def start_workflow(workflow_id_or_name):  # noqa
                     'workflow_id': workflow_id_or_name,
                     'workflow_name': workflow_id_or_name,
                     'status': WorkflowStatus.queued.name,
-                    'user': str(user.id_)}
+                    'user': str(user)}
         return jsonify(response), 200
     except HTTPError as e:
         logging.error(traceback.format_exc())
@@ -669,6 +689,7 @@ def start_workflow(workflow_id_or_name):  # noqa
 
 
 @blueprint.route('/workflows/<workflow_id_or_name>/status', methods=['PUT'])
+@jwt_optional
 def set_workflow_status(workflow_id_or_name):  # noqa
     r"""Set workflow status.
     ---
@@ -783,7 +804,10 @@ def set_workflow_status(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -791,7 +815,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         parameters = request.json
         response, http_response = current_rwc_api_client.api.\
             set_workflow_status(
-                user=str(user.id_),
+                user=str(user),
                 workflow_id_or_name=workflow_id_or_name,
                 status=status,
                 parameters=parameters).result()
@@ -810,6 +834,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
 
 @blueprint.route('/workflows/<workflow_id_or_name>/workspace',
                  methods=['POST'])
+@jwt_optional
 def upload_file(workflow_id_or_name):  # noqa
     r"""Upload file to workspace.
 
@@ -886,7 +911,10 @@ def upload_file(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -894,7 +922,7 @@ def upload_file(workflow_id_or_name):  # noqa
         file_ = request.files['file_content'].stream.read()
         response, http_response = current_rwc_api_client.api.\
             upload_file(
-                user=str(user.id_),
+                user=str(user),
                 workflow_id_or_name=workflow_id_or_name,
                 file_content=file_,
                 file_name=request.args['file_name']).result()
@@ -917,6 +945,7 @@ def upload_file(workflow_id_or_name):  # noqa
 @blueprint.route(
     '/workflows/<workflow_id_or_name>/workspace/<path:file_name>',
     methods=['GET'])
+@jwt_optional
 def download_file(workflow_id_or_name, file_name):  # noqa
     r"""Download a file from the workspace.
 
@@ -982,14 +1011,17 @@ def download_file(workflow_id_or_name, file_name):  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             download_file(
-                user=str(user.id_),
+                user=str(user),
                 workflow_id_or_name=workflow_id_or_name,
                 file_name=file_name).result()
 
@@ -1011,6 +1043,7 @@ def download_file(workflow_id_or_name, file_name):  # noqa
 @blueprint.route(
     '/workflows/<workflow_id_or_name>/workspace/<path:file_name>',
     methods=['DELETE'])
+@jwt_optional
 def delete_file(workflow_id_or_name, file_name):  # noqa
     r"""Delete a file from the workspace.
 
@@ -1073,14 +1106,17 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             delete_file(
-                user=str(user.id_),
+                user=str(user),
                 workflow_id_or_name=workflow_id_or_name,
                 file_name=file_name).result()
 
@@ -1098,6 +1134,7 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
 
 @blueprint.route('/workflows/<workflow_id_or_name>/workspace',
                  methods=['GET'])
+@jwt_optional
 def get_files(workflow_id_or_name):  # noqa
     r"""List all files contained in a workspace.
 
@@ -1168,14 +1205,17 @@ def get_files(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             get_files(
-                user=str(user.id_),
+                user=str(user),
                 workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(http_response.json()), http_response.status_code
@@ -1192,6 +1232,7 @@ def get_files(workflow_id_or_name):  # noqa
 
 @blueprint.route('/workflows/<workflow_id_or_name>/parameters',
                  methods=['GET'])
+@jwt_optional
 def get_workflow_parameters(workflow_id_or_name):  # noqa
     r"""Get workflow input parameters.
 
@@ -1274,14 +1315,17 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             get_workflow_parameters(
-                user=str(user.id_),
+                user=str(user),
                 workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
@@ -1298,6 +1342,7 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
 
 @blueprint.route('/workflows/<workflow_id_or_name_a>/diff/'
                  '<workflow_id_or_name_b>', methods=['GET'])
+@jwt_optional
 def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
     r"""Get differences between two workflows.
 
@@ -1391,7 +1436,10 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
         brief = request.args.get('brief', False)
         brief = True if brief == 'true' else False
         context_lines = request.args.get('context_lines', 5)
@@ -1400,7 +1448,7 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
 
         response, http_response = current_rwc_api_client.api. \
             get_workflow_diff(
-                user=str(user.id_),
+                user=str(user),
                 brief=brief,
                 context_lines=context_lines,
                 workflow_id_or_name_a=workflow_id_or_name_a,
@@ -1421,6 +1469,7 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
 @blueprint.route('/workflows/<workflow_id_or_name>/open/'
                  '<interactive_session_type>',
                  methods=['POST'])
+@jwt_optional
 def open_interactive_session(workflow_id_or_name,
                              interactive_session_type):  # noqa
     r"""Start an interactive session inside the workflow workspace.
@@ -1510,7 +1559,10 @@ def open_interactive_session(workflow_id_or_name,
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
         if interactive_session_type not in INTERACTIVE_SESSION_TYPES:
             return jsonify({
                 "message": "Interactive session type {0} not found, try "
@@ -1522,7 +1574,7 @@ def open_interactive_session(workflow_id_or_name,
 
         response, http_response = current_rwc_api_client.api.\
             open_interactive_session(
-                user=str(user.id_),
+                user=str(user),
                 workflow_id_or_name=workflow_id_or_name,
                 interactive_session_type=interactive_session_type,
                 interactive_session_configuration=request.json or {}).result()
@@ -1544,6 +1596,7 @@ def open_interactive_session(workflow_id_or_name,
 
 @blueprint.route('/workflows/<workflow_id_or_name>/close/',
                  methods=['POST'])
+@jwt_optional
 def close_interactive_session(workflow_id_or_name):  # noqa
     r"""Close an interactive workflow session.
 
@@ -1614,12 +1667,15 @@ def close_interactive_session(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
         response, http_response = current_rwc_api_client.api.\
             close_interactive_session(
-                user=str(user.id_),
+                user=str(user),
                 workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
@@ -1639,6 +1695,7 @@ def close_interactive_session(workflow_id_or_name):  # noqa
 
 @blueprint.route('/workflows/move_files/<workflow_id_or_name>',
                  methods=['PUT'])
+@jwt_optional
 def move_files(workflow_id_or_name):  # noqa
     r"""Move files within workspace.
     ---
@@ -1726,7 +1783,10 @@ def move_files(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -1734,7 +1794,7 @@ def move_files(workflow_id_or_name):  # noqa
         target = request.args.get('target')
         response, http_response = current_rwc_api_client.api.\
             move_files(
-                user=str(user.id_),
+                user=str(user),
                 workflow_id_or_name=workflow_id_or_name,
                 source=source,
                 target=target).result()
@@ -1753,6 +1813,7 @@ def move_files(workflow_id_or_name):  # noqa
 
 @blueprint.route('/workflows/<workflow_id_or_name>/disk_usage',
                  methods=['GET'])
+@jwt_optional
 def get_workflow_disk_usage(workflow_id_or_name):  # noqa
     r"""Get workflow disk usage.
 
@@ -1848,13 +1909,16 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
         parameters = request.json or {}
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
-                                                   str(user.id_))
+                                                   str(user))
         summarize = bool(parameters.get('summarize', False))
         reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
         if reana_fs.exists(workflow.get_workspace()):
@@ -1867,7 +1931,7 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
 
         response = {'workflow_id': workflow.id_,
                     'workflow_name': workflow.name,
-                    'user': str(user.id_),
+                    'user': str(user),
                     'disk_usage_info': disk_usage_info}
 
         return jsonify(response), 200

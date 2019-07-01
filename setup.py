@@ -48,6 +48,7 @@ install_requires = [
     'Flask>=0.11',
     'fs>=2.0',
     'flask-cors>=3.0.6',
+    'flask-jwt-extended>=3.19.0',
     'marshmallow>=2.13',
     'pyOpenSSL==17.5.0',
     'reana-commons[kubernetes]>=0.6.0.dev20190715,<0.7.0',

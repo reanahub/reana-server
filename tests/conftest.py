@@ -15,6 +15,7 @@ import shutil
 
 import pytest
 from flask import Flask
+from flask_jwt_extended import JWTManager
 from mock import Mock
 from reana_commons.api_client import BaseAPIClient
 from reana_db.database import Session
@@ -31,7 +32,7 @@ def base_app():
     """Flask application fixture."""
     config_mapping = {
         'AVAILABLE_WORKFLOW_ENGINES': 'serial',
-        'SERVER_NAME': 'localhost:5000',
+        'SERVER_NAME': 'api.localhost:5000',
         'SECRET_KEY': 'SECRET_KEY',
         'TESTING': True,
         'SHARED_VOLUME_PATH': '/tmp/test',
@@ -41,7 +42,10 @@ def base_app():
     }
     app = Flask(__name__)
     app.config.from_mapping(config_mapping)
+    app.config['JWT_SECRET_KEY'] = "hyper secret key"
+    app.config['JWT_TOKEN_LOCATION'] = ['cookies']
     app.secret_key = "hyper secret key"
+    JWTManager(app)
 
     # Register API routes
     from reana_server.rest import ping, workflows, users  # noqa

@@ -14,6 +14,7 @@ import traceback
 
 from bravado.exception import HTTPError
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_optional, get_jwt_identity
 
 from reana_commons.errors import (REANASecretAlreadyExists,
                                   REANASecretDoesNotExist)
@@ -24,6 +25,7 @@ blueprint = Blueprint('secrets', __name__)
 
 
 @blueprint.route('/secrets/', methods=['POST'])
+@jwt_optional
 def add_secrets():  # noqa
     r"""Endpoint to create user secrets.
 
@@ -112,8 +114,11 @@ def add_secrets():  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get("access_token"))
-        secrets_store = REANAUserSecretsStore(str(user.id_))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
+        secrets_store = REANAUserSecretsStore(str(user))
         overwrite = json.loads(request.args.get('overwrite'))
         secrets_store.add_secrets(request.json, overwrite=overwrite)
         return jsonify({"message": "Secret(s) successfully added."}), 201
@@ -127,6 +132,7 @@ def add_secrets():  # noqa
 
 
 @blueprint.route('/secrets', methods=['GET'])
+@jwt_optional
 def get_secrets():  # noqa
     r"""Endpoint to retrieve user secrets.
 
@@ -194,8 +200,11 @@ def get_secrets():  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get("access_token"))
-        secrets_store = REANAUserSecretsStore(str(user.id_))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
+        secrets_store = REANAUserSecretsStore(str(user))
         user_secrets = secrets_store.get_secrets()
         return jsonify(user_secrets), 200
     except ValueError:
@@ -206,6 +215,7 @@ def get_secrets():  # noqa
 
 
 @blueprint.route('/secrets/', methods=['DELETE'])
+@jwt_optional
 def delete_secrets():  # noqa
     r"""Endpoint to delete user secrets.
 
@@ -283,8 +293,11 @@ def delete_secrets():  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get("access_token"))
-        secrets_store = REANAUserSecretsStore(str(user.id_))
+        user = get_jwt_identity()
+        if not user:
+            user = get_user_from_token(
+                    request.args.get('access_token')).id_
+        secrets_store = REANAUserSecretsStore(str(user))
         deleted_secrets_list = secrets_store.delete_secrets(request.json)
         return jsonify(deleted_secrets_list), 200
     except REANASecretDoesNotExist as e:

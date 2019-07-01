@@ -14,6 +14,7 @@ from uuid import uuid4
 
 import pytest
 from flask import url_for
+from flask_jwt_extended import create_access_token
 from jsonschema.exceptions import ValidationError
 from mock import Mock, PropertyMock, patch
 from pytest_reana.fixtures import default_user
@@ -39,6 +40,20 @@ def test_get_workflows(app, default_user):
                 url_for("workflows.get_workflows"),
                 query_string={"access_token": default_user.access_token,
                               "type": "batch"},
+            )
+            assert res.status_code == 200
+
+    with app.test_client() as client:
+        with patch(
+            "reana_server.rest.workflows.current_rwc_api_client",
+            make_mock_api_client("reana-workflow-controller")(),
+        ):
+            access_token = create_access_token(identity=default_user.id_)
+            client.set_cookie('api.localhost', 'access_token_cookie',
+                              access_token)
+            res = client.get(
+                url_for("workflows.get_workflows"),
+                query_string={"type": "batch"},
             )
             assert res.status_code == 200
 

@@ -12,6 +12,7 @@ import logging
 
 from flask import Flask
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager
 from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 from reana_db.database import Session
 
@@ -34,5 +35,6 @@ def create_app():
     app.register_blueprint(secrets.blueprint, url_prefix='/api')
 
     app.session = Session
-    CORS(app)
+    jwt = JWTManager(app)
+    CORS(app, supports_credentials=True)
     return app
