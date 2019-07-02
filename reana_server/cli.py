@@ -24,7 +24,7 @@ To retrieve the administrator token you can use the
 
 .. code-block:: bash
 
-    $ reana-cluster env --all
+    $ reana-cluster env --include-admin-token
 
 or enter the database pod:
 
