@@ -113,7 +113,7 @@ def add_secrets():  # noqa
     """
     try:
         user = get_user_from_token(request.args.get("access_token"))
-        secrets_store = REANAUserSecretsStore(user)
+        secrets_store = REANAUserSecretsStore(str(user.id_))
         overwrite = json.loads(request.args.get('overwrite'))
         secrets_store.add_secrets(request.json, overwrite=overwrite)
         return jsonify({"message": "Secret(s) successfully added."}), 201
@@ -195,7 +195,7 @@ def get_secrets():  # noqa
     """
     try:
         user = get_user_from_token(request.args.get("access_token"))
-        secrets_store = REANAUserSecretsStore(user)
+        secrets_store = REANAUserSecretsStore(str(user.id_))
         user_secrets = secrets_store.get_secrets()
         return jsonify(user_secrets), 200
     except ValueError:
@@ -284,7 +284,7 @@ def delete_secrets():  # noqa
     """
     try:
         user = get_user_from_token(request.args.get("access_token"))
-        secrets_store = REANAUserSecretsStore(user)
+        secrets_store = REANAUserSecretsStore(str(user.id_))
         deleted_secrets_list = secrets_store.delete_secrets(request.json)
         return jsonify(deleted_secrets_list), 200
     except REANASecretDoesNotExist as e:
