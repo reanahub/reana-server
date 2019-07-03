@@ -51,7 +51,7 @@ With the administrator access token, new user creation is allowed with:
 
 .. code-block :: bash
 
-    $ flask  users create --e=<email> --admin-access-token=<token>
+    $ flask  users create -e=<email> --admin-access-token=<token>
 
 Similarly, to retrieve information for all users:
 
