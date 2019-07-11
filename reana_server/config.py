@@ -14,6 +14,7 @@ from datetime import timedelta
 
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
 from invenio_oauthclient.contrib import cern
+
 # Database
 # ========
 #: Database URI including user and password
@@ -47,7 +48,7 @@ MAIL_SUPPRESS_SEND = True
 
 # Accounts
 # ========
-#: Redis URLL
+#: Redis URL
 ACCOUNTS_SESSION_REDIS_URL = 'redis://cache:6379/1'
 #: Email address used as sender of account registration emails.
 SECURITY_EMAIL_SENDER = SUPPORT_EMAIL
@@ -85,7 +86,7 @@ SESSION_COOKIE_SECURE = True
 #: provided, the allowed hosts variable is set to localhost. In production it
 #: should be set to the correct host and it is strongly recommended to only
 #: route correct hosts to the application.
-APP_ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'reana.cern.ch']
+APP_ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 # Security configuration
 # ======================
