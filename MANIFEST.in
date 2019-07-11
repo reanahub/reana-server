@@ -10,7 +10,7 @@ include *.sh
 include *.txt
 include pytest.ini
 include docs/*.json
-include scripts/*.py
+include scripts/*
 include docs/requirements.txt
 include Dockerfile
 include .dockerignore
