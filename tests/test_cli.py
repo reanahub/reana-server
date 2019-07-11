@@ -17,7 +17,7 @@ import pytest
 from click.testing import CliRunner
 from reana_db.models import User
 
-from reana_server.cli import users as users_cmd
+from reana_server.cli import reana_users as users_cmd
 
 
 def test_export_users(default_user):

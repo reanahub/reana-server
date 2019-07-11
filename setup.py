@@ -44,10 +44,7 @@ setup_requires = [
 ]
 
 install_requires = [
-    'click>=7.0',
-    'Flask>=0.11',
     'fs>=2.0',
-    'flask-cors>=3.0.6',
     'marshmallow>=2.13',
     'pyOpenSSL==17.5.0',
     'reana-commons[kubernetes]>=0.6.0.dev20190812,<0.7.0',
@@ -60,6 +57,25 @@ install_requires = [
     'uwsgi-tools>=1.1.1',
     'uwsgitop>=0.10',
     'webcolors==1.7',
+    # Invenio dependencies
+    'Flask>=1.0.2',
+    'invenio-app>=1.1.0,<1.2.0',
+    'invenio-base>=1.0.2,<1.1.0',
+    'invenio-cache>=1.0.0,<1.1.0',
+    'invenio-config>=1.0.1,<1.1.0',
+    # From base bundle
+    'invenio-logging>=1.1.0,<1.2.0',
+    'invenio-mail>=1.0.2,<1.1.0',
+    'invenio-rest>=1.0.0,<1.1.0',
+    # From auth bundle
+    'invenio-accounts-rest>=1.0.0a4',
+    'invenio-oauth2server>=1.0.3,<1.1.0',
+    'invenio-oauthclient>=1.1.2,<1.2.0',
+    'invenio-userprofiles>=1.0.1,<1.1.0',
+    # Not included in previous dependencies
+    'invenio-db[postgresql]>=1.0.3,<1.1.0',
+    # Invenio dependencies missing from Invenio packages setup.py
+    'jsonpatch>=1.23,<2',
 ]
 
 packages = find_packages()
@@ -84,10 +100,25 @@ setup(
     zip_safe=False,
     entry_points={
         'flask.commands': [
-            'db = reana_server.cli:db',
-            'users = reana_server.cli:users',
+            'reana-db = reana_server.cli:reana_db',
+            'reana-users = reana_server.cli:reana_users',
             'start-scheduler = reana_server.cli:start_scheduler',
-        ]
+        ],
+        "invenio_base.apps": [
+            "reana = reana_server.ext:REANA"
+        ],
+        'console_scripts': [
+            'reana-server = invenio_app.cli:cli',
+        ],
+        'invenio_config.module': [
+            'reana_server = reana_server.config',
+        ],
+        "invenio_base.api_blueprints": [
+            "reana_server_ping = reana_server.rest.ping:blueprint",
+            "reana_server_workflows = reana_server.rest.workflows:blueprint",
+            "reana_server_users = reana_server.rest.users:blueprint",
+            "reana_server_secrets = reana_server.rest.secrets:blueprint",
+        ],
     },
     include_package_data=True,
     extras_require=extras_require,

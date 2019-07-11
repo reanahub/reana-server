@@ -41,9 +41,8 @@ ENV FLASK_APP=/code/reana_server/app.py
 
 EXPOSE 5000
 
-CMD set -e && flask db init && \
-    flask users create_default info@reana.io &&\
-    uwsgi --module reana_server.app:app \
+CMD set -e && ./scripts/setup &&\
+    uwsgi --module invenio_app.wsgi:application \
     --http-socket 0.0.0.0:5000 --master \
     --processes ${UWSGI_PROCESSES} --threads ${UWSGI_THREADS} \
     --stats /tmp/stats.socket \
