@@ -93,11 +93,11 @@ from reana_server.utils import (_create_user, _export_users, _get_users,
 
 
 @click.group()
-def db():
+def reana_db():
     """Database management commands."""
 
 
-@db.command('init')
+@reana_db.command('init')
 def db_init():
     """Initialise database."""
     try:
@@ -111,12 +111,12 @@ def db_init():
 @click.group(
     help='All interaction related to user management on REANA cloud.')
 @click.pass_context
-def users(ctx):
+def reana_users(ctx):
     """Top level wrapper for user related interaction."""
     logging.debug(ctx.info_name)
 
 
-@users.command('create_default')
+@reana_users.command('create_default')
 @click.argument('email')
 @click.option('-i', '--id', 'id_',
               default=config.ADMIN_USER_ID)
@@ -146,7 +146,7 @@ def users_create_default(email, id_):
         sys.exit(1)
 
 
-@users.command(
+@reana_users.command(
     'get',
     help='Get information of users matching search criteria.')
 @click.option(
@@ -198,7 +198,7 @@ def get_users(ctx, id, email, user_access_token, admin_access_token,
             err=True)
 
 
-@users.command(
+@reana_users.command(
     'create',
     help='Create a new user.')
 @click.option(
@@ -232,7 +232,7 @@ def create_user(ctx, email, user_access_token, admin_access_token):
             err=True)
 
 
-@users.command('export')
+@reana_users.command('export')
 @click.option(
     '--admin-access-token',
     default=os.environ.get('REANA_ACCESS_TOKEN', None),
@@ -249,7 +249,7 @@ def export_users(ctx, admin_access_token):
             fg='red', err=True)
 
 
-@users.command('import')
+@reana_users.command('import')
 @click.option(
     '--admin-access-token',
     default=os.environ.get('REANA_ACCESS_TOKEN', None),
