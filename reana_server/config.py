@@ -8,10 +8,12 @@
 
 """Flask application configuration."""
 
+import copy
 import os
 from datetime import timedelta
 
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
+from invenio_oauthclient.contrib import cern
 # Database
 # ========
 #: Database URI including user and password
@@ -81,17 +83,33 @@ SESSION_COOKIE_SECURE = True
 #: provided, the allowed hosts variable is set to localhost. In production it
 #: should be set to the correct host and it is strongly recommended to only
 #: route correct hosts to the application.
-APP_ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+APP_ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'reana.cern.ch']
 
 # Security configuration
 # ======================
 APP_DEFAULT_SECURE_HEADERS["content_security_policy"] = {}
-APP_DEFAULT_SECURE_HEADERS["force_https"] = False
+APP_DEFAULT_SECURE_HEADERS["force_https"] = True
 APP_DEFAULT_SECURE_HEADERS["frame_options"] = "allowfrom"
 APP_DEFAULT_SECURE_HEADERS["frame_options_allow_from"] = "*"
-APP_ALLOWED_HOSTS = None
 
 
 # Flask-Breadcrumbs needs this variable set
 # =========================================
 BREADCRUMBS_ROOT = 'breadcrumbs'
+
+CERN_REMOTE_APP = copy.deepcopy(cern.REMOTE_APP)
+
+OAUTHCLIENT_REMOTE_APPS = dict(
+    cern=CERN_REMOTE_APP,
+)
+
+CERN_APP_CREDENTIALS = dict(
+    consumer_key='CHANGE_ME',
+    consumer_secret='CHANGE_ME',
+)
+
+DEBUG = True
+
+SECURITY_PASSWORD_SALT = 'security-password-salt'
+
+SECURITY_SEND_REGISTER_EMAIL = False

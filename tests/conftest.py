@@ -44,10 +44,11 @@ def base_app():
     app.secret_key = "hyper secret key"
 
     # Register API routes
-    from reana_server.rest import ping, workflows, users  # noqa
+    from reana_server.rest import ping, workflows, users, secrets  # noqa
     app.register_blueprint(ping.blueprint, url_prefix='/api')
     app.register_blueprint(workflows.blueprint, url_prefix='/api')
     app.register_blueprint(users.blueprint, url_prefix='/api')
+    app.register_blueprint(secrets.blueprint, url_prefix='/api')
 
     app.session = Session
     return app

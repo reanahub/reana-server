@@ -112,9 +112,33 @@ def _import_users(admin_access_token, users_csv_file):
     if admin_access_token != admin.access_token:
         raise ValueError('Admin access token invalid.')
     csv_reader = csv.reader(users_csv_file)
-    users = []
     for row in csv_reader:
         user = User(id_=row[0], email=row[1], access_token=row[2])
         Session.add(user)
     Session.commit()
     Session.remove()
+
+
+def _create_and_associate_reana_user(sender, token=None,
+                                     response=None, account_info=None):
+    try:
+        user_email = account_info['user']['email']
+        search_criteria = dict()
+        search_criteria['email'] = user_email
+        users = Session.query(User).filter_by(**search_criteria).all()
+        if users:
+            user = users[0]
+        else:
+            user_access_token = secrets.token_urlsafe(16)
+            user_parameters = dict(access_token=user_access_token)
+            user_parameters['email'] = user_email
+            user = User(**user_parameters)
+            Session.add(user)
+            Session.commit()
+    except (InvalidRequestError, IntegrityError):
+        Session.rollback()
+        raise ValueError('Could not create user, '
+                         'possible constraint violation')
+    except Exception:
+        raise ValueError('Could not create user')
+    return user

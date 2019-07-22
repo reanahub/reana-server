@@ -7,6 +7,12 @@
   },
   "parameters": {},
   "paths": {
+    "/account/settings/linkedaccounts/": {},
+    "/account/settings/linkedaccounts/static/{filename}": {},
+    "/account/settings/password/": {},
+    "/account/settings/security/": {},
+    "/account/settings/sessions/revoke/": {},
+    "/account/settings/static/{filename}": {},
     "/api/login": {
       "get": {
         "description": "This resource provides guidance to the user on how to access a file. It tells the user to add the access token as an URL param.",
@@ -1990,7 +1996,19 @@
         },
         "summary": "Returns the requested file."
       }
-    }
+    },
+    "/confirm": {},
+    "/confirm/{token}": {},
+    "/login/": {},
+    "/logout/": {},
+    "/lost-password/": {},
+    "/lost-password/{token}/": {},
+    "/oauth/authorized/{remote_app}/": {},
+    "/oauth/disconnect/{remote_app}/": {},
+    "/oauth/login/{remote_app}/": {},
+    "/oauth/signup/{remote_app}/": {},
+    "/oauth/static/{filename}": {},
+    "/signup/": {}
   },
   "swagger": "2.0",
   "tags": []
