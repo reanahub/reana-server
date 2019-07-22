@@ -14,7 +14,6 @@ from datetime import timedelta
 
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
 from invenio_oauthclient.contrib import cern
-
 # Database
 # ========
 #: Database URI including user and password
