@@ -19,6 +19,10 @@ from mock import Mock, PropertyMock, patch
 from pytest_reana.fixtures import default_user
 from pytest_reana.test_utils import make_mock_api_client
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
+from reana_db.database import Session
+from reana_db.models import User
+
+from reana_server.utils import _create_and_associate_reana_user
 
 
 def test_get_workflows(app, default_user):
@@ -477,3 +481,16 @@ def test_close_interactive_session(app, default_user,
                         workflow_id_or_name=sample_serial_workflow_in_db.id_),
                     query_string={"access_token": default_user.access_token})
                 assert res.status_code == expected_status_code
+
+
+def test_create_and_associate_reana_user():
+    user_email = 'test@reana.io'
+    account_info = {'user': {'email': user_email}}
+    user = Session.query(User).filter_by(email=user_email).\
+        one_or_none()
+    assert user is None
+    _create_and_associate_reana_user(None, account_info=account_info)
+    user = Session.query(User).filter_by(email=user_email).\
+        one_or_none()
+    assert user
+    assert user.email == user_email

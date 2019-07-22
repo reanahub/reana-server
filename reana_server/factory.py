@@ -11,7 +11,15 @@
 import logging
 
 from flask import Flask
-from flask_cors import CORS
+from flask_babelex import Babel
+from flask_menu import Menu as FlaskMenu
+from flask_oauthlib.client import OAuth as FlaskOAuth
+from invenio_accounts import InvenioAccounts
+from invenio_accounts.views import blueprint as blueprint_user
+from invenio_db import InvenioDB
+from invenio_oauthclient import InvenioOAuthClient
+from invenio_oauthclient.views.client import blueprint as blueprint_client
+from invenio_oauthclient.views.settings import blueprint as blueprint_settings
 from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 from reana_db.database import Session
 
@@ -26,6 +34,20 @@ def create_app():
     app.config.from_object('reana_server.config')
     app.secret_key = "hyper secret key"
 
+    app.session = Session
+
+    Babel(app)
+    FlaskMenu(app)
+    InvenioDB(app)
+    InvenioAccounts(app)
+    FlaskOAuth(app)
+    InvenioOAuthClient(app)
+
+    # Register Invenio OAuth endpoints
+    app.register_blueprint(blueprint_user)
+    app.register_blueprint(blueprint_client)
+    app.register_blueprint(blueprint_settings)
+
     # Register API routes
     from .rest import ping, secrets, users, workflows  # noqa
     app.register_blueprint(ping.blueprint, url_prefix='/api')
@@ -33,6 +55,4 @@ def create_app():
     app.register_blueprint(users.blueprint, url_prefix='/api')
     app.register_blueprint(secrets.blueprint, url_prefix='/api')
 
-    app.session = Session
-    CORS(app)
     return app

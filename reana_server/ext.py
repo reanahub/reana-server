@@ -27,6 +27,17 @@ class REANA(object):
         self.init_config(app)
         Menu(app=app)
 
+        @app.before_first_request
+        def connect_signals():
+            """Connect OAuthClient signals."""
+            from invenio_oauthclient.signals import account_info_received
+
+            from .utils import _create_and_associate_reana_user
+
+            account_info_received.connect(
+                _create_and_associate_reana_user
+            )
+
     def init_config(self, app):
         """Initialize configuration."""
         for k in dir(config):
