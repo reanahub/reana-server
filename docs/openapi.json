@@ -79,10 +79,10 @@
         "operationId": "get_secrets",
         "parameters": [
           {
-            "description": "Required. Secrets owner access token.",
+            "description": "Secrets owner access token.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           }
         ],
@@ -150,10 +150,10 @@
         "operationId": "delete_secrets",
         "parameters": [
           {
-            "description": "Required. API key of the admin.",
+            "description": "API key of the admin.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -233,10 +233,10 @@
         "operationId": "add_secrets",
         "parameters": [
           {
-            "description": "Required. Secrets owner access token.",
+            "description": "Secrets owner access token.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -495,10 +495,10 @@
         "operationId": "get_workflows",
         "parameters": [
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -646,10 +646,10 @@
             }
           },
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           }
         ],
@@ -740,10 +740,10 @@
             "type": "string"
           },
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           }
         ],
@@ -842,10 +842,10 @@
             "type": "string"
           },
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           }
         ],
@@ -924,10 +924,10 @@
             "type": "string"
           },
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           }
         ],
@@ -988,10 +988,10 @@
         "operationId": "get_workflow_disk_usage",
         "parameters": [
           {
-            "description": "Required. API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -1099,10 +1099,10 @@
         "operationId": "get_workflow_logs",
         "parameters": [
           {
-            "description": "Required. API access_token of workflow owner.",
+            "description": "API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -1192,10 +1192,10 @@
             "type": "string"
           },
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -1285,10 +1285,10 @@
             "type": "string"
           },
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           }
         ],
@@ -1376,10 +1376,10 @@
             "type": "string"
           },
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -1488,10 +1488,10 @@
             "type": "string"
           },
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           }
         ],
@@ -1611,10 +1611,10 @@
             "type": "string"
           },
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           },
           {
@@ -1723,10 +1723,10 @@
             "type": "string"
           },
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           }
         ],
@@ -1813,10 +1813,10 @@
             "type": "string"
           },
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           }
         ],
@@ -1886,10 +1886,10 @@
             "type": "string"
           },
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           }
         ],
@@ -1949,10 +1949,10 @@
             "type": "string"
           },
           {
-            "description": "Required. The API access_token of workflow owner.",
+            "description": "The API access_token of workflow owner.",
             "in": "query",
             "name": "access_token",
-            "required": true,
+            "required": false,
             "type": "string"
           }
         ],

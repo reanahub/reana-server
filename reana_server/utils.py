@@ -142,3 +142,10 @@ def _create_and_associate_reana_user(sender, token=None,
     except Exception:
         raise ValueError('Could not create user')
     return user
+
+
+def _get_user_from_invenio_user(id):
+    user = Session.query(User).filter_by(email=id).one_or_none()
+    if not user:
+        raise ValueError('No users registered with this id')
+    return user

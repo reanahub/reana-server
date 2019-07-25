@@ -14,11 +14,13 @@ import traceback
 
 from bravado.exception import HTTPError
 from flask import Blueprint, jsonify, request
+from flask_login import current_user
 
 from reana_commons.errors import (REANASecretAlreadyExists,
                                   REANASecretDoesNotExist)
 from reana_commons.k8s.secrets import REANAUserSecretsStore
-from reana_server.utils import get_user_from_token
+from reana_server.utils import get_user_from_token, \
+    _get_user_from_invenio_user
 
 blueprint = Blueprint('secrets', __name__)
 
@@ -38,8 +40,8 @@ def add_secrets():  # noqa
       parameters:
         - name: access_token
           in: query
-          description: Required. Secrets owner access token.
-          required: true
+          description: Secrets owner access token.
+          required: false
           type: string
         - name: overwrite
           in: query
@@ -112,7 +114,10 @@ def add_secrets():  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get("access_token"))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
         secrets_store = REANAUserSecretsStore(str(user.id_))
         overwrite = json.loads(request.args.get('overwrite'))
         secrets_store.add_secrets(request.json, overwrite=overwrite)
@@ -141,8 +146,8 @@ def get_secrets():  # noqa
       parameters:
         - name: access_token
           in: query
-          description: Required. Secrets owner access token.
-          required: true
+          description: Secrets owner access token.
+          required: false
           type: string
       responses:
         200:
@@ -194,7 +199,10 @@ def get_secrets():  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get("access_token"))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
         secrets_store = REANAUserSecretsStore(str(user.id_))
         user_secrets = secrets_store.get_secrets()
         return jsonify(user_secrets), 200
@@ -220,8 +228,8 @@ def delete_secrets():  # noqa
       parameters:
         - name: access_token
           in: query
-          description: Required. API key of the admin.
-          required: true
+          description: API key of the admin.
+          required: false
           type: string
         - name: secrets
           in: body
@@ -283,7 +291,10 @@ def delete_secrets():  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get("access_token"))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
         secrets_store = REANAUserSecretsStore(str(user.id_))
         deleted_secrets_list = secrets_store.delete_secrets(request.json)
         return jsonify(deleted_secrets_list), 200
