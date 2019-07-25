@@ -68,7 +68,7 @@ install_requires = [
     'invenio-mail>=1.0.2,<1.1.0',
     'invenio-rest>=1.0.0,<1.1.0',
     # From auth bundle
-    'invenio-accounts-rest>=1.0.0a4',
+    'invenio-accounts>=1.1.1',
     'invenio-oauth2server>=1.0.3,<1.1.0',
     'invenio-oauthclient>=1.1.2,<1.2.0',
     'invenio-userprofiles>=1.0.1,<1.1.0',

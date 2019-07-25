@@ -13,9 +13,10 @@ from __future__ import absolute_import, print_function
 import os
 import shutil
 
+import flask_login
 import pytest
 from flask import Flask
-from mock import Mock
+from mock import Mock, patch
 from reana_commons.api_client import BaseAPIClient
 from reana_db.database import Session
 from reana_db.models import Base, User
@@ -63,3 +64,10 @@ def app(base_app, db_engine, session):
         yield base_app
         for table in reversed(Base.metadata.sorted_tables):
             db_engine.execute(table.delete())
+
+
+@pytest.fixture()
+def _get_user_mock():
+    with patch("flask_login.utils._get_user",
+               Mock(return_value=Mock(is_authenticated=False))):
+        yield flask_login.utils._get_user

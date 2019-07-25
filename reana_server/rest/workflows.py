@@ -17,6 +17,7 @@ from bravado.exception import HTTPError
 from flask import Blueprint
 from flask import current_app as app
 from flask import jsonify, redirect, request, send_file, url_for
+from flask_login import current_user
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_commons.utils import get_workspace_disk_usage
 from reana_db.database import Session
@@ -26,7 +27,8 @@ from reana_db.utils import _get_workflow_with_uuid_or_name
 from reana_server.api_client import current_rwc_api_client, \
     current_workflow_submission_publisher
 from reana_server.config import SHARED_VOLUME_PATH
-from reana_server.utils import get_user_from_token, is_uuid_v4
+from reana_server.utils import get_user_from_token, is_uuid_v4, \
+    _get_user_from_invenio_user
 
 blueprint = Blueprint('workflows', __name__)
 
@@ -46,8 +48,8 @@ def get_workflows():  # noqa
       parameters:
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
         - name: type
           in: query
@@ -148,7 +150,10 @@ def get_workflows():  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
         type = request.args.get('type', 'batch')
         verbose = request.args.get('verbose', False)
         response, http_response = current_rwc_api_client.api.\
@@ -207,8 +212,8 @@ def create_workflow():  # noqa
             type: object
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
       responses:
         201:
@@ -260,7 +265,10 @@ def create_workflow():  # noqa
             Request failed. Not implemented.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
         if request.json:
             # validate against schema
             reana_spec_file = request.json
@@ -320,8 +328,8 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
       parameters:
         - name: access_token
           in: query
-          description: Required. API access_token of workflow owner.
-          required: true
+          description: API access_token of workflow owner.
+          required: false
           type: string
         - name: workflow_id_or_name
           in: path
@@ -384,7 +392,10 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -427,8 +438,8 @@ def get_workflow_status(workflow_id_or_name):  # noqa
           type: string
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
       responses:
         200:
@@ -503,7 +514,10 @@ def get_workflow_status(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -547,8 +561,8 @@ def start_workflow(workflow_id_or_name):  # noqa
           type: string
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
         - name: parameters
           in: body
@@ -635,7 +649,10 @@ def start_workflow(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -695,8 +712,8 @@ def set_workflow_status(workflow_id_or_name):  # noqa
           type: string
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
         - name: parameters
           in: body
@@ -783,7 +800,10 @@ def set_workflow_status(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -842,8 +862,8 @@ def upload_file(workflow_id_or_name):  # noqa
           type: string
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
       responses:
         200:
@@ -886,7 +906,10 @@ def upload_file(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -942,8 +965,8 @@ def download_file(workflow_id_or_name, file_name):  # noqa
           type: string
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
       responses:
         200:
@@ -982,7 +1005,10 @@ def download_file(workflow_id_or_name, file_name):  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -1036,8 +1062,8 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
           type: string
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
       responses:
         200:
@@ -1073,7 +1099,10 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -1118,8 +1147,8 @@ def get_files(workflow_id_or_name):  # noqa
           type: string
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
       responses:
         200:
@@ -1168,7 +1197,10 @@ def get_files(workflow_id_or_name):  # noqa
               }
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -1212,8 +1244,8 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
           type: string
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
       responses:
         200:
@@ -1274,7 +1306,10 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -1337,8 +1372,8 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
           default: '5'
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
       responses:
         200:
@@ -1391,7 +1426,11 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
+
         brief = request.args.get('brief', False)
         brief = True if brief == 'true' else False
         context_lines = request.args.get('context_lines', 5)
@@ -1444,8 +1483,8 @@ def open_interactive_session(workflow_id_or_name,
           type: string
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
         - name: interactive_session_type
           in: path
@@ -1510,7 +1549,11 @@ def open_interactive_session(workflow_id_or_name,
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
+
         if interactive_session_type not in INTERACTIVE_SESSION_TYPES:
             return jsonify({
                 "message": "Interactive session type {0} not found, try "
@@ -1566,8 +1609,8 @@ def close_interactive_session(workflow_id_or_name):  # noqa
           type: string
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
       responses:
         200:
@@ -1614,7 +1657,10 @@ def close_interactive_session(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
         response, http_response = current_rwc_api_client.api.\
@@ -1670,8 +1716,8 @@ def move_files(workflow_id_or_name):  # noqa
           type: string
         - name: access_token
           in: query
-          description: Required. The API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
       responses:
         200:
@@ -1726,7 +1772,10 @@ def move_files(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -1768,8 +1817,8 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
       parameters:
         - name: access_token
           in: query
-          description: Required. API access_token of workflow owner.
-          required: true
+          description: The API access_token of workflow owner.
+          required: false
           type: string
         - name: workflow_id_or_name
           in: path
@@ -1848,7 +1897,10 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        user = get_user_from_token(request.args.get('access_token'))
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
         parameters = request.json or {}
 
         if not workflow_id_or_name:
