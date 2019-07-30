@@ -113,3 +113,8 @@ DEBUG = True
 SECURITY_PASSWORD_SALT = 'security-password-salt'
 
 SECURITY_SEND_REGISTER_EMAIL = False
+
+# Gitlab Application configuration
+# ================================
+GITLAB_APP_ID = 'CHANGE_ME'
+GITLAB_APP_SECRET = 'CHANGE_ME'
