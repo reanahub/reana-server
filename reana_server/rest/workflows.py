@@ -28,7 +28,7 @@ from reana_server.api_client import current_rwc_api_client, \
     current_workflow_submission_publisher
 from reana_server.config import SHARED_VOLUME_PATH
 from reana_server.utils import get_user_from_token, is_uuid_v4, \
-    _get_user_from_invenio_user
+    _get_user_from_invenio_user, _get_reana_yaml_from_gitlab
 
 blueprint = Blueprint('workflows', __name__)
 
@@ -267,11 +267,23 @@ def create_workflow():  # noqa
     try:
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
+        elif 'X-Gitlab-Token' in request.headers:
+            user = get_user_from_token(request.headers['X-Gitlab-Token'])
         else:
             user = get_user_from_token(request.args.get('access_token'))
         if request.json:
-            # validate against schema
-            reana_spec_file = request.json
+            if 'object_kind' in request.json:
+                reana_spec_file, git_url, git_branch, git_commit_sha = \
+                  _get_reana_yaml_from_gitlab(request.json, user.id_)
+                git_data = {"git_url": git_url,
+                            "git_branch": git_branch,
+                            "git_commit_sha": git_commit_sha}
+                workflow_name = git_url.replace('/', '%2F')
+            else:
+                # validate against schema
+                git_data = {}
+                reana_spec_file = request.json
+                workflow_name = ''
             workflow_engine = reana_spec_file['workflow']['type']
         elif request.args.get('spec'):
             return jsonify('Not implemented'), 501
@@ -282,8 +294,7 @@ def create_workflow():  # noqa
         if workflow_engine not in app.config['AVAILABLE_WORKFLOW_ENGINES']:
             raise Exception('Unknown workflow type.')
 
-        workflow_name = request.args.get('workflow_name', '')
-
+        workflow_name = request.args.get('workflow_name', workflow_name)
         if is_uuid_v4(workflow_name):
             return jsonify({'message':
                             'Workflow name cannot be a valid UUIDv4.'}), \
@@ -292,11 +303,20 @@ def create_workflow():  # noqa
                          'workflow_name': workflow_name}
         workflow_dict['operational_options'] = \
             reana_spec_file.get('inputs', {}).get('options', {})
+        if git_data:
+            workflow_dict['git_data'] = git_data
         response, http_response = current_rwc_api_client.api.\
             create_workflow(
                 workflow=workflow_dict,
                 user=str(user.id_)).result()
-
+        if git_data:
+            Workflow.update_workflow_status(Session, response["workflow_id"],
+                                            WorkflowStatus.queued)
+            current_workflow_submission_publisher.publish_workflow_submission(
+                user_id=str(user.id_),
+                workflow_id_or_name=response["workflow_id"],
+                parameters=request.json
+            )
         return jsonify(response), http_response.status_code
     except HTTPError as e:
         logging.error(traceback.format_exc())

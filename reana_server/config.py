@@ -14,7 +14,6 @@ from datetime import timedelta
 
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
 from invenio_oauthclient.contrib import cern
-
 # Database
 # ========
 #: Database URI including user and password
@@ -30,6 +29,12 @@ AVAILABLE_WORKFLOW_ENGINES = [
 ADMIN_USER_ID = "00000000-0000-0000-0000-000000000000"
 
 SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/var/reana')
+
+REANA_URL = os.getenv('REANA_URL', 'reana.io')
+
+REANA_SSO_CERN_CONSUMER_KEY = os.getenv('CERN_CONSUMER_KEY', 'CHANGE_ME')
+
+REANA_SSO_CERN_CONSUMER_SECRET = os.getenv('CERN_CONSUMER_SECRET', 'CHANGE_ME')
 
 
 # Invenio configuration
@@ -86,7 +91,7 @@ SESSION_COOKIE_SECURE = True
 #: provided, the allowed hosts variable is set to localhost. In production it
 #: should be set to the correct host and it is strongly recommended to only
 #: route correct hosts to the application.
-APP_ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+APP_ALLOWED_HOSTS = ['localhost', '127.0.0.1', REANA_URL]
 
 # Security configuration
 # ======================
@@ -107,8 +112,8 @@ OAUTHCLIENT_REMOTE_APPS = dict(
 )
 
 CERN_APP_CREDENTIALS = dict(
-    consumer_key='CHANGE_ME',
-    consumer_secret='CHANGE_ME',
+    consumer_key=REANA_SSO_CERN_CONSUMER_KEY,
+    consumer_secret=REANA_SSO_CERN_CONSUMER_SECRET,
 )
 
 DEBUG = True
@@ -116,3 +121,13 @@ DEBUG = True
 SECURITY_PASSWORD_SALT = 'security-password-salt'
 
 SECURITY_SEND_REGISTER_EMAIL = False
+
+# Gitlab Application configuration
+# ================================
+REANA_GITLAB_OAUTH_APP_ID = os.getenv('REANA_GITLAB_OAUTH_APP_ID', 'CHANGE_ME')
+REANA_GITLAB_OAUTH_APP_SECRET = os.getenv('REANA_GITLAB_OAUTH_APP_SECRET',
+                                          'CHANGE_ME')
+REANA_GITLAB_URL = 'https://{}'.format(os.getenv('REANA_GITLAB_HOST',
+                                                 'CHANGE_ME'))
+REANA_GITLAB_OAUTH_REDIRECT_URL = os.getenv('REANA_GITLAB_OAUTH_REDIRECT_URL',
+                                            'CHANGE_ME')

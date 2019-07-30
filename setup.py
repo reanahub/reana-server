@@ -118,6 +118,7 @@ setup(
             "reana_server_workflows = reana_server.rest.workflows:blueprint",
             "reana_server_users = reana_server.rest.users:blueprint",
             "reana_server_secrets = reana_server.rest.secrets:blueprint",
+            "reana_server_gitlab = reana_server.rest.gitlab:blueprint",
         ],
     },
     include_package_data=True,
