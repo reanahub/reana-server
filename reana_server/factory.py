@@ -49,10 +49,11 @@ def create_app():
     app.register_blueprint(blueprint_settings)
 
     # Register API routes
-    from .rest import ping, secrets, users, workflows  # noqa
+    from .rest import gitlab, ping, secrets, users, workflows  # noqa
     app.register_blueprint(ping.blueprint, url_prefix='/api')
     app.register_blueprint(workflows.blueprint, url_prefix='/api')
     app.register_blueprint(users.blueprint, url_prefix='/api')
     app.register_blueprint(secrets.blueprint, url_prefix='/api')
+    app.register_blueprint(gitlab.blueprint, url_prefix='/api')
 
     return app

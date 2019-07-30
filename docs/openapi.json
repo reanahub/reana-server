@@ -13,6 +13,121 @@
     "/account/settings/security/": {},
     "/account/settings/sessions/revoke/": {},
     "/account/settings/static/{filename}": {},
+    "/api/gitlab": {
+      "get": {
+        "description": "Authorize REANA on GitLab.",
+        "operationId": "gitlab_oauth",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Ping succeeded.",
+            "examples": {
+              "application/json": {
+                "message": "OK",
+                "status": 200
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "201": {
+            "description": "Authorization succeeded. GitLab secret created.",
+            "examples": {
+              "application/json": {
+                "message": "GitLab secret created",
+                "status": 201
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. User token not valid.",
+            "examples": {
+              "application/json": {
+                "message": "Token is not valid."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Get access token from GitLab"
+      }
+    },
+    "/api/gitlab/projects": {
+      "get": {
+        "description": "Retrieve projects from GitLab.",
+        "operationId": "gitlab_projects",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "This resource return all projects owned by the user on GitLab in JSON format."
+          },
+          "403": {
+            "description": "Request failed. User token not valid.",
+            "examples": {
+              "application/json": {
+                "message": "Token is not valid."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Get user project from GitLab"
+      }
+    },
+    "/api/gitlab/webhook": {
+      "post": {
+        "description": "Setup a webhook for a GitLab project on GitLab.",
+        "operationId": "gitlab_webhook",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "201": {
+            "description": "The webhook was created."
+          },
+          "403": {
+            "description": "Request failed. User token not valid.",
+            "examples": {
+              "application/json": {
+                "message": "Token is not valid."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Set a webhook on a user project from GitLab"
+      }
+    },
     "/api/login": {
       "get": {
         "description": "This resource provides guidance to the user on how to access a file. It tells the user to add the access token as an URL param.",
