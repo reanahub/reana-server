@@ -91,15 +91,15 @@ SESSION_COOKIE_SECURE = True
 #: provided, the allowed hosts variable is set to localhost. In production it
 #: should be set to the correct host and it is strongly recommended to only
 #: route correct hosts to the application.
-APP_ALLOWED_HOSTS = ['localhost', '127.0.0.1', REANA_URL]
+
+#: In production use the following configuration plus adding  the hostname/ip
+#: of the reverse proxy in front of REANA-Server.
+# APP_ALLOWED_HOSTS = [REANA_URL]
 
 # Security configuration
 # ======================
 APP_DEFAULT_SECURE_HEADERS["content_security_policy"] = {}
-APP_DEFAULT_SECURE_HEADERS["force_https"] = True
-APP_DEFAULT_SECURE_HEADERS["frame_options"] = "allowfrom"
-APP_DEFAULT_SECURE_HEADERS["frame_options_allow_from"] = "*"
-
+APP_HEALTH_BLUEPRINT_ENABLED = False
 
 # Flask-Breadcrumbs needs this variable set
 # =========================================

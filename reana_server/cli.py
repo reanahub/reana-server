@@ -51,26 +51,26 @@ With the administrator access token, new user creation is allowed with:
 
 .. code-block :: bash
 
-    $ flask  users create -e=<email> --admin-access-token=<token>
+    $ flask reana-users create -e=<email> --admin-access-token=<token>
 
 Similarly, to retrieve information for all users:
 
 .. code-block :: bash
 
-    $ flask users get --admin-access-token=<token>
+    $ flask reana-users get --admin-access-token=<token>
 
 To export all users in current REANA cluster you can use:
 
 .. code-block :: bash
 
     # users will be exported in CSV format
-    $ flask export --admin-access-token=<token> > users.csv
+    $ flask reana-users export --admin-access-token=<token> > users.csv
 
 And import them in a new cluster as follows:
 
 .. code-block :: bash
 
-    $ flask import --file users.csv --admin-access-token=<token>
+    $ flask reana-users import --file users.csv --admin-access-token=<token>
 """
 import logging
 import os
