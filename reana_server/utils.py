@@ -14,6 +14,7 @@ import json
 import secrets
 from uuid import UUID
 
+import os
 import fs
 import requests
 import yaml
@@ -42,6 +43,10 @@ def create_user_workspace(user_workspace_path):
     reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
     if not reana_fs.exists(user_workspace_path):
         reana_fs.makedirs(user_workspace_path)
+    if os.environ.get("VC3USERID", None):
+        vc3_uid = int(os.environ.get("VC3USERID"))
+        owner_gid = os.stat(reana_fs.getsyspath(user_workspace_path)).st_gid
+        os.chown(reana_fs.getsyspath(user_workspace_path), vc3_uid, owner_gid)
 
 
 def get_user_from_token(access_token):
