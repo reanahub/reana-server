@@ -194,7 +194,7 @@ def gitlab_webhook():  # noqa
         gitlab_url = REANA_GITLAB_URL + "/api/v4/projects/" + \
             "{0}/hooks?access_token={1}"
         webhook_payload = {
-            "url": REANA_URL + "/api/workflows",
+            "url": "https://{}/api/workflows".format(REANA_URL),
             "push_events": True,
             "push_events_branch_filter": "master",
             "merge_requests_events": True,
