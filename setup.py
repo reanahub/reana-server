@@ -45,10 +45,10 @@ setup_requires = [
 
 install_requires = [
     'fs>=2.0',
-    'marshmallow>=2.13',
+    'marshmallow>2.13.0,<=2.20.1',
     'pyOpenSSL==17.5.0',
-    'reana-commons[kubernetes]>=0.6.0.dev20190812,<0.7.0',
-    'reana-db>=0.6.0.dev20190715,<0.7.0',
+    'reana-commons[kubernetes]>=0.6.0.dev20190823,<0.7.0',
+    'reana-db>=0.6.0.dev20190828,<0.7.0',
     'requests==2.20.0',
     'rfc3987==1.3.7',
     'strict-rfc3339==0.7',
