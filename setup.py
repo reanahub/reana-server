@@ -107,8 +107,8 @@ setup(
         "invenio_base.apps": [
             "reana = reana_server.ext:REANA"
         ],
-        'console_scripts': [
-            'reana-server = invenio_app.cli:cli',
+        'invenio_base.api_apps': [
+            'reana = reana_server.ext:REANA'
         ],
         'invenio_config.module': [
             'reana_server = reana_server.config',
