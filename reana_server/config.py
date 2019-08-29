@@ -87,6 +87,8 @@ SECRET_KEY = 'CHANGE_ME'
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100 MiB
 #: Sets cookie with the secure flag by default
 SESSION_COOKIE_SECURE = True
+#: Sets session to be samesite to avoid CSRF attacks
+SESSION_COOKIE_SAMESITE = 'Lax'
 #: Since HAProxy and Nginx route all requests no matter the host header
 #: provided, the allowed hosts variable is set to localhost. In production it
 #: should be set to the correct host and it is strongly recommended to only
