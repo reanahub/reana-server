@@ -59,8 +59,8 @@ install_requires = [
     'webcolors==1.7',
     # Invenio dependencies
     'Flask>=1.0.2',
-    'invenio-app>=1.2.0,<1.3.0',
-    'invenio-base>=1.1.0,<1.2.0',
+    'invenio-app>=1.2.2,<1.3.0',
+    'invenio-base>=1.2.0,<1.3.0',
     'invenio-cache>=1.0.0,<1.1.0',
     'invenio-config>=1.0.2,<1.1.0',
     # From base bundle
