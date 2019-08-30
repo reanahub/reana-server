@@ -100,6 +100,7 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 
 # Security configuration
 # ======================
+PROXYFIX_CONFIG = {"x_proto": 1}
 APP_DEFAULT_SECURE_HEADERS["content_security_policy"] = {}
 APP_HEALTH_BLUEPRINT_ENABLED = False
 
