@@ -147,8 +147,12 @@ def gitlab_projects():  # noqa
         gitlab_user = secrets_store.get_secret_value('gitlab_user')
         gitlab_url = REANA_GITLAB_URL + \
             "/api/v4/users/{0}/projects?access_token={1}"
-        projects = requests.get(gitlab_url.format(gitlab_user, gitlab_token))
-        return projects.content, 200
+        response = requests.get(gitlab_url.format(gitlab_user, gitlab_token))
+        if response.status_code == 200:
+            return response.content, 200
+        else:
+            return jsonify({"message": "Project list could not be retrieved"}),
+            response.status_code
     except ValueError:
         return jsonify({"message": "Token is not valid."}), 403
     except Exception as e:
@@ -194,7 +198,7 @@ def gitlab_webhook():  # noqa
         gitlab_url = REANA_GITLAB_URL + "/api/v4/projects/" + \
             "{0}/hooks?access_token={1}"
         webhook_payload = {
-            "url": REANA_URL + "/api/workflows",
+            "url": "https://{}/api/workflows".format(REANA_URL),
             "push_events": True,
             "push_events_branch_filter": "master",
             "merge_requests_events": True,

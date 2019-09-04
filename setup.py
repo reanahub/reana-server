@@ -45,10 +45,10 @@ setup_requires = [
 
 install_requires = [
     'fs>=2.0',
-    'marshmallow>=2.13',
+    'marshmallow>2.13.0,<=2.20.1',
     'pyOpenSSL==17.5.0',
-    'reana-commons[kubernetes]>=0.6.0.dev20190812,<0.7.0',
-    'reana-db>=0.6.0.dev20190715,<0.7.0',
+    'reana-commons[kubernetes]>=0.6.0.dev20190823,<0.7.0',
+    'reana-db>=0.6.0.dev20190828,<0.7.0',
     'requests==2.20.0',
     'rfc3987==1.3.7',
     'strict-rfc3339==0.7',
@@ -59,8 +59,8 @@ install_requires = [
     'webcolors==1.7',
     # Invenio dependencies
     'Flask>=1.0.2',
-    'invenio-app>=1.2.0,<1.3.0',
-    'invenio-base>=1.1.0,<1.2.0',
+    'invenio-app>=1.2.2,<1.3.0',
+    'invenio-base>=1.2.0,<1.3.0',
     'invenio-cache>=1.0.0,<1.1.0',
     'invenio-config>=1.0.2,<1.1.0',
     # From base bundle
@@ -107,8 +107,8 @@ setup(
         "invenio_base.apps": [
             "reana = reana_server.ext:REANA"
         ],
-        'console_scripts': [
-            'reana-server = invenio_app.cli:cli',
+        'invenio_base.api_apps': [
+            'reana = reana_server.ext:REANA'
         ],
         'invenio_config.module': [
             'reana_server = reana_server.config',
