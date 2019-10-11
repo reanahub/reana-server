@@ -169,51 +169,55 @@ def test_set_workflow_status(app, default_user, _get_user_mock):
 def test_upload_file(app, default_user, _get_user_mock):
     """Test upload_file view."""
     with app.test_client() as client:
-        with patch("reana_server.rest.workflows.current_rwc_api_client",
-                   make_mock_api_client("reana-workflow-controller")()):
+        with patch("reana_server.rest.workflows.requests"):
+            file_content = b"Upload this data."
             res = client.post(url_for("workflows.upload_file",
                                       workflow_id_or_name="1"),
                               query_string={"file_name": "test_upload.txt"},
-                              data={"file_content":
-                                    "tests/test_files/test_upload.txt"})
+                              input_stream=BytesIO(file_content))
             assert res.status_code == 403
 
+            # wrong content type
             res = client.post(url_for("workflows.upload_file",
                                       workflow_id_or_name="1"),
                               query_string={"access_token":
                                             default_user.access_token,
                                             "file_name": "test_upload.txt"},
-                              headers={"content_type":
+                              headers={"Content-Type":
                                        "multipart/form-data"},
-                              data={"file":
-                                    (BytesIO(b"Upload this data."),
-                                        "tests/test_files/test_upload.txt")})
+                              input_stream=BytesIO(file_content))
             assert res.status_code == 400
-
+            # missing file name
             res = client.post(url_for("workflows.upload_file",
                                       workflow_id_or_name="1"),
                               query_string={"access_token":
                                             default_user.access_token,
                                             "file_name": None},
-                              headers={"content_type":
-                                       "multipart/form-data"},
-                              data={"file_content":
-                                    (BytesIO(b"Upload this data."),
-                                        "tests/test_files/test_upload.txt")})
+                              headers={"Content-Type":
+                                       "application/octet-stream"},
+                              input_stream=BytesIO(file_content))
             assert res.status_code == 400
 
+        requests_mock = Mock()
+        requests_response_mock = Mock()
+        requests_response_mock.status_code = 200
+        requests_response_mock.json = \
+            Mock(return_value={'message': 'File uploaded.'})
+        requests_mock.post = Mock(return_value=requests_response_mock)
+        with patch("reana_server.rest.workflows.requests",
+                   requests_mock) as requests_client:
             res = client.post(url_for("workflows.upload_file",
                                       workflow_id_or_name="1"),
                               query_string={"access_token":
                                             default_user.access_token,
                                             "file_name":
                                             "test_upload.txt"},
-                              headers={"content_type":
-                                       "multipart/form-data"},
-                              data={"file_content":
-                                    (BytesIO(b"Upload this data."),
-                                     "tests/test_files/test_upload.txt")})
-            assert res.status_code == 200
+                              headers={"Content-Type":
+                                       "application/octet-stream"},
+                              input_stream=BytesIO(file_content))
+            requests_client.post.assert_called_once()
+            assert file_content == \
+                requests_client.post.call_args_list[0][1]['data'].read()
 
 
 def test_download_file(app, default_user, _get_user_mock):

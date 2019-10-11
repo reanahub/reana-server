@@ -1901,7 +1901,7 @@
       },
       "post": {
         "consumes": [
-          "multipart/form-data"
+          "application/octet-stream"
         ],
         "description": "This resource is expecting a file to place in the workspace.",
         "operationId": "upload_file",
@@ -1914,11 +1914,13 @@
             "type": "string"
           },
           {
-            "description": "Required. File to be transferred to the workflow workspace.",
-            "in": "formData",
-            "name": "file_content",
+            "description": "Required. File to add to the workspace.",
+            "in": "body",
+            "name": "file",
             "required": true,
-            "type": "file"
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "description": "Required. File name.",

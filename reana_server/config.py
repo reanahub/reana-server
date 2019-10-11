@@ -83,8 +83,6 @@ CORS_SUPPORTS_CREDENTIALS = False
 #: Secret key - each installation (dev, production, ...) needs a separate key.
 #: It should be changed before deploying.
 SECRET_KEY = 'CHANGE_ME'
-#: Max upload size for form data via application/mulitpart-formdata.
-MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100 MiB
 #: Sets cookie with the secure flag by default
 SESSION_COOKIE_SECURE = True
 #: Sets session to be samesite to avoid CSRF attacks

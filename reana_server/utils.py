@@ -22,6 +22,7 @@ from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_db.database import Session
 from reana_db.models import User
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
+from werkzeug.wsgi import LimitedStream
 
 from reana_server.config import ADMIN_USER_ID, REANA_GITLAB_URL
 
@@ -193,3 +194,39 @@ def _format_gitlab_secrets(gitlab_response):
             "type": "env"
         }
     }
+
+
+class RequestStreamWithLen(object):
+    """Wrap ``request.stream`` object to have ``__len__`` attribute.
+
+    Users can uplaod files to REANA through REANA-Server (RS). RS passes then
+    the content of the file uploads to the next REANA component,
+    REANA-Workflow-Controller (RWC).
+
+    In order for this operation to be efficient we read the user stream upload
+    using ``werkzeug`` streams through ``request.stream``. Then, to pass this
+    stream to RWC without creating memory leaks we stream upload the
+    ``request.stream`` content using the Requests library. However, the
+    Request library is not aware of how the size of the stream is represented
+    in ``werkzeug`` (``limit`` attribute), Requests only understands
+    ``len(stream)`` or ``stream.len``, see more here
+    https://github.com/psf/requests/blob/3e7d0a873f838e0001f7ac69b1987147128a7b5f/requests/utils.py#L108-L166
+
+    This class provides the necessary attributes for compatibility with
+    Requests stream upload.
+    """
+
+    def __init__(self, limitedstream):
+        """Wrap the stream to have ``len``."""
+        if not hasattr(limitedstream, 'limit'):
+            raise TypeError('The provided stream doesn\'t have the limit'
+                            'attribute needed to calculate it\'s length.')
+        self.limitedstream = limitedstream
+
+    def read(self, *args, **kwargs):
+        """Expose ``request.stream``s read method."""
+        return self.limitedstream.read(*args, **kwargs)
+
+    def __len__(self):
+        """Expose the length of the ``request.stream``."""
+        return self.limitedstream.limit
