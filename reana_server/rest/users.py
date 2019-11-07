@@ -12,8 +12,10 @@ import logging
 import traceback
 
 from flask import Blueprint, jsonify, request
+from flask_login import current_user
 
-from reana_server.utils import _create_user, _get_users
+from reana_server.utils import (_create_user, _get_user_from_invenio_user,
+                                _get_users)
 
 blueprint = Blueprint('users', __name__)
 
@@ -233,3 +235,57 @@ def user_login():
     return jsonify({"message": "Add your REANA_ACCESS_TOKEN as a URL param " +
                     "to access the resource. " +
                     "RESOURCE_URL?access_token=REANA_ACCESS_TOKEN"}), 200
+
+
+@blueprint.route('/me', methods=['GET'])
+def get_me():
+    r"""Endpoint to get user information.
+
+    ---
+    get:
+      summary: Gets information from authenticated user.
+      description: >-
+        This resource provides basic information about an authenticated
+        user based on the session cookie presence.
+      operationId: get_me
+      produces:
+        - application/json
+      responses:
+        200:
+          description: >-
+            User information correspoding to the session cookie sent
+            in the request.
+          schema:
+            type: object
+            properties:
+              email:
+                type: string
+              reana_token:
+                type: string
+          examples:
+            application/json:
+              {
+                "email": "user@reana.info",
+                "reana_token": "Drmhze6EPcv0fN_81Bj-nA"
+              }
+        401:
+          description: >-
+            Error message indicating that the uses is not authenticated.
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+          examples:
+            application/json:
+              {
+                "error": "User not logged in"
+              }
+    """
+    if current_user.is_authenticated:
+        me = _get_user_from_invenio_user(current_user.email)
+        return (
+          jsonify({'email': me.email, 'reana_token': me.access_token}), 200
+        )
+    else:
+        return jsonify({'error': 'User not logged in'}), 401
