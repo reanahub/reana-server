@@ -9,21 +9,21 @@
 """Reana-Server GitLab integration Flask-Blueprint."""
 
 import logging
-import requests
 import traceback
 
+import requests
 from flask import Blueprint, jsonify, request
 from flask_login import current_user
 from reana_commons.k8s.secrets import REANAUserSecretsStore
+
 from reana_server.api_client import current_rwc_api_client
-from reana_server.config import REANA_GITLAB_OAUTH_APP_ID, \
-                                REANA_GITLAB_OAUTH_APP_SECRET, \
-                                REANA_GITLAB_OAUTH_REDIRECT_URL, \
-                                REANA_GITLAB_URL, \
-                                REANA_URL
-from reana_server.utils import get_user_from_token, \
-                               _get_user_from_invenio_user, \
-                               _format_gitlab_secrets
+from reana_server.config import (REANA_GITLAB_OAUTH_APP_ID,
+                                 REANA_GITLAB_OAUTH_APP_SECRET,
+                                 REANA_GITLAB_OAUTH_REDIRECT_URL,
+                                 REANA_GITLAB_URL, REANA_URL)
+from reana_server.utils import (_format_gitlab_secrets,
+                                _get_user_from_invenio_user,
+                                get_user_from_token)
 
 blueprint = Blueprint('gitlab', __name__)
 

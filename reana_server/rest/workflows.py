@@ -12,19 +12,19 @@ import logging
 import subprocess
 import traceback
 
+import fs
 import requests
 from bravado.exception import HTTPError
-from reana_commons.config import INTERACTIVE_SESSION_TYPES
-from reana_commons.utils import get_workspace_disk_usage
-
-import fs
 from flask import Blueprint
 from flask import current_app as app
 from flask import jsonify, redirect, request, send_file, url_for
 from flask_login import current_user
+from reana_commons.config import INTERACTIVE_SESSION_TYPES
+from reana_commons.utils import get_workspace_disk_usage
 from reana_db.database import Session
 from reana_db.models import Workflow, WorkflowStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
+
 from reana_server.api_client import (current_rwc_api_client,
                                      current_workflow_submission_publisher)
 from reana_server.config import SHARED_VOLUME_PATH

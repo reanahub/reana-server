@@ -23,7 +23,6 @@ from reana_db.database import Session
 from reana_db.models import User
 
 from reana_server.utils import _create_and_associate_reana_user
-from tests.conftest import _get_user_mock
 
 
 def test_get_workflows(app, default_user, _get_user_mock):
