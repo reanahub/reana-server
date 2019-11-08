@@ -11,9 +11,10 @@
 import logging
 import traceback
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, make_response, redirect
 from flask_login import current_user
 
+from reana_server.config import REANA_URL
 from reana_server.utils import (_create_user, _get_user_from_invenio_user,
                                 _get_users)
 
@@ -287,5 +288,15 @@ def get_me():
         return (
           jsonify({'email': me.email, 'reana_token': me.access_token}), 200
         )
+    else:
+        return jsonify({'error': 'User not logged in'}), 401
+
+
+@blueprint.route('/logout', methods=['GET'])
+def _logout():
+    if current_user.is_authenticated:
+        resp = make_response(redirect(request.args.get("next")))
+        resp.delete_cookie('session')
+        return resp
     else:
         return jsonify({'error': 'User not logged in'}), 401

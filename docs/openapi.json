@@ -156,6 +156,7 @@
         "summary": "TEMPORARY displays a message about how to access a resource."
       }
     },
+    "/api/logout": {},
     "/api/me": {
       "get": {
         "description": "This resource provides basic information about an authenticated user based on the session cookie presence.",
