@@ -11,7 +11,7 @@ set -e
 # Create REANA DB
 echo 'Creating REANA database ...'
 invenio reana-db init
-invenio reana-users create_default info@reana.io
+invenio reana-users create_default info@reana.io  > /dev/null 2>&1
 
 # Create Invenio DB
 echo 'Creating Invenio database ...'
