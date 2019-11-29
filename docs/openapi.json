@@ -76,6 +76,18 @@
         "summary": "Get access token from GitLab"
       }
     },
+    "/api/gitlab/connect": {
+      "get": {
+        "description": "Initiate connection to GitLab to authorize accessing the authenticated user's API.",
+        "operationId": "gitlab_connect",
+        "responses": {
+          "302": {
+            "description": "Redirection to GitLab site."
+          }
+        },
+        "summary": "Initiate connection to GitLab."
+      }
+    },
     "/api/gitlab/projects": {
       "get": {
         "description": "Retrieve projects from GitLab.",
@@ -202,7 +214,7 @@
             }
           }
         },
-        "summary": "Gets information from authenticated user."
+        "summary": "Gets information about authenticated user."
       }
     },
     "/api/ping": {

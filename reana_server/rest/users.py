@@ -244,7 +244,7 @@ def get_me():
 
     ---
     get:
-      summary: Gets information from authenticated user.
+      summary: Gets information about authenticated user.
       description: >-
         This resource provides basic information about an authenticated
         user based on the session cookie presence.

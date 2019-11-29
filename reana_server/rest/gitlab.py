@@ -12,8 +12,15 @@ import logging
 import traceback
 
 import requests
-from flask import Blueprint, jsonify, request
+from flask import (Blueprint, current_app, jsonify, make_response, redirect,
+                   request, url_for)
 from flask_login import current_user
+from flask_login.utils import _create_identifier
+from itsdangerous import BadData, TimedJSONWebSignatureSerializer
+from werkzeug.local import LocalProxy
+
+from invenio_oauthclient.utils import get_safe_redirect_target
+
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 
 from reana_server.api_client import current_rwc_api_client
@@ -26,6 +33,45 @@ from reana_server.utils import (_format_gitlab_secrets,
                                 get_user_from_token)
 
 blueprint = Blueprint('gitlab', __name__)
+
+
+serializer = LocalProxy(
+    lambda: TimedJSONWebSignatureSerializer(
+        current_app.config['SECRET_KEY']
+    )
+)
+
+
+@blueprint.route('/gitlab/connect')
+def gitlab_connect():
+    r"""Endpoint to init the REANA connection to GitLab.
+
+    ---
+    get:
+      summary: Initiate connection to GitLab.
+      operationId: gitlab_connect
+      description: >-
+        Initiate connection to GitLab to authorize accessing the
+        authenticated user's API.
+      responses:
+        302:
+          description: >-
+            Redirection to GitLab site.
+    """
+    # Get redirect target in safe manner.
+    next_param = get_safe_redirect_target()
+    # Create a JSON Web Token
+    state_token = serializer.dumps({
+        'next': next_param,
+        'sid': _create_identifier(),
+    })
+
+    params = {'client_id': REANA_GITLAB_OAUTH_APP_ID,
+              'redirect_uri': url_for('.gitlab_oauth', _external=True),
+              'response_type': 'code', 'scope': 'api', 'state': state_token}
+    req = requests.PreparedRequest()
+    req.prepare_url(REANA_GITLAB_URL + '/oauth/authorize', params)
+    return redirect(req.url), 302
 
 
 @blueprint.route('/gitlab', methods=['GET'])
@@ -86,24 +132,33 @@ def gitlab_oauth():  # noqa
         else:
             user = get_user_from_token(request.args.get('access_token'))
         if 'code' in request.args:
+            # Verifies state parameter and obtain next url
+            state_token = request.args.get('state')
+            assert state_token
+            # Checks authenticity and integrity of state and decodes the value.
+            state = serializer.loads(state_token)
+            # Verifies that state is for this session and that next parameter
+            # has not been modified.
+            assert state['sid'] == _create_identifier()
+            # Stores next URL
+            next_url = state['next']
             gitlab_code = request.args.get('code')
-            parameters = "client_id={0}&" + \
-                         "client_secret={1}&code={2}&" + \
-                         "grant_type=authorization_code&redirect_uri={3}"
-            parameters = parameters.format(REANA_GITLAB_OAUTH_APP_ID,
-                                           REANA_GITLAB_OAUTH_APP_SECRET,
-                                           gitlab_code,
-                                           REANA_GITLAB_OAUTH_REDIRECT_URL)
+            params = {'client_id': REANA_GITLAB_OAUTH_APP_ID,
+                      'client_secret': REANA_GITLAB_OAUTH_APP_SECRET,
+                      'redirect_uri': url_for('.gitlab_oauth', _external=True),
+                      'code': gitlab_code, 'grant_type': 'authorization_code'}
             gitlab_response = requests.post(REANA_GITLAB_URL + '/oauth/token',
-                                            data=parameters).content
+                                            data=params).content
             secrets_store = REANAUserSecretsStore(str(user.id_))
             secrets_store.add_secrets(_format_gitlab_secrets(gitlab_response),
                                       overwrite=True)
-            return jsonify({"message": "GitLab secret created"}), 201
+            return redirect(next_url), 201
         else:
             return jsonify({"message": "OK"}), 200
     except ValueError:
         return jsonify({"message": "Token is not valid."}), 403
+    except (AssertionError, BadData):
+        return jsonify({"message": "State param is invalid."}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
@@ -151,8 +206,10 @@ def gitlab_projects():  # noqa
         if response.status_code == 200:
             return response.content, 200
         else:
-            return jsonify({"message": "Project list could not be retrieved"}),
-            response.status_code
+            return (
+                jsonify({"message": "Project list could not be retrieved"}),
+                response.status_code
+            )
     except ValueError:
         return jsonify({"message": "Token is not valid."}), 403
     except Exception as e:
