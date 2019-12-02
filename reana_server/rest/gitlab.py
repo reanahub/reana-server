@@ -18,7 +18,6 @@ from flask_login import current_user
 from flask_login.utils import _create_identifier
 from itsdangerous import BadData, TimedJSONWebSignatureSerializer
 from werkzeug.local import LocalProxy
-
 from invenio_oauthclient.utils import get_safe_redirect_target
 
 from reana_commons.k8s.secrets import REANAUserSecretsStore
