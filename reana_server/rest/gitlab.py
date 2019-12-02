@@ -26,7 +26,6 @@ from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_server.api_client import current_rwc_api_client
 from reana_server.config import (REANA_GITLAB_OAUTH_APP_ID,
                                  REANA_GITLAB_OAUTH_APP_SECRET,
-                                 REANA_GITLAB_OAUTH_REDIRECT_URL,
                                  REANA_GITLAB_URL, REANA_URL)
 from reana_server.utils import (_format_gitlab_secrets,
                                 _get_user_from_invenio_user,
