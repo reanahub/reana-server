@@ -16,11 +16,10 @@ from flask import (Blueprint, current_app, jsonify, make_response, redirect,
                    request, url_for)
 from flask_login import current_user
 from flask_login.utils import _create_identifier
-from itsdangerous import BadData, TimedJSONWebSignatureSerializer
-from werkzeug.local import LocalProxy
 from invenio_oauthclient.utils import get_safe_redirect_target
-
+from itsdangerous import BadData, TimedJSONWebSignatureSerializer
 from reana_commons.k8s.secrets import REANAUserSecretsStore
+from werkzeug.local import LocalProxy
 
 from reana_server.api_client import current_rwc_api_client
 from reana_server.config import (REANA_GITLAB_OAUTH_APP_ID,
@@ -28,6 +27,7 @@ from reana_server.config import (REANA_GITLAB_OAUTH_APP_ID,
                                  REANA_GITLAB_URL, REANA_URL)
 from reana_server.utils import (_format_gitlab_secrets,
                                 _get_user_from_invenio_user,
+                                _is_gitlab_project_connected,
                                 get_user_from_token)
 
 blueprint = Blueprint('gitlab', __name__)
@@ -201,8 +201,16 @@ def gitlab_projects():  # noqa
         gitlab_url = REANA_GITLAB_URL + \
             "/api/v4/users/{0}/projects?access_token={1}"
         response = requests.get(gitlab_url.format(gitlab_user, gitlab_token))
+        projects = dict()
         if response.status_code == 200:
-            return response.content, 200
+            for gitlab_project in response.json():
+                connected = _is_gitlab_project_connected(response,
+                                                         gitlab_project['id'],
+                                                         gitlab_token)
+                projects[gitlab_project['id']] = {
+                    'name': gitlab_project['name'],
+                    'connected': connected}
+            return jsonify(projects), 200
         else:
             return (
                 jsonify({"message": "Project list could not be retrieved"}),

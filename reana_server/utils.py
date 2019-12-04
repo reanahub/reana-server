@@ -18,6 +18,7 @@ import fs
 import requests
 import yaml
 from flask import current_app as app
+from flask import url_for
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_db.database import Session
 from reana_db.models import User
@@ -194,6 +195,31 @@ def _format_gitlab_secrets(gitlab_response):
             "type": "env"
         }
     }
+
+
+def _is_gitlab_project_connected(response, project_id, gitlab_token):
+    """Return whether a GitLab project is connected to REANA.
+
+    By checking its webhooks and comparing them to REANA ones.
+
+    :param response: Flask response.
+    :param project_id: Project id on GitLab.
+    :param gitlab_token: GitLab token.
+    """
+    gitlab_hooks_url = (
+        REANA_GITLAB_URL +
+        "/api/v4/projects/{0}/hooks?access_token={1}"
+        .format(project_id, gitlab_token)
+    )
+    response_json = requests.get(gitlab_hooks_url).json()
+    create_workflow_url = url_for('workflows.create_workflow',
+                                  _external=True)
+    if response.status_code == 200 and response_json:
+        return any(
+            hook['url'] == create_workflow_url
+            for hook in response_json if hook['url'])
+    else:
+        return False
 
 
 class RequestStreamWithLen(object):
