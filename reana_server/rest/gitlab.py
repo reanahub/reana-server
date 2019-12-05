@@ -25,9 +25,8 @@ from reana_server.api_client import current_rwc_api_client
 from reana_server.config import (REANA_GITLAB_OAUTH_APP_ID,
                                  REANA_GITLAB_OAUTH_APP_SECRET,
                                  REANA_GITLAB_URL, REANA_URL)
-from reana_server.utils import (_format_gitlab_secrets,
+from reana_server.utils import (_format_gitlab_secrets, _get_gitlab_hook_id,
                                 _get_user_from_invenio_user,
-                                _is_gitlab_project_connected,
                                 get_user_from_token)
 
 blueprint = Blueprint('gitlab', __name__)
@@ -204,12 +203,13 @@ def gitlab_projects():  # noqa
         projects = dict()
         if response.status_code == 200:
             for gitlab_project in response.json():
-                connected = _is_gitlab_project_connected(response,
-                                                         gitlab_project['id'],
-                                                         gitlab_token)
+                hook_id = _get_gitlab_hook_id(response, gitlab_project['id'],
+                                              gitlab_token)
                 projects[gitlab_project['id']] = {
                     'name': gitlab_project['name'],
-                    'connected': connected}
+                    'path': gitlab_project['path_with_namespace'],
+                    'url': gitlab_project['web_url'],
+                    'hook_id': hook_id}
             return jsonify(projects), 200
         else:
             return (
@@ -223,7 +223,7 @@ def gitlab_projects():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/gitlab/webhook', methods=['POST'])
+@blueprint.route('/gitlab/webhook', methods=['POST', 'DELETE'])
 def gitlab_webhook():  # noqa
     r"""Endpoint to setup a GitLab webhook.
     ---
@@ -234,6 +234,12 @@ def gitlab_webhook():  # noqa
         Setup a webhook for a GitLab project on GitLab.
       produces:
        - application/json
+      parameters:
+      - name: project_id
+        in: path
+        description: The GitLab project id.
+        required: true
+        type: integer
       responses:
         201:
           description: >-
@@ -249,7 +255,44 @@ def gitlab_webhook():  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+    delete:
+      summary: Delete an existing webhook from GitLab
+      operationId: gitlab_webhook
+      description: >-
+        Remove an existing REANA webhook from a project on GitLab
+      produces:
+      - application/json
+      parameters:
+      - name: project_id
+        in: path
+        description: The GitLab project id.
+        required: true
+        type: integer
+      - name: hook_id
+        in: path
+        description: The GitLab webhook id of the project.
+        required: true
+        type: integer
+      responses:
+        204:
+          description: >-
+            The webhook was properly deleted.
+        404:
+          description: >-
+            No webhook found with provided id.
+        403:
+          description: >-
+            Request failed. User token not valid.
+          examples:
+            application/json:
+              {
+                "message": "Token is not valid."
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
     """
+
     try:
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
@@ -258,21 +301,30 @@ def gitlab_webhook():  # noqa
         secrets_store = REANAUserSecretsStore(str(user.id_))
         gitlab_token = secrets_store.get_secret_value('gitlab_access_token')
         parameters = request.json
-        gitlab_url = REANA_GITLAB_URL + "/api/v4/projects/" + \
-            "{0}/hooks?access_token={1}"
-        webhook_payload = {
-            "url": "https://{}/api/workflows".format(REANA_URL),
-            "push_events": True,
-            "push_events_branch_filter": "master",
-            "merge_requests_events": True,
-            "enable_ssl_verification": False,
-            "token": user.access_token,
-        }
-        webhook = requests.post(gitlab_url.format(
-                                              parameters['project_id'],
-                                              gitlab_token),
-                                data=webhook_payload)
-        return webhook.content, 201
+        if request.method == 'POST':
+            gitlab_url = REANA_GITLAB_URL + "/api/v4/projects/" + \
+                "{0}/hooks?access_token={1}"
+            webhook_payload = {
+                "url": "https://{}/api/workflows".format(REANA_URL),
+                "push_events": True,
+                "push_events_branch_filter": "master",
+                "merge_requests_events": True,
+                "enable_ssl_verification": False,
+                "token": user.access_token,
+            }
+            webhook = requests.post(gitlab_url.format(
+                                                parameters['project_id'],
+                                                gitlab_token),
+                                    data=webhook_payload)
+            return jsonify({'id': webhook.json()['id']}), 201
+        elif request.method == 'DELETE':
+            gitlab_url = REANA_GITLAB_URL + "/api/v4/projects/" + \
+                "{0}/hooks/{1}?access_token={2}"
+            resp = requests.delete(gitlab_url.format(parameters['project_id'],
+                                                     parameters['hook_id'],
+                                                     gitlab_token))
+            return resp.content, resp.status_code
+
     except ValueError:
         return jsonify({"message": "Token is not valid."}), 403
     except Exception as e:

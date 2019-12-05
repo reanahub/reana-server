@@ -115,9 +115,61 @@
       }
     },
     "/api/gitlab/webhook": {
+      "delete": {
+        "description": "Remove an existing REANA webhook from a project on GitLab",
+        "operationId": "gitlab_webhook",
+        "parameters": [
+          {
+            "description": "The GitLab project id.",
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "description": "The GitLab webhook id of the project.",
+            "in": "path",
+            "name": "hook_id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "204": {
+            "description": "The webhook was properly deleted."
+          },
+          "403": {
+            "description": "Request failed. User token not valid.",
+            "examples": {
+              "application/json": {
+                "message": "Token is not valid."
+              }
+            }
+          },
+          "404": {
+            "description": "No webhook found with provided id."
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Delete an existing webhook from GitLab"
+      },
       "post": {
         "description": "Setup a webhook for a GitLab project on GitLab.",
         "operationId": "gitlab_webhook",
+        "parameters": [
+          {
+            "description": "The GitLab project id.",
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
         "produces": [
           "application/json"
         ],

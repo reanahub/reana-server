@@ -197,8 +197,8 @@ def _format_gitlab_secrets(gitlab_response):
     }
 
 
-def _is_gitlab_project_connected(response, project_id, gitlab_token):
-    """Return whether a GitLab project is connected to REANA.
+def _get_gitlab_hook_id(response, project_id, gitlab_token):
+    """Return REANA hook id from a GitLab project if it is connected.
 
     By checking its webhooks and comparing them to REANA ones.
 
@@ -206,6 +206,7 @@ def _is_gitlab_project_connected(response, project_id, gitlab_token):
     :param project_id: Project id on GitLab.
     :param gitlab_token: GitLab token.
     """
+    reana_hook_id = None
     gitlab_hooks_url = (
         REANA_GITLAB_URL +
         "/api/v4/projects/{0}/hooks?access_token={1}"
@@ -215,11 +216,10 @@ def _is_gitlab_project_connected(response, project_id, gitlab_token):
     create_workflow_url = url_for('workflows.create_workflow',
                                   _external=True)
     if response.status_code == 200 and response_json:
-        return any(
-            hook['url'] == create_workflow_url
-            for hook in response_json if hook['url'])
-    else:
-        return False
+        reana_hook_id = next(hook['id'] for hook in response_json
+                             if hook['url'] and
+                             hook['url'] == create_workflow_url)
+    return reana_hook_id
 
 
 class RequestStreamWithLen(object):

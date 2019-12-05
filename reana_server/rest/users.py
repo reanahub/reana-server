@@ -11,7 +11,7 @@
 import logging
 import traceback
 
-from flask import Blueprint, jsonify, request, make_response, redirect
+from flask import Blueprint, jsonify, make_response, redirect, request
 from flask_login import current_user
 from invenio_oauthclient.utils import get_safe_redirect_target
 
