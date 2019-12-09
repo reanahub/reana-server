@@ -418,7 +418,11 @@ def test_close_interactive_session(app, default_user,
 
 def test_create_and_associate_reana_user():
     user_email = 'test@reana.io'
-    account_info = {'user': {'email': user_email}}
+    user_fullname = 'John Doe'
+    username = 'johndoe'
+    account_info = {'user': {'email': user_email,
+                             'profile': {'full_name': user_fullname,
+                                         'username': username}}}
     user = Session.query(User).filter_by(email=user_email).\
         one_or_none()
     assert user is None
@@ -427,3 +431,5 @@ def test_create_and_associate_reana_user():
         one_or_none()
     assert user
     assert user.email == user_email
+    assert user.full_name == user_fullname
+    assert user.username == username

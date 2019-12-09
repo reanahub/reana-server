@@ -130,6 +130,8 @@ def _create_and_associate_reana_user(sender, token=None,
                                      response=None, account_info=None):
     try:
         user_email = account_info['user']['email']
+        user_fullname = account_info['user']['profile']['full_name']
+        username = account_info['user']['profile']['username']
         search_criteria = dict()
         search_criteria['email'] = user_email
         users = Session.query(User).filter_by(**search_criteria).all()
@@ -139,6 +141,8 @@ def _create_and_associate_reana_user(sender, token=None,
             user_access_token = secrets.token_urlsafe(16)
             user_parameters = dict(access_token=user_access_token)
             user_parameters['email'] = user_email
+            user_parameters['full_name'] = user_fullname
+            user_parameters['username'] = username
             user = User(**user_parameters)
             Session.add(user)
             Session.commit()

@@ -287,7 +287,8 @@ def get_me():
     if current_user.is_authenticated:
         me = _get_user_from_invenio_user(current_user.email)
         return (
-          jsonify({'email': me.email, 'reana_token': me.access_token}), 200
+          jsonify({'email': me.email, 'reana_token': me.access_token,
+                   'full_name': me.full_name, 'username': me.username}), 200
         )
     else:
         return jsonify({'error': 'User not logged in'}), 401
