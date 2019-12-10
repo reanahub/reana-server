@@ -229,7 +229,7 @@ def gitlab_webhook():  # noqa
     ---
     post:
       summary: Set a webhook on a user project from GitLab
-      operationId: gitlab_webhook
+      operationId: create_gitlab_webhook
       description: >-
         Setup a webhook for a GitLab project on GitLab.
       produces:
@@ -257,7 +257,7 @@ def gitlab_webhook():  # noqa
             Request failed. Internal controller error.
     delete:
       summary: Delete an existing webhook from GitLab
-      operationId: gitlab_webhook
+      operationId: delete_gitlab_webhook
       description: >-
         Remove an existing REANA webhook from a project on GitLab
       produces:

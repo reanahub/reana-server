@@ -29,7 +29,7 @@ class WorkflowExecutionScheduler(BaseConsumer):
     """
 
     def __init__(self, **kwargs):
-        """Constructor."""
+        """Initialise the WorkflowExecutionScheduler class."""
         super(WorkflowExecutionScheduler, self).__init__(
             queue='workflow-submission', **kwargs)
 

@@ -117,7 +117,7 @@
     "/api/gitlab/webhook": {
       "delete": {
         "description": "Remove an existing REANA webhook from a project on GitLab",
-        "operationId": "gitlab_webhook",
+        "operationId": "delete_gitlab_webhook",
         "parameters": [
           {
             "description": "The GitLab project id.",
@@ -160,7 +160,7 @@
       },
       "post": {
         "description": "Setup a webhook for a GitLab project on GitLab.",
-        "operationId": "gitlab_webhook",
+        "operationId": "create_gitlab_webhook",
         "parameters": [
           {
             "description": "The GitLab project id.",
