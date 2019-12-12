@@ -174,7 +174,8 @@ def _get_reana_yaml_from_gitlab(webhook_data, user_id):
     yaml_file = requests.get(gitlab_api.format(project_id, reana_yaml,
                                                branch, gitlab_token))
     return yaml.load(yaml_file.content), \
-        webhook_data['project']['path_with_namespace'], branch, \
+        webhook_data['project']['path_with_namespace'], \
+        webhook_data['project']['name'], branch, \
         commit_sha
 
 

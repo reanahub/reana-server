@@ -281,12 +281,12 @@ def create_workflow():  # noqa
             user = get_user_from_token(request.args.get('access_token'))
         if request.json:
             if 'object_kind' in request.json:
-                reana_spec_file, git_url, git_branch, git_commit_sha = \
-                  _get_reana_yaml_from_gitlab(request.json, user.id_)
+                (reana_spec_file, git_url, workflow_name, git_branch,
+                 git_commit_sha) = _get_reana_yaml_from_gitlab(request.json,
+                                                               user.id_)
                 git_data = {"git_url": git_url,
                             "git_branch": git_branch,
                             "git_commit_sha": git_commit_sha}
-                workflow_name = git_url.replace('/', '%2F')
             else:
                 # validate against schema
                 git_data = {}
