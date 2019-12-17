@@ -11,7 +11,7 @@ set -e
 # Create REANA DB
 echo 'Creating REANA database...'
 invenio reana-db init
-invenio reana-users create_default info@reana.io  > /dev/null 2>&1
+invenio reana-users create_default info@reana.io
 echo 'REANA database created.'
 
 # Create Invenio DB
@@ -19,9 +19,3 @@ echo 'Creating Invenio database...'
 invenio db init
 invenio db create
 echo 'Invenio database created.'
-
-# Create admin role to restrict access
-echo 'Creating admin role...'
-invenio roles create admin || echo "Admin role already exists"
-invenio access allow superuser-access role admin || echo "Admin role already has superuser-access"
-echo 'Admin role created.'

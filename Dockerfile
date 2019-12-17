@@ -42,7 +42,7 @@ ENV FLASK_APP=/code/reana_server/app.py
 
 EXPOSE 5000
 
-CMD set -e && ./scripts/setup &&\
+CMD ./scripts/setup > /var/log/reana-server-init-output.log 2>&1 &&\
     uwsgi --module invenio_app.wsgi:application \
     --http-socket 0.0.0.0:5000 --master \
     --processes ${UWSGI_PROCESSES} --threads ${UWSGI_THREADS} \
