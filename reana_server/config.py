@@ -54,7 +54,7 @@ MAIL_SUPPRESS_SEND = True
 # Accounts
 # ========
 #: Redis URL
-ACCOUNTS_SESSION_REDIS_URL = 'redis://cache:6379/1'
+ACCOUNTS_SESSION_REDIS_URL = 'redis://reana-cache:6379/1'
 #: Email address used as sender of account registration emails.
 SECURITY_EMAIL_SENDER = SUPPORT_EMAIL
 #: Email subject for account registration emails.
