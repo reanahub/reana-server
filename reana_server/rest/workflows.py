@@ -69,6 +69,11 @@ def get_workflows():  # noqa
           description: Optional flag to show more information.
           required: false
           type: boolean
+        - name: block_size
+          in: query
+          description: Size format, either 'b' (bytes) or 'k' (kilobytes).
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -164,11 +169,13 @@ def get_workflows():  # noqa
             user = get_user_from_token(request.args.get('access_token'))
         type = request.args.get('type', 'batch')
         verbose = request.args.get('verbose', False)
+        block_size = request.args.get('block_size')
         response, http_response = current_rwc_api_client.api.\
             get_workflows(
                 user=str(user.id_),
                 type=type,
-                verbose=bool(verbose)).result()
+                verbose=bool(verbose),
+                block_size=block_size).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -1949,12 +1956,15 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
                                                    str(user.id_))
         summarize = bool(parameters.get('summarize', False))
+        block_size = parameters.get('block_size')
         reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
         if reana_fs.exists(workflow.get_workspace()):
             absolute_workspace_path = reana_fs.getospath(
                 workflow.get_workspace())
-            disk_usage_info = get_workspace_disk_usage(absolute_workspace_path,
-                                                       summarize=summarize)
+            disk_usage_info = get_workspace_disk_usage(
+              absolute_workspace_path,
+              summarize=summarize,
+              block_size=block_size)
         else:
             raise ValueError('Workspace does not exist.')
 

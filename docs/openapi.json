@@ -742,6 +742,13 @@
             "name": "verbose",
             "required": false,
             "type": "boolean"
+          },
+          {
+            "description": "Size format, either 'b' (bytes) or 'k' (kilobytes).",
+            "in": "query",
+            "name": "block_size",
+            "required": false,
+            "type": "string"
           }
         ],
         "produces": [
