@@ -19,12 +19,11 @@ By default the server docker image is set to create the administrator account
 on startup, which has the email ``info@reana.io`` and a token which is
 generated using the ``secrets`` python library.
 
-To retrieve the administrator token you can use the
-`reana-cluster <https://github.com/reanahub/reana-cluster>`_ CLI:
+To retrieve the administrator token you can use the `reana-dev` CLI:
 
 .. code-block:: bash
 
-    $ reana-cluster env --include-admin-token
+    $ reana-dev setup-environment
 
 or enter the database pod:
 
