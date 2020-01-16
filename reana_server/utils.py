@@ -230,7 +230,7 @@ def _get_gitlab_hook_id(response, project_id, gitlab_token):
 class RequestStreamWithLen(object):
     """Wrap ``request.stream`` object to have ``__len__`` attribute.
 
-    Users can uplaod files to REANA through REANA-Server (RS). RS passes then
+    Users can upload files to REANA through REANA-Server (RS). RS passes then
     the content of the file uploads to the next REANA component,
     REANA-Workflow-Controller (RWC).
 
@@ -249,9 +249,6 @@ class RequestStreamWithLen(object):
 
     def __init__(self, limitedstream):
         """Wrap the stream to have ``len``."""
-        if not hasattr(limitedstream, 'limit'):
-            raise TypeError('The provided stream doesn\'t have the limit'
-                            'attribute needed to calculate it\'s length.')
         self.limitedstream = limitedstream
 
     def read(self, *args, **kwargs):
@@ -260,4 +257,6 @@ class RequestStreamWithLen(object):
 
     def __len__(self):
         """Expose the length of the ``request.stream``."""
+        if not hasattr(self.limitedstream, 'limit'):
+            return 0
         return self.limitedstream.limit

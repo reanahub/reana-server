@@ -218,6 +218,20 @@ def test_upload_file(app, default_user, _get_user_mock):
             assert file_content == \
                 requests_client.post.call_args_list[0][1]['data'].read()
 
+            # empty file
+            res = client.post(url_for("workflows.upload_file",
+                                      workflow_id_or_name="1"),
+                              query_string={"access_token":
+                                            default_user.access_token,
+                                            "file_name": "empty.txt"},
+                              headers={"Content-Type":
+                                       "application/octet-stream"},
+                              input_stream=BytesIO(b""))
+            assert requests_client.post.call_count == 2
+            data = requests_client.post.call_args_list[1][1]['data']
+            assert not len(data)
+            assert not data.read()
+
 
 def test_download_file(app, default_user, _get_user_mock):
     """Test download_file view."""
