@@ -688,13 +688,17 @@ def start_workflow(workflow_id_or_name):  # noqa
             user = _get_user_from_invenio_user(current_user.email)
         else:
             user = get_user_from_token(request.args.get('access_token'))
-
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
         parameters = request.json
         workflow = _get_workflow_with_uuid_or_name(
             workflow_id_or_name, str(user.id_))
-        if workflow.status != WorkflowStatus.created:
+        if parameters['restart']:
+            if workflow.status not in \
+                    [WorkflowStatus.finished, WorkflowStatus.failed]:
+                raise ValueError(
+                    "Only finished or failed workflows can be restarted.")
+        elif workflow.status != WorkflowStatus.created:
             raise ValueError("Workflow cannot be started again.")
         Workflow.update_workflow_status(Session, workflow.id_,
                                         WorkflowStatus.queued)
