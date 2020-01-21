@@ -11,13 +11,14 @@
 import json
 import logging
 
-from reana_commons.config import MQ_DEFAULT_QUEUES
+from bravado.exception import HTTPBadGateway
 from reana_commons.consumer import BaseConsumer
 from reana_commons.tasks import reana_ready
 from reana_db.database import Session
-from reana_db.models import Workflow, WorkflowStatus
+from reana_db.models import Workflow
 
-from reana_server.api_client import current_rwc_api_client
+from reana_server.api_client import (current_rwc_api_client,
+                                     current_workflow_submission_publisher)
 
 
 class WorkflowExecutionScheduler(BaseConsumer):
@@ -38,21 +39,69 @@ class WorkflowExecutionScheduler(BaseConsumer):
         return [Consumer(queues=self.queue, callbacks=[self.on_message],
                          accept=[self.message_default_format])]
 
+    def requeue_workflow(self, **kwargs):
+        """Send a workflow back to the queue.
+
+        We do not use ``message.requeue()`` because it cannot be used after
+        ``message.ack()``, and we cannot wait to validate all the checks
+        (``reana_ready()`` and calling RWC) without calling ``message.ack()``
+        and getting a new call to on_message with the same workflow.
+        """
+        try:
+            current_workflow_submission_publisher.publish_workflow_submission(
+                kwargs['user'], kwargs['workflow_id_or_name'],
+                kwargs['parameters']
+            )
+            logging.error(
+                f'Requeueing workflow '
+                f'{kwargs["workflow_id_or_name"]} ...')
+        except KeyError:
+            logging.error(
+                f'Wrong parameters to requeue workflow:\n'
+                f'{kwargs}\n'
+                f'Did reana_commons.publisher.WorkflowSubmissionPublisher\'s '
+                f'method publish_workflow_submission change its signature?',
+                exc_info=True)
+        except Exception:
+            logging.error('An error has occurred while requeueing worfklow',
+                          exc_info=True)
+
     def on_message(self, workflow_submission, message):
         """On new workflow_submission event handler."""
+        message.ack()
+        workflow_submission = json.loads(workflow_submission)
         if reana_ready():
-            message.ack()
-            workflow_submission = json.loads(workflow_submission)
             logging.info('Starting queued workflow: {}'.
                          format(workflow_submission))
             workflow_submission['status'] = 'start'
-            response, http_response = current_rwc_api_client.api.\
-                set_workflow_status(**workflow_submission).result()
-            http_response_json = http_response.json()
-            if http_response.status_code == 200:
-                workflow_uuid = http_response_json['workflow_id']
-                status = http_response_json['status']
-                Workflow.update_workflow_status(
-                    Session, workflow_uuid, status)
+            try:
+                started = False
+                response, http_response = current_rwc_api_client.api.\
+                    set_workflow_status(**workflow_submission).result()
+                http_response_json = http_response.json()
+                if http_response.status_code == 200:
+                    started = True
+                    logging.info(
+                        f'Workflow '
+                        f'{http_response_json["workflow_id"]} '
+                        f'successfully started.')
+                else:
+                    logging.error(f'RWC returned an unexpected status code:\n'
+                                  f'{http_response_json}')
+
+            except HTTPBadGateway as api_e:
+                logging.error(f'Workflow failed to start because '
+                              f'RWC got an error while calling an external'
+                              f'service (i.e. DB):\n'
+                              f'{api_e}', exc_info=True)
+            except Exception as e:
+                logging.error(f'Something went wrong while calling RWC :\n'
+                              f'{e}', exc_info=True)
+            finally:
+                if not started:
+                    self.requeue_workflow(**workflow_submission)
         else:
-            message.requeue()
+            logging.info(f'REANA not ready to run workflow '
+                         f'{workflow_submission["workflow_id_or_name"]}, '
+                         f'requeueing ...')
+            self.requeue_workflow(**workflow_submission)

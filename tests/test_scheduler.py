@@ -12,9 +12,8 @@ import json
 import threading
 
 import pytest
-from kombu import Exchange, Queue
-from mock import ANY, patch
-from reana_commons.config import MQ_DEFAULT_QUEUES
+from bravado.exception import HTTPError
+from mock import ANY, DEFAULT, Mock, patch
 from reana_commons.publisher import WorkflowSubmissionPublisher
 from requests.exceptions import ConnectionError
 
@@ -25,19 +24,26 @@ def test_scheduler_starts_workflows(in_memory_queue_connection,
                                     default_in_memory_producer,
                                     consume_queue):
     """Test message is consumed from the queue."""
+    workflow_name = 'workflow.1'
     scheduler = WorkflowExecutionScheduler(
         connection=in_memory_queue_connection)
 
-    in_memory_workflow_submission_publisher = WorkflowSubmissionPublisher(
+    in_memory_wsp = WorkflowSubmissionPublisher(
         connection=in_memory_queue_connection)
-    in_memory_workflow_submission_publisher.publish_workflow_submission(
-        '1', 'workflow.1', {}
+    in_memory_wsp.publish_workflow_submission(
+        '1', workflow_name, {}
     )
-    with patch('reana_commons.config.REANA_READY_CONDITIONS',
-               {'pytest_reana.fixtures':
-                ['sample_condition_for_starting_queued_workflows']}):
-        with pytest.raises(ConnectionError):
-            consume_queue(scheduler, limit=1)
+    mock_rwc_api_client = Mock()
+    mock_result_obj = Mock()
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_result_obj.result.return_value = (DEFAULT, mock_response)
+    mock_rwc_api_client.api.set_workflow_status.return_value = mock_result_obj
+    with patch.multiple('reana_server.scheduler',
+                        reana_ready=Mock(return_value=True),
+                        current_rwc_api_client=mock_rwc_api_client,
+                        current_workflow_submission_publisher=in_memory_wsp):
+        consume_queue(scheduler, limit=1)
     assert in_memory_queue_connection.channel().queues[
         'workflow-submission'].empty()
 
@@ -49,14 +55,43 @@ def test_scheduler_requeues_workflows(in_memory_queue_connection,
     scheduler = WorkflowExecutionScheduler(
         connection=in_memory_queue_connection)
 
-    in_memory_workflow_submission_publisher = WorkflowSubmissionPublisher(
+    in_memory_wsp = WorkflowSubmissionPublisher(
         connection=in_memory_queue_connection)
-    in_memory_workflow_submission_publisher.publish_workflow_submission(
+    in_memory_wsp.publish_workflow_submission(
         '1', 'workflow.1', {}
     )
-    with patch('reana_commons.config.REANA_READY_CONDITIONS',
-               {'pytest_reana.fixtures':
-                ['sample_condition_for_requeueing_workflows']}):
+    with patch.multiple('reana_server.scheduler',
+                        reana_ready=Mock(return_value=False),
+                        current_workflow_submission_publisher=in_memory_wsp):
+        consume_queue(scheduler, limit=1)
+        assert not in_memory_queue_connection.channel().queues[
+            'workflow-submission'].empty()
+
+
+def test_scheduler_requeues_on_rwc_failure(in_memory_queue_connection,
+                                           default_in_memory_producer,
+                                           consume_queue):
+    """Test scheduler requeues requests if RWC fails to start workflows."""
+    scheduler = WorkflowExecutionScheduler(
+        connection=in_memory_queue_connection)
+
+    in_memory_wsp = WorkflowSubmissionPublisher(
+        connection=in_memory_queue_connection)
+    in_memory_wsp.publish_workflow_submission(
+        '1', 'workflow.1', {}
+    )
+    mock_rwc_api_client = Mock()
+    mock_result_obj = Mock()
+    mock_response = Mock()
+    mock_response.status_code = 502
+    mock_result_obj.result = Mock(
+        side_effect=HTTPError(mock_response,
+                              message='DB connection timed out.'))
+    mock_rwc_api_client.api.set_workflow_status.return_value = mock_result_obj
+    with patch.multiple('reana_server.scheduler',
+                        reana_ready=Mock(return_value=True),
+                        current_rwc_api_client=mock_rwc_api_client,
+                        current_workflow_submission_publisher=in_memory_wsp):
         consume_queue(scheduler, limit=1)
         assert not in_memory_queue_connection.channel().queues[
             'workflow-submission'].empty()
