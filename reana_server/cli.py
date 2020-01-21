@@ -279,4 +279,5 @@ def start_scheduler():
         format=REANA_LOG_FORMAT
     )
     scheduler = WorkflowExecutionScheduler()
+    logging.info('Starting scheduler...')
     scheduler.run()
