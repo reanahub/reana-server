@@ -28,7 +28,8 @@ from reana_db.utils import _get_workflow_with_uuid_or_name
 from reana_server.api_client import (current_rwc_api_client,
                                      current_workflow_submission_publisher)
 from reana_server.config import SHARED_VOLUME_PATH
-from reana_server.utils import (RequestStreamWithLen,
+from reana_server.utils import (clone_workflow,
+                                RequestStreamWithLen,
                                 _get_reana_yaml_from_gitlab,
                                 _get_user_from_invenio_user,
                                 get_user_from_token, is_uuid_v4)
@@ -698,19 +699,21 @@ def start_workflow(workflow_id_or_name):  # noqa
                     [WorkflowStatus.finished, WorkflowStatus.failed]:
                 raise ValueError(
                     "Only finished or failed workflows can be restarted.")
+            workflow = clone_workflow(workflow)
         elif workflow.status != WorkflowStatus.created:
             raise ValueError("Workflow cannot be started again.")
         Workflow.update_workflow_status(Session, workflow.id_,
                                         WorkflowStatus.queued)
         current_workflow_submission_publisher.publish_workflow_submission(
             user_id=str(user.id_),
-            workflow_id_or_name=workflow_id_or_name,
+            workflow_id_or_name=workflow.get_full_workflow_name(),
             parameters=parameters
         )
         response = {'message': 'Workflow submitted.',
-                    'workflow_id': workflow_id_or_name,
-                    'workflow_name': workflow_id_or_name,
+                    'workflow_id': workflow.id_,
+                    'workflow_name': workflow.name,
                     'status': WorkflowStatus.queued.name,
+                    'run_number': workflow.run_number,
                     'user': str(user.id_)}
         return jsonify(response), 200
     except HTTPError as e:
@@ -1962,13 +1965,13 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
         summarize = bool(parameters.get('summarize', False))
         block_size = parameters.get('block_size')
         reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
-        if reana_fs.exists(workflow.get_workspace()):
+        if reana_fs.exists(workflow.workspace_path):
             absolute_workspace_path = reana_fs.getospath(
-                workflow.get_workspace())
+                workflow.workspace_path)
             disk_usage_info = get_workspace_disk_usage(
-              absolute_workspace_path,
-              summarize=summarize,
-              block_size=block_size)
+                absolute_workspace_path,
+                summarize=summarize,
+                block_size=block_size)
         else:
             raise ValueError('Workspace does not exist.')
 

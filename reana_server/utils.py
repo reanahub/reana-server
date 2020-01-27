@@ -11,8 +11,9 @@ import base64
 import csv
 import io
 import json
+import logging
 import secrets
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import fs
 import requests
@@ -21,8 +22,8 @@ from flask import current_app as app
 from flask import url_for
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_db.database import Session
-from reana_db.models import User
-from sqlalchemy.exc import IntegrityError, InvalidRequestError
+from reana_db.models import User, Workflow
+from sqlalchemy.exc import IntegrityError, InvalidRequestError, SQLAlchemyError
 from werkzeug.wsgi import LimitedStream
 
 from reana_server.config import ADMIN_USER_ID, REANA_GITLAB_URL
@@ -260,3 +261,28 @@ class RequestStreamWithLen(object):
         if not hasattr(self.limitedstream, 'limit'):
             return 0
         return self.limitedstream.limit
+
+
+def clone_workflow(workflow):
+    """Create a copy of workflow in DB for restarting."""
+    try:
+        cloned_workflow = Workflow(
+            id_=str(uuid4()),
+            name=workflow.name,
+            owner_id=workflow.owner_id,
+            reana_specification=workflow.reana_specification,
+            type_=workflow.type_,
+            logs='',
+            workspace_path=workflow.workspace_path,
+            restart=True,
+            run_number=workflow.run_number
+        )
+        Session.add(cloned_workflow)
+        Session.object_session(cloned_workflow).commit()
+        return cloned_workflow
+    except SQLAlchemyError as e:
+        message = \
+            'Database connection failed, please retry.'
+        logging.error(
+            f'Error while creating {cloned_workflow.id_}: {message}\n{e}',
+            exc_info=True)

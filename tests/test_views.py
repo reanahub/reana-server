@@ -20,7 +20,7 @@ from pytest_reana.fixtures import default_user
 from pytest_reana.test_utils import make_mock_api_client
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_db.database import Session
-from reana_db.models import User
+from reana_db.models import User, Workflow
 
 from reana_server.utils import _create_and_associate_reana_user
 
