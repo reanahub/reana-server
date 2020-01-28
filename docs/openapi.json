@@ -3,7 +3,7 @@
   "info": {
     "description": "Submit workflows to be run on REANA Cloud",
     "title": "REANA Server",
-    "version": "0.6.0.dev20190603"
+    "version": "0.6.0"
   },
   "parameters": {},
   "paths": {
@@ -76,6 +76,18 @@
         "summary": "Get access token from GitLab"
       }
     },
+    "/api/gitlab/connect": {
+      "get": {
+        "description": "Initiate connection to GitLab to authorize accessing the authenticated user's API.",
+        "operationId": "gitlab_connect",
+        "responses": {
+          "302": {
+            "description": "Redirection to GitLab site."
+          }
+        },
+        "summary": "Initiate connection to GitLab."
+      }
+    },
     "/api/gitlab/projects": {
       "get": {
         "description": "Retrieve projects from GitLab.",
@@ -103,9 +115,61 @@
       }
     },
     "/api/gitlab/webhook": {
+      "delete": {
+        "description": "Remove an existing REANA webhook from a project on GitLab",
+        "operationId": "delete_gitlab_webhook",
+        "parameters": [
+          {
+            "description": "The GitLab project id.",
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "description": "The GitLab webhook id of the project.",
+            "in": "path",
+            "name": "hook_id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "204": {
+            "description": "The webhook was properly deleted."
+          },
+          "403": {
+            "description": "Request failed. User token not valid.",
+            "examples": {
+              "application/json": {
+                "message": "Token is not valid."
+              }
+            }
+          },
+          "404": {
+            "description": "No webhook found with provided id."
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Delete an existing webhook from GitLab"
+      },
       "post": {
         "description": "Setup a webhook for a GitLab project on GitLab.",
-        "operationId": "gitlab_webhook",
+        "operationId": "create_gitlab_webhook",
+        "parameters": [
+          {
+            "description": "The GitLab project id.",
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "type": "integer"
+          }
+        ],
         "produces": [
           "application/json"
         ],
@@ -154,6 +218,55 @@
           }
         },
         "summary": "TEMPORARY displays a message about how to access a resource."
+      }
+    },
+    "/api/logout": {},
+    "/api/me": {
+      "get": {
+        "description": "This resource provides basic information about an authenticated user based on the session cookie presence.",
+        "operationId": "get_me",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "User information correspoding to the session cookie sent in the request.",
+            "examples": {
+              "application/json": {
+                "email": "user@reana.info",
+                "reana_token": "Drmhze6EPcv0fN_81Bj-nA"
+              }
+            },
+            "schema": {
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "reana_token": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Error message indicating that the uses is not authenticated.",
+            "examples": {
+              "application/json": {
+                "error": "User not logged in"
+              }
+            },
+            "schema": {
+              "properties": {
+                "error": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Gets information about authenticated user."
       }
     },
     "/api/ping": {
@@ -1901,7 +2014,7 @@
       },
       "post": {
         "consumes": [
-          "multipart/form-data"
+          "application/octet-stream"
         ],
         "description": "This resource is expecting a file to place in the workspace.",
         "operationId": "upload_file",
@@ -1914,11 +2027,13 @@
             "type": "string"
           },
           {
-            "description": "Required. File to be transferred to the workflow workspace.",
-            "in": "formData",
-            "name": "file_content",
+            "description": "Required. File to add to the workspace.",
+            "in": "body",
+            "name": "file",
             "required": true,
-            "type": "file"
+            "schema": {
+              "type": "string"
+            }
           },
           {
             "description": "Required. File name.",

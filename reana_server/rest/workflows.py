@@ -13,6 +13,7 @@ import subprocess
 import traceback
 
 import fs
+import requests
 from bravado.exception import HTTPError
 from flask import Blueprint
 from flask import current_app as app
@@ -24,11 +25,18 @@ from reana_db.database import Session
 from reana_db.models import Workflow, WorkflowStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
-from reana_server.api_client import current_rwc_api_client, \
-    current_workflow_submission_publisher
+from reana_server.api_client import (current_rwc_api_client,
+                                     current_workflow_submission_publisher)
 from reana_server.config import SHARED_VOLUME_PATH
-from reana_server.utils import get_user_from_token, is_uuid_v4, \
-    _get_user_from_invenio_user, _get_reana_yaml_from_gitlab
+from reana_server.utils import (RequestStreamWithLen,
+                                _get_reana_yaml_from_gitlab,
+                                _get_user_from_invenio_user,
+                                get_user_from_token, is_uuid_v4)
+
+try:
+    from urllib import parse as urlparse
+except ImportError:
+    from urlparse import urlparse
 
 blueprint = Blueprint('workflows', __name__)
 
@@ -273,12 +281,12 @@ def create_workflow():  # noqa
             user = get_user_from_token(request.args.get('access_token'))
         if request.json:
             if 'object_kind' in request.json:
-                reana_spec_file, git_url, git_branch, git_commit_sha = \
-                  _get_reana_yaml_from_gitlab(request.json, user.id_)
+                (reana_spec_file, git_url, workflow_name, git_branch,
+                 git_commit_sha) = _get_reana_yaml_from_gitlab(request.json,
+                                                               user.id_)
                 git_data = {"git_url": git_url,
                             "git_branch": git_branch,
                             "git_commit_sha": git_commit_sha}
-                workflow_name = git_url.replace('/', '%2F')
             else:
                 # validate against schema
                 git_data = {}
@@ -860,7 +868,7 @@ def upload_file(workflow_id_or_name):  # noqa
         This resource is expecting a file to place in the workspace.
       operationId: upload_file
       consumes:
-        - multipart/form-data
+        - application/octet-stream
       produces:
         - application/json
       parameters:
@@ -869,12 +877,12 @@ def upload_file(workflow_id_or_name):  # noqa
           description: Required. Analysis UUID or name.
           required: true
           type: string
-        - name: file_content
-          in: formData
-          description: >-
-            Required. File to be transferred to the workflow workspace.
+        - name: file
+          in: body
+          description: Required. File to add to the workspace.
           required: true
-          type: file
+          schema:
+            type: string
         - name: file_name
           in: query
           description: Required. File name.
@@ -931,18 +939,31 @@ def upload_file(workflow_id_or_name):  # noqa
         else:
             user = get_user_from_token(request.args.get('access_token'))
 
+        if not request.args.get('file_name'):
+            return jsonify({"message": "No file_name provided"}), 400
+        if not ('application/octet-stream' in
+                request.headers.get('Content-Type')):
+            return jsonify(
+                {"message": f'Wrong Content-Type '
+                            f'{request.headers.get("Content-Type")} '
+                            f'use application/octet-stream'}), 400
+
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
-        file_ = request.files['file_content'].stream.read()
-        response, http_response = current_rwc_api_client.api.\
-            upload_file(
-                user=str(user.id_),
-                workflow_id_or_name=workflow_id_or_name,
-                file_content=file_,
-                file_name=request.args['file_name']).result()
+        api_url = current_rwc_api_client.swagger_spec.__dict__.get('api_url')
+        endpoint = \
+            current_rwc_api_client.api.upload_file.operation.path_name.format(
+                workflow_id_or_name=workflow_id_or_name)
+        http_response = requests.post(
+            urlparse.urljoin(api_url, endpoint),
+            data=RequestStreamWithLen(request.stream),
+            params={'user': str(user.id_),
+                    'file_name': request.args.get('file_name')},
+            headers={'Content-Type':
+                     'application/octet-stream'})
 
-        return jsonify(response), http_response.status_code
+        return jsonify(http_response.json()), http_response.status_code
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code

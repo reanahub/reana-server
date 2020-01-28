@@ -9,7 +9,8 @@ FROM python:3.6-slim
 RUN apt-get update && \
     apt-get install -y \
       gcc \
-      vim-tiny && \
+      vim-tiny \
+      libffi-dev && \
     pip install --upgrade pip
 
 COPY CHANGES.rst README.rst setup.py /code/
@@ -26,7 +27,7 @@ ARG DEBUG=0
 RUN if [ "${DEBUG}" -gt 0 ]; then pip install -r requirements-dev.txt; pip install -e .; else pip install .; fi;
 
 # Building with locally-checked-out shared modules?
-RUN if test -e modules/reana-commons; then pip install modules/reana-commons --upgrade; fi
+RUN if test -e modules/reana-commons; then pip install modules/reana-commons[kubernetes] --upgrade; fi
 RUN if test -e modules/reana-db; then pip install modules/reana-db --upgrade; fi
 
 # Check if there are broken requirements
@@ -41,7 +42,7 @@ ENV FLASK_APP=/code/reana_server/app.py
 
 EXPOSE 5000
 
-CMD set -e && ./scripts/setup &&\
+CMD ./scripts/setup > /var/log/reana-server-init-output.log 2>&1 &&\
     uwsgi --module invenio_app.wsgi:application \
     --http-socket 0.0.0.0:5000 --master \
     --processes ${UWSGI_PROCESSES} --threads ${UWSGI_THREADS} \

@@ -19,10 +19,12 @@ import fs
 import requests
 import yaml
 from flask import current_app as app
+from flask import url_for
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_db.database import Session
 from reana_db.models import User
 from sqlalchemy.exc import IntegrityError, InvalidRequestError
+from werkzeug.wsgi import LimitedStream
 
 from reana_server.config import ADMIN_USER_ID, REANA_GITLAB_URL
 
@@ -133,6 +135,8 @@ def _create_and_associate_reana_user(sender, token=None,
                                      response=None, account_info=None):
     try:
         user_email = account_info['user']['email']
+        user_fullname = account_info['user']['profile']['full_name']
+        username = account_info['user']['profile']['username']
         search_criteria = dict()
         search_criteria['email'] = user_email
         users = Session.query(User).filter_by(**search_criteria).all()
@@ -142,6 +146,8 @@ def _create_and_associate_reana_user(sender, token=None,
             user_access_token = secrets.token_urlsafe(16)
             user_parameters = dict(access_token=user_access_token)
             user_parameters['email'] = user_email
+            user_parameters['full_name'] = user_fullname
+            user_parameters['username'] = username
             user = User(**user_parameters)
             Session.add(user)
             Session.commit()
@@ -177,7 +183,8 @@ def _get_reana_yaml_from_gitlab(webhook_data, user_id):
     yaml_file = requests.get(gitlab_api.format(project_id, reana_yaml,
                                                branch, gitlab_token))
     return yaml.load(yaml_file.content), \
-        webhook_data['project']['path_with_namespace'], branch, \
+        webhook_data['project']['path_with_namespace'], \
+        webhook_data['project']['name'], branch, \
         commit_sha
 
 
@@ -198,3 +205,64 @@ def _format_gitlab_secrets(gitlab_response):
             "type": "env"
         }
     }
+
+
+def _get_gitlab_hook_id(response, project_id, gitlab_token):
+    """Return REANA hook id from a GitLab project if it is connected.
+
+    By checking its webhooks and comparing them to REANA ones.
+
+    :param response: Flask response.
+    :param project_id: Project id on GitLab.
+    :param gitlab_token: GitLab token.
+    """
+    reana_hook_id = None
+    gitlab_hooks_url = (
+        REANA_GITLAB_URL +
+        "/api/v4/projects/{0}/hooks?access_token={1}"
+        .format(project_id, gitlab_token)
+    )
+    response_json = requests.get(gitlab_hooks_url).json()
+    create_workflow_url = url_for('workflows.create_workflow',
+                                  _external=True)
+    if response.status_code == 200 and response_json:
+        reana_hook_id = next(hook['id'] for hook in response_json
+                             if hook['url'] and
+                             hook['url'] == create_workflow_url)
+    return reana_hook_id
+
+
+class RequestStreamWithLen(object):
+    """Wrap ``request.stream`` object to have ``__len__`` attribute.
+
+    Users can uplaod files to REANA through REANA-Server (RS). RS passes then
+    the content of the file uploads to the next REANA component,
+    REANA-Workflow-Controller (RWC).
+
+    In order for this operation to be efficient we read the user stream upload
+    using ``werkzeug`` streams through ``request.stream``. Then, to pass this
+    stream to RWC without creating memory leaks we stream upload the
+    ``request.stream`` content using the Requests library. However, the
+    Request library is not aware of how the size of the stream is represented
+    in ``werkzeug`` (``limit`` attribute), Requests only understands
+    ``len(stream)`` or ``stream.len``, see more here
+    https://github.com/psf/requests/blob/3e7d0a873f838e0001f7ac69b1987147128a7b5f/requests/utils.py#L108-L166
+
+    This class provides the necessary attributes for compatibility with
+    Requests stream upload.
+    """
+
+    def __init__(self, limitedstream):
+        """Wrap the stream to have ``len``."""
+        if not hasattr(limitedstream, 'limit'):
+            raise TypeError('The provided stream doesn\'t have the limit'
+                            'attribute needed to calculate it\'s length.')
+        self.limitedstream = limitedstream
+
+    def read(self, *args, **kwargs):
+        """Expose ``request.stream``s read method."""
+        return self.limitedstream.read(*args, **kwargs)
+
+    def __len__(self):
+        """Expose the length of the ``request.stream``."""
+        return self.limitedstream.limit

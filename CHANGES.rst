@@ -1,7 +1,18 @@
 Changes
 =======
 
-Version 0.5.0 (2018-04-23)
+Version 0.6.0 (2019-12-20)
+--------------------------
+
+- Fixes bug with big file uploads by using data streaming.
+- Adds user login endpoints using OAuth, currently configured to work with CERN
+  SSO but extensible to use other OAuth providers such as GitHub, more in `Invenio-OAuthClient <https://invenio-oauthclient.readthedocs.io/en/latest/>`_.
+- Adds endpoints to integrate with GitLab (for retrieving user projects and creating/deleting webhooks).
+- Adds new endpoint ``/me`` to retrieve user information.
+- Improves security by allowing requests only with ``REANA_URL`` in the host header, avoiding host header injection attacks.
+- Initialisation logs moved from ``stdout`` to ``/var/log/reana-server-init-output.log``.
+
+Version 0.5.0 (2019-04-23)
 --------------------------
 
 - Adds new endpoint to compare two workflows. The output is a ``git`` like

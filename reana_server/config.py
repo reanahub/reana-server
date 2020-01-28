@@ -30,7 +30,7 @@ ADMIN_USER_ID = "00000000-0000-0000-0000-000000000000"
 
 SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/var/reana')
 
-REANA_URL = os.getenv('REANA_URL', 'reana.io')
+REANA_URL = os.getenv('REANA_URL')
 
 REANA_SSO_CERN_CONSUMER_KEY = os.getenv('CERN_CONSUMER_KEY', 'CHANGE_ME')
 
@@ -83,8 +83,6 @@ CORS_SUPPORTS_CREDENTIALS = False
 #: Secret key - each installation (dev, production, ...) needs a separate key.
 #: It should be changed before deploying.
 SECRET_KEY = 'CHANGE_ME'
-#: Max upload size for form data via application/mulitpart-formdata.
-MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100 MiB
 #: Sets cookie with the secure flag by default
 SESSION_COOKIE_SECURE = True
 #: Sets session to be samesite to avoid CSRF attacks
@@ -96,7 +94,8 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 
 #: In production use the following configuration plus adding  the hostname/ip
 #: of the reverse proxy in front of REANA-Server.
-# APP_ALLOWED_HOSTS = [REANA_URL]
+if REANA_URL:
+    APP_ALLOWED_HOSTS = [REANA_URL]
 
 # Security configuration
 # ======================
@@ -132,5 +131,3 @@ REANA_GITLAB_OAUTH_APP_SECRET = os.getenv('REANA_GITLAB_OAUTH_APP_SECRET',
                                           'CHANGE_ME')
 REANA_GITLAB_URL = 'https://{}'.format(os.getenv('REANA_GITLAB_HOST',
                                                  'CHANGE_ME'))
-REANA_GITLAB_OAUTH_REDIRECT_URL = os.getenv('REANA_GITLAB_OAUTH_REDIRECT_URL',
-                                            'CHANGE_ME')

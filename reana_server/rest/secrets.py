@@ -15,12 +15,11 @@ import traceback
 from bravado.exception import HTTPError
 from flask import Blueprint, jsonify, request
 from flask_login import current_user
-
 from reana_commons.errors import (REANASecretAlreadyExists,
                                   REANASecretDoesNotExist)
 from reana_commons.k8s.secrets import REANAUserSecretsStore
-from reana_server.utils import get_user_from_token, \
-    _get_user_from_invenio_user
+
+from reana_server.utils import _get_user_from_invenio_user, get_user_from_token
 
 blueprint = Blueprint('secrets', __name__)
 
