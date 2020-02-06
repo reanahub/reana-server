@@ -805,6 +805,9 @@
                   "name": {
                     "type": "string"
                   },
+                  "progress": {
+                    "type": "object"
+                  },
                   "size": {
                     "type": "string"
                   },

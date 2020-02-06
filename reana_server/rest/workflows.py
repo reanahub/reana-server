@@ -97,6 +97,8 @@ def get_workflows():  # noqa
                   type: string
                 created:
                   type: string
+                progress:
+                  type: object
           examples:
             application/json:
               [
