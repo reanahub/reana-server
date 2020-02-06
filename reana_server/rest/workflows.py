@@ -8,6 +8,7 @@
 
 """Reana-Server workflow-functionality Flask-Blueprint."""
 import io
+import json
 import logging
 import subprocess
 import traceback
@@ -169,7 +170,7 @@ def get_workflows():  # noqa
         else:
             user = get_user_from_token(request.args.get('access_token'))
         type = request.args.get('type', 'batch')
-        verbose = request.args.get('verbose', False)
+        verbose = json.loads(request.args.get('verbose', 'false').lower())
         block_size = request.args.get('block_size')
         response, http_response = current_rwc_api_client.api.\
             get_workflows(
@@ -182,6 +183,10 @@ def get_workflows():  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
+    except json.JSONDecodeError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(
+          {"message": "Your request contains not valid JSON."}), 400
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
@@ -1488,8 +1493,7 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
         else:
             user = get_user_from_token(request.args.get('access_token'))
 
-        brief = request.args.get('brief', False)
-        brief = True if brief == 'true' else False
+        brief = json.loads(request.args.get('brief', 'false').lower())
         context_lines = request.args.get('context_lines', 5)
         if not workflow_id_or_name_a or not workflow_id_or_name_b:
             raise ValueError("Workflow id or name is not supplied")
@@ -1506,6 +1510,10 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
+    except json.JSONDecodeError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(
+          {"message": "Your request contains not valid JSON."}), 400
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
