@@ -694,12 +694,14 @@ def start_workflow(workflow_id_or_name):  # noqa
         parameters = request.json
         workflow = _get_workflow_with_uuid_or_name(
             workflow_id_or_name, str(user.id_))
-        if parameters['restart']:
+        if 'restart' in parameters:
             if workflow.status not in \
                     [WorkflowStatus.finished, WorkflowStatus.failed]:
                 raise ValueError(
                     "Only finished or failed workflows can be restarted.")
-            workflow = clone_workflow(workflow)
+            workflow = clone_workflow(
+                workflow,
+                parameters.get('reana_specification', None))
         elif workflow.status != WorkflowStatus.created:
             raise ValueError("Workflow cannot be started again.")
         Workflow.update_workflow_status(Session, workflow.id_,

@@ -263,14 +263,14 @@ class RequestStreamWithLen(object):
         return self.limitedstream.limit
 
 
-def clone_workflow(workflow):
+def clone_workflow(workflow, reana_spec):
     """Create a copy of workflow in DB for restarting."""
     try:
         cloned_workflow = Workflow(
             id_=str(uuid4()),
             name=workflow.name,
             owner_id=workflow.owner_id,
-            reana_specification=workflow.reana_specification,
+            reana_specification=reana_spec or workflow.reana_specification,
             type_=workflow.type_,
             logs='',
             workspace_path=workflow.workspace_path,
