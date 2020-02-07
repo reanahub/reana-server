@@ -11,7 +11,7 @@
 import json
 import logging
 
-from bravado.exception import HTTPBadGateway
+from bravado.exception import HTTPBadGateway, HTTPNotFound
 from reana_commons.consumer import BaseConsumer
 from reana_commons.tasks import reana_ready
 from reana_db.database import Session
@@ -75,6 +75,7 @@ class WorkflowExecutionScheduler(BaseConsumer):
                          format(workflow_submission))
             workflow_submission['status'] = 'start'
             try:
+                requeue = True
                 started = False
                 response, http_response = current_rwc_api_client.api.\
                     set_workflow_status(**workflow_submission).result()
@@ -94,11 +95,16 @@ class WorkflowExecutionScheduler(BaseConsumer):
                               f'RWC got an error while calling an external'
                               f'service (i.e. DB):\n'
                               f'{api_e}', exc_info=True)
+            except HTTPNotFound as not_found_e:
+                logging.error(f'Workflow failed to start because '
+                              f'workflow does not exist or was deleted \n'
+                              f'{not_found_e}', exc_info=True)
+                requeue = False
             except Exception as e:
                 logging.error(f'Something went wrong while calling RWC :\n'
                               f'{e}', exc_info=True)
             finally:
-                if not started:
+                if not started and requeue:
                     self.requeue_workflow(**workflow_submission)
         else:
             logging.info(f'REANA not ready to run workflow '
