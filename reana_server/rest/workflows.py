@@ -708,7 +708,12 @@ def start_workflow(workflow_id_or_name):  # noqa
                 workflow,
                 parameters.get('reana_specification', None))
         elif workflow.status != WorkflowStatus.created:
-            raise ValueError("Workflow cannot be started again.")
+            raise ValueError(
+                'Workflow {} is already {} and cannot be started '
+                'again.'.format(
+                    workflow.get_full_workflow_name(),
+                    workflow.status.name
+                ))
         Workflow.update_workflow_status(Session, workflow.id_,
                                         WorkflowStatus.queued)
         current_workflow_submission_publisher.publish_workflow_submission(
