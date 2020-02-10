@@ -118,7 +118,8 @@ def test_get_workflow_logs(app, default_user, _get_user_mock):
                                      workflow_id_or_name="1"),
                              headers={"Content-Type": "application/json"},
                              query_string={"access_token":
-                                           default_user.access_token})
+                                           default_user.access_token},
+                             data=json.dumps(None))
             assert res.status_code == 200
 
 

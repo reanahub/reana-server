@@ -1349,6 +1349,20 @@
             "name": "workflow_id_or_name",
             "required": true,
             "type": "string"
+          },
+          {
+            "description": "Steps of a workflow.",
+            "in": "body",
+            "name": "steps",
+            "required": false,
+            "schema": {
+              "description": "List of step names to get logs for.",
+              "items": {
+                "description": "step name.",
+                "type": "string"
+              },
+              "type": "array"
+            }
           }
         ],
         "produces": [

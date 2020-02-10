@@ -379,6 +379,16 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
           description: Required. Analysis UUID or name.
           required: true
           type: string
+        - name: steps
+          in: body
+          description: Steps of a workflow.
+          required: false
+          schema:
+            type: array
+            description: List of step names to get logs for.
+            items:
+              type: string
+              description: step name.
       responses:
         200:
           description: >-
@@ -439,13 +449,14 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
             user = _get_user_from_invenio_user(current_user.email)
         else:
             user = get_user_from_token(request.args.get('access_token'))
-
+        steps = request.json or None
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.\
             get_workflow_logs(
                 user=str(user.id_),
+                steps=steps or None,
                 workflow_id_or_name=workflow_id_or_name).result()
 
         return jsonify(response), http_response.status_code
