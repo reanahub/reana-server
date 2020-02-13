@@ -60,6 +60,7 @@ install_requires = [
     # Invenio dependencies
     'Flask>=1.0.2',
     'Flask-Login<0.5.0',  # FIXME waiting for Flask-Security release
+    'Flask-CeleryExt==0.3.1',  # FIXME waiting for the fix in Invenio
     'werkzeug>=0.16.1,<0.17',
     'invenio-app>=1.2.2,<1.3.0',
     'invenio-base>=1.2.0,<1.3.0',
@@ -70,7 +71,7 @@ install_requires = [
     'invenio-mail>=1.0.2,<1.1.0',
     'invenio-rest>=1.1.0,<1.2.0',
     # From auth bundle
-    'invenio-accounts>=1.1.1,<1.2.0',
+    'invenio-accounts==1.1.1',  # FIXME
     'invenio-oauth2server>=1.0.3,<1.1.0',
     'invenio-oauthclient>=1.1.2,<1.2.0',
     'invenio-userprofiles>=1.0.1,<1.1.0',
