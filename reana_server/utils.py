@@ -286,3 +286,12 @@ def clone_workflow(workflow, reana_spec):
         logging.error(
             f'Error while creating {cloned_workflow.id_}: {message}\n{e}',
             exc_info=True)
+
+
+def reconstruct_reana_yaml(workflow):
+    """Reconstruct the REANA.yaml from a workflow object."""
+    return {
+        'workflow': {
+            'specification': workflow.get_specification(),
+            'type': workflow.type_},
+        'inputs': {'parameters': workflow.get_input_parameters()}}

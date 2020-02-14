@@ -30,6 +30,7 @@ from reana_server.api_client import (current_rwc_api_client,
                                      current_workflow_submission_publisher)
 from reana_server.config import SHARED_VOLUME_PATH
 from reana_server.utils import (clone_workflow,
+                                reconstruct_reana_yaml,
                                 RequestStreamWithLen,
                                 _get_reana_yaml_from_gitlab,
                                 _get_user_from_invenio_user,
@@ -347,6 +348,107 @@ def create_workflow():  # noqa
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route('/workflows/<workflow_id_or_name>/specification',
+                 methods=['GET'])
+def get_workflow_specification(workflow_id_or_name):  # noqa
+    r"""Get workflow specification.
+
+    ---
+    get:
+      summary: Get the specification used for this workflow run.
+      description: >-
+        This resource returns the REANA workflow specification used to start
+        the workflow run. Resource is expecting a workflow UUID.
+      operationId: get_workflow_specification
+      produces:
+        - application/json
+      parameters:
+        - name: access_token
+          in: query
+          description: API access_token of workflow owner.
+          required: false
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. Workflow specification is returned.
+          schema:
+            type: object
+          examples:
+            application/json:
+              {
+                "inputs": {
+                  "parameters": {
+                    "helloworld": "code/helloworld.py",
+                    "inputfile": "data/names.txt",
+                    "outputfile": "results/greetings.txt",
+                    "sleeptime": 0
+                  }
+                },
+                "workflow": {
+                  "specification": {
+                    "steps": [
+                      {
+                        "commands": [
+                          "echo 'Hello World!'"
+                        ],
+                        "environment": "busybox"
+                      }
+                    ]
+                  },
+                  "type": "serial"
+                }
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. User does not exist.
+          examples:
+            application/json:
+              {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+    """
+    try:
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        else:
+            user = get_user_from_token(request.args.get('access_token'))
+        if not workflow_id_or_name:
+            raise ValueError("workflow_id_or_name is not supplied")
+        workflow = _get_workflow_with_uuid_or_name(
+            workflow_id_or_name, str(user.id_))
+
+        return jsonify(reconstruct_reana_yaml(workflow)), 200
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403

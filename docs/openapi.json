@@ -1612,6 +1612,84 @@
         "summary": "Get parameters of a workflow."
       }
     },
+    "/api/workflows/{workflow_id_or_name}/specification": {
+      "get": {
+        "description": "This resource returns the REANA workflow specification used to start the workflow run. Resource is expecting a workflow UUID.",
+        "operationId": "get_workflow_specification",
+        "parameters": [
+          {
+            "description": "API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Required. Analysis UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. Workflow specification is returned.",
+            "examples": {
+              "application/json": {
+                "inputs": {
+                  "parameters": {
+                    "helloworld": "code/helloworld.py",
+                    "inputfile": "data/names.txt",
+                    "outputfile": "results/greetings.txt",
+                    "sleeptime": 0
+                  }
+                },
+                "workflow": {
+                  "specification": {
+                    "steps": [
+                      {
+                        "commands": [
+                          "echo 'Hello World!'"
+                        ],
+                        "environment": "busybox"
+                      }
+                    ]
+                  },
+                  "type": "serial"
+                }
+              }
+            },
+            "schema": {
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed. User does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does not exist"
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Get the specification used for this workflow run."
+      }
+    },
     "/api/workflows/{workflow_id_or_name}/start": {
       "post": {
         "consumes": [

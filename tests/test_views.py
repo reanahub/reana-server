@@ -105,6 +105,33 @@ def test_create_workflow(app, default_user, _get_user_mock):
             assert res.status_code == 200
 
 
+def test_get_workflow_specification(app, default_user, _get_user_mock,
+                                    sample_yadage_workflow_in_db):
+    """Test get_workflow_specification view."""
+    with app.test_client() as client:
+        with patch("reana_server.rest.workflows.current_rwc_api_client",
+                   make_mock_api_client("reana-workflow-controller")()):
+            res = client.get(url_for("workflows.get_workflow_specification",
+                                     workflow_id_or_name="1"))
+            assert res.status_code == 403
+
+            res = client.get(
+                url_for("workflows.get_workflow_specification",
+                        workflow_id_or_name=sample_yadage_workflow_in_db.id_),
+                headers={"Content-Type": "application/json"},
+                query_string={"access_token":
+                              default_user.access_token},
+                data=json.dumps(None))
+            parsed_res = json.loads(res.data)
+            assert res.status_code == 200
+            assert parsed_res['workflow']['specification'] == \
+                sample_yadage_workflow_in_db.get_specification()
+            assert parsed_res['inputs']['parameters'] == \
+                sample_yadage_workflow_in_db.get_input_parameters()
+            assert parsed_res['workflow']['type'] == \
+                sample_yadage_workflow_in_db.type_
+
+
 def test_get_workflow_logs(app, default_user, _get_user_mock):
     """Test get_workflow_logs view."""
     with app.test_client() as client:
