@@ -1034,6 +1034,13 @@ def upload_file(workflow_id_or_name):  # noqa
           description: The API access_token of workflow owner.
           required: false
           type: string
+        - name: preview
+          in: query
+          description: >-
+            Optional flag to return a previewable response of the file
+            (corresponding mime-type).
+          required: false
+          type: boolean
       responses:
         200:
           description: >-
@@ -1194,17 +1201,17 @@ def download_file(workflow_id_or_name, file_name):  # noqa
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-
+        preview = 'preview' in request.args
         response, http_response = current_rwc_api_client.api.\
             download_file(
                 user=str(user.id_),
                 workflow_id_or_name=workflow_id_or_name,
-                file_name=file_name).result()
-
+                file_name=file_name,
+                preview=preview).result()
         return send_file(
             io.BytesIO(http_response.raw_bytes),
             attachment_filename=file_name,
-            mimetype='multipart/form-data'), 200
+            mimetype=http_response.headers['Content-Type']), 200
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code

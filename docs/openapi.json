@@ -2223,6 +2223,13 @@
             "name": "access_token",
             "required": false,
             "type": "string"
+          },
+          {
+            "description": "Optional flag to return a previewable response of the file (corresponding mime-type).",
+            "in": "query",
+            "name": "preview",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "produces": [

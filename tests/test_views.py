@@ -263,9 +263,13 @@ def test_upload_file(app, default_user, _get_user_mock):
 
 def test_download_file(app, default_user, _get_user_mock):
     """Test download_file view."""
+    mock_response = Mock()
+    mock_response.headers = {'Content-Type': 'multipart/form-data'}
+    mock_response.raw_bytes = b''
     with app.test_client() as client:
         with patch("reana_server.rest.workflows.current_rwc_api_client",
-                   make_mock_api_client("reana-workflow-controller")()):
+                   make_mock_api_client("reana-workflow-controller")(
+                       mock_http_response=mock_response)):
                 res = client.get(url_for("workflows.download_file",
                                          workflow_id_or_name="1",
                                          file_name="test_download"),
@@ -283,9 +287,13 @@ def test_download_file(app, default_user, _get_user_mock):
 
 def test_delete_file(app, default_user, _get_user_mock):
     """Test delete_file view."""
+    mock_response = Mock()
+    mock_response.headers = {'Content-Type': 'multipart/form-data'}
+    mock_response.raw_bytes = b''
     with app.test_client() as client:
         with patch("reana_server.rest.workflows.current_rwc_api_client",
-                   make_mock_api_client("reana-workflow-controller")()):
+                   make_mock_api_client("reana-workflow-controller")(
+                       mock_http_response=mock_response)):
             res = client.get(url_for("workflows.delete_file",
                              workflow_id_or_name="1",
                              file_name="test_delete.txt"))
