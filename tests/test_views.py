@@ -263,13 +263,8 @@ def test_upload_file(app, default_user, _get_user_mock):
 
 def test_download_file(app, default_user, _get_user_mock):
     """Test download_file view."""
-    mock_response = Mock()
-    mock_response.headers = {'Content-Type': 'multipart/form-data'}
-    mock_response.raw_bytes = b''
     with app.test_client() as client:
-        with patch("reana_server.rest.workflows.current_rwc_api_client",
-                   make_mock_api_client("reana-workflow-controller")(
-                       mock_http_response=mock_response)):
+        with patch("reana_server.rest.workflows.requests"):
                 res = client.get(url_for("workflows.download_file",
                                          workflow_id_or_name="1",
                                          file_name="test_download"),
@@ -277,11 +272,12 @@ def test_download_file(app, default_user, _get_user_mock):
                                                "test_upload.txt"})
                 assert res.status_code == 302
 
-                res = client.get(url_for("workflows.download_file",
-                                         workflow_id_or_name="1",
-                                         file_name="test_download"),
-                                 query_string={"access_token":
-                                               default_user.access_token})
+                res = client.get(
+                    url_for("workflows.download_file",
+                            workflow_id_or_name="1",
+                            file_name="test_download"),
+                    query_string={"access_token":
+                                  default_user.access_token})
                 assert res.status_code == 200
 
 
@@ -289,21 +285,22 @@ def test_delete_file(app, default_user, _get_user_mock):
     """Test delete_file view."""
     mock_response = Mock()
     mock_response.headers = {'Content-Type': 'multipart/form-data'}
-    mock_response.raw_bytes = b''
+    mock_response.json = Mock(return_value={})
+    mock_response.status_code = 200
     with app.test_client() as client:
         with patch("reana_server.rest.workflows.current_rwc_api_client",
                    make_mock_api_client("reana-workflow-controller")(
                        mock_http_response=mock_response)):
-            res = client.get(url_for("workflows.delete_file",
-                             workflow_id_or_name="1",
-                             file_name="test_delete.txt"))
-            assert res.status_code == 302
+            res = client.delete(url_for("workflows.delete_file",
+                                workflow_id_or_name="1",
+                                file_name="test_delete.txt"))
+            assert res.status_code == 403
 
-            res = client.get(url_for("workflows.delete_file",
-                                     workflow_id_or_name="1",
-                                     file_name="test_delete.txt"),
-                             query_string={"access_token":
-                                           default_user.access_token})
+            res = client.delete(url_for("workflows.delete_file",
+                                        workflow_id_or_name="1",
+                                        file_name="test_delete.txt"),
+                                query_string={"access_token":
+                                              default_user.access_token})
             assert res.status_code == 200
 
 

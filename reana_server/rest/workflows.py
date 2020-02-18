@@ -16,9 +16,10 @@ import traceback
 import fs
 import requests
 from bravado.exception import HTTPError
-from flask import Blueprint
+from flask import Blueprint, Response
 from flask import current_app as app
-from flask import jsonify, redirect, request, send_file, url_for
+from flask import (jsonify, redirect, request, send_file, stream_with_context,
+                   url_for)
 from flask_login import current_user
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_commons.utils import get_workspace_disk_usage
@@ -1202,16 +1203,18 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
         preview = 'preview' in request.args
-        response, http_response = current_rwc_api_client.api.\
-            download_file(
-                user=str(user.id_),
-                workflow_id_or_name=workflow_id_or_name,
-                file_name=file_name,
-                preview=preview).result()
-        return send_file(
-            io.BytesIO(http_response.raw_bytes),
-            attachment_filename=file_name,
-            mimetype=http_response.headers['Content-Type']), 200
+        api_url = current_rwc_api_client.swagger_spec.__dict__.get('api_url')
+        endpoint = \
+            current_rwc_api_client.api.download_file. \
+            operation.path_name.format(
+                workflow_id_or_name=workflow_id_or_name, file_name=file_name)
+        req = requests.get(
+          urlparse.urljoin(api_url, endpoint),
+          params={'preview': preview, 'user': str(user.id_)},
+          stream=True)
+        return Response(
+            stream_with_context(req.iter_content(chunk_size=1024)),
+            content_type=req.headers['Content-Type']), 200
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
