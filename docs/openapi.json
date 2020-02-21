@@ -225,6 +225,15 @@
       "get": {
         "description": "This resource provides basic information about an authenticated user based on the session cookie presence.",
         "operationId": "get_me",
+        "parameters": [
+          {
+            "description": "API access_token of user.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          }
+        ],
         "produces": [
           "application/json"
         ],
@@ -263,6 +272,22 @@
                 }
               },
               "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. User token not valid.",
+            "examples": {
+              "application/json": {
+                "message": "Token is not valid."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal server error."
+              }
             }
           }
         },

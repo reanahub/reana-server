@@ -11,13 +11,14 @@
 import logging
 import traceback
 
+from bravado.exception import HTTPError
 from flask import Blueprint, jsonify, make_response, redirect, request
 from flask_login import current_user
 from invenio_oauthclient.utils import get_safe_redirect_target
 
 from reana_server.config import REANA_URL
 from reana_server.utils import (_create_user, _get_user_from_invenio_user,
-                                _get_users)
+                                _get_users, get_user_from_token)
 
 blueprint = Blueprint('users', __name__)
 
@@ -252,6 +253,12 @@ def get_me():
       operationId: get_me
       produces:
         - application/json
+      parameters:
+        - name: access_token
+          in: query
+          description: API access_token of user.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -283,15 +290,46 @@ def get_me():
               {
                 "error": "User not logged in"
               }
+        403:
+          description: >-
+            Request failed. User token not valid.
+          examples:
+            application/json:
+              {
+                "message": "Token is not valid."
+              }
+        500:
+          description: >-
+            Request failed. Internal server error.
+          examples:
+            application/json:
+              {
+                "message": "Internal server error."
+              }
     """
-    if current_user.is_authenticated:
-        me = _get_user_from_invenio_user(current_user.email)
-        return (
-          jsonify({'email': me.email, 'reana_token': me.access_token,
-                   'full_name': me.full_name, 'username': me.username}), 200
-        )
-    else:
-        return jsonify({'error': 'User not logged in'}), 401
+    try:
+        me = None
+        if current_user.is_authenticated:
+            me = _get_user_from_invenio_user(current_user.email)
+        elif "access_token" in request.args:
+            me = get_user_from_token(request.args.get('access_token'))
+
+        if me:
+            return (jsonify({'email': me.email,
+                             'reana_token': me.access_token,
+                             'full_name': me.full_name,
+                             'username': me.username}), 200)
+        else:
+            return jsonify(message='User not logged in'), 401
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
 
 
 @blueprint.route('/logout', methods=['GET'])
@@ -302,4 +340,4 @@ def _logout():
         resp.delete_cookie('session')
         return resp
     else:
-        return jsonify({'error': 'User not logged in'}), 401
+        return jsonify(message='User not logged in'), 401
