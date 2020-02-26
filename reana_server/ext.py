@@ -27,6 +27,15 @@ class REANA(object):
         self.init_config(app)
         Menu(app=app)
 
+        @app.teardown_appcontext
+        def shutdown_reana_db_session(response_or_exc):
+            """Close session on app teardown."""
+            from reana_db.database import Session as reana_db_session
+            from invenio_db import db as invenio_db
+            reana_db_session.remove()
+            invenio_db.session.remove()
+            return response_or_exc
+
         @app.before_first_request
         def connect_signals():
             """Connect OAuthClient signals."""
