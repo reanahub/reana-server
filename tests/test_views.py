@@ -265,20 +265,20 @@ def test_download_file(app, default_user, _get_user_mock):
     """Test download_file view."""
     with app.test_client() as client:
         with patch("reana_server.rest.workflows.requests"):
-                res = client.get(url_for("workflows.download_file",
-                                         workflow_id_or_name="1",
-                                         file_name="test_download"),
-                                 query_string={"file_name":
-                                               "test_upload.txt"})
-                assert res.status_code == 302
+            res = client.get(url_for("workflows.download_file",
+                                     workflow_id_or_name="1",
+                                     file_name="test_download"),
+                             query_string={"file_name":
+                                           "test_upload.txt"})
+            assert res.status_code == 302
 
-                res = client.get(
-                    url_for("workflows.download_file",
-                            workflow_id_or_name="1",
-                            file_name="test_download"),
-                    query_string={"access_token":
-                                  default_user.access_token})
-                assert res.status_code == 200
+            res = client.get(
+                url_for("workflows.download_file",
+                        workflow_id_or_name="1",
+                        file_name="test_download"),
+                query_string={"access_token":
+                              default_user.access_token})
+            assert res.status_code == 200
 
 
 def test_delete_file(app, default_user, _get_user_mock):
@@ -310,7 +310,7 @@ def test_get_files(app, default_user, _get_user_mock):
         with patch("reana_server.rest.workflows.current_rwc_api_client",
                    make_mock_api_client("reana-workflow-controller")()):
             res = client.get(url_for("workflows.get_files",
-                             workflow_id_or_name="1"))
+                                     workflow_id_or_name="1"))
             assert res.status_code == 403
 
             res = client.get(url_for("workflows.get_files",
@@ -319,19 +319,17 @@ def test_get_files(app, default_user, _get_user_mock):
                                            default_user.access_token})
             assert res.status_code == 500
 
-            mock_response = Mock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = dict(key='value')
-            with patch(
-                "reana_server.rest.workflows.current_rwc_api_client",
-                make_mock_api_client("reana-workflow-controller")(
-                    mock_http_response=mock_response),
-            ):
-                res = client.get(url_for("workflows.get_files",
-                                         workflow_id_or_name="1"),
-                                 query_string={"access_token":
-                                               default_user.access_token})
-                assert res.status_code == 200
+        mock_http_response = Mock()
+        mock_http_response.status_code = 200
+        mock_http_response.json.return_value = dict(key='value')
+        with patch("reana_server.rest.workflows.current_rwc_api_client",
+                   make_mock_api_client("reana-workflow-controller")(
+                       mock_http_response=mock_http_response)):
+            res = client.get(url_for("workflows.get_files",
+                                     workflow_id_or_name="1"),
+                             query_string={"access_token":
+                                           default_user.access_token})
+            assert res.status_code == 200
 
 
 def test_get_user(app, default_user):
@@ -373,13 +371,13 @@ def test_create_user(app, default_user):
         )
         assert res.status_code == 403
 
-        with app.test_client() as client:
-            res = client.post(
-                url_for("users.create_user"),
-                query_string={"email": "test_email",
-                              "access_token": default_user.access_token},
-            )
-            assert res.status_code == 201
+    with app.test_client() as client:
+        res = client.post(
+            url_for("users.create_user"),
+            query_string={"email": "test_email",
+                          "access_token": default_user.access_token},
+        )
+        assert res.status_code == 201
 
 
 def test_user_login(app, default_user):
