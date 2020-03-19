@@ -124,11 +124,12 @@ def test_get_workflow_specification(app, default_user, _get_user_mock,
                 data=json.dumps(None))
             parsed_res = json.loads(res.data)
             assert res.status_code == 200
-            assert parsed_res['workflow']['specification'] == \
+            specification = parsed_res['specification']
+            assert specification['workflow']['specification'] == \
                 sample_yadage_workflow_in_db.get_specification()
-            assert parsed_res['inputs']['parameters'] == \
+            assert specification['inputs']['parameters'] == \
                 sample_yadage_workflow_in_db.get_input_parameters()
-            assert parsed_res['workflow']['type'] == \
+            assert specification['workflow']['type'] == \
                 sample_yadage_workflow_in_db.type_
 
 

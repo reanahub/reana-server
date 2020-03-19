@@ -31,7 +31,6 @@ from reana_server.api_client import (current_rwc_api_client,
                                      current_workflow_submission_publisher)
 from reana_server.config import SHARED_VOLUME_PATH
 from reana_server.utils import (clone_workflow,
-                                reconstruct_reana_yaml,
                                 RequestStreamWithLen,
                                 _get_reana_yaml_from_gitlab,
                                 _get_user_from_invenio_user,
@@ -446,7 +445,8 @@ def get_workflow_specification(workflow_id_or_name):  # noqa
         workflow = _get_workflow_with_uuid_or_name(
             workflow_id_or_name, str(user.id_))
 
-        return jsonify(reconstruct_reana_yaml(workflow)), 200
+        return jsonify({'specification': workflow.reana_specification,
+                        'parameters': workflow.input_parameters}), 200
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
