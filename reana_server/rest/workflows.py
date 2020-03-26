@@ -1214,7 +1214,7 @@ def download_file(workflow_id_or_name, file_name):  # noqa
           stream=True)
         return Response(
             stream_with_context(req.iter_content(chunk_size=1024)),
-            content_type=req.headers['Content-Type']), 200
+            content_type=req.headers['Content-Type']), req.status_code
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code

@@ -273,13 +273,23 @@ def test_download_file(app, default_user, _get_user_mock):
                                            "test_upload.txt"})
             assert res.status_code == 302
 
+        requests_mock = Mock()
+        requests_response_mock = Mock()
+        requests_response_mock.status_code = 200
+        requests_response_mock.json = \
+            Mock(return_value={'message': 'File downloaded.'})
+        requests_mock.get = Mock(return_value=requests_response_mock)
+        with patch("reana_server.rest.workflows.requests",
+                   requests_mock) as requests_client:
             res = client.get(
                 url_for("workflows.download_file",
                         workflow_id_or_name="1",
                         file_name="test_download"),
                 query_string={"access_token":
                               default_user.access_token})
-            assert res.status_code == 200
+
+            requests_client.get.assert_called_once()
+            assert requests_client.get.return_value.status_code == 200
 
 
 def test_delete_file(app, default_user, _get_user_mock):
