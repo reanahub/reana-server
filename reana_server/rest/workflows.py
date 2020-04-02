@@ -22,6 +22,8 @@ from flask import (jsonify, redirect, request, send_file, stream_with_context,
                    url_for)
 from flask_login import current_user
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
+from reana_commons.errors import REANAValidationError
+from reana_commons.operational_options import validate_operational_options
 from reana_commons.utils import get_workspace_disk_usage
 from reana_db.database import Session
 from reana_db.models import Workflow, WorkflowStatus
@@ -325,8 +327,9 @@ def create_workflow():  # noqa
                 400
         workflow_dict = {'reana_specification': reana_spec_file,
                          'workflow_name': workflow_name}
-        workflow_dict['operational_options'] = \
-            reana_spec_file.get('inputs', {}).get('options', {})
+        workflow_dict['operational_options'] = validate_operational_options(
+            workflow_engine,
+            reana_spec_file.get('inputs', {}).get('options', {}))
         if git_data:
             workflow_dict['git_data'] = git_data
         response, http_response = current_rwc_api_client.api.\
@@ -345,7 +348,7 @@ def create_workflow():  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
-    except KeyError as e:
+    except (KeyError, REANAValidationError) as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
     except ValueError as e:
@@ -815,6 +818,8 @@ def start_workflow(workflow_id_or_name):  # noqa
         parameters = request.json
         workflow = _get_workflow_with_uuid_or_name(
             workflow_id_or_name, str(user.id_))
+        parameters['operational_options'] = validate_operational_options(
+            workflow.type_, parameters['operational_options'])
         if 'restart' in parameters:
             if workflow.status not in \
                     [WorkflowStatus.finished, WorkflowStatus.failed]:
@@ -847,6 +852,9 @@ def start_workflow(workflow_id_or_name):  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
+    except REANAValidationError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 400
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
