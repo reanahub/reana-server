@@ -33,18 +33,10 @@ RUN if test -e modules/reana-db; then pip install -e modules/reana-db --upgrade;
 # Check if there are broken requirements
 RUN pip check
 
-ARG UWSGI_PROCESSES=2
-ENV UWSGI_PROCESSES ${UWSGI_PROCESSES:-2}
-ARG UWSGI_THREADS=2
-ENV UWSGI_THREADS ${UWSGI_THREADS:-2}
 ENV TERM=xterm
 ENV FLASK_APP=/code/reana_server/app.py
 
 EXPOSE 5000
 
-CMD ./scripts/setup > /var/log/reana-server-init-output.log 2>&1 &&\
-    uwsgi --module invenio_app.wsgi:application \
-    --http-socket 0.0.0.0:5000 --master \
-    --processes ${UWSGI_PROCESSES} --threads ${UWSGI_THREADS} \
-    --stats /tmp/stats.socket \
-    --wsgi-disable-file-wrapper
+CMD ./scripts/setup > /var/log/reana-server-init-output.log 2>&1 && \
+    uwsgi --ini uwsgi.ini
