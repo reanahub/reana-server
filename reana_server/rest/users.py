@@ -16,7 +16,6 @@ from flask import Blueprint, jsonify, make_response, redirect, request
 from flask_login import current_user
 from invenio_oauthclient.utils import get_safe_redirect_target
 
-from reana_server.config import REANA_URL
 from reana_server.utils import (_create_user, _get_user_from_invenio_user,
                                 _get_users, get_user_from_token)
 
@@ -317,10 +316,10 @@ def get_me():
         if me:
             return (jsonify({'email': me.email,
                              'reana_token': me.access_token,
+                             'reana_token_status': me.access_token_status,
                              'full_name': me.full_name,
                              'username': me.username}), 200)
-        else:
-            return jsonify(message='User not logged in'), 401
+        return jsonify(message='User not logged in'), 401
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code

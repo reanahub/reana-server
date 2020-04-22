@@ -177,7 +177,7 @@ def get_users(ctx, id, email, user_access_token, admin_access_token,
         headers = ['id', 'email', 'access_token']
         data = []
         for user in response:
-            data.append((str(user.id_), user.email, user.access_token))
+            data.append((str(user.id_), user.email, str(user.access_token)))
         if output_format:
             tablib_data = tablib.Dataset()
             tablib_data.headers = headers

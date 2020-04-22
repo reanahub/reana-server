@@ -78,6 +78,7 @@ install_requires = [
     # Invenio dependencies missing from Invenio packages setup.py
     'jsonpatch>=1.23,<2',
     'six>=1.12.0',
+    'wtforms<2.3.0',  # FIXME wait for invenio fix
 ]
 
 packages = find_packages()

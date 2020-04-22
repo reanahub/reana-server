@@ -22,7 +22,7 @@ from flask import current_app as app
 from flask import url_for
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_db.database import Session
-from reana_db.models import User, Workflow
+from reana_db.models import User, UserTokenType, Workflow
 from sqlalchemy.exc import IntegrityError, InvalidRequestError, SQLAlchemyError
 from werkzeug.wsgi import LimitedStream
 
@@ -49,8 +49,9 @@ def create_user_workspace(user_workspace_path):
 
 def get_user_from_token(access_token):
     """Validate that the token provided is valid."""
-    user = Session.query(User).filter_by(access_token=access_token).\
-        one_or_none()
+    user = (Session.query(User).join(User.tokens)
+            .filter_by(token=access_token,
+                       type_=UserTokenType.reana)).one_or_none()
     if not user:
         raise ValueError('Token not valid.')
     return user
@@ -66,10 +67,11 @@ def _get_users(_id, email, user_access_token, admin_access_token):
         search_criteria['id_'] = _id
     if email:
         search_criteria['email'] = email
+    query = Session.query(User).filter_by(**search_criteria)
     if user_access_token:
-        search_criteria['access_token'] = user_access_token
-    users = Session.query(User).filter_by(**search_criteria).all()
-    return users
+        query = query.join(User.tokens).filter_by(token=user_access_token,
+                                                  type_=UserTokenType.reana)
+    return query.all()
 
 
 def _create_user(email, user_access_token, admin_access_token):
@@ -139,11 +141,8 @@ def _create_and_associate_reana_user(sender, token=None,
         if users:
             user = users[0]
         else:
-            user_access_token = secrets.token_urlsafe(16)
-            user_parameters = dict(access_token=user_access_token)
-            user_parameters['email'] = user_email
-            user_parameters['full_name'] = user_fullname
-            user_parameters['username'] = username
+            user_parameters = dict(email=user_email, full_name=user_fullname,
+                                   username=username)
             user = User(**user_parameters)
             Session.add(user)
             Session.commit()
