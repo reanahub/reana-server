@@ -160,7 +160,7 @@ def users_create_default(email, id_):
     help='The access token of the user.')
 @click.option(
     '--admin-access-token',
-    default=os.environ.get('REANA_ACCESS_TOKEN', None),
+    default=os.environ.get('REANA_ADMIN_ACCESS_TOKEN', None),
     help='The access token of an administrator.')
 @click.option(
     '--json',
@@ -174,10 +174,11 @@ def get_users(ctx, id, email, user_access_token, admin_access_token,
     """Return user information. Requires the token of an administrator."""
     try:
         response = _get_users(id, email, user_access_token, admin_access_token)
-        headers = ['id', 'email', 'access_token']
+        headers = ['id', 'email', 'access_token', 'access_token_status']
         data = []
         for user in response:
-            data.append((str(user.id_), user.email, str(user.access_token)))
+            data.append((str(user.id_), user.email, str(user.access_token),
+                         str(user.access_token_status)))
         if output_format:
             tablib_data = tablib.Dataset()
             tablib_data.headers = headers
@@ -209,7 +210,7 @@ def get_users(ctx, id, email, user_access_token, admin_access_token,
     help='The access token of the user.')
 @click.option(
     '--admin-access-token',
-    default=os.environ.get('REANA_ACCESS_TOKEN', None),
+    default=os.environ.get('REANA_ADMIN_ACCESS_TOKEN', None),
     help='The access token of an administrator.')
 @click.pass_context
 def create_user(ctx, email, user_access_token, admin_access_token):
@@ -234,7 +235,7 @@ def create_user(ctx, email, user_access_token, admin_access_token):
 @reana_users.command('export')
 @click.option(
     '--admin-access-token',
-    default=os.environ.get('REANA_ACCESS_TOKEN', None),
+    default=os.environ.get('REANA_ADMIN_ACCESS_TOKEN', None),
     help='The access token of an administrator.')
 @click.pass_context
 def export_users(ctx, admin_access_token):
@@ -251,7 +252,7 @@ def export_users(ctx, admin_access_token):
 @reana_users.command('import')
 @click.option(
     '--admin-access-token',
-    default=os.environ.get('REANA_ACCESS_TOKEN', None),
+    default=os.environ.get('REANA_ADMIN_ACCESS_TOKEN', None),
     help='The access token of an administrator.')
 @click.option(
     '-f',
@@ -269,6 +270,50 @@ def import_users(ctx, admin_access_token, file_):
         click.secho(
             'Something went wrong while importing users:\n{}'.format(e),
             fg='red', err=True)
+
+
+@reana_users.group(
+    'token',
+    help='All interaction related to user tokens on REANA cloud.')
+def reana_users_token():
+    """Manage REANA user tokens."""
+
+
+@reana_users_token.command('grant')
+@click.option(
+    '--id',
+    help='The id of the user.')
+@click.option(
+    '--admin-access-token',
+    default=os.environ.get('REANA_ADMIN_ACCESS_TOKEN', None),
+    help='The access token of an administrator.')
+def token_grant(id, admin_access_token):
+    """."""
+    user_id = 'dc4aef21-c324-4fd5-8480-c724de1f0c06'
+    user_email = 'john.doe@google.com'
+    user_granted_token = 'c0fa47fa00ae4013a13fd7n'
+    # create a token in UserToken table and activate it
+    # send notification to user by email
+    click.secho(f'Token for user {user_id} ({user_email}) granted.\n'
+                f'\nToken: {user_granted_token}', fg='green')
+
+
+@reana_users_token.command('revoke')
+@click.option(
+    '--id',
+    help='The id of the user.')
+@click.option(
+    '--admin-access-token',
+    default=os.environ.get('REANA_ADMIN_ACCESS_TOKEN', None),
+    help='The access token of an administrator.')
+def token_revoke(id, admin_access_token):
+    """."""
+    user_id = 'dc4aef21-c324-4fd5-8480-c724de1f0c06'
+    user_email = 'john.doe@google.com'
+    # deactivate REANA token in UserToken table
+    # send notification to user by email
+    click.secho(f'User\'s {user_id} ({user_email}) token successfully revoked',
+                fg='green')
 
 
 @click.command('start-scheduler')
