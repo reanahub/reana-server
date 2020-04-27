@@ -17,7 +17,7 @@ import pytest
 from click.testing import CliRunner
 from reana_db.models import User
 
-from reana_server.cli import reana_users as users_cmd
+from reana_server.reana_admin import reana_admin
 
 
 def test_export_users(default_user):
@@ -28,8 +28,8 @@ def test_export_users(default_user):
     csv_writer.writerow(
         [default_user.id_, default_user.email, default_user.access_token])
     result = runner.invoke(
-        users_cmd,
-        ['export', '--admin-access-token', default_user.access_token])
+        reana_admin,
+        ['users-export', '--admin-access-token', default_user.access_token])
     assert result.output == expected_csv_file.getvalue()
 
 
@@ -48,8 +48,8 @@ def test_import_users(app, session, default_user):
                                  user_access_token])
 
         result = runner.invoke(
-            users_cmd,
-            ['import',
+            reana_admin,
+            ['users-import',
              '--admin-access-token', default_user.access_token,
              '--file', users_csv_file_name])
         assert expected_output in result.output

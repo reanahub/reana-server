@@ -1,0 +1,252 @@
+# -*- coding: utf-8 -*-
+#
+# This file is part of REANA.
+# Copyright (C) 2017, 2018 CERN.
+#
+# REANA is free software; you can redistribute it and/or modify it
+# under the terms of the MIT License; see LICENSE file for more details.
+
+"""REANA Server administrator command line tool."""
+
+import functools
+import logging
+import os
+import secrets
+import sys
+import traceback
+
+import click
+import tablib
+from flask.cli import FlaskGroup, with_appcontext
+from reana_commons.utils import click_table_printer
+from reana_db.database import Session, init_db
+from reana_db.models import User
+
+from reana_server.config import ADMIN_USER_ID
+from reana_server.factory import create_app
+from reana_server.utils import (_create_user, _export_users, _get_users,
+                                _import_users, create_user_workspace)
+
+
+def admin_access_token_option(func):
+    """Click option to load admin access token."""
+    @click.option(
+        '--admin-access-token',
+        default=os.environ.get('REANA_ADMIN_ACCESS_TOKEN', None),
+        help='The access token of an administrator.')
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+    return wrapper
+
+
+def create_reana_flask_app():
+    """Create the REANA Flask app, removing existing Invenio commands."""
+    app = create_app()
+    app.cli.commands.clear()
+    return app
+
+
+@click.group(cls=FlaskGroup, add_default_commands=False,
+             create_app=create_reana_flask_app)
+def reana_admin():
+    """REANA administration commands."""
+
+
+@reana_admin.command('db-init')
+def db_init():
+    """Initialise database."""
+    try:
+        init_db()
+        click.echo(click.style('DB Created.', fg='green'))
+    except Exception as e:
+        click.echo('Something went wrong: {0}'.format(e))
+        sys.exit(1)
+
+
+@reana_admin.command('users-create-default')
+@click.argument('email')
+@click.option('-i', '--id', 'id_',
+              default=ADMIN_USER_ID)
+@with_appcontext
+def users_create_default(email, id_):
+    """Create default user.
+
+    This user has the administrator role
+    and can retrieve other user information as well as create
+    new users.
+    """
+    user_characteristics = {"id_": id_,
+                            "email": email,
+                            }
+    try:
+        user = User.query.filter_by(**user_characteristics).first()
+        if not user:
+            user_characteristics['access_token'] = secrets.token_urlsafe()
+            user = User(**user_characteristics)
+            create_user_workspace(user.get_user_workspace())
+            Session.add(user)
+            Session.commit()
+            click.echo('Created 1st user with access_token: {}'.
+                       format(user_characteristics['access_token']))
+    except Exception as e:
+        click.echo('Something went wrong: {0}'.format(e))
+        sys.exit(1)
+
+
+@reana_admin.command(
+    'users-list',
+    help='List users according to the search criteria.')
+@click.option(
+    '--id',
+    help='The id of the user.')
+@click.option(
+    '-e',
+    '--email',
+    help='The email of the user.')
+@click.option(
+    '--user-access-token',
+    help='The access token of the user.')
+@click.option(
+    '--json',
+    'output_format',
+    flag_value='json',
+    default=None,
+    help='Get output in JSON format.')
+@admin_access_token_option
+@click.pass_context
+def list_users(ctx, id, email, user_access_token, admin_access_token,
+               output_format):
+    """List users according to the search criteria."""
+    try:
+        response = _get_users(id, email, user_access_token, admin_access_token)
+        headers = ['id', 'email', 'access_token', 'access_token_status']
+        data = []
+        for user in response:
+            data.append((str(user.id_), user.email, str(user.access_token),
+                         str(user.access_token_status)))
+        if output_format:
+            tablib_data = tablib.Dataset()
+            tablib_data.headers = headers
+            for row in data:
+                tablib_data.append(row)
+
+            click.echo(tablib_data.export(output_format))
+        else:
+            click_table_printer(headers, [], data)
+
+    except Exception as e:
+        logging.debug(traceback.format_exc())
+        logging.debug(str(e))
+        click.echo(
+            click.style('User could not be retrieved: \n{}'
+                        .format(str(e)), fg='red'),
+            err=True)
+
+
+@reana_admin.command(
+    'users-create',
+    help='Create a new user.')
+@click.option(
+    '-e',
+    '--email',
+    help='The email of the user.')
+@click.option(
+    '--user-access-token',
+    help='The access token of the user.')
+@admin_access_token_option
+@click.pass_context
+def create_user(ctx, email, user_access_token, admin_access_token):
+    """Create a new user. Requires the token of an administrator."""
+    try:
+        response = _create_user(email, user_access_token, admin_access_token)
+        headers = ['id', 'email', 'access_token']
+        data = [(str(response.id_), response.email, response.access_token)]
+        click.echo(
+            click.style('User was successfully created.', fg='green'))
+        click_table_printer(headers, [], data)
+
+    except Exception as e:
+        logging.debug(traceback.format_exc())
+        logging.debug(str(e))
+        click.echo(
+            click.style('User could not be created: \n{}'
+                        .format(str(e)), fg='red'),
+            err=True)
+
+
+@reana_admin.command('users-export')
+@admin_access_token_option
+@click.pass_context
+def export_users(ctx, admin_access_token):
+    """Export all users in current REANA cluster."""
+    try:
+        csv_file = _export_users(admin_access_token)
+        click.echo(csv_file.getvalue(), nl=False)
+    except Exception as e:
+        click.secho(
+            'Something went wrong while importing users:\n{}'.format(e),
+            fg='red', err=True)
+
+
+@reana_admin.command('users-import')
+@admin_access_token_option
+@click.option(
+    '-f',
+    '--file',
+    'file_',
+    help='A CSV file containing a list of REANA users.',
+    type=click.File())
+@click.pass_context
+def import_users(ctx, admin_access_token, file_):
+    """Import users from file."""
+    try:
+        _import_users(admin_access_token, file_)
+        click.secho('Users successfully imported.', fg='green')
+    except Exception as e:
+        click.secho(
+            'Something went wrong while importing users:\n{}'.format(e),
+            fg='red', err=True)
+
+
+@reana_admin.command(
+    'token-grant', help='Grant a token to the selected user.')
+@admin_access_token_option
+@click.option(
+    '--id',
+    help='The id of the user.')
+@click.option(
+    '-e',
+    '--email',
+    help='The email of the user.')
+def token_grant(id, email, admin_access_token):
+    """."""
+    user_id = 'dc4aef21-c324-4fd5-8480-c724de1f0c06'
+    user_email = 'john.doe@google.com'
+    user_granted_token = 'c0fa47fa00ae4013a13fd7n'
+    # create a token in UserToken table and activate it
+    # create an audit log entry
+    # send notification to user by email
+    click.secho(f'Token for user {user_id} ({user_email}) granted.\n'
+                f'\nToken: {user_granted_token}', fg='green')
+
+
+@reana_admin.command(
+    'token-revoke', help='Revoke selected user\'s token.')
+@click.option(
+    '--id',
+    help='The id of the user.')
+@click.option(
+    '-e',
+    '--email',
+    help='The email of the user.')
+@admin_access_token_option
+def token_revoke(id, email, admin_access_token):
+    """."""
+    user_id = 'dc4aef21-c324-4fd5-8480-c724de1f0c06'
+    user_email = 'john.doe@google.com'
+    # deactivate REANA token in UserToken table
+    # create an audit log entry
+    # send notification to user by email
+    click.secho(f'User\'s {user_id} ({user_email}) token successfully revoked',
+                fg='green')

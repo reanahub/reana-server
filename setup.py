@@ -102,9 +102,10 @@ setup(
     packages=['reana_server'],
     zip_safe=False,
     entry_points={
+        'console_scripts': [
+            'reana-admin=reana_server.reana_admin:reana_admin'
+        ],
         'flask.commands': [
-            'reana-db = reana_server.cli:reana_db',
-            'reana-users = reana_server.cli:reana_users',
             'start-scheduler = reana_server.cli:start_scheduler',
         ],
         "invenio_base.apps": [

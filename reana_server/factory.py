@@ -10,7 +10,7 @@
 
 import logging
 
-from flask import Flask
+from flask import Flask, current_app
 from flask_babelex import Babel
 from flask_menu import Menu as FlaskMenu
 from flask_oauthlib.client import OAuth as FlaskOAuth
@@ -55,5 +55,11 @@ def create_app():
     app.register_blueprint(users.blueprint, url_prefix='/api')
     app.register_blueprint(secrets.blueprint, url_prefix='/api')
     app.register_blueprint(gitlab.blueprint, url_prefix='/api')
+
+    @app.teardown_appcontext
+    def shutdown_session(response_or_exc):
+        """Close session on app teardown."""
+        current_app.session.remove()
+        return response_or_exc
 
     return app
