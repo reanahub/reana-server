@@ -285,3 +285,13 @@ def clone_workflow(workflow, reana_spec):
         logging.error(
             f'Error while creating {cloned_workflow.id_}: {message}\n{e}',
             exc_info=True)
+
+
+def _get_user_by_criteria(id_, email):
+    """Get user filtering first by id, then by email."""
+    criteria = dict()
+    if id_:
+        criteria['id_'] = id_
+    elif email:
+        criteria['email'] = email
+    return User.query.filter_by(**criteria).one_or_none()

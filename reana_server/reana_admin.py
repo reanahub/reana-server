@@ -20,12 +20,17 @@ import tablib
 from flask.cli import FlaskGroup, with_appcontext
 from reana_commons.utils import click_table_printer
 from reana_db.database import Session, init_db
-from reana_db.models import User
+from reana_db.models import AuditLogAction, User, UserTokenStatus
 
 from reana_server.config import ADMIN_USER_ID
 from reana_server.factory import create_app
+<<<<<<< HEAD
 from reana_server.status import STATUS_OBJECT_TYPES
 from reana_server.utils import (_create_user, _export_users, _get_users,
+=======
+from reana_server.utils import (_create_user, _export_users,
+                                _get_user_by_criteria, _get_users,
+>>>>>>> cli: add grant & revoke access token commands
                                 _import_users, create_user_workspace)
 
 
@@ -33,7 +38,8 @@ def admin_access_token_option(func):
     """Click option to load admin access token."""
     @click.option(
         '--admin-access-token',
-        default=os.environ.get('REANA_ADMIN_ACCESS_TOKEN', None),
+        required=True,
+        default=os.environ.get('REANA_ADMIN_ACCESS_TOKEN'),
         help='The access token of an administrator.')
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
@@ -151,6 +157,7 @@ def list_users(ctx, id, email, user_access_token, admin_access_token,
 @click.option(
     '-e',
     '--email',
+    required=True,
     help='The email of the user.')
 @click.option(
     '--user-access-token',
@@ -215,40 +222,77 @@ def import_users(ctx, admin_access_token, file_):
 @admin_access_token_option
 @click.option(
     '--id',
+    'id_',
     help='The id of the user.')
 @click.option(
     '-e',
     '--email',
     help='The email of the user.')
-def token_grant(id, email, admin_access_token):
-    """."""
-    user_id = 'dc4aef21-c324-4fd5-8480-c724de1f0c06'
-    user_email = 'john.doe@google.com'
-    user_granted_token = 'c0fa47fa00ae4013a13fd7n'
-    # create a token in UserToken table and activate it
-    # create an audit log entry
-    # send notification to user by email
-    click.secho(f'Token for user {user_id} ({user_email}) granted.\n'
-                f'\nToken: {user_granted_token}', fg='green')
+@click.option(
+    '-f',
+    '--force',
+    is_flag=True,
+    default=False,
+    help='Grant token even if user has a revoked access token.')
+def token_grant(admin_access_token, id_, email, force):
+    """Grant a token to the selected user."""
+    try:
+        admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
+        if admin_access_token != admin.access_token:
+            raise ValueError('Admin access token invalid.')
+        user = _get_user_by_criteria(id_, email)
+        if user.access_token:
+            click.secho(f'User {user.id_} ({user.email}) has already an active'
+                        ' access token')
+            sys.exit(1)
+        if not force and \
+           user.access_token_status in [UserTokenStatus.revoked.name, None]:
+            click.secho(f'User {user.id_} ({user.email}) access token status'
+                        ' is {user.access_token_status}, if you want to'
+                        ' proceed in any case use --force option')
+            sys.exit(1)
+        user_granted_token = secrets.token_urlsafe(16)
+        user.access_token = user_granted_token
+        Session.commit()
+        msg = (f'Token for user {user.id_} ({user.email}) granted.\n'
+               f'\nToken: {user_granted_token}')
+        admin.log_action(AuditLogAction.grant_token, {'reana_admin': msg})
+        # send notification to user by email
+
+        click.secho(msg, fg='green')
+    except Exception as e:
+        click.secho(
+            'Something went wrong while granting token:\n{}'.format(e),
+            fg='red', err=True)
 
 
 @reana_admin.command(
     'token-revoke', help='Revoke selected user\'s token.')
+@admin_access_token_option
 @click.option(
     '--id',
+    'id_',
     help='The id of the user.')
 @click.option(
     '-e',
     '--email',
     help='The email of the user.')
-@admin_access_token_option
-def token_revoke(id, email, admin_access_token):
-    """."""
-    user_id = 'dc4aef21-c324-4fd5-8480-c724de1f0c06'
-    user_email = 'john.doe@google.com'
-    # deactivate REANA token in UserToken table
-    # create an audit log entry
+def token_revoke(admin_access_token, id_, email):
+    """Revoke selected user's token."""
+    admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
+    if admin_access_token != admin.access_token:
+        raise ValueError('Admin access token invalid.')
+    user = _get_user_by_criteria(id_, email)
+    if not user.access_token:
+        click.secho(f'User {user.id_} ({user.email}) does not have an active'
+                    ' access token')
+        sys.exit(1)
+    user.active_token.status = UserTokenStatus.revoked
+    Session.commit()
+    msg = f'User\'s {user.id_} ({user.email}) token successfully revoked'
+    admin.log_action(AuditLogAction.revoke_token, {'reana_admin': msg})
     # send notification to user by email
+    click.secho(msg, fg='green')
     click.secho(f'User\'s {user_id} ({user_email}) token successfully revoked',
                 fg='green')
 
