@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018 CERN.
+# Copyright (C) 2020 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -24,6 +24,7 @@ from reana_db.models import User
 
 from reana_server.config import ADMIN_USER_ID
 from reana_server.factory import create_app
+from reana_server.status import STATUS_OBJECT_TYPES
 from reana_server.utils import (_create_user, _export_users, _get_users,
                                 _import_users, create_user_workspace)
 
@@ -250,3 +251,29 @@ def token_revoke(id, email, admin_access_token):
     # send notification to user by email
     click.secho(f'User\'s {user_id} ({user_email}) token successfully revoked',
                 fg='green')
+
+
+@reana_admin.command(help='Get a status report of the REANA system.')
+@click.option(
+    '--type',
+    'types',
+    multiple=True,
+    default=('all',),
+    type=click.Choice(list(STATUS_OBJECT_TYPES.keys()) + ['all'],
+                      case_sensitive=False),
+    help='Type of information to be displayed?')
+@admin_access_token_option
+def status_report(types, admin_access_token):
+    """Retrieve a status report summary of the REANA system."""
+    def _format_statuses(type_, statuses):
+        """Format statuses dictionary object."""
+        click.echo(type_.upper())
+        for stat_name, stat_value in statuses.items():
+            click.echo(f'{stat_name}: {stat_value}')
+
+    types = STATUS_OBJECT_TYPES.keys() if 'all' in types else types
+    for type_ in types:
+        statuses_obj = STATUS_OBJECT_TYPES[type_]()
+        statuses = statuses_obj.get_status()
+        _format_statuses(type_, statuses)
+        click.echo('\n')

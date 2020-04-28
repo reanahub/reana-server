@@ -10,8 +10,8 @@ set -e
 
 # Create REANA DB
 echo 'Creating REANA database...'
-reana-admin db-init
-reana-admin users-create-default info@reana.io
+flask reana-admin db-init
+flask reana-admin users-create-default info@reana.io
 echo 'REANA database created.'
 
 # Create Invenio DB

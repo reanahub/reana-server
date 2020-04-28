@@ -10,7 +10,8 @@ RUN apt-get update && \
     apt-get install -y \
       gcc \
       vim-tiny \
-      libffi-dev && \
+      libffi-dev \
+      procps && \
     pip install --upgrade pip
 
 COPY CHANGES.rst README.rst setup.py /code/
