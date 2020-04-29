@@ -23,7 +23,8 @@ from flask import url_for
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_db.database import Session
 from reana_db.models import User, UserTokenType, Workflow
-from sqlalchemy.exc import IntegrityError, InvalidRequestError, SQLAlchemyError
+from sqlalchemy.exc import (IntegrityError, InvalidRequestError,
+                            SQLAlchemyError, StatementError)
 from werkzeug.wsgi import LimitedStream
 
 from reana_server.config import ADMIN_USER_ID, REANA_GITLAB_URL
@@ -290,8 +291,12 @@ def clone_workflow(workflow, reana_spec):
 def _get_user_by_criteria(id_, email):
     """Get user filtering first by id, then by email."""
     criteria = dict()
-    if id_:
-        criteria['id_'] = id_
-    elif email:
-        criteria['email'] = email
-    return User.query.filter_by(**criteria).one_or_none()
+    try:
+        if id_:
+            criteria['id_'] = id_
+        elif email:
+            criteria['email'] = email
+        return User.query.filter_by(**criteria).one_or_none()
+    except StatementError as e:
+        print(e)
+        return None
