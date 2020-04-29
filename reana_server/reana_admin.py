@@ -17,21 +17,17 @@ import traceback
 
 import click
 import tablib
-from flask.cli import FlaskGroup, with_appcontext
-from reana_commons.mail import send_email
+from flask.cli import with_appcontext
+from reana_commons.email import send_email
 from reana_commons.utils import click_table_printer
 from reana_db.database import Session, init_db
 from reana_db.models import AuditLogAction, User, UserTokenStatus
 
 from reana_server.config import ADMIN_USER_ID, REANA_URL
 from reana_server.factory import create_app
-<<<<<<< HEAD
 from reana_server.status import STATUS_OBJECT_TYPES
-from reana_server.utils import (_create_user, _export_users, _get_users,
-=======
 from reana_server.utils import (_create_user, _export_users,
                                 _get_user_by_criteria, _get_users,
->>>>>>> cli: add grant & revoke access token commands
                                 _import_users, create_user_workspace)
 
 
@@ -48,15 +44,7 @@ def admin_access_token_option(func):
     return wrapper
 
 
-def create_reana_flask_app():
-    """Create the REANA Flask app, removing existing Invenio commands."""
-    app = create_app()
-    app.cli.commands.clear()
-    return app
-
-
-@click.group(cls=FlaskGroup, add_default_commands=False,
-             create_app=create_reana_flask_app)
+@click.group()
 def reana_admin():
     """REANA administration commands."""
 
@@ -229,13 +217,7 @@ def import_users(ctx, admin_access_token, file_):
     '-e',
     '--email',
     help='The email of the user.')
-@click.option(
-    '-f',
-    '--force',
-    is_flag=True,
-    default=False,
-    help='Grant token even if user has a revoked access token.')
-def token_grant(admin_access_token, id_, email, force):
+def token_grant(admin_access_token, id_, email):
     """Grant a token to the selected user."""
     try:
         admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
@@ -248,14 +230,13 @@ def token_grant(admin_access_token, id_, email, force):
         elif user.access_token:
             error_msg = (f'User {user.id_} ({user.email}) has already an'
                          ' active access token.')
-        elif (not force and user.access_token_status in
-              [UserTokenStatus.revoked.name, None]):
-            error_msg = (f'User {user.id_} ({user.email}) access token status'
-                         f' is {user.access_token_status}, if you want to'
-                         ' proceed in any case use --force option.')
         if error_msg:
             click.secho(f'ERROR: {error_msg}', fg='red')
             sys.exit(1)
+        if (user.access_token_status in [UserTokenStatus.revoked.name, None]):
+            click.confirm(f'User {user.id_} ({user.email}) access token status'
+                          f' is {user.access_token_status}, do you want to'
+                          ' proceed?', abort=True)
 
         user_granted_token = secrets.token_urlsafe(16)
         user.access_token = user_granted_token
@@ -271,6 +252,8 @@ def token_grant(admin_access_token, id_, email, force):
             '\n\nThe REANA support team'
         send_email(user.email, email_subject, email_body)
 
+    except click.exceptions.Abort as e:
+        click.echo('Grant token aborted.')
     except Exception as e:
         click.secho(
             'Something went wrong while granting token:\n{}'.format(e),
@@ -306,10 +289,11 @@ def token_revoke(admin_access_token, id_, email):
             click.secho(f'ERROR: {error_msg}', fg='red')
             sys.exit(1)
 
+        revoked_token = user.access_token
         user.active_token.status = UserTokenStatus.revoked
         Session.commit()
-        log_msg = f'User\'s {user.id_} ({user.email}) token successfully' \
-            ' revoked.'
+        log_msg = f'User token {revoked_token} ({user.email}) token was' \
+            ' successfully revoked.'
         click.secho(log_msg, fg='green')
         admin.log_action(AuditLogAction.revoke_token, {'reana_admin': log_msg})
         # send notification to user by email

@@ -24,7 +24,7 @@ from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 from reana_db.database import Session
 
 
-def create_app():
+def create_app(config_mapping=None):
     """REANA Server application factory."""
     logging.basicConfig(
         level=REANA_LOG_LEVEL,
@@ -32,6 +32,8 @@ def create_app():
     )
     app = Flask(__name__)
     app.config.from_object('reana_server.config')
+    if config_mapping:
+        app.config.from_mapping(config_mapping)
     app.secret_key = "hyper secret key"
 
     app.session = Session

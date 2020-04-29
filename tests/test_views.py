@@ -472,18 +472,18 @@ def test_close_interactive_session(app, default_user,
             assert res.status_code == expected_status_code
 
 
-def test_create_and_associate_reana_user():
-    user_email = 'test@reana.io'
+def test_create_and_associate_reana_user(session):
+    user_email = 'johndoe@reana.io'
     user_fullname = 'John Doe'
     username = 'johndoe'
     account_info = {'user': {'email': user_email,
                              'profile': {'full_name': user_fullname,
                                          'username': username}}}
-    user = Session.query(User).filter_by(email=user_email).\
+    user = session.query(User).filter_by(email=user_email).\
         one_or_none()
     assert user is None
     _create_and_associate_reana_user(None, account_info=account_info)
-    user = Session.query(User).filter_by(email=user_email).\
+    user = session.query(User).filter_by(email=user_email).\
         one_or_none()
     assert user
     assert user.email == user_email
