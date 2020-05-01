@@ -317,18 +317,36 @@ def token_revoke(admin_access_token, id_, email):
     type=click.Choice(list(STATUS_OBJECT_TYPES.keys()) + ['all'],
                       case_sensitive=False),
     help='Type of information to be displayed?')
+@click.option(
+    '-e',
+    '--email',
+    default=None,
+    help='Send the status by email to the configured receiver.')
 @admin_access_token_option
-def status_report(types, admin_access_token):
+def status_report(types, email, admin_access_token):
     """Retrieve a status report summary of the REANA system."""
     def _format_statuses(type_, statuses):
         """Format statuses dictionary object."""
-        click.echo(type_.upper())
+        formatted_statuses = type_.upper() + '\n'
         for stat_name, stat_value in statuses.items():
-            click.echo(f'{stat_name}: {stat_value}')
+            formatted_statuses += f'{stat_name}: {stat_value}\n'
+
+        return formatted_statuses
 
     types = STATUS_OBJECT_TYPES.keys() if 'all' in types else types
+    status_report_output = ''
     for type_ in types:
         statuses_obj = STATUS_OBJECT_TYPES[type_]()
         statuses = statuses_obj.get_status()
-        _format_statuses(type_, statuses)
-        click.echo('\n')
+        status_report_output += _format_statuses(type_, statuses) + '\n'
+
+    click.echo(status_report_output)
+
+    if email:
+        status_report_body = (
+            f'Status report for {REANA_URL or "REANA service"}\n'
+            '---\n' +
+            status_report_output)
+
+        send_email(email, 'REANA system status report', status_report_body)
+        click.echo(f'Status report successfully sent by email to {email}.')
