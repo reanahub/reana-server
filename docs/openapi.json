@@ -243,7 +243,10 @@
             "examples": {
               "application/json": {
                 "email": "user@reana.info",
-                "reana_token": "Drmhze6EPcv0fN_81Bj-nA"
+                "full_name": "John Doe",
+                "reana_token": "Drmhze6EPcv0fN_81Bj-nA",
+                "reana_token_status": "active",
+                "username": "jdoe"
               }
             },
             "schema": {
@@ -251,7 +254,16 @@
                 "email": {
                   "type": "string"
                 },
+                "full_name": {
+                  "type": "string"
+                },
                 "reana_token": {
+                  "type": "string"
+                },
+                "reana_token_status": {
+                  "type": "string"
+                },
+                "username": {
                   "type": "string"
                 }
               },
@@ -577,6 +589,75 @@
           }
         },
         "summary": "Add user secrets to REANA."
+      }
+    },
+    "/api/token": {
+      "put": {
+        "description": "This resource allows the user to create an empty REANA access token and mark it as requested.",
+        "operationId": "request_token",
+        "parameters": [
+          {
+            "description": "API access_token of user.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "User information correspoding to the session cookie sent in the request.",
+            "examples": {
+              "application/json": {
+                "reana_token_status": "requested"
+              }
+            },
+            "schema": {
+              "properties": {
+                "reana_token_status": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Error message indicating that the uses is not authenticated.",
+            "examples": {
+              "application/json": {
+                "error": "User not logged in"
+              }
+            },
+            "schema": {
+              "properties": {
+                "error": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. User token not valid.",
+            "examples": {
+              "application/json": {
+                "message": "Token is not valid."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal server error."
+              }
+            }
+          }
+        },
+        "summary": "Requests a new access token for the authenticated user."
       }
     },
     "/api/users": {

@@ -16,7 +16,7 @@ import uuid
 import pytest
 from click.testing import CliRunner
 from mock import patch
-from reana_db.models import User, UserTokenStatus
+from reana_db.models import AuditLogAction, User, UserTokenStatus
 
 from reana_server.reana_admin import reana_admin
 
@@ -102,15 +102,16 @@ def test_grant_token(default_user, session):
          '-e', user.email], input='y\n')
     assert f'Token for user {user.id_} ({user.email}) granted' in result.output
     assert user.access_token
+    assert default_user.audit_logs[-1].action is AuditLogAction.grant_token
 
     # user with active token
     active_user = User(email='active@cern.ch', access_token='valid_token')
     session.add(active_user)
     session.commit()
     result = runner.invoke(
-            reana_admin,
-            ['token-grant', '--admin-access-token', default_user.access_token,
-             '--id', str(active_user.id_)])
+        reana_admin,
+        ['token-grant', '--admin-access-token', default_user.access_token,
+         '--id', str(active_user.id_)])
     assert 'has already an active access token' in result.output
 
     # typical ui user workflow
@@ -118,14 +119,15 @@ def test_grant_token(default_user, session):
     session.add(ui_user)
     session.commit()
     ui_user.request_access_token()
-    assert ui_user.access_token_status == UserTokenStatus.requested.name
+    assert ui_user.access_token_status is UserTokenStatus.requested.name
     assert ui_user.access_token is None
     result = runner.invoke(
-            reana_admin,
-            ['token-grant', '--admin-access-token', default_user.access_token,
-             '--id', str(ui_user.id_)])
-    assert ui_user.access_token_status == UserTokenStatus.active.name
+        reana_admin,
+        ['token-grant', '--admin-access-token', default_user.access_token,
+         '--id', str(ui_user.id_)])
+    assert ui_user.access_token_status is UserTokenStatus.active.name
     assert ui_user.access_token
+    assert default_user.audit_logs[-1].action is AuditLogAction.grant_token
 
 
 def test_revoke_token(default_user, session):
@@ -159,8 +161,9 @@ def test_revoke_token(default_user, session):
             reana_admin,
             ['token-revoke', '--admin-access-token', default_user.access_token,
              '--id', str(user.id_)])
-    assert 'token was successfully revoked' in result.output
+    assert 'was successfully revoked' in result.output
     assert user.access_token_status == UserTokenStatus.revoked.name
+    assert default_user.audit_logs[-1].action is AuditLogAction.revoke_token
 
     # try to revoke again
     result = runner.invoke(

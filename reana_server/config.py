@@ -136,3 +136,8 @@ REANA_GITLAB_OAUTH_APP_SECRET = os.getenv('REANA_GITLAB_OAUTH_APP_SECRET',
                                           'CHANGE_ME')
 REANA_GITLAB_URL = 'https://{}'.format(os.getenv('REANA_GITLAB_HOST',
                                                  'CHANGE_ME'))
+
+
+# Email configuration
+# ===================
+ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'CHANGE_ME')

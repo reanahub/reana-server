@@ -15,7 +15,10 @@ from bravado.exception import HTTPError
 from flask import Blueprint, jsonify, make_response, redirect, request
 from flask_login import current_user
 from invenio_oauthclient.utils import get_safe_redirect_target
+from reana_db.models import AuditLogAction
+from reana_commons.email import send_email
 
+from reana_server.config import ADMIN_EMAIL, REANA_URL
 from reana_server.utils import (_create_user, _get_user_from_invenio_user,
                                 _get_users, get_user_from_token)
 
@@ -270,11 +273,20 @@ def get_me():
                 type: string
               reana_token:
                 type: string
+              reana_token_status:
+                type: string
+              full_name:
+                type: string
+              username:
+                type: string
           examples:
             application/json:
               {
                 "email": "user@reana.info",
-                "reana_token": "Drmhze6EPcv0fN_81Bj-nA"
+                "reana_token": "Drmhze6EPcv0fN_81Bj-nA",
+                "reana_token_status": "active",
+                "full_name": "John Doe",
+                "username": "jdoe"
               }
         401:
           description: >-
@@ -338,5 +350,96 @@ def _logout():
         resp = make_response(redirect(next_url))
         resp.delete_cookie('session')
         return resp
-    else:
-        return jsonify(message='User not logged in'), 401
+    return jsonify(message='User not logged in'), 401
+
+
+@blueprint.route('/token', methods=['PUT'])
+def request_token():
+    r"""Endpoint to request user access token.
+
+    ---
+    put:
+      summary: Requests a new access token for the authenticated user.
+      description: >-
+        This resource allows the user to create an empty REANA access token
+        and mark it as requested.
+      operationId: request_token
+      produces:
+        - application/json
+      parameters:
+        - name: access_token
+          in: query
+          description: API access_token of user.
+          required: false
+          type: string
+      responses:
+        200:
+          description: >-
+            User information correspoding to the session cookie sent
+            in the request.
+          schema:
+            type: object
+            properties:
+              reana_token_status:
+                type: string
+          examples:
+            application/json:
+              {
+                "reana_token_status": "requested"
+              }
+        401:
+          description: >-
+            Error message indicating that the uses is not authenticated.
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+          examples:
+            application/json:
+              {
+                "error": "User not logged in"
+              }
+        403:
+          description: >-
+            Request failed. User token not valid.
+          examples:
+            application/json:
+              {
+                "message": "Token is not valid."
+              }
+        500:
+          description: >-
+            Request failed. Internal server error.
+          examples:
+            application/json:
+              {
+                "message": "Internal server error."
+              }
+    """
+    try:
+        user = None
+        if current_user.is_authenticated:
+            user = _get_user_from_invenio_user(current_user.email)
+        elif "access_token" in request.args:
+            user = get_user_from_token(request.args.get('access_token'))
+        user.request_access_token()
+        user.log_action(AuditLogAction.request_token)
+        email_subject = f'[{REANA_URL}] Token request ({user.email})'
+        fields = ['id_', 'email', 'full_name', 'username', 'access_token',
+                  'access_token_status']
+        email_body = (
+            'New user access token request:\n\n' +
+            '\n'.join([f'{f}: {getattr(user, f, None)}' for f in fields]))
+        send_email(ADMIN_EMAIL, email_subject, email_body)
+        return jsonify({'reana_token_status': user.access_token_status}), 200
+
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500

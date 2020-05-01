@@ -292,7 +292,7 @@ def token_revoke(admin_access_token, id_, email):
         revoked_token = user.access_token
         user.active_token.status = UserTokenStatus.revoked
         Session.commit()
-        log_msg = f'User token {revoked_token} ({user.email}) token was' \
+        log_msg = f'User token {revoked_token} ({user.email}) was' \
             ' successfully revoked.'
         click.secho(log_msg, fg='green')
         admin.log_action(AuditLogAction.revoke_token, {'reana_admin': log_msg})
