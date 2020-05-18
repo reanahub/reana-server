@@ -275,10 +275,6 @@ def get_me():
                 type: string
               reana_token_status:
                 type: string
-              full_name:
-                type: string
-              username:
-                type: string
           examples:
             application/json:
               {

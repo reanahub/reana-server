@@ -254,16 +254,10 @@
                 "email": {
                   "type": "string"
                 },
-                "full_name": {
-                  "type": "string"
-                },
                 "reana_token": {
                   "type": "string"
                 },
                 "reana_token_status": {
-                  "type": "string"
-                },
-                "username": {
                   "type": "string"
                 }
               },
