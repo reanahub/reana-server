@@ -58,27 +58,25 @@ install_requires = [
     'uwsgitop>=0.10',
     'webcolors==1.7',
     # Invenio dependencies
-    'Flask>=1.0.2',
-    'Flask-Login<0.5.0',  # FIXME waiting for Flask-Security release
+    'Flask>=1.0.4',
     'werkzeug>=0.16.1,<0.17',
-    'invenio-app>=1.2.2,<1.3.0',
-    'invenio-base>=1.2.0,<1.3.0',
+    'invenio-app>=1.2.6,<1.3.0',
+    'invenio-base>=1.2.3,<1.3.0',
     'invenio-cache>=1.0.0,<1.1.0',
-    'invenio-config>=1.0.2,<1.1.0',
+    'invenio-config>=1.0.3,<1.1.0',
     # From base bundle
-    'invenio-logging>=1.1.0,<1.3.0',
+    'invenio-logging>=1.2.0,<1.3.0',
     'invenio-mail>=1.0.2,<1.1.0',
-    'invenio-rest>=1.1.0,<1.2.0',
+    'invenio-rest>=1.1.2,<1.2.0',
     # From auth bundle
-    'invenio-oauth2server>=1.0.3,<1.1.0',
-    'invenio-oauthclient>=1.1.2,<1.2.0',
+    'invenio-accounts>=1.1.1,<1.2.0',
+    'invenio-oauth2server>=1.0.5,<1.1.0',
+    'invenio-oauthclient>=1.1.3,<1.2.0',
     'invenio-userprofiles>=1.0.1,<1.1.0',
-    # Not included in previous dependencies
-    'invenio-db[postgresql]>=1.0.3,<1.1.0',
-    # Invenio dependencies missing from Invenio packages setup.py
-    'jsonpatch>=1.23,<2',
-    'six>=1.12.0',
-    'wtforms<2.3.0',  # FIXME wait for invenio fix
+    # Invenio database
+    'invenio-db[postgresql]>=1.0.5,<1.1.0',
+    'SQLAlchemy-Utils[encrypted]>=0.33.0,<0.36.0',
+    'six>=1.12.0',  # required by Flask-Breadcrumbs
 ]
 
 packages = find_packages()
