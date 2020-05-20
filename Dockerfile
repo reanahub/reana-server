@@ -39,5 +39,4 @@ ENV FLASK_APP=/code/reana_server/app.py
 
 EXPOSE 5000
 
-CMD ./scripts/setup > /var/log/reana-server-init-output.log 2>&1 && \
-    uwsgi --ini uwsgi.ini
+CMD uwsgi --ini uwsgi.ini

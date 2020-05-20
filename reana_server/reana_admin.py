@@ -60,7 +60,7 @@ def db_init():
         sys.exit(1)
 
 
-@reana_admin.command('users-create-default')
+@reana_admin.command('create-admin-user')
 @click.argument('email')
 @click.option('-i', '--id', 'id_',
               default=ADMIN_USER_ID)
@@ -83,8 +83,7 @@ def users_create_default(email, id_):
             create_user_workspace(user.get_user_workspace())
             Session.add(user)
             Session.commit()
-            click.echo('Created 1st user with access_token: {}'.
-                       format(user_characteristics['access_token']))
+            click.echo(user_characteristics['access_token'])
     except Exception as e:
         click.echo('Something went wrong: {0}'.format(e))
         sys.exit(1)
