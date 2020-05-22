@@ -22,7 +22,7 @@ from flask import current_app as app
 from flask import url_for
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_db.database import Session
-from reana_db.models import User, UserTokenType, Workflow
+from reana_db.models import User, UserTokenStatus, UserTokenType, Workflow
 from sqlalchemy.exc import (IntegrityError, InvalidRequestError,
                             SQLAlchemyError, StatementError)
 from werkzeug.wsgi import LimitedStream
@@ -55,6 +55,8 @@ def get_user_from_token(access_token):
                        type_=UserTokenType.reana)).one_or_none()
     if not user:
         raise ValueError('Token not valid.')
+    if user.access_token_status == UserTokenStatus.revoked.name:
+        raise ValueError('User access token revoked.')
     return user
 
 
@@ -160,6 +162,8 @@ def _get_user_from_invenio_user(id):
     user = Session.query(User).filter_by(email=id).one_or_none()
     if not user:
         raise ValueError('No users registered with this id')
+    if user.access_token_status == UserTokenStatus.revoked.name:
+        raise ValueError('User access token revoked.')
     return user
 
 

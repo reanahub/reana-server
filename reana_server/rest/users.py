@@ -320,7 +320,6 @@ def get_me():
             me = _get_user_from_invenio_user(current_user.email)
         elif "access_token" in request.args:
             me = get_user_from_token(request.args.get('access_token'))
-
         if me:
             return (jsonify({'email': me.email,
                              'reana_token': me.access_token,
