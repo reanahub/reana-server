@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 0.6.1 (2020-05-25)
+--------------------------
+
+- Upgrades REANA-Commons package using latest Kubernetes Python client version.
+- Pins Flask and Invenio dependencies to fix REANA 0.6 installation troubles.
+
 Version 0.6.0 (2019-12-20)
 --------------------------
 
