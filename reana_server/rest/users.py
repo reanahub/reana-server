@@ -272,15 +272,23 @@ def get_me():
               email:
                 type: string
               reana_token:
-                type: string
-              reana_token_status:
-                type: string
+                type: object
+                properties:
+                  value:
+                    type: string
+                  status:
+                    type: string
+                  requested_at:
+                    type: string
           examples:
             application/json:
               {
                 "email": "user@reana.info",
-                "reana_token": "Drmhze6EPcv0fN_81Bj-nA",
-                "reana_token_status": "active",
+                "reana_token": {
+                    "value": "Drmhze6EPcv0fN_81Bj-nA",
+                    "status": "active",
+                    "requested_at": "Mon, 25 May 2020 10:39:57 GMT",
+                },
                 "full_name": "John Doe",
                 "username": "jdoe"
               }
@@ -321,11 +329,17 @@ def get_me():
         elif "access_token" in request.args:
             me = get_user_from_token(request.args.get('access_token'))
         if me:
-            return (jsonify({'email': me.email,
-                             'reana_token': me.access_token,
-                             'reana_token_status': me.access_token_status,
-                             'full_name': me.full_name,
-                             'username': me.username}), 200)
+            return (jsonify({
+                'email': me.email,
+                'reana_token': {
+                    'value': me.access_token,
+                    'status': me.access_token_status,
+                    'requested_at':
+                    me.latest_access_token.created
+                    if me.latest_access_token else None,
+                },
+                'full_name': me.full_name,
+                'username': me.username}), 200)
         return jsonify(message='User not logged in'), 401
     except HTTPError as e:
         logging.error(traceback.format_exc())
@@ -375,12 +389,20 @@ def request_token():
           schema:
             type: object
             properties:
-              reana_token_status:
-                type: string
+              reana_token:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  requested_at:
+                    type: string
           examples:
             application/json:
               {
-                "reana_token_status": "requested"
+                "reana_token": {
+                  "status": "requested",
+                  "requested_at": "Mon, 25 May 2020 10:45:15 GMT"
+                }
               }
         401:
           description: >-
@@ -427,7 +449,10 @@ def request_token():
             'New user access token request:\n\n' +
             '\n'.join([f'{f}: {getattr(user, f, None)}' for f in fields]))
         send_email(ADMIN_EMAIL, email_subject, email_body)
-        return jsonify({'reana_token_status': user.access_token_status}), 200
+        return jsonify({
+            'reana_token': {
+                'status': user.access_token_status,
+                'requested_at': user.latest_access_token.created}}), 200
 
     except HTTPError as e:
         logging.error(traceback.format_exc())

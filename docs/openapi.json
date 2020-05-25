@@ -244,8 +244,11 @@
               "application/json": {
                 "email": "user@reana.info",
                 "full_name": "John Doe",
-                "reana_token": "Drmhze6EPcv0fN_81Bj-nA",
-                "reana_token_status": "active",
+                "reana_token": {
+                  "requested_at": "Mon, 25 May 2020 10:39:57 GMT",
+                  "status": "active",
+                  "value": "Drmhze6EPcv0fN_81Bj-nA"
+                },
                 "username": "jdoe"
               }
             },
@@ -255,10 +258,18 @@
                   "type": "string"
                 },
                 "reana_token": {
-                  "type": "string"
-                },
-                "reana_token_status": {
-                  "type": "string"
+                  "properties": {
+                    "requested_at": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
                 }
               },
               "type": "object"
@@ -606,13 +617,24 @@
             "description": "User information correspoding to the session cookie sent in the request.",
             "examples": {
               "application/json": {
-                "reana_token_status": "requested"
+                "reana_token": {
+                  "requested_at": "Mon, 25 May 2020 10:45:15 GMT",
+                  "status": "requested"
+                }
               }
             },
             "schema": {
               "properties": {
-                "reana_token_status": {
-                  "type": "string"
+                "reana_token": {
+                  "properties": {
+                    "requested_at": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
                 }
               },
               "type": "object"
