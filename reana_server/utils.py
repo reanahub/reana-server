@@ -109,7 +109,8 @@ def _export_users(admin_access_token):
     csv_file_obj = io.StringIO()
     csv_writer = csv.writer(csv_file_obj, dialect='unix')
     for user in User.query.all():
-        csv_writer.writerow([user.id_, user.email, user.access_token])
+        csv_writer.writerow([user.id_, user.email, user.access_token,
+                             user.username, user.full_name])
     return csv_file_obj
 
 
@@ -126,10 +127,10 @@ def _import_users(admin_access_token, users_csv_file):
         raise ValueError('Admin access token invalid.')
     csv_reader = csv.reader(users_csv_file)
     for row in csv_reader:
-        user = User(id_=row[0], email=row[1], access_token=row[2])
+        user = User(id_=row[0], email=row[1], access_token=row[2],
+                    username=row[3], full_name=row[4])
         Session.add(user)
     Session.commit()
-    Session.remove()
 
 
 def _create_and_associate_reana_user(sender, token=None,

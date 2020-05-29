@@ -27,7 +27,8 @@ def test_export_users(default_user):
     expected_csv_file = io.StringIO()
     csv_writer = csv.writer(expected_csv_file, dialect='unix')
     csv_writer.writerow(
-        [default_user.id_, default_user.email, default_user.access_token])
+        [default_user.id_, default_user.email, default_user.access_token,
+         default_user.username, default_user.full_name])
     result = runner.invoke(
         reana_admin,
         ['users-export', '--admin-access-token', default_user.access_token])
@@ -42,11 +43,13 @@ def test_import_users(app, session, default_user):
     user_id = uuid.uuid4()
     user_email = 'test@reana.io'
     user_access_token = secrets.token_urlsafe(16)
+    user_username = 'jdoe'
+    user_full_name = 'John Doe'
     with runner.isolated_filesystem():
         with open(users_csv_file_name, 'w') as f:
             csv_writer = csv.writer(f, dialect='unix')
-            csv_writer.writerow([user_id, user_email,
-                                 user_access_token])
+            csv_writer.writerow([user_id, user_email, user_access_token,
+                                 user_username, user_full_name])
 
         result = runner.invoke(
             reana_admin,
@@ -57,7 +60,9 @@ def test_import_users(app, session, default_user):
         user = session.query(User).filter_by(id_=user_id).first()
         assert user
         assert user.email == user_email
-        assert user.access_token == user.access_token
+        assert user.access_token == user_access_token
+        assert user.username == user_username
+        assert user.full_name == user_full_name
 
 
 def test_grant_token(default_user, session):
