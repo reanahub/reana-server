@@ -146,3 +146,7 @@ REANA_GITLAB_URL = 'https://{}'.format(os.getenv('REANA_GITLAB_HOST',
 # Email configuration
 # ===================
 ADMIN_EMAIL = os.getenv('REANA_EMAIL_SENDER', 'CHANGE_ME')
+
+# UI
+# ==
+REANA_UI_ANNOUNCEMENT = os.getenv('REANA_UI_ANNOUNCEMENT')
