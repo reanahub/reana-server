@@ -565,7 +565,7 @@ def test_close_interactive_session(
             assert res.status_code == expected_status_code
 
 
-def test_create_and_associate_reana_user(session):
+def test_create_and_associate_reana_user(app, session):
     user_email = "johndoe@reana.io"
     user_fullname = "John Doe"
     username = "johndoe"
