@@ -13,5 +13,5 @@ from reana_server.factory import create_app
 # Needed for flask.with_appcontext decorator to work.
 app = create_app()
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0')
+if __name__ == "__main__":
+    app.run(host="0.0.0.0")

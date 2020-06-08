@@ -26,12 +26,9 @@ from reana_db.database import Session
 
 def create_app(config_mapping=None):
     """REANA Server application factory."""
-    logging.basicConfig(
-        level=REANA_LOG_LEVEL,
-        format=REANA_LOG_FORMAT
-    )
+    logging.basicConfig(level=REANA_LOG_LEVEL, format=REANA_LOG_FORMAT)
     app = Flask(__name__)
-    app.config.from_object('reana_server.config')
+    app.config.from_object("reana_server.config")
     if config_mapping:
         app.config.from_mapping(config_mapping)
     app.secret_key = "hyper secret key"
@@ -52,11 +49,12 @@ def create_app(config_mapping=None):
 
     # Register API routes
     from .rest import gitlab, ping, secrets, users, workflows  # noqa
-    app.register_blueprint(ping.blueprint, url_prefix='/api')
-    app.register_blueprint(workflows.blueprint, url_prefix='/api')
-    app.register_blueprint(users.blueprint, url_prefix='/api')
-    app.register_blueprint(secrets.blueprint, url_prefix='/api')
-    app.register_blueprint(gitlab.blueprint, url_prefix='/api')
+
+    app.register_blueprint(ping.blueprint, url_prefix="/api")
+    app.register_blueprint(workflows.blueprint, url_prefix="/api")
+    app.register_blueprint(users.blueprint, url_prefix="/api")
+    app.register_blueprint(secrets.blueprint, url_prefix="/api")
+    app.register_blueprint(gitlab.blueprint, url_prefix="/api")
 
     @app.teardown_appcontext
     def shutdown_session(response_or_exc):

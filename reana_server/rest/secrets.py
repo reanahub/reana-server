@@ -15,16 +15,15 @@ import traceback
 from bravado.exception import HTTPError
 from flask import Blueprint, jsonify, request
 from flask_login import current_user
-from reana_commons.errors import (REANASecretAlreadyExists,
-                                  REANASecretDoesNotExist)
+from reana_commons.errors import REANASecretAlreadyExists, REANASecretDoesNotExist
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 
 from reana_server.utils import _get_user_from_invenio_user, get_user_from_token
 
-blueprint = Blueprint('secrets', __name__)
+blueprint = Blueprint("secrets", __name__)
 
 
-@blueprint.route('/secrets/', methods=['POST'])
+@blueprint.route("/secrets/", methods=["POST"])
 def add_secrets():  # noqa
     r"""Endpoint to create user secrets.
 
@@ -116,9 +115,9 @@ def add_secrets():  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
         secrets_store = REANAUserSecretsStore(str(user.id_))
-        overwrite = json.loads(request.args.get('overwrite'))
+        overwrite = json.loads(request.args.get("overwrite"))
         secrets_store.add_secrets(request.json, overwrite=overwrite)
         return jsonify({"message": "Secret(s) successfully added."}), 201
     except REANASecretAlreadyExists as e:
@@ -130,7 +129,7 @@ def add_secrets():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/secrets', methods=['GET'])
+@blueprint.route("/secrets", methods=["GET"])
 def get_secrets():  # noqa
     r"""Endpoint to retrieve user secrets.
 
@@ -201,7 +200,7 @@ def get_secrets():  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
         secrets_store = REANAUserSecretsStore(str(user.id_))
         user_secrets = secrets_store.get_secrets()
         return jsonify(user_secrets), 200
@@ -212,7 +211,7 @@ def get_secrets():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/secrets/', methods=['DELETE'])
+@blueprint.route("/secrets/", methods=["DELETE"])
 def delete_secrets():  # noqa
     r"""Endpoint to delete user secrets.
 
@@ -293,7 +292,7 @@ def delete_secrets():  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
         secrets_store = REANAUserSecretsStore(str(user.id_))
         deleted_secrets_list = secrets_store.delete_secrets(request.json)
         return jsonify(deleted_secrets_list), 200

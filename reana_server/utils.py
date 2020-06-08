@@ -23,8 +23,12 @@ from flask import url_for
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_db.database import Session
 from reana_db.models import User, UserTokenStatus, UserTokenType, Workflow
-from sqlalchemy.exc import (IntegrityError, InvalidRequestError,
-                            SQLAlchemyError, StatementError)
+from sqlalchemy.exc import (
+    IntegrityError,
+    InvalidRequestError,
+    SQLAlchemyError,
+    StatementError,
+)
 from werkzeug.wsgi import LimitedStream
 
 from reana_server.config import ADMIN_USER_ID, REANA_GITLAB_URL
@@ -38,25 +42,27 @@ def is_uuid_v4(uuid_or_name):
     except Exception:
         return False
 
-    return uuid.hex == uuid_or_name.replace('-', '')
+    return uuid.hex == uuid_or_name.replace("-", "")
 
 
 def create_user_workspace(user_workspace_path):
     """Create user workspace directory."""
-    reana_fs = fs.open_fs(app.config['SHARED_VOLUME_PATH'])
+    reana_fs = fs.open_fs(app.config["SHARED_VOLUME_PATH"])
     if not reana_fs.exists(user_workspace_path):
         reana_fs.makedirs(user_workspace_path)
 
 
 def get_user_from_token(access_token):
     """Validate that the token provided is valid."""
-    user = (Session.query(User).join(User.tokens)
-            .filter_by(token=access_token,
-                       type_=UserTokenType.reana)).one_or_none()
+    user = (
+        Session.query(User)
+        .join(User.tokens)
+        .filter_by(token=access_token, type_=UserTokenType.reana)
+    ).one_or_none()
     if not user:
-        raise ValueError('Token not valid.')
+        raise ValueError("Token not valid.")
     if user.access_token_status == UserTokenStatus.revoked.name:
-        raise ValueError('User access token revoked.')
+        raise ValueError("User access token revoked.")
     return user
 
 
@@ -64,16 +70,17 @@ def _get_users(_id, email, user_access_token, admin_access_token):
     """Return all users matching search criteria."""
     admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
     if admin_access_token != admin.access_token:
-        raise ValueError('Admin access token invalid.')
+        raise ValueError("Admin access token invalid.")
     search_criteria = dict()
     if _id:
-        search_criteria['id_'] = _id
+        search_criteria["id_"] = _id
     if email:
-        search_criteria['email'] = email
+        search_criteria["email"] = email
     query = Session.query(User).filter_by(**search_criteria)
     if user_access_token:
-        query = query.join(User.tokens).filter_by(token=user_access_token,
-                                                  type_=UserTokenType.reana)
+        query = query.join(User.tokens).filter_by(
+            token=user_access_token, type_=UserTokenType.reana
+        )
     return query.all()
 
 
@@ -82,18 +89,17 @@ def _create_user(email, user_access_token, admin_access_token):
     try:
         admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
         if admin_access_token != admin.access_token:
-            raise ValueError('Admin access token invalid.')
+            raise ValueError("Admin access token invalid.")
         if not user_access_token:
             user_access_token = secrets.token_urlsafe(16)
         user_parameters = dict(access_token=user_access_token)
-        user_parameters['email'] = email
+        user_parameters["email"] = email
         user = User(**user_parameters)
         Session.add(user)
         Session.commit()
     except (InvalidRequestError, IntegrityError) as e:
         Session.rollback()
-        raise ValueError('Could not create user, '
-                         'possible constraint violation')
+        raise ValueError("Could not create user, " "possible constraint violation")
     return user
 
 
@@ -105,12 +111,13 @@ def _export_users(admin_access_token):
     """
     admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
     if admin_access_token != admin.access_token:
-        raise ValueError('Admin access token invalid.')
+        raise ValueError("Admin access token invalid.")
     csv_file_obj = io.StringIO()
-    csv_writer = csv.writer(csv_file_obj, dialect='unix')
+    csv_writer = csv.writer(csv_file_obj, dialect="unix")
     for user in User.query.all():
-        csv_writer.writerow([user.id_, user.email, user.access_token,
-                             user.username, user.full_name])
+        csv_writer.writerow(
+            [user.id_, user.email, user.access_token, user.username, user.full_name]
+        )
     return csv_file_obj
 
 
@@ -124,87 +131,100 @@ def _import_users(admin_access_token, users_csv_file):
     """
     admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
     if admin_access_token != admin.access_token:
-        raise ValueError('Admin access token invalid.')
+        raise ValueError("Admin access token invalid.")
     csv_reader = csv.reader(users_csv_file)
     for row in csv_reader:
-        user = User(id_=row[0], email=row[1], access_token=row[2],
-                    username=row[3], full_name=row[4])
+        user = User(
+            id_=row[0],
+            email=row[1],
+            access_token=row[2],
+            username=row[3],
+            full_name=row[4],
+        )
         Session.add(user)
     Session.commit()
 
 
-def _create_and_associate_reana_user(sender, token=None,
-                                     response=None, account_info=None):
+def _create_and_associate_reana_user(
+    sender, token=None, response=None, account_info=None
+):
     try:
-        user_email = account_info['user']['email']
-        user_fullname = account_info['user']['profile']['full_name']
-        username = account_info['user']['profile']['username']
+        user_email = account_info["user"]["email"]
+        user_fullname = account_info["user"]["profile"]["full_name"]
+        username = account_info["user"]["profile"]["username"]
         search_criteria = dict()
-        search_criteria['email'] = user_email
+        search_criteria["email"] = user_email
         users = Session.query(User).filter_by(**search_criteria).all()
         if users:
             user = users[0]
         else:
-            user_parameters = dict(email=user_email, full_name=user_fullname,
-                                   username=username)
+            user_parameters = dict(
+                email=user_email, full_name=user_fullname, username=username
+            )
             user = User(**user_parameters)
             Session.add(user)
             Session.commit()
     except (InvalidRequestError, IntegrityError):
         Session.rollback()
-        raise ValueError('Could not create user, '
-                         'possible constraint violation')
+        raise ValueError("Could not create user, " "possible constraint violation")
     except Exception:
-        raise ValueError('Could not create user')
+        raise ValueError("Could not create user")
     return user
 
 
 def _get_user_from_invenio_user(id):
     user = Session.query(User).filter_by(email=id).one_or_none()
     if not user:
-        raise ValueError('No users registered with this id')
+        raise ValueError("No users registered with this id")
     if user.access_token_status == UserTokenStatus.revoked.name:
-        raise ValueError('User access token revoked.')
+        raise ValueError("User access token revoked.")
     return user
 
 
 def _get_reana_yaml_from_gitlab(webhook_data, user_id):
-    gitlab_api = REANA_GITLAB_URL + "/api/v4/projects/{0}" + \
-                 "/repository/files/{1}/raw?ref={2}&access_token={3}"
-    reana_yaml = 'reana.yaml'
-    if webhook_data['object_kind'] == 'push':
-        branch = webhook_data['project']['default_branch']
-        commit_sha = webhook_data['checkout_sha']
-    elif webhook_data['object_kind'] == 'merge_request':
-        branch = webhook_data['object_attributes']['source_branch']
-        commit_sha = webhook_data['object_attributes']['last_commit']['id']
+    gitlab_api = (
+        REANA_GITLAB_URL
+        + "/api/v4/projects/{0}"
+        + "/repository/files/{1}/raw?ref={2}&access_token={3}"
+    )
+    reana_yaml = "reana.yaml"
+    if webhook_data["object_kind"] == "push":
+        branch = webhook_data["project"]["default_branch"]
+        commit_sha = webhook_data["checkout_sha"]
+    elif webhook_data["object_kind"] == "merge_request":
+        branch = webhook_data["object_attributes"]["source_branch"]
+        commit_sha = webhook_data["object_attributes"]["last_commit"]["id"]
     secrets_store = REANAUserSecretsStore(str(user_id))
-    gitlab_token = secrets_store.get_secret_value('gitlab_access_token')
-    project_id = webhook_data['project']['id']
-    yaml_file = requests.get(gitlab_api.format(project_id, reana_yaml,
-                                               branch, gitlab_token))
-    return yaml.load(yaml_file.content), \
-        webhook_data['project']['path_with_namespace'], \
-        webhook_data['project']['name'], branch, \
-        commit_sha
+    gitlab_token = secrets_store.get_secret_value("gitlab_access_token")
+    project_id = webhook_data["project"]["id"]
+    yaml_file = requests.get(
+        gitlab_api.format(project_id, reana_yaml, branch, gitlab_token)
+    )
+    return (
+        yaml.load(yaml_file.content),
+        webhook_data["project"]["path_with_namespace"],
+        webhook_data["project"]["name"],
+        branch,
+        commit_sha,
+    )
 
 
 def _format_gitlab_secrets(gitlab_response):
-    access_token = json.loads(gitlab_response)['access_token']
+    access_token = json.loads(gitlab_response)["access_token"]
     user = json.loads(
-                requests.get(REANA_GITLAB_URL + '/api/v4/user?access_token={0}'
-                             .format(access_token)).content)
+        requests.get(
+            REANA_GITLAB_URL + "/api/v4/user?access_token={0}".format(access_token)
+        ).content
+    )
     return {
         "gitlab_access_token": {
-            "value": base64.b64encode(
-                        access_token.encode('utf-8')).decode('utf-8'),
-            "type": "env"
+            "value": base64.b64encode(access_token.encode("utf-8")).decode("utf-8"),
+            "type": "env",
         },
         "gitlab_user": {
-            "value": base64.b64encode(
-                        user['username'].encode('utf-8')).decode('utf-8'),
-            "type": "env"
-        }
+            "value": base64.b64encode(user["username"].encode("utf-8")).decode("utf-8"),
+            "type": "env",
+        },
     }
 
 
@@ -219,17 +239,17 @@ def _get_gitlab_hook_id(response, project_id, gitlab_token):
     """
     reana_hook_id = None
     gitlab_hooks_url = (
-        REANA_GITLAB_URL +
-        "/api/v4/projects/{0}/hooks?access_token={1}"
-        .format(project_id, gitlab_token)
+        REANA_GITLAB_URL
+        + "/api/v4/projects/{0}/hooks?access_token={1}".format(project_id, gitlab_token)
     )
     response_json = requests.get(gitlab_hooks_url).json()
-    create_workflow_url = url_for('workflows.create_workflow',
-                                  _external=True)
+    create_workflow_url = url_for("workflows.create_workflow", _external=True)
     if response.status_code == 200 and response_json:
-        reana_hook_id = next(hook['id'] for hook in response_json
-                             if hook['url'] and
-                             hook['url'] == create_workflow_url)
+        reana_hook_id = next(
+            hook["id"]
+            for hook in response_json
+            if hook["url"] and hook["url"] == create_workflow_url
+        )
     return reana_hook_id
 
 
@@ -263,7 +283,7 @@ class RequestStreamWithLen(object):
 
     def __len__(self):
         """Expose the length of the ``request.stream``."""
-        if not hasattr(self.limitedstream, 'limit'):
+        if not hasattr(self.limitedstream, "limit"):
             return 0
         return self.limitedstream.limit
 
@@ -277,20 +297,19 @@ def clone_workflow(workflow, reana_spec):
             owner_id=workflow.owner_id,
             reana_specification=reana_spec or workflow.reana_specification,
             type_=workflow.type_,
-            logs='',
+            logs="",
             workspace_path=workflow.workspace_path,
             restart=True,
-            run_number=workflow.run_number
+            run_number=workflow.run_number,
         )
         Session.add(cloned_workflow)
         Session.object_session(cloned_workflow).commit()
         return cloned_workflow
     except SQLAlchemyError as e:
-        message = \
-            'Database connection failed, please retry.'
+        message = "Database connection failed, please retry."
         logging.error(
-            f'Error while creating {cloned_workflow.id_}: {message}\n{e}',
-            exc_info=True)
+            f"Error while creating {cloned_workflow.id_}: {message}\n{e}", exc_info=True
+        )
 
 
 def _get_user_by_criteria(id_, email):
@@ -298,9 +317,9 @@ def _get_user_by_criteria(id_, email):
     criteria = dict()
     try:
         if id_:
-            criteria['id_'] = id_
+            criteria["id_"] = id_
         elif email:
-            criteria['email'] = email
+            criteria["email"] = email
         return User.query.filter_by(**criteria).one_or_none()
     except StatementError as e:
         print(e)

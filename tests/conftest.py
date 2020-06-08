@@ -17,18 +17,18 @@ from mock import Mock, patch
 from reana_server.factory import create_app
 
 
-@pytest.fixture(scope='module')
+@pytest.fixture(scope="module")
 def base_app(tmp_shared_volume_path):
     """Flask application fixture."""
     config_mapping = {
-        'AVAILABLE_WORKFLOW_ENGINES': 'serial',
-        'SERVER_NAME': 'localhost:5000',
-        'SECRET_KEY': 'SECRET_KEY',
-        'TESTING': True,
-        'FLASK_ENV': 'development',
-        'SHARED_VOLUME_PATH': tmp_shared_volume_path,
-        'SQLALCHEMY_DATABASE_URI': 'sqlite://',
-        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+        "AVAILABLE_WORKFLOW_ENGINES": "serial",
+        "SERVER_NAME": "localhost:5000",
+        "SECRET_KEY": "SECRET_KEY",
+        "TESTING": True,
+        "FLASK_ENV": "development",
+        "SHARED_VOLUME_PATH": tmp_shared_volume_path,
+        "SQLALCHEMY_DATABASE_URI": "sqlite://",
+        "SQLALCHEMY_TRACK_MODIFICATIONS": False,
     }
     app_ = create_app(config_mapping=config_mapping)
     return app_

@@ -32,6 +32,7 @@ class REANA(object):
             """Close session on app teardown."""
             from reana_db.database import Session as reana_db_session
             from invenio_db import db as invenio_db
+
             reana_db_session.remove()
             invenio_db.session.remove()
             return response_or_exc
@@ -43,12 +44,10 @@ class REANA(object):
 
             from .utils import _create_and_associate_reana_user
 
-            account_info_received.connect(
-                _create_and_associate_reana_user
-            )
+            account_info_received.connect(_create_and_associate_reana_user)
 
     def init_config(self, app):
         """Initialize configuration."""
         for k in dir(config):
-            if k.startswith('REANA_'):
+            if k.startswith("REANA_"):
                 app.config.setdefault(k, getattr(config, k))

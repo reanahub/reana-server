@@ -19,13 +19,17 @@ from reana_db.models import AuditLogAction
 from reana_commons.email import send_email
 
 from reana_server.config import ADMIN_EMAIL, REANA_UI_ANNOUNCEMENT, REANA_URL
-from reana_server.utils import (_create_user, _get_user_from_invenio_user,
-                                _get_users, get_user_from_token)
+from reana_server.utils import (
+    _create_user,
+    _get_user_from_invenio_user,
+    _get_users,
+    get_user_from_token,
+)
 
-blueprint = Blueprint('users', __name__)
+blueprint = Blueprint("users", __name__)
 
 
-@blueprint.route('/users', methods=['GET'])
+@blueprint.route("/users", methods=["GET"])
 def get_user():  # noqa
     r"""Endpoint to get user information from the server.
     ---
@@ -109,22 +113,21 @@ def get_user():  # noqa
               }
     """
     try:
-        user_id = request.args.get('id_')
-        user_email = request.args.get('email')
-        user_token = request.args.get('user_token')
-        access_token = request.args.get('access_token')
+        user_id = request.args.get("id_")
+        user_email = request.args.get("email")
+        user_token = request.args.get("user_token")
+        access_token = request.args.get("access_token")
         users = _get_users(user_id, user_email, user_token, access_token)
         if users:
             users_response = []
             for user in users:
-                user_response = dict(id_=user.id_,
-                                     email=user.email,
-                                     access_token=user.access_token)
+                user_response = dict(
+                    id_=user.id_, email=user.email, access_token=user.access_token
+                )
                 users_response.append(user_response)
             return jsonify(users_response), 200
         else:
-            return jsonify({"message": "User {} does not exist.".
-                            format(user_id)}, 404)
+            return jsonify({"message": "User {} does not exist.".format(user_id)}, 404)
     except ValueError:
         return jsonify({"message": "Action not permitted."}), 403
     except Exception as e:
@@ -132,7 +135,7 @@ def get_user():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/users', methods=['POST'])
+@blueprint.route("/users", methods=["POST"])
 def create_user():  # noqa
     r"""Endpoint to create users.
 
@@ -194,14 +197,21 @@ def create_user():  # noqa
               }
     """
     try:
-        user_email = request.args.get('email')
-        user_token = request.args.get('user_token')
-        access_token = request.args.get('access_token')
+        user_email = request.args.get("email")
+        user_token = request.args.get("user_token")
+        access_token = request.args.get("access_token")
         user = _create_user(user_email, user_token, access_token)
-        return jsonify({"message": "User was successfully created.",
-                        "id_": user.id_,
-                        "email": user.email,
-                        "access_token": user.access_token}), 201
+        return (
+            jsonify(
+                {
+                    "message": "User was successfully created.",
+                    "id_": user.id_,
+                    "email": user.email,
+                    "access_token": user.access_token,
+                }
+            ),
+            201,
+        )
     except ValueError:
         return jsonify({"message": "Action not permitted."}), 403
     except Exception as e:
@@ -209,7 +219,7 @@ def create_user():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/login', methods=['GET'])
+@blueprint.route("/login", methods=["GET"])
 def user_login():
     r"""Endpoint to authenticate users.
 
@@ -237,12 +247,19 @@ def user_login():
                 "message": "Add your REANA_ACCESS_TOKEN as a param."
               }
     """
-    return jsonify({"message": "Add your REANA_ACCESS_TOKEN as a URL param " +
-                    "to access the resource. " +
-                    "RESOURCE_URL?access_token=REANA_ACCESS_TOKEN"}), 200
+    return (
+        jsonify(
+            {
+                "message": "Add your REANA_ACCESS_TOKEN as a URL param "
+                + "to access the resource. "
+                + "RESOURCE_URL?access_token=REANA_ACCESS_TOKEN"
+            }
+        ),
+        200,
+    )
 
 
-@blueprint.route('/me', methods=['GET'])
+@blueprint.route("/me", methods=["GET"])
 def get_me():
     r"""Endpoint to get user information.
 
@@ -327,21 +344,27 @@ def get_me():
         if current_user.is_authenticated:
             me = _get_user_from_invenio_user(current_user.email)
         elif "access_token" in request.args:
-            me = get_user_from_token(request.args.get('access_token'))
+            me = get_user_from_token(request.args.get("access_token"))
         if me:
-            return (jsonify({
-                'email': me.email,
-                'reana_token': {
-                    'value': me.access_token,
-                    'status': me.access_token_status,
-                    'requested_at':
-                    me.latest_access_token.created
-                    if me.latest_access_token else None,
-                },
-                'full_name': me.full_name,
-                'username': me.username,
-                'announcement': REANA_UI_ANNOUNCEMENT}), 200)
-        return jsonify(message='User not logged in'), 401
+            return (
+                jsonify(
+                    {
+                        "email": me.email,
+                        "reana_token": {
+                            "value": me.access_token,
+                            "status": me.access_token_status,
+                            "requested_at": me.latest_access_token.created
+                            if me.latest_access_token
+                            else None,
+                        },
+                        "full_name": me.full_name,
+                        "username": me.username,
+                        "announcement": REANA_UI_ANNOUNCEMENT,
+                    }
+                ),
+                200,
+            )
+        return jsonify(message="User not logged in"), 401
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
@@ -353,17 +376,17 @@ def get_me():
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/logout', methods=['GET'])
+@blueprint.route("/logout", methods=["GET"])
 def _logout():
     if current_user.is_authenticated:
         next_url = get_safe_redirect_target()
         resp = make_response(redirect(next_url))
-        resp.delete_cookie('session')
+        resp.delete_cookie("session")
         return resp
-    return jsonify(message='User not logged in'), 401
+    return jsonify(message="User not logged in"), 401
 
 
-@blueprint.route('/token', methods=['PUT'])
+@blueprint.route("/token", methods=["PUT"])
 def request_token():
     r"""Endpoint to request user access token.
 
@@ -440,20 +463,33 @@ def request_token():
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         elif "access_token" in request.args:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
         user.request_access_token()
         user.log_action(AuditLogAction.request_token)
-        email_subject = f'[{REANA_URL}] Token request ({user.email})'
-        fields = ['id_', 'email', 'full_name', 'username', 'access_token',
-                  'access_token_status']
-        email_body = (
-            'New user access token request:\n\n' +
-            '\n'.join([f'{f}: {getattr(user, f, None)}' for f in fields]))
+        email_subject = f"[{REANA_URL}] Token request ({user.email})"
+        fields = [
+            "id_",
+            "email",
+            "full_name",
+            "username",
+            "access_token",
+            "access_token_status",
+        ]
+        email_body = "New user access token request:\n\n" + "\n".join(
+            [f"{f}: {getattr(user, f, None)}" for f in fields]
+        )
         send_email(ADMIN_EMAIL, email_subject, email_body)
-        return jsonify({
-            'reana_token': {
-                'status': user.access_token_status,
-                'requested_at': user.latest_access_token.created}}), 200
+        return (
+            jsonify(
+                {
+                    "reana_token": {
+                        "status": user.access_token_status,
+                        "requested_at": user.latest_access_token.created,
+                    }
+                }
+            ),
+            200,
+        )
 
     except HTTPError as e:
         logging.error(traceback.format_exc())

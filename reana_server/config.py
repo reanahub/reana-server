@@ -15,27 +15,24 @@ from datetime import timedelta
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
 from invenio_oauthclient.contrib import cern
 from reana_commons.config import REANA_COMPONENT_PREFIX
+
 # Database
 # ========
 #: Database URI including user and password
 from reana_db.config import SQLALCHEMY_DATABASE_URI
 
-AVAILABLE_WORKFLOW_ENGINES = [
-    'yadage',
-    'cwl',
-    'serial'
-]
+AVAILABLE_WORKFLOW_ENGINES = ["yadage", "cwl", "serial"]
 """Available workflow engines."""
 
 ADMIN_USER_ID = "00000000-0000-0000-0000-000000000000"
 
-SHARED_VOLUME_PATH = os.getenv('SHARED_VOLUME_PATH', '/var/reana')
+SHARED_VOLUME_PATH = os.getenv("SHARED_VOLUME_PATH", "/var/reana")
 
-REANA_URL = os.getenv('REANA_URL')
+REANA_URL = os.getenv("REANA_URL")
 
-REANA_SSO_CERN_CONSUMER_KEY = os.getenv('CERN_CONSUMER_KEY', 'CHANGE_ME')
+REANA_SSO_CERN_CONSUMER_KEY = os.getenv("CERN_CONSUMER_KEY", "CHANGE_ME")
 
-REANA_SSO_CERN_CONSUMER_SECRET = os.getenv('CERN_CONSUMER_SECRET', 'CHANGE_ME')
+REANA_SSO_CERN_CONSUMER_SECRET = os.getenv("CERN_CONSUMER_SECRET", "CHANGE_ME")
 
 
 # Invenio configuration
@@ -55,13 +52,11 @@ MAIL_SUPPRESS_SEND = True
 # Accounts
 # ========
 #: Redis URL
-ACCOUNTS_SESSION_REDIS_URL = 'redis://{}-cache:6379/1'.format(
-    REANA_COMPONENT_PREFIX)
+ACCOUNTS_SESSION_REDIS_URL = "redis://{}-cache:6379/1".format(REANA_COMPONENT_PREFIX)
 #: Email address used as sender of account registration emails.
 SECURITY_EMAIL_SENDER = SUPPORT_EMAIL
 #: Email subject for account registration emails.
-SECURITY_EMAIL_SUBJECT_REGISTER = _(
-    "Welcome to REANA Server!")
+SECURITY_EMAIL_SUBJECT_REGISTER = _("Welcome to REANA Server!")
 
 #: Enable session/user id request tracing. This feature will add X-Session-ID
 #: and X-User-ID headers to HTTP response. You MUST ensure that NGINX (or other
@@ -84,11 +79,11 @@ CORS_SUPPORTS_CREDENTIALS = False
 
 #: Secret key - each installation (dev, production, ...) needs a separate key.
 #: It should be changed before deploying.
-SECRET_KEY = 'CHANGE_ME'
+SECRET_KEY = "CHANGE_ME"
 #: Sets cookie with the secure flag by default
 SESSION_COOKIE_SECURE = True
 #: Sets session to be samesite to avoid CSRF attacks
-SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = "Lax"
 #: Since HAProxy and Nginx route all requests no matter the host header
 #: provided, the allowed hosts variable is set to localhost. In production it
 #: should be set to the correct host and it is strongly recommended to only
@@ -107,21 +102,18 @@ APP_HEALTH_BLUEPRINT_ENABLED = False
 
 # Flask-Breadcrumbs needs this variable set
 # =========================================
-BREADCRUMBS_ROOT = 'breadcrumbs'
+BREADCRUMBS_ROOT = "breadcrumbs"
 
 CERN_REMOTE_APP = copy.deepcopy(cern.REMOTE_APP)
 
-OAUTHCLIENT_REMOTE_APPS = dict(
-    cern=CERN_REMOTE_APP,
-)
+OAUTHCLIENT_REMOTE_APPS = dict(cern=CERN_REMOTE_APP,)
 
-REANA_CERN_ALLOW_SOCIAL_LOGIN = os.getenv(
-    'REANA_CERN_ALLOW_SOCIAL_LOGIN', False)
+REANA_CERN_ALLOW_SOCIAL_LOGIN = os.getenv("REANA_CERN_ALLOW_SOCIAL_LOGIN", False)
 
 if REANA_CERN_ALLOW_SOCIAL_LOGIN:
     OAUTHCLIENT_CERN_ALLOWED_IDENTITY_CLASSES = (
-        cern.OAUTHCLIENT_CERN_ALLOWED_IDENTITY_CLASSES +
-        ['Unverified External'])
+        cern.OAUTHCLIENT_CERN_ALLOWED_IDENTITY_CLASSES + ["Unverified External"]
+    )
 
 CERN_APP_CREDENTIALS = dict(
     consumer_key=REANA_SSO_CERN_CONSUMER_KEY,
@@ -130,23 +122,21 @@ CERN_APP_CREDENTIALS = dict(
 
 DEBUG = True
 
-SECURITY_PASSWORD_SALT = 'security-password-salt'
+SECURITY_PASSWORD_SALT = "security-password-salt"
 
 SECURITY_SEND_REGISTER_EMAIL = False
 
 # Gitlab Application configuration
 # ================================
-REANA_GITLAB_OAUTH_APP_ID = os.getenv('REANA_GITLAB_OAUTH_APP_ID', 'CHANGE_ME')
-REANA_GITLAB_OAUTH_APP_SECRET = os.getenv('REANA_GITLAB_OAUTH_APP_SECRET',
-                                          'CHANGE_ME')
-REANA_GITLAB_URL = 'https://{}'.format(os.getenv('REANA_GITLAB_HOST',
-                                                 'CHANGE_ME'))
+REANA_GITLAB_OAUTH_APP_ID = os.getenv("REANA_GITLAB_OAUTH_APP_ID", "CHANGE_ME")
+REANA_GITLAB_OAUTH_APP_SECRET = os.getenv("REANA_GITLAB_OAUTH_APP_SECRET", "CHANGE_ME")
+REANA_GITLAB_URL = "https://{}".format(os.getenv("REANA_GITLAB_HOST", "CHANGE_ME"))
 
 
 # Email configuration
 # ===================
-ADMIN_EMAIL = os.getenv('REANA_EMAIL_SENDER', 'CHANGE_ME')
+ADMIN_EMAIL = os.getenv("REANA_EMAIL_SENDER", "CHANGE_ME")
 
 # UI
 # ==
-REANA_UI_ANNOUNCEMENT = os.getenv('REANA_UI_ANNOUNCEMENT')
+REANA_UI_ANNOUNCEMENT = os.getenv("REANA_UI_ANNOUNCEMENT")

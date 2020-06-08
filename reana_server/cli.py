@@ -16,13 +16,10 @@ from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 from reana_server.scheduler import WorkflowExecutionScheduler
 
 
-@click.command('start-scheduler')
+@click.command("start-scheduler")
 def start_scheduler():
     """Start a workflow execution scheduler process."""
-    logging.basicConfig(
-        level=REANA_LOG_LEVEL,
-        format=REANA_LOG_FORMAT
-    )
+    logging.basicConfig(level=REANA_LOG_LEVEL, format=REANA_LOG_FORMAT)
     scheduler = WorkflowExecutionScheduler()
-    logging.info('Starting scheduler...')
+    logging.info("Starting scheduler...")
     scheduler.run()

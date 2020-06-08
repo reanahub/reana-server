@@ -28,7 +28,7 @@ class REANAStatus:
 
     def execute_cmd(self, cmd):
         """Execute a command."""
-        return subprocess.check_output(cmd).decode().rstrip('\r\n')
+        return subprocess.check_output(cmd).decode().rstrip("\r\n")
 
     def get_status(self):
         """Get status summary for REANA."""
@@ -54,14 +54,17 @@ class InteractiveSessionsStatus(REANAStatus):
 
     def get_active(self):
         """Get the number of active interactive sessions."""
-        active_interactive_sessions = Session.query(Workflow).filter(
-            Workflow.interactive_session.isnot(None)).count()
+        active_interactive_sessions = (
+            Session.query(Workflow)
+            .filter(Workflow.interactive_session.isnot(None))
+            .count()
+        )
         return active_interactive_sessions
 
     def get_status(self):
         """Get status summary for interactive sessions."""
         return {
-            'active': self.get_active(),
+            "active": self.get_active(),
         }
 
 
@@ -84,13 +87,13 @@ class SystemStatus(REANAStatus):
 
     def uptime(self):
         """Get component uptime."""
-        cmd = ['uptime', '-p']
+        cmd = ["uptime", "-p"]
         return self.execute_cmd(cmd)
 
     def get_status(self):
         """Get status summary for REANA system."""
         return {
-            'uptime': self.uptime(),
+            "uptime": self.uptime(),
         }
 
 
@@ -117,36 +120,38 @@ class StorageStatus(REANAStatus):
         if self.user:
             path = self.user.workspace_path
         else:
-            path = SHARED_VOLUME_PATH + '/users'
+            path = SHARED_VOLUME_PATH + "/users"
 
         return path
 
     def users_directory_size(self):
         """Get disk usage for users directory."""
         depth = 0
-        cmd = ['du', '-h', f'--max-depth={depth}', self._get_path()]
+        cmd = ["du", "-h", f"--max-depth={depth}", self._get_path()]
         output = self.execute_cmd(cmd)
         size = output.split()[0]
         return size
 
     def shared_volume_health(self):
         """REANA shared volume health."""
-        cmd = ['df', '-h', SHARED_VOLUME_PATH]
+        cmd = ["df", "-h", SHARED_VOLUME_PATH]
         output = self.execute_cmd(cmd).splitlines()
         headers = output[0].split()
         values = output[1].split()
-        used_index = headers.index('Used')
-        available_index = headers.index('Avail')
-        use_percentage_index = headers.index('Use%')
+        used_index = headers.index("Used")
+        available_index = headers.index("Avail")
+        use_percentage_index = headers.index("Use%")
 
-        return f'{values[used_index]}/{values[available_index]} ' \
-               f'({values[use_percentage_index]})'
+        return (
+            f"{values[used_index]}/{values[available_index]} "
+            f"({values[use_percentage_index]})"
+        )
 
     def get_status(self):
         """Get status summary for REANA storage."""
         return {
-            'user_directory_size': self.users_directory_size(),
-            'shared_volume_health': self.shared_volume_health(),
+            "user_directory_size": self.users_directory_size(),
+            "shared_volume_health": self.shared_volume_health(),
         }
 
 
@@ -177,7 +182,7 @@ class UsersStatus(REANAStatus):
     def get_status(self):
         """Get status summary for REANA users."""
         return {
-            'active_web_users': self.active_web_users(),
+            "active_web_users": self.active_web_users(),
         }
 
 
@@ -200,54 +205,52 @@ class WorkflowsStatus(REANAStatus):
 
     def get_workflows_by_status(self, status):
         """Get the number of workflows in status ``status``."""
-        number = Session.query(Workflow).filter(
-            Workflow.status == status).count()
+        number = Session.query(Workflow).filter(Workflow.status == status).count()
 
         return number
 
     def restarted_workflows(self):
         """Get the number of restarted workflows."""
-        number = Session.query(Workflow).filter(
-            Workflow.restart).count()
+        number = Session.query(Workflow).filter(Workflow.restart).count()
 
         return number
 
     def stuck_workflows(self):
         """Get the number of stuck workflows."""
         inactivity_threshold = datetime.now() - timedelta(hours=12)
-        number = (Session.query(Workflow)
-                  .filter(Workflow.status == WorkflowStatus.running)
-                  .filter(Workflow.run_started_at <= inactivity_threshold)
-                  .filter(Workflow.updated <= inactivity_threshold)
-                  .count())
+        number = (
+            Session.query(Workflow)
+            .filter(Workflow.status == WorkflowStatus.running)
+            .filter(Workflow.run_started_at <= inactivity_threshold)
+            .filter(Workflow.updated <= inactivity_threshold)
+            .count()
+        )
 
         return number
 
     def git_workflows(self):
         """Get the number of Git based workflows."""
-        number = (Session.query(Workflow)
-                  .filter(Workflow.git_repo != '')
-                  .count())
+        number = Session.query(Workflow).filter(Workflow.git_repo != "").count()
 
         return number
 
     def get_status(self):
         """Get status summary for REANA workflows."""
         return {
-            'running': self.get_workflows_by_status(WorkflowStatus.running),
-            'finished': self.get_workflows_by_status(WorkflowStatus.finished),
-            'stuck': self.stuck_workflows(),
-            'queued': self.get_workflows_by_status(WorkflowStatus.queued),
-            'restarts': self.restarted_workflows(),
-            'git_source': self.git_workflows(),
+            "running": self.get_workflows_by_status(WorkflowStatus.running),
+            "finished": self.get_workflows_by_status(WorkflowStatus.finished),
+            "stuck": self.stuck_workflows(),
+            "queued": self.get_workflows_by_status(WorkflowStatus.queued),
+            "restarts": self.restarted_workflows(),
+            "git_source": self.git_workflows(),
         }
 
 
 STATUS_OBJECT_TYPES = {
-    'interactive-sessions': InteractiveSessionsStatus,
-    'workflows': WorkflowsStatus,
-    'users': UsersStatus,
-    'system': SystemStatus,
-    'storage': StorageStatus,
+    "interactive-sessions": InteractiveSessionsStatus,
+    "workflows": WorkflowsStatus,
+    "users": UsersStatus,
+    "system": SystemStatus,
+    "storage": StorageStatus,
 }
 """High level REANA objects to extract information from."""

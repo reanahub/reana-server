@@ -10,10 +10,10 @@
 
 from flask import Blueprint, jsonify
 
-blueprint = Blueprint('ping', __name__)
+blueprint = Blueprint("ping", __name__)
 
 
-@blueprint.route('/ping', methods=['GET'])
+@blueprint.route("/ping", methods=["GET"])
 def ping():  # noqa
     r"""Endpoint to ping the server. Responds with a pong.
     ---

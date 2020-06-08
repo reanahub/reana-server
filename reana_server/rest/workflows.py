@@ -18,8 +18,7 @@ import requests
 from bravado.exception import HTTPError
 from flask import Blueprint, Response
 from flask import current_app as app
-from flask import (jsonify, redirect, request, send_file, stream_with_context,
-                   url_for)
+from flask import jsonify, redirect, request, send_file, stream_with_context, url_for
 from flask_login import current_user
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_commons.errors import REANAValidationError
@@ -29,24 +28,29 @@ from reana_db.database import Session
 from reana_db.models import Workflow, WorkflowStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
-from reana_server.api_client import (current_rwc_api_client,
-                                     current_workflow_submission_publisher)
+from reana_server.api_client import (
+    current_rwc_api_client,
+    current_workflow_submission_publisher,
+)
 from reana_server.config import SHARED_VOLUME_PATH
-from reana_server.utils import (clone_workflow,
-                                RequestStreamWithLen,
-                                _get_reana_yaml_from_gitlab,
-                                _get_user_from_invenio_user,
-                                get_user_from_token, is_uuid_v4)
+from reana_server.utils import (
+    clone_workflow,
+    RequestStreamWithLen,
+    _get_reana_yaml_from_gitlab,
+    _get_user_from_invenio_user,
+    get_user_from_token,
+    is_uuid_v4,
+)
 
 try:
     from urllib import parse as urlparse
 except ImportError:
     from urlparse import urlparse
 
-blueprint = Blueprint('workflows', __name__)
+blueprint = Blueprint("workflows", __name__)
 
 
-@blueprint.route('/workflows', methods=['GET'])
+@blueprint.route("/workflows", methods=["GET"])
 def get_workflows():  # noqa
     r"""Get all current workflows in REANA.
 
@@ -173,16 +177,13 @@ def get_workflows():  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
-        type = request.args.get('type', 'batch')
-        verbose = json.loads(request.args.get('verbose', 'false').lower())
-        block_size = request.args.get('block_size')
-        response, http_response = current_rwc_api_client.api.\
-            get_workflows(
-                user=str(user.id_),
-                type=type,
-                verbose=bool(verbose),
-                block_size=block_size).result()
+            user = get_user_from_token(request.args.get("access_token"))
+        type = request.args.get("type", "batch")
+        verbose = json.loads(request.args.get("verbose", "false").lower())
+        block_size = request.args.get("block_size")
+        response, http_response = current_rwc_api_client.api.get_workflows(
+            user=str(user.id_), type=type, verbose=bool(verbose), block_size=block_size
+        ).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -190,8 +191,7 @@ def get_workflows():  # noqa
         return jsonify(e.response.json()), e.response.status_code
     except json.JSONDecodeError as e:
         logging.error(traceback.format_exc())
-        return jsonify(
-          {"message": "Your request contains not valid JSON."}), 400
+        return jsonify({"message": "Your request contains not valid JSON."}), 400
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
@@ -200,7 +200,7 @@ def get_workflows():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows', methods=['POST'])
+@blueprint.route("/workflows", methods=["POST"])
 def create_workflow():  # noqa
     r"""Create a workflow.
 
@@ -293,56 +293,64 @@ def create_workflow():  # noqa
     try:
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
-        elif 'X-Gitlab-Token' in request.headers:
-            user = get_user_from_token(request.headers['X-Gitlab-Token'])
+        elif "X-Gitlab-Token" in request.headers:
+            user = get_user_from_token(request.headers["X-Gitlab-Token"])
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
         if request.json:
-            if 'object_kind' in request.json:
-                (reana_spec_file, git_url, workflow_name, git_branch,
-                 git_commit_sha) = _get_reana_yaml_from_gitlab(request.json,
-                                                               user.id_)
-                git_data = {"git_url": git_url,
-                            "git_branch": git_branch,
-                            "git_commit_sha": git_commit_sha}
+            if "object_kind" in request.json:
+                (
+                    reana_spec_file,
+                    git_url,
+                    workflow_name,
+                    git_branch,
+                    git_commit_sha,
+                ) = _get_reana_yaml_from_gitlab(request.json, user.id_)
+                git_data = {
+                    "git_url": git_url,
+                    "git_branch": git_branch,
+                    "git_commit_sha": git_commit_sha,
+                }
             else:
                 # validate against schema
                 git_data = {}
                 reana_spec_file = request.json
-                workflow_name = ''
-            workflow_engine = reana_spec_file['workflow']['type']
-        elif request.args.get('spec'):
-            return jsonify('Not implemented'), 501
+                workflow_name = ""
+            workflow_engine = reana_spec_file["workflow"]["type"]
+        elif request.args.get("spec"):
+            return jsonify("Not implemented"), 501
         else:
-            raise Exception('Either remote repository or a reana spec need to \
-            be provided')
+            raise Exception(
+                "Either remote repository or a reana spec need to \
+            be provided"
+            )
 
-        if workflow_engine not in app.config['AVAILABLE_WORKFLOW_ENGINES']:
-            raise Exception('Unknown workflow type.')
+        if workflow_engine not in app.config["AVAILABLE_WORKFLOW_ENGINES"]:
+            raise Exception("Unknown workflow type.")
 
-        workflow_name = request.args.get('workflow_name', workflow_name)
+        workflow_name = request.args.get("workflow_name", workflow_name)
         if is_uuid_v4(workflow_name):
-            return jsonify({'message':
-                            'Workflow name cannot be a valid UUIDv4.'}), \
-                400
-        workflow_dict = {'reana_specification': reana_spec_file,
-                         'workflow_name': workflow_name}
-        workflow_dict['operational_options'] = validate_operational_options(
-            workflow_engine,
-            reana_spec_file.get('inputs', {}).get('options', {}))
+            return jsonify({"message": "Workflow name cannot be a valid UUIDv4."}), 400
+        workflow_dict = {
+            "reana_specification": reana_spec_file,
+            "workflow_name": workflow_name,
+        }
+        workflow_dict["operational_options"] = validate_operational_options(
+            workflow_engine, reana_spec_file.get("inputs", {}).get("options", {})
+        )
         if git_data:
-            workflow_dict['git_data'] = git_data
-        response, http_response = current_rwc_api_client.api.\
-            create_workflow(
-                workflow=workflow_dict,
-                user=str(user.id_)).result()
+            workflow_dict["git_data"] = git_data
+        response, http_response = current_rwc_api_client.api.create_workflow(
+            workflow=workflow_dict, user=str(user.id_)
+        ).result()
         if git_data:
-            Workflow.update_workflow_status(Session, response["workflow_id"],
-                                            WorkflowStatus.queued)
+            Workflow.update_workflow_status(
+                Session, response["workflow_id"], WorkflowStatus.queued
+            )
             current_workflow_submission_publisher.publish_workflow_submission(
                 user_id=str(user.id_),
                 workflow_id_or_name=response["workflow_id"],
-                parameters=request.json
+                parameters=request.json,
             )
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -359,8 +367,7 @@ def create_workflow():  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/specification',
-                 methods=['GET'])
+@blueprint.route("/workflows/<workflow_id_or_name>/specification", methods=["GET"])
 def get_workflow_specification(workflow_id_or_name):  # noqa
     r"""Get workflow specification.
 
@@ -442,14 +449,20 @@ def get_workflow_specification(workflow_id_or_name):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-        workflow = _get_workflow_with_uuid_or_name(
-            workflow_id_or_name, str(user.id_))
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
 
-        return jsonify({'specification': workflow.reana_specification,
-                        'parameters': workflow.input_parameters}), 200
+        return (
+            jsonify(
+                {
+                    "specification": workflow.reana_specification,
+                    "parameters": workflow.input_parameters,
+                }
+            ),
+            200,
+        )
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
@@ -461,7 +474,7 @@ def get_workflow_specification(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/logs', methods=['GET'])
+@blueprint.route("/workflows/<workflow_id_or_name>/logs", methods=["GET"])
 def get_workflow_logs(workflow_id_or_name):  # noqa
     r"""Get workflow logs.
 
@@ -554,16 +567,16 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
         steps = request.json or None
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
-        response, http_response = current_rwc_api_client.api.\
-            get_workflow_logs(
-                user=str(user.id_),
-                steps=steps or None,
-                workflow_id_or_name=workflow_id_or_name).result()
+        response, http_response = current_rwc_api_client.api.get_workflow_logs(
+            user=str(user.id_),
+            steps=steps or None,
+            workflow_id_or_name=workflow_id_or_name,
+        ).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -577,7 +590,7 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/status', methods=['GET'])
+@blueprint.route("/workflows/<workflow_id_or_name>/status", methods=["GET"])
 def get_workflow_status(workflow_id_or_name):  # noqa
     r"""Get workflow status.
 
@@ -677,15 +690,14 @@ def get_workflow_status(workflow_id_or_name):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
-        response, http_response = current_rwc_api_client.api.\
-            get_workflow_status(
-                user=str(user.id_),
-                workflow_id_or_name=workflow_id_or_name).result()
+        response, http_response = current_rwc_api_client.api.get_workflow_status(
+            user=str(user.id_), workflow_id_or_name=workflow_id_or_name
+        ).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -699,7 +711,7 @@ def get_workflow_status(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/start', methods=['POST'])
+@blueprint.route("/workflows/<workflow_id_or_name>/start", methods=["POST"])
 def start_workflow(workflow_id_or_name):  # noqa
     r"""Start workflow.
     ---
@@ -812,42 +824,39 @@ def start_workflow(workflow_id_or_name):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
         parameters = request.json
-        workflow = _get_workflow_with_uuid_or_name(
-            workflow_id_or_name, str(user.id_))
-        parameters['operational_options'] = validate_operational_options(
-            workflow.type_, parameters['operational_options'])
-        if 'restart' in parameters:
-            if workflow.status not in \
-                    [WorkflowStatus.finished, WorkflowStatus.failed]:
-                raise ValueError(
-                    "Only finished or failed workflows can be restarted.")
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
+        parameters["operational_options"] = validate_operational_options(
+            workflow.type_, parameters["operational_options"]
+        )
+        if "restart" in parameters:
+            if workflow.status not in [WorkflowStatus.finished, WorkflowStatus.failed]:
+                raise ValueError("Only finished or failed workflows can be restarted.")
             workflow = clone_workflow(
-                workflow,
-                parameters.get('reana_specification', None))
+                workflow, parameters.get("reana_specification", None)
+            )
         elif workflow.status != WorkflowStatus.created:
             raise ValueError(
-                'Workflow {} is already {} and cannot be started '
-                'again.'.format(
-                    workflow.get_full_workflow_name(),
-                    workflow.status.name
-                ))
-        Workflow.update_workflow_status(Session, workflow.id_,
-                                        WorkflowStatus.queued)
+                "Workflow {} is already {} and cannot be started "
+                "again.".format(workflow.get_full_workflow_name(), workflow.status.name)
+            )
+        Workflow.update_workflow_status(Session, workflow.id_, WorkflowStatus.queued)
         current_workflow_submission_publisher.publish_workflow_submission(
             user_id=str(user.id_),
             workflow_id_or_name=workflow.get_full_workflow_name(),
-            parameters=parameters
+            parameters=parameters,
         )
-        response = {'message': 'Workflow submitted.',
-                    'workflow_id': workflow.id_,
-                    'workflow_name': workflow.name,
-                    'status': WorkflowStatus.queued.name,
-                    'run_number': workflow.run_number,
-                    'user': str(user.id_)}
+        response = {
+            "message": "Workflow submitted.",
+            "workflow_id": workflow.id_,
+            "workflow_name": workflow.name,
+            "status": WorkflowStatus.queued.name,
+            "run_number": workflow.run_number,
+            "user": str(user.id_),
+        }
         return jsonify(response), 200
     except HTTPError as e:
         logging.error(traceback.format_exc())
@@ -863,7 +872,7 @@ def start_workflow(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/status', methods=['PUT'])
+@blueprint.route("/workflows/<workflow_id_or_name>/status", methods=["PUT"])
 def set_workflow_status(workflow_id_or_name):  # noqa
     r"""Set workflow status.
     ---
@@ -981,18 +990,18 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-        status = request.args.get('status')
+        status = request.args.get("status")
         parameters = request.json
-        response, http_response = current_rwc_api_client.api.\
-            set_workflow_status(
-                user=str(user.id_),
-                workflow_id_or_name=workflow_id_or_name,
-                status=status,
-                parameters=parameters).result()
+        response, http_response = current_rwc_api_client.api.set_workflow_status(
+            user=str(user.id_),
+            workflow_id_or_name=workflow_id_or_name,
+            status=status,
+            parameters=parameters,
+        ).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -1006,8 +1015,7 @@ def set_workflow_status(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/workspace',
-                 methods=['POST'])
+@blueprint.route("/workflows/<workflow_id_or_name>/workspace", methods=["POST"])
 def upload_file(workflow_id_or_name):  # noqa
     r"""Upload file to workspace.
 
@@ -1094,31 +1102,35 @@ def upload_file(workflow_id_or_name):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
 
-        if not request.args.get('file_name'):
+        if not request.args.get("file_name"):
             return jsonify({"message": "No file_name provided"}), 400
-        if not ('application/octet-stream' in
-                request.headers.get('Content-Type')):
-            return jsonify(
-                {"message": f'Wrong Content-Type '
-                            f'{request.headers.get("Content-Type")} '
-                            f'use application/octet-stream'}), 400
+        if not ("application/octet-stream" in request.headers.get("Content-Type")):
+            return (
+                jsonify(
+                    {
+                        "message": f"Wrong Content-Type "
+                        f'{request.headers.get("Content-Type")} '
+                        f"use application/octet-stream"
+                    }
+                ),
+                400,
+            )
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
-        api_url = current_rwc_api_client.swagger_spec.__dict__.get('api_url')
-        endpoint = \
-            current_rwc_api_client.api.upload_file.operation.path_name.format(
-                workflow_id_or_name=workflow_id_or_name)
+        api_url = current_rwc_api_client.swagger_spec.__dict__.get("api_url")
+        endpoint = current_rwc_api_client.api.upload_file.operation.path_name.format(
+            workflow_id_or_name=workflow_id_or_name
+        )
         http_response = requests.post(
             urlparse.urljoin(api_url, endpoint),
             data=RequestStreamWithLen(request.stream),
-            params={'user': str(user.id_),
-                    'file_name': request.args.get('file_name')},
-            headers={'Content-Type':
-                     'application/octet-stream'})
+            params={"user": str(user.id_), "file_name": request.args.get("file_name")},
+            headers={"Content-Type": "application/octet-stream"},
+        )
 
         return jsonify(http_response.json()), http_response.status_code
     except HTTPError as e:
@@ -1136,8 +1148,8 @@ def upload_file(workflow_id_or_name):  # noqa
 
 
 @blueprint.route(
-    '/workflows/<workflow_id_or_name>/workspace/<path:file_name>',
-    methods=['GET'])
+    "/workflows/<workflow_id_or_name>/workspace/<path:file_name>", methods=["GET"]
+)
 def download_file(workflow_id_or_name, file_name):  # noqa
     r"""Download a file from the workspace.
 
@@ -1206,37 +1218,41 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-        preview = 'preview' in request.args
-        api_url = current_rwc_api_client.swagger_spec.__dict__.get('api_url')
-        endpoint = \
-            current_rwc_api_client.api.download_file. \
-            operation.path_name.format(
-                workflow_id_or_name=workflow_id_or_name, file_name=file_name)
+        preview = "preview" in request.args
+        api_url = current_rwc_api_client.swagger_spec.__dict__.get("api_url")
+        endpoint = current_rwc_api_client.api.download_file.operation.path_name.format(
+            workflow_id_or_name=workflow_id_or_name, file_name=file_name
+        )
         req = requests.get(
-          urlparse.urljoin(api_url, endpoint),
-          params={'preview': preview, 'user': str(user.id_)},
-          stream=True)
-        return Response(
-            stream_with_context(req.iter_content(chunk_size=1024)),
-            content_type=req.headers['Content-Type']), req.status_code
+            urlparse.urljoin(api_url, endpoint),
+            params={"preview": preview, "user": str(user.id_)},
+            stream=True,
+        )
+        return (
+            Response(
+                stream_with_context(req.iter_content(chunk_size=1024)),
+                content_type=req.headers["Content-Type"],
+            ),
+            req.status_code,
+        )
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
     except ValueError as e:
         logging.error(traceback.format_exc())
-        return redirect(url_for('users.user_login'))
+        return redirect(url_for("users.user_login"))
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
 
 
 @blueprint.route(
-    '/workflows/<workflow_id_or_name>/workspace/<path:file_name>',
-    methods=['DELETE'])
+    "/workflows/<workflow_id_or_name>/workspace/<path:file_name>", methods=["DELETE"]
+)
 def delete_file(workflow_id_or_name, file_name):  # noqa
     r"""Delete a file from the workspace.
 
@@ -1302,16 +1318,16 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
-        response, http_response = current_rwc_api_client.api.\
-            delete_file(
-                user=str(user.id_),
-                workflow_id_or_name=workflow_id_or_name,
-                file_name=file_name).result()
+        response, http_response = current_rwc_api_client.api.delete_file(
+            user=str(user.id_),
+            workflow_id_or_name=workflow_id_or_name,
+            file_name=file_name,
+        ).result()
 
         return jsonify(http_response.json()), http_response.status_code
     except HTTPError as e:
@@ -1325,8 +1341,7 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/workspace',
-                 methods=['GET'])
+@blueprint.route("/workflows/<workflow_id_or_name>/workspace", methods=["GET"])
 def get_files(workflow_id_or_name):  # noqa
     r"""List all files contained in a workspace.
 
@@ -1400,15 +1415,14 @@ def get_files(workflow_id_or_name):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
-        response, http_response = current_rwc_api_client.api.\
-            get_files(
-                user=str(user.id_),
-                workflow_id_or_name=workflow_id_or_name).result()
+        response, http_response = current_rwc_api_client.api.get_files(
+            user=str(user.id_), workflow_id_or_name=workflow_id_or_name
+        ).result()
 
         return jsonify(http_response.json()), http_response.status_code
     except HTTPError as e:
@@ -1422,8 +1436,7 @@ def get_files(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/parameters',
-                 methods=['GET'])
+@blueprint.route("/workflows/<workflow_id_or_name>/parameters", methods=["GET"])
 def get_workflow_parameters(workflow_id_or_name):  # noqa
     r"""Get workflow input parameters.
 
@@ -1509,15 +1522,14 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
-        response, http_response = current_rwc_api_client.api.\
-            get_workflow_parameters(
-                user=str(user.id_),
-                workflow_id_or_name=workflow_id_or_name).result()
+        response, http_response = current_rwc_api_client.api.get_workflow_parameters(
+            user=str(user.id_), workflow_id_or_name=workflow_id_or_name
+        ).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -1531,8 +1543,10 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name_a>/diff/'
-                 '<workflow_id_or_name_b>', methods=['GET'])
+@blueprint.route(
+    "/workflows/<workflow_id_or_name_a>/diff/" "<workflow_id_or_name_b>",
+    methods=["GET"],
+)
 def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
     r"""Get differences between two workflows.
 
@@ -1629,20 +1643,20 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
 
-        brief = json.loads(request.args.get('brief', 'false').lower())
-        context_lines = request.args.get('context_lines', 5)
+        brief = json.loads(request.args.get("brief", "false").lower())
+        context_lines = request.args.get("context_lines", 5)
         if not workflow_id_or_name_a or not workflow_id_or_name_b:
             raise ValueError("Workflow id or name is not supplied")
 
-        response, http_response = current_rwc_api_client.api. \
-            get_workflow_diff(
-                user=str(user.id_),
-                brief=brief,
-                context_lines=context_lines,
-                workflow_id_or_name_a=workflow_id_or_name_a,
-                workflow_id_or_name_b=workflow_id_or_name_b).result()
+        response, http_response = current_rwc_api_client.api.get_workflow_diff(
+            user=str(user.id_),
+            brief=brief,
+            context_lines=context_lines,
+            workflow_id_or_name_a=workflow_id_or_name_a,
+            workflow_id_or_name_b=workflow_id_or_name_b,
+        ).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -1650,8 +1664,7 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
         return jsonify(e.response.json()), e.response.status_code
     except json.JSONDecodeError as e:
         logging.error(traceback.format_exc())
-        return jsonify(
-          {"message": "Your request contains not valid JSON."}), 400
+        return jsonify({"message": "Your request contains not valid JSON."}), 400
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
@@ -1660,11 +1673,11 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/open/'
-                 '<interactive_session_type>',
-                 methods=['POST'])
-def open_interactive_session(workflow_id_or_name,
-                             interactive_session_type):  # noqa
+@blueprint.route(
+    "/workflows/<workflow_id_or_name>/open/" "<interactive_session_type>",
+    methods=["POST"],
+)
+def open_interactive_session(workflow_id_or_name, interactive_session_type):  # noqa
     r"""Start an interactive session inside the workflow workspace.
 
     ---
@@ -1755,23 +1768,29 @@ def open_interactive_session(workflow_id_or_name,
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
 
         if interactive_session_type not in INTERACTIVE_SESSION_TYPES:
-            return jsonify({
-                "message": "Interactive session type {0} not found, try "
-                           "with one of: {1}".format(
-                               interactive_session_type,
-                               INTERACTIVE_SESSION_TYPES)}), 404
+            return (
+                jsonify(
+                    {
+                        "message": "Interactive session type {0} not found, try "
+                        "with one of: {1}".format(
+                            interactive_session_type, INTERACTIVE_SESSION_TYPES
+                        )
+                    }
+                ),
+                404,
+            )
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
 
-        response, http_response = current_rwc_api_client.api.\
-            open_interactive_session(
-                user=str(user.id_),
-                workflow_id_or_name=workflow_id_or_name,
-                interactive_session_type=interactive_session_type,
-                interactive_session_configuration=request.json or {}).result()
+        response, http_response = current_rwc_api_client.api.open_interactive_session(
+            user=str(user.id_),
+            workflow_id_or_name=workflow_id_or_name,
+            interactive_session_type=interactive_session_type,
+            interactive_session_configuration=request.json or {},
+        ).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -1788,8 +1807,7 @@ def open_interactive_session(workflow_id_or_name,
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/close/',
-                 methods=['POST'])
+@blueprint.route("/workflows/<workflow_id_or_name>/close/", methods=["POST"])
 def close_interactive_session(workflow_id_or_name):  # noqa
     r"""Close an interactive workflow session.
 
@@ -1863,13 +1881,12 @@ def close_interactive_session(workflow_id_or_name):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
-        response, http_response = current_rwc_api_client.api.\
-            close_interactive_session(
-                user=str(user.id_),
-                workflow_id_or_name=workflow_id_or_name).result()
+        response, http_response = current_rwc_api_client.api.close_interactive_session(
+            user=str(user.id_), workflow_id_or_name=workflow_id_or_name
+        ).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -1886,8 +1903,7 @@ def close_interactive_session(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/move_files/<workflow_id_or_name>',
-                 methods=['PUT'])
+@blueprint.route("/workflows/move_files/<workflow_id_or_name>", methods=["PUT"])
 def move_files(workflow_id_or_name):  # noqa
     r"""Move files within workspace.
     ---
@@ -1978,18 +1994,18 @@ def move_files(workflow_id_or_name):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-        source = request.args.get('source')
-        target = request.args.get('target')
-        response, http_response = current_rwc_api_client.api.\
-            move_files(
-                user=str(user.id_),
-                workflow_id_or_name=workflow_id_or_name,
-                source=source,
-                target=target).result()
+        source = request.args.get("source")
+        target = request.args.get("target")
+        response, http_response = current_rwc_api_client.api.move_files(
+            user=str(user.id_),
+            workflow_id_or_name=workflow_id_or_name,
+            source=source,
+            target=target,
+        ).result()
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -2003,8 +2019,7 @@ def move_files(workflow_id_or_name):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route('/workflows/<workflow_id_or_name>/disk_usage',
-                 methods=['GET'])
+@blueprint.route("/workflows/<workflow_id_or_name>/disk_usage", methods=["GET"])
 def get_workflow_disk_usage(workflow_id_or_name):  # noqa
     r"""Get workflow disk usage.
 
@@ -2103,30 +2118,29 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
         if current_user.is_authenticated:
             user = _get_user_from_invenio_user(current_user.email)
         else:
-            user = get_user_from_token(request.args.get('access_token'))
+            user = get_user_from_token(request.args.get("access_token"))
         parameters = request.json or {}
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name,
-                                                   str(user.id_))
-        summarize = bool(parameters.get('summarize', False))
-        block_size = parameters.get('block_size')
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
+        summarize = bool(parameters.get("summarize", False))
+        block_size = parameters.get("block_size")
         reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
         if reana_fs.exists(workflow.workspace_path):
-            absolute_workspace_path = reana_fs.getospath(
-                workflow.workspace_path)
+            absolute_workspace_path = reana_fs.getospath(workflow.workspace_path)
             disk_usage_info = get_workspace_disk_usage(
-                absolute_workspace_path,
-                summarize=summarize,
-                block_size=block_size)
+                absolute_workspace_path, summarize=summarize, block_size=block_size
+            )
         else:
-            raise ValueError('Workspace does not exist.')
+            raise ValueError("Workspace does not exist.")
 
-        response = {'workflow_id': workflow.id_,
-                    'workflow_name': workflow.name,
-                    'user': str(user.id_),
-                    'disk_usage_info': disk_usage_info}
+        response = {
+            "workflow_id": workflow.id_,
+            "workflow_name": workflow.name,
+            "user": str(user.id_),
+            "disk_usage_info": disk_usage_info,
+        }
 
         return jsonify(response), 200
     except HTTPError as e:
