@@ -1,6 +1,26 @@
 Changes
 =======
 
+Version master (UNRELEASED)
+---------------------------
+
+- Adds new endpoint to request user tokens.
+- Adds email notifications on relevant events such as user token granted/revoked.
+- Adds possibility to query logs for a single workflow step.
+- Adds endpoint to retrieve the workflow specification used for the workflow run.
+- Adds preview flag to download file endpoint.
+- Validates submitted operational options before starting a workflow.
+- Includes workflow progress in the workflow list endpoint response payload.
+- Allows uploading empty files.
+- Adds new block size which specifies the type of units to use for disk size.
+- Fixes bug related to rescheduling deleted workflows.
+- Workflow restart accepts now new workflow specifications.
+- Adds new command to generate a status report for the REANA system (useful as cronjob).
+- Adds user token management commands (grant/revoke).
+- Extends import/export commands with new user model fields.
+- Installs submodels in editable mode for live code updates.
+- Adds Black formatter support.
+
 Version 0.6.0 (2019-12-20)
 --------------------------
 
