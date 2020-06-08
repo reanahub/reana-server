@@ -7,7 +7,7 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 
 pydocstyle reana_server && \
-isort -rc -c -df **/*.py && \
+black --check . && \
 FLASK_APP=reana_server/app.py python ./scripts/generate_openapi_spec.py && \
 diff -q -w temp_openapi.json docs/openapi.json && \
 check-manifest --ignore ".travis-*" && \
