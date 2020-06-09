@@ -44,18 +44,9 @@ setup_requires = [
 ]
 
 install_requires = [
-    # Workaround for urllib3>1.25 being installed
-    # and conflicting with requests 2.20.0
-    'urllib3<1.25.0',
     'fs>=2.0',
     'marshmallow>2.13.0,<=2.20.1',
     'pyOpenSSL==17.5.0',
-    # FIXME: Workaround to avoid PyYAML issues
-    # kubernetes 10.1.0 (released on March 12)
-    # ask for PyYAML==3.12, which conflichts 
-    # with PyYAML 5.x requirement in reana
-    # kubernetes 10.0.1 asks for PyYAML>=3.12
-    'kubernetes==10.0.1',
     'reana-commons[kubernetes]>=0.6.0,<0.7.0',
     'reana-db>=0.6.0,<0.7.0',
     'requests==2.20.0',
