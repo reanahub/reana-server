@@ -14,7 +14,10 @@ from datetime import timedelta
 
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
 from invenio_oauthclient.contrib import cern
-from reana_commons.config import REANA_COMPONENT_PREFIX
+from reana_commons.config import (
+    REANA_COMPONENT_PREFIX,
+    REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES,
+)
 
 # Database
 # ========
@@ -52,7 +55,9 @@ MAIL_SUPPRESS_SEND = True
 # Accounts
 # ========
 #: Redis URL
-ACCOUNTS_SESSION_REDIS_URL = "redis://{}-cache:6379/1".format(REANA_COMPONENT_PREFIX)
+ACCOUNTS_SESSION_REDIS_URL = "redis://{host}:6379/1".format(
+    host=REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES["cache"]
+)
 #: Email address used as sender of account registration emails.
 SECURITY_EMAIL_SENDER = SUPPORT_EMAIL
 #: Email subject for account registration emails.
