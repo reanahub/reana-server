@@ -41,10 +41,15 @@ class REANA(object):
         def connect_signals():
             """Connect OAuthClient signals."""
             from invenio_oauthclient.signals import account_info_received
+            from flask_security.signals import user_registered
 
-            from .utils import _create_and_associate_reana_user
+            from .utils import (
+                _create_and_associate_local_user,
+                _create_and_associate_oauth_user,
+            )
 
-            account_info_received.connect(_create_and_associate_reana_user)
+            account_info_received.connect(_create_and_associate_oauth_user)
+            user_registered.connect(_create_and_associate_local_user)
 
     def init_config(self, app):
         """Initialize configuration."""

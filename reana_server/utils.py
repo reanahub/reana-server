@@ -145,28 +145,36 @@ def _import_users(admin_access_token, users_csv_file):
     Session.commit()
 
 
-def _create_and_associate_reana_user(
-    sender, token=None, response=None, account_info=None
-):
+def _create_and_associate_oauth_user(sender, account_info, **kwargs):
+    user_email = account_info["user"]["email"]
+    user_fullname = account_info["user"]["profile"]["full_name"]
+    username = account_info["user"]["profile"]["username"]
+    return _create_and_associate_reana_user(user_email, user_fullname, username)
+
+
+def _create_and_associate_local_user(sender, user, **kwargs):
+    # TODO: Add fullname and username in sign up form eventually?
+    user_email = user.email
+    user_fullname = user.email
+    username = user.email
+    return _create_and_associate_reana_user(user_email, user_fullname, username)
+
+
+def _create_and_associate_reana_user(email, fullname, username):
     try:
-        user_email = account_info["user"]["email"]
-        user_fullname = account_info["user"]["profile"]["full_name"]
-        username = account_info["user"]["profile"]["username"]
         search_criteria = dict()
-        search_criteria["email"] = user_email
+        search_criteria["email"] = email
         users = Session.query(User).filter_by(**search_criteria).all()
         if users:
             user = users[0]
         else:
-            user_parameters = dict(
-                email=user_email, full_name=user_fullname, username=username
-            )
+            user_parameters = dict(email=email, full_name=fullname, username=username)
             user = User(**user_parameters)
             Session.add(user)
             Session.commit()
     except (InvalidRequestError, IntegrityError):
         Session.rollback()
-        raise ValueError("Could not create user, " "possible constraint violation")
+        raise ValueError("Could not create user, possible constraint violation")
     except Exception:
         raise ValueError("Could not create user")
     return user
