@@ -9,7 +9,6 @@
   "paths": {
     "/account/settings/linkedaccounts/": {},
     "/account/settings/linkedaccounts/static/{filename}": {},
-    "/account/settings/password/": {},
     "/account/settings/security/": {},
     "/account/settings/sessions/revoke/": {},
     "/account/settings/static/{filename}": {},
@@ -192,7 +191,6 @@
         "summary": "Set a webhook on a user project from GitLab"
       }
     },
-    "/api/logout": {},
     "/api/ping": {
       "get": {
         "description": "Ping the server.",
@@ -2430,12 +2428,8 @@
         "summary": "Gets information about authenticated user."
       }
     },
-    "/confirm": {},
-    "/confirm/{token}": {},
     "/login/": {},
     "/logout/": {},
-    "/lost-password/": {},
-    "/lost-password/{token}/": {},
     "/oauth/authorized/{remote_app}/": {},
     "/oauth/disconnect/{remote_app}/": {},
     "/oauth/login/{remote_app}/": {},

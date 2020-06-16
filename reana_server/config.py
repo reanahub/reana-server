@@ -68,7 +68,12 @@ SECURITY_EMAIL_SUBJECT_REGISTER = _("Welcome to REANA Server!")
 #: proxies) removes these headers again before sending the response to the
 #: client. Set to False, in case of doubt.
 ACCOUNTS_USERINFO_HEADERS = True
-
+#: Disable password recovery by users.
+SECURITY_RECOVERABLE = False
+#: Disable user to confirm their email address.
+SECURITY_CONFIRMABLE = False
+#: Disable password change by users.
+SECURITY_CHANGEABLE = False
 
 # CORS
 # ====

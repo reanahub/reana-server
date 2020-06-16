@@ -336,16 +336,6 @@ def get_you():
         return jsonify({"message": str(e)}), 500
 
 
-@blueprint.route("/logout", methods=["GET"])
-def _logout():
-    if current_user.is_authenticated:
-        next_url = get_safe_redirect_target()
-        resp = make_response(redirect(next_url))
-        resp.delete_cookie("session")
-        return resp
-    return jsonify(message="User not logged in"), 401
-
-
 @blueprint.route("/token", methods=["PUT"])
 def request_token():
     r"""Endpoint to request user access token.
