@@ -192,125 +192,7 @@
         "summary": "Set a webhook on a user project from GitLab"
       }
     },
-    "/api/login": {
-      "get": {
-        "description": "This resource provides guidance to the user on how to access a file. It tells the user to add the access token as an URL param.",
-        "operationId": "user_login",
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Message is displayed on the browser.",
-            "examples": {
-              "application/json": {
-                "message": "Add your REANA_ACCESS_TOKEN as a param."
-              }
-            },
-            "schema": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "summary": "TEMPORARY displays a message about how to access a resource."
-      }
-    },
     "/api/logout": {},
-    "/api/me": {
-      "get": {
-        "description": "This resource provides basic information about an authenticated user based on the session cookie presence.",
-        "operationId": "get_me",
-        "parameters": [
-          {
-            "description": "API access_token of user.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "User information correspoding to the session cookie sent in the request.",
-            "examples": {
-              "application/json": {
-                "email": "user@reana.info",
-                "full_name": "John Doe",
-                "reana_token": {
-                  "requested_at": "Mon, 25 May 2020 10:39:57 GMT",
-                  "status": "active",
-                  "value": "Drmhze6EPcv0fN_81Bj-nA"
-                },
-                "username": "jdoe"
-              }
-            },
-            "schema": {
-              "properties": {
-                "email": {
-                  "type": "string"
-                },
-                "reana_token": {
-                  "properties": {
-                    "requested_at": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "string"
-                    },
-                    "value": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "401": {
-            "description": "Error message indicating that the uses is not authenticated.",
-            "examples": {
-              "application/json": {
-                "error": "User not logged in"
-              }
-            },
-            "schema": {
-              "properties": {
-                "error": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "403": {
-            "description": "Request failed. User token not valid.",
-            "examples": {
-              "application/json": {
-                "message": "Token is not valid."
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed. Internal server error.",
-            "examples": {
-              "application/json": {
-                "message": "Internal server error."
-              }
-            }
-          }
-        },
-        "summary": "Gets information about authenticated user."
-      }
-    },
     "/api/ping": {
       "get": {
         "description": "Ping the server.",
@@ -2456,6 +2338,96 @@
           }
         },
         "summary": "Returns the requested file."
+      }
+    },
+    "/api/you": {
+      "get": {
+        "description": "This resource provides basic information about an authenticated user based on the session cookie presence.",
+        "operationId": "get_you",
+        "parameters": [
+          {
+            "description": "API access_token of user.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "User information correspoding to the session cookie sent in the request.",
+            "examples": {
+              "application/json": {
+                "email": "user@reana.info",
+                "full_name": "John Doe",
+                "reana_token": {
+                  "requested_at": "Mon, 25 May 2020 10:39:57 GMT",
+                  "status": "active",
+                  "value": "Drmhze6EPcv0fN_81Bj-nA"
+                },
+                "username": "jdoe"
+              }
+            },
+            "schema": {
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "reana_token": {
+                  "properties": {
+                    "requested_at": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Error message indicating that the uses is not authenticated.",
+            "examples": {
+              "application/json": {
+                "error": "User not logged in"
+              }
+            },
+            "schema": {
+              "properties": {
+                "error": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. User token not valid.",
+            "examples": {
+              "application/json": {
+                "message": "Token is not valid."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal server error."
+              }
+            }
+          }
+        },
+        "summary": "Gets information about authenticated user."
       }
     },
     "/confirm": {},
