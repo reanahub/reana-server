@@ -22,7 +22,10 @@ from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_db.database import Session
 from reana_db.models import User, Workflow
 
-from reana_server.utils import _create_and_associate_reana_user
+from reana_server.utils import (
+    _create_and_associate_local_user,
+    _create_and_associate_oauth_user,
+)
 
 
 def test_get_workflows(app, default_user, _get_user_mock):
@@ -320,7 +323,7 @@ def test_download_file(app, default_user, _get_user_mock):
                 ),
                 query_string={"file_name": "test_upload.txt"},
             )
-            assert res.status_code == 302
+            assert res.status_code == 403
 
         requests_mock = Mock()
         requests_response_mock = Mock()
@@ -466,14 +469,6 @@ def test_create_user(app, default_user):
         assert res.status_code == 201
 
 
-def test_user_login(app, default_user):
-    """Test user_login view."""
-    with app.test_client() as client:
-        res = client.get(url_for("users.user_login"))
-        assert res.status_code == 200
-        assert json.loads(res.data)["message"]
-
-
 def test_move_files(app, default_user, _get_user_mock):
     """Test move_files view."""
     with app.test_client() as client:
@@ -565,7 +560,7 @@ def test_close_interactive_session(
             assert res.status_code == expected_status_code
 
 
-def test_create_and_associate_reana_user(app, session):
+def test_create_and_associate_oauth_user(app, session):
     user_email = "johndoe@reana.io"
     user_fullname = "John Doe"
     username = "johndoe"
@@ -577,9 +572,21 @@ def test_create_and_associate_reana_user(app, session):
     }
     user = session.query(User).filter_by(email=user_email).one_or_none()
     assert user is None
-    _create_and_associate_reana_user(None, account_info=account_info)
+    _create_and_associate_oauth_user(None, account_info=account_info)
     user = session.query(User).filter_by(email=user_email).one_or_none()
     assert user
     assert user.email == user_email
     assert user.full_name == user_fullname
     assert user.username == username
+
+
+def test_create_and_associate_local_user(app, session):
+    mock_user = Mock(email="johndoe@reana.io")
+    user = session.query(User).filter_by(email=mock_user.email).one_or_none()
+    assert user is None
+    _create_and_associate_local_user(None, user=mock_user)
+    user = session.query(User).filter_by(email=mock_user.email).one_or_none()
+    assert user
+    assert user.email == mock_user.email
+    assert user.full_name == mock_user.email
+    assert user.username == mock_user.email

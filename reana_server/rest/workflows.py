@@ -1244,7 +1244,7 @@ def download_file(workflow_id_or_name, file_name):  # noqa
         return jsonify(e.response.json()), e.response.status_code
     except ValueError as e:
         logging.error(traceback.format_exc())
-        return redirect(url_for("users.user_login"))
+        return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500

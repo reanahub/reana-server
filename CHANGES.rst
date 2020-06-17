@@ -20,6 +20,9 @@ Version master (UNRELEASED)
 - Extends import/export commands with new user model fields.
 - Installs submodels in editable mode for live code updates.
 - Adds Black formatter support.
+- Bumps to Invenio-Accounts 1.3.0 to support REST API.
+- Adds support to local users.
+- Renames ``/api/me`` to ``/api/you`` due to conflict with Invenio-Accounts.
 
 Version 0.6.1 (2020-05-25)
 --------------------------
