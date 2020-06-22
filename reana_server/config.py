@@ -10,7 +10,6 @@
 
 import copy
 import os
-from datetime import timedelta
 
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
 from invenio_oauthclient.contrib import cern
@@ -74,6 +73,12 @@ SECURITY_RECOVERABLE = False
 SECURITY_CONFIRMABLE = False
 #: Disable password change by users.
 SECURITY_CHANGEABLE = False
+#: Modify sign in validaiton error to avoid leaking extra information.
+failed_signin_msg = ("Signin failed. Invalid user or password.", "error")
+SECURITY_MSG_USER_DOES_NOT_EXIST = failed_signin_msg
+SECURITY_MSG_PASSWORD_NOT_SET = failed_signin_msg
+SECURITY_MSG_INVALID_PASSWORD = failed_signin_msg
+SECURITY_MSG_PASSWORD_INVALID_LENGTH = failed_signin_msg
 
 # CORS
 # ====
