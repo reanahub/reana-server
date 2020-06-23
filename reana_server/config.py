@@ -9,6 +9,7 @@
 """Flask application configuration."""
 
 import copy
+import json
 import os
 
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
@@ -155,3 +156,9 @@ ADMIN_EMAIL = os.getenv("REANA_EMAIL_SENDER", "CHANGE_ME")
 # UI
 # ==
 REANA_UI_ANNOUNCEMENT = os.getenv("REANA_UI_ANNOUNCEMENT")
+REANA_UI_POOLING_SECS = os.getenv("REANA_UI_POOLING_SECS")
+REANA_UI_DOCS_URL = os.getenv("REANA_UI_DOCS_URL")
+REANA_UI_FORUM_URL = os.getenv("REANA_UI_FORUM_URL")
+REANA_UI_MATTERMOST_URL = os.getenv("REANA_UI_MATTERMOST_URL")
+REANA_UI_CERN_SSO = json.loads(os.getenv("REANA_UI_CERN_SSO", "false"))
+REANA_UI_LOCAL_USERS = json.loads(os.getenv("REANA_UI_LOCAL_USERS", "false"))

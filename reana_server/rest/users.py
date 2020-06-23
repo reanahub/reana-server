@@ -319,7 +319,6 @@ def get_you():
                         },
                         "full_name": me.full_name,
                         "username": me.username,
-                        "announcement": REANA_UI_ANNOUNCEMENT,
                     }
                 ),
                 200,
