@@ -12,16 +12,7 @@ import logging
 import traceback
 
 from flask import Blueprint, jsonify
-
-from reana_server.config import (
-    REANA_UI_ANNOUNCEMENT,
-    REANA_UI_POOLING_SECS,
-    REANA_UI_DOCS_URL,
-    REANA_UI_FORUM_URL,
-    REANA_UI_MATTERMOST_URL,
-    REANA_UI_CERN_SSO,
-    REANA_UI_LOCAL_USERS,
-)
+from reana_commons.config import REANAConfig
 
 
 blueprint = Blueprint("config", __name__)
@@ -73,17 +64,7 @@ def get_config():
     """
     try:
         return (
-            jsonify(
-                {
-                    "announcement": REANA_UI_ANNOUNCEMENT,
-                    "pooling_secs": REANA_UI_POOLING_SECS,
-                    "docs_url": REANA_UI_DOCS_URL,
-                    "forum_url": REANA_UI_FORUM_URL,
-                    "mattermost_url": REANA_UI_MATTERMOST_URL,
-                    "cern_sso": REANA_UI_CERN_SSO,
-                    "local_users": REANA_UI_LOCAL_USERS,
-                }
-            ),
+            jsonify(REANAConfig.load("ui")),
             200,
         )
     except Exception as e:

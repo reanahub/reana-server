@@ -18,7 +18,7 @@ from invenio_oauthclient.utils import get_safe_redirect_target
 from reana_db.models import AuditLogAction
 from reana_commons.email import send_email
 
-from reana_server.config import ADMIN_EMAIL, REANA_UI_ANNOUNCEMENT, REANA_URL
+from reana_server.config import ADMIN_EMAIL, REANA_URL
 from reana_server.utils import (
     _create_user,
     _get_user_from_invenio_user,
