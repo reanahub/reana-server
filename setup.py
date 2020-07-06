@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -23,6 +23,7 @@ tests_require = [
 ]
 
 extras_require = {
+    "debug": ["wdb", "ipdb", "Flask-DebugToolbar",],
     "docs": [
         "Sphinx>=1.4.4,<1.6",
         "sphinx-rtd-theme>=0.1.9",

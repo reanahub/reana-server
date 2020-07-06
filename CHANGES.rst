@@ -4,6 +4,7 @@ Changes
 Version master (UNRELEASED)
 ---------------------------
 
+- Pins all Python dependencies allowing to easily rebuild component images at later times.
 - Adds new endpoint to request user tokens.
 - Adds email notifications on relevant events such as user token granted/revoked.
 - Adds possibility to query logs for a single workflow step.
