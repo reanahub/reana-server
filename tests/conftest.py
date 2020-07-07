@@ -10,6 +10,8 @@
 
 from __future__ import absolute_import, print_function
 
+import os
+
 import flask_login
 import pytest
 from mock import Mock, patch
@@ -27,7 +29,7 @@ def base_app(tmp_shared_volume_path):
         "TESTING": True,
         "FLASK_ENV": "development",
         "SHARED_VOLUME_PATH": tmp_shared_volume_path,
-        "SQLALCHEMY_DATABASE_URI": "sqlite://",
+        "SQLALCHEMY_DATABASE_URI": os.getenv("REANA_SQLALCHEMY_DATABASE_URI"),
         "SQLALCHEMY_TRACK_MODIFICATIONS": False,
     }
     app_ = create_app(config_mapping=config_mapping)

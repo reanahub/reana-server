@@ -13,9 +13,7 @@ import io
 import secrets
 import uuid
 
-import pytest
 from click.testing import CliRunner
-from mock import patch
 from reana_db.models import AuditLogAction, User, UserTokenStatus
 
 from reana_server.reana_admin import reana_admin

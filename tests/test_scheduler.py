@@ -8,14 +8,10 @@
 
 """REANA-Server Workflow Execution Scheduler."""
 
-import json
-import threading
 
-import pytest
 from bravado.exception import HTTPError
-from mock import ANY, DEFAULT, Mock, patch
+from mock import DEFAULT, Mock, patch
 from reana_commons.publisher import WorkflowSubmissionPublisher
-from requests.exceptions import ConnectionError
 
 from reana_server.scheduler import WorkflowExecutionScheduler
 

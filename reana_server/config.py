@@ -18,10 +18,6 @@ from reana_commons.config import (
     REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES,
 )
 
-# Database
-# ========
-#: Database URI including user and password
-from reana_db.config import SQLALCHEMY_DATABASE_URI
 
 AVAILABLE_WORKFLOW_ENGINES = ["yadage", "cwl", "serial"]
 """Available workflow engines."""
