@@ -18,6 +18,8 @@ from reana_commons.config import (
     REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES,
 )
 
+# This database URI import is necessary for Invenio-DB
+from reana_db.config import SQLALCHEMY_DATABASE_URI
 
 AVAILABLE_WORKFLOW_ENGINES = ["yadage", "cwl", "serial"]
 """Available workflow engines."""
