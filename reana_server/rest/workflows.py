@@ -7,10 +7,8 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 
 """Reana-Server workflow-functionality Flask-Blueprint."""
-import io
 import json
 import logging
-import subprocess
 import traceback
 
 import fs
@@ -18,7 +16,7 @@ import requests
 from bravado.exception import HTTPError
 from flask import Blueprint, Response
 from flask import current_app as app
-from flask import jsonify, redirect, request, send_file, stream_with_context, url_for
+from flask import jsonify, request, stream_with_context
 from flask_login import current_user
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_commons.errors import REANAValidationError
@@ -27,6 +25,8 @@ from reana_commons.utils import get_workspace_disk_usage
 from reana_db.database import Session
 from reana_db.models import Workflow, WorkflowStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
+from webargs import fields, validate
+from webargs.flaskparser import use_kwargs
 
 from reana_server.api_client import (
     current_rwc_api_client,
@@ -51,7 +51,13 @@ blueprint = Blueprint("workflows", __name__)
 
 
 @blueprint.route("/workflows", methods=["GET"])
-def get_workflows():  # noqa
+@use_kwargs(
+    {
+        "page": fields.Int(validate=validate.Range(min=1)),
+        "size": fields.Int(validate=validate.Range(min=1)),
+    }
+)
+def get_workflows(**kwargs):  # noqa
     r"""Get all current workflows in REANA.
 
     ---
@@ -83,6 +89,16 @@ def get_workflows():  # noqa
           description: Size format, either 'b' (bytes) or 'k' (kilobytes).
           required: false
           type: string
+        - name: page
+          in: query
+          description: Results page number (pagination).
+          required: false
+          type: integer
+        - name: size
+          in: query
+          description: Number of results per page (pagination).
+          required: false
+          type: integer
       responses:
         200:
           description: >-
@@ -178,11 +194,15 @@ def get_workflows():  # noqa
             user = _get_user_from_invenio_user(current_user.email)
         else:
             user = get_user_from_token(request.args.get("access_token"))
-        type = request.args.get("type", "batch")
+        type_ = request.args.get("type", "batch")
         verbose = json.loads(request.args.get("verbose", "false").lower())
         block_size = request.args.get("block_size")
         response, http_response = current_rwc_api_client.api.get_workflows(
-            user=str(user.id_), type=type, verbose=bool(verbose), block_size=block_size
+            user=str(user.id_),
+            type=type_,
+            verbose=bool(verbose),
+            block_size=block_size,
+            **kwargs,
         ).result()
 
         return jsonify(response), http_response.status_code
@@ -475,7 +495,13 @@ def get_workflow_specification(workflow_id_or_name):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/logs", methods=["GET"])
-def get_workflow_logs(workflow_id_or_name):  # noqa
+@use_kwargs(
+    {
+        "page": fields.Int(validate=validate.Range(min=1)),
+        "size": fields.Int(validate=validate.Range(min=1)),
+    }
+)
+def get_workflow_logs(workflow_id_or_name, **kwargs):  # noqa
     r"""Get workflow logs.
 
     ---
@@ -508,6 +534,16 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
             items:
               type: string
               description: step name.
+        - name: page
+          in: query
+          description: Results page number (pagination).
+          required: false
+          type: integer
+        - name: size
+          in: query
+          description: Number of results per page (pagination).
+          required: false
+          type: integer
       responses:
         200:
           description: >-
@@ -576,6 +612,7 @@ def get_workflow_logs(workflow_id_or_name):  # noqa
             user=str(user.id_),
             steps=steps or None,
             workflow_id_or_name=workflow_id_or_name,
+            **kwargs,
         ).result()
 
         return jsonify(response), http_response.status_code
@@ -1342,7 +1379,13 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/workspace", methods=["GET"])
-def get_files(workflow_id_or_name):  # noqa
+@use_kwargs(
+    {
+        "page": fields.Int(validate=validate.Range(min=1)),
+        "size": fields.Int(validate=validate.Range(min=1)),
+    }
+)
+def get_files(workflow_id_or_name, **kwargs):  # noqa
     r"""List all files contained in a workspace.
 
     ---
@@ -1365,6 +1408,16 @@ def get_files(workflow_id_or_name):  # noqa
           description: The API access_token of workflow owner.
           required: false
           type: string
+        - name: page
+          in: query
+          description: Results page number (pagination).
+          required: false
+          type: integer
+        - name: size
+          in: query
+          description: Number of results per page (pagination).
+          required: false
+          type: integer
       responses:
         200:
           description: >-
@@ -1421,7 +1474,7 @@ def get_files(workflow_id_or_name):  # noqa
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.get_files(
-            user=str(user.id_), workflow_id_or_name=workflow_id_or_name
+            user=str(user.id_), workflow_id_or_name=workflow_id_or_name, **kwargs
         ).result()
 
         return jsonify(http_response.json()), http_response.status_code
