@@ -856,33 +856,41 @@
               ]
             },
             "schema": {
-              "items": {
-                "properties": {
-                  "created": {
-                    "type": "string"
-                  },
-                  "id": {
-                    "type": "string"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "progress": {
+              "properties": {
+                "items": {
+                  "items": {
+                    "properties": {
+                      "created": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "progress": {
+                        "type": "object"
+                      },
+                      "size": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string"
+                      },
+                      "user": {
+                        "type": "string"
+                      }
+                    },
                     "type": "object"
                   },
-                  "size": {
-                    "type": "string"
-                  },
-                  "status": {
-                    "type": "string"
-                  },
-                  "user": {
-                    "type": "string"
-                  }
+                  "type": "array"
                 },
-                "type": "object"
+                "total": {
+                  "type": "integer"
+                }
               },
-              "type": "array"
+              "type": "object"
             }
           },
           "400": {
@@ -2157,21 +2165,29 @@
           "200": {
             "description": "Requests succeeded. The list of files has been retrieved.",
             "schema": {
-              "items": {
-                "properties": {
-                  "last-modified": {
-                    "type": "string"
+              "properties": {
+                "items": {
+                  "items": {
+                    "properties": {
+                      "last-modified": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "size": {
+                        "type": "integer"
+                      }
+                    },
+                    "type": "object"
                   },
-                  "name": {
-                    "type": "string"
-                  },
-                  "size": {
-                    "type": "integer"
-                  }
+                  "type": "array"
                 },
-                "type": "object"
+                "total": {
+                  "type": "integer"
+                }
               },
-              "type": "array"
+              "type": "object"
             }
           },
           "400": {

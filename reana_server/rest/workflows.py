@@ -104,24 +104,29 @@ def get_workflows(**kwargs):  # noqa
           description: >-
             Request succeeded. The response contains the list of all workflows.
           schema:
-            type: array
-            items:
-              type: object
-              properties:
-                id:
-                  type: string
-                name:
-                  type: string
-                status:
-                  type: string
-                size:
-                  type: string
-                user:
-                  type: string
-                created:
-                  type: string
-                progress:
+            type: object
+            properties:
+              total:
+                type: integer
+              items:
+                type: array
+                items:
                   type: object
+                  properties:
+                    id:
+                      type: string
+                    name:
+                      type: string
+                    status:
+                      type: string
+                    size:
+                      type: string
+                    user:
+                      type: string
+                    created:
+                      type: string
+                    progress:
+                      type: object
           examples:
             application/json:
               [
@@ -1423,16 +1428,21 @@ def get_files(workflow_id_or_name, **kwargs):  # noqa
           description: >-
             Requests succeeded. The list of files has been retrieved.
           schema:
-            type: array
-            items:
-              type: object
-              properties:
-                name:
-                  type: string
-                last-modified:
-                  type: string
-                size:
-                  type: integer
+            type: object
+            properties:
+              total:
+                type: integer
+              items:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    last-modified:
+                      type: string
+                    size:
+                      type: integer
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
