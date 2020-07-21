@@ -24,7 +24,7 @@ COPY . /code
 
 # Are we debugging?
 ARG DEBUG=0
-RUN if [ "${DEBUG}" -gt 0 ]; then pip install pip install -e ".[debug]"; else pip install .; fi;
+RUN if [ "${DEBUG}" -gt 0 ]; then pip install -e ".[debug]"; else pip install .; fi;
 
 # Are we building with locally-checked-out shared modules?
 RUN if test -e modules/reana-commons; then pip install -e modules/reana-commons[kubernetes] --upgrade; fi
