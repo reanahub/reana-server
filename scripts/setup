@@ -10,7 +10,8 @@ set -e
 
 # Create REANA DB
 echo 'Creating REANA database...'
-flask reana-admin db-init
+reana-db init
+reana-db alembic init
 echo 'REANA database created.'
 
 # Create Invenio DB

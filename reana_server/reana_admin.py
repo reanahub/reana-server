@@ -20,11 +20,10 @@ import tablib
 from flask.cli import with_appcontext
 from reana_commons.email import send_email
 from reana_commons.utils import click_table_printer
-from reana_db.database import Session, init_db
+from reana_db.database import Session
 from reana_db.models import AuditLogAction, User, UserTokenStatus
 
 from reana_server.config import ADMIN_USER_ID, REANA_URL
-from reana_server.factory import create_app
 from reana_server.status import STATUS_OBJECT_TYPES
 from reana_server.utils import (
     _create_user,
@@ -55,17 +54,6 @@ def admin_access_token_option(func):
 @click.group()
 def reana_admin():
     """REANA administration commands."""
-
-
-@reana_admin.command("db-init")
-def db_init():
-    """Initialise database."""
-    try:
-        init_db()
-        click.echo(click.style("DB Created.", fg="green"))
-    except Exception as e:
-        click.echo("Something went wrong: {0}".format(e))
-        sys.exit(1)
 
 
 @reana_admin.command("create-admin-user")
