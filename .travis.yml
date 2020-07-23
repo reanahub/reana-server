@@ -15,7 +15,7 @@ cache:
   - pip
 
 python:
-  - "3.6"
+  - "3.8"
 
 services:
   - docker
@@ -24,6 +24,7 @@ before_install:
   - pip install -r requirements.txt
   - travis_retry pip install --upgrade pip setuptools py
   - travis_retry pip install twine wheel coveralls
+  - pip uninstall numpy -y
 
 install:
   - travis_retry pip install -e .[all]
