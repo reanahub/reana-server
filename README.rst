@@ -1,6 +1,6 @@
-==============
- REANA-Server
-==============
+############
+REANA-Server
+############
 
 .. image:: https://img.shields.io/travis/reanahub/reana-server.svg
    :target: https://travis-ci.org/reanahub/reana-server
@@ -21,14 +21,14 @@
    :target: https://github.com/psf/black
 
 About
------
+=====
 
 REANA-Server is a component of the `REANA <http://www.reana.io/>`_ reusable and
 reproducible research data analysis platform. It implements the API Server that
 takes and performs REST API calls issued by REANA clients.
 
 Features
---------
+========
 
 - offers rich REST API services for REANA clients
 - transmits REST API requests to appropriate REANA cloud components
@@ -38,14 +38,21 @@ Features
 - REST API to download results of finished analysis workflows
 - REST API to find the differences between two workflows (``git`` like output)
 
+Usage
+=====
+
+The detailed information on how to install and use REANA can be found in
+`docs.reana.io <https://docs.reana.io>`_.
+
 Useful links
-------------
+============
 
-- `documentation <https://reana-server.readthedocs.io/>`_
-- `releases <https://github.com/reanahub/reana-server/releases>`_
-- `known issues <https://github.com/reanahub/reana-server/issues>`_
-- `source code <https://github.com/reanahub/reana-server>`_
+- `REANA project home page <http://www.reana.io/>`_
+- `REANA user documentation <https://docs.reana.io>`_
+- `REANA user support forum <https://forum.reana.io>`_
 
-For more information about the REANA reusable analysis platform, please see the
-`REANA project <http://www.reana.io>`_ home page and the general `REANA
-documentation <http://reana.readthedocs.io/>`_ pages.
+- `REANA-Server releases <https://reana-server.readthedocs.io/en/latest#changes>`_
+- `REANA-Server docker images <https://hub.docker.com/r/reanahub/reana-server>`_
+- `REANA-Server developer documentation <https://reana-server.readthedocs.io/>`_
+- `REANA-Server known issues <https://github.com/reanahub/reana-server/issues>`_
+- `REANA-Server source code <https://github.com/reanahub/reana-server>`_

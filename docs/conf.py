@@ -43,6 +43,7 @@ extensions = [
     "sphinxcontrib.httpdomain",
     "sphinxcontrib.openapi",
     "sphinxcontrib.redoc",
+    "sphinx_click.ext",
 ]
 
 redoc = [
@@ -68,7 +69,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "reana"
-copyright = "2017-2019 info@reana.io"
+copyright = "2017-2020 info@reana.io"
 author = "info@reana.io"
 
 # The version info for the project you're documenting, acts as replacement for
@@ -117,7 +118,6 @@ html_theme = "alabaster"
 # documentation.
 #
 html_theme_options = {
-    "logo": "logo-reana.png",
     "description": """<p>REANA-Server is a component of the <a
                       href="http://www.reana.io">REANA</a> reusable and
                       reproducible research data analysis
@@ -135,12 +135,13 @@ html_theme_options = {
         "REANA@Twitter": "https://twitter.com/reanahub",
         "REANA@Web": "http://www.reana.io",
     },
+    "nosidebar": True,
 }
 
 # Add any paths that contain custom _static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin _static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ["_static"]
+# html_static_path = ["_static"]
 
 # Custom sidebar templates, maps document names to template names.
 html_sidebars = {
