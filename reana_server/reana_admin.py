@@ -19,6 +19,7 @@ import click
 import tablib
 from flask.cli import with_appcontext
 from reana_commons.email import send_email
+from reana_commons.errors import REANAEmailNotificationError
 from reana_commons.utils import click_table_printer
 from reana_db.database import Session
 from reana_db.models import AuditLogAction, User, UserTokenStatus
@@ -243,6 +244,12 @@ def token_grant(admin_access_token, id_, email):
 
     except click.exceptions.Abort as e:
         click.echo("Grant token aborted.")
+    except REANAEmailNotificationError as e:
+        click.secho(
+            "Something went wrong while sending email:\n{}".format(e),
+            fg="red",
+            err=True,
+        )
     except Exception as e:
         click.secho(
             "Something went wrong while granting token:\n{}".format(e),
@@ -291,6 +298,12 @@ def token_revoke(admin_access_token, id_, email):
         )
         send_email(user.email, email_subject, email_body)
 
+    except REANAEmailNotificationError as e:
+        click.secho(
+            "Something went wrong while sending email:\n{}".format(e),
+            fg="red",
+            err=True,
+        )
     except Exception as e:
         click.secho(
             "Something went wrong while revoking token:\n{}".format(e),
@@ -326,20 +339,31 @@ def status_report(types, email, admin_access_token):
 
         return formatted_statuses
 
-    types = STATUS_OBJECT_TYPES.keys() if "all" in types else types
-    status_report_output = ""
-    for type_ in types:
-        statuses_obj = STATUS_OBJECT_TYPES[type_]()
-        statuses = statuses_obj.get_status()
-        status_report_output += _format_statuses(type_, statuses) + "\n"
+    try:
+        types = STATUS_OBJECT_TYPES.keys() if "all" in types else types
+        status_report_output = ""
+        for type_ in types:
+            statuses_obj = STATUS_OBJECT_TYPES[type_]()
+            statuses = statuses_obj.get_status()
+            status_report_output += _format_statuses(type_, statuses) + "\n"
 
-    click.echo(status_report_output)
+        if email:
+            status_report_body = (
+                f'Status report for {REANA_URL or "REANA service"}\n'
+                "---\n" + status_report_output
+            )
 
-    if email:
-        status_report_body = (
-            f'Status report for {REANA_URL or "REANA service"}\n'
-            "---\n" + status_report_output
+            send_email(email, "REANA system status report", status_report_body)
+            click.echo(f"Status report successfully sent by email to {email}.")
+    except REANAEmailNotificationError as e:
+        click.secho(
+            "Something went wrong while sending email:\n{}".format(e),
+            fg="red",
+            err=True,
         )
-
-        send_email(email, "REANA system status report", status_report_body)
-        click.echo(f"Status report successfully sent by email to {email}.")
+    except Exception as e:
+        click.secho(
+            "Something went wrong while generating the status report:\n{}".format(e),
+            fg="red",
+            err=True,
+        )
