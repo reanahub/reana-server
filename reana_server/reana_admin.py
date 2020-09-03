@@ -18,6 +18,7 @@ import traceback
 import click
 import tablib
 from flask.cli import with_appcontext
+from invenio_accounts.utils import register_user
 from reana_commons.email import send_email
 from reana_commons.errors import REANAEmailNotificationError
 from reana_commons.utils import click_table_printer
@@ -32,6 +33,8 @@ from reana_server.utils import (
     _get_user_by_criteria,
     _get_users,
     _import_users,
+    _validate_email,
+    _validate_password,
     create_user_workspace,
 )
 
@@ -58,29 +61,32 @@ def reana_admin():
 
 
 @reana_admin.command("create-admin-user")
-@click.argument("email")
+@click.option("--email", "-e", callback=_validate_email, required=True)
+@click.option("--password", "-p", callback=_validate_password, required=True)
 @click.option("-i", "--id", "id_", default=ADMIN_USER_ID)
 @with_appcontext
-def users_create_default(email, id_):
+def users_create_default(email, password, id_):
     """Create default user.
 
     This user has the administrator role
     and can retrieve other user information as well as create
     new users.
     """
-    user_characteristics = {
+    reana_user_characteristics = {
         "id_": id_,
         "email": email,
     }
     try:
-        user = User.query.filter_by(**user_characteristics).first()
+        user = User.query.filter_by(**reana_user_characteristics).first()
         if not user:
-            user_characteristics["access_token"] = secrets.token_urlsafe()
-            user = User(**user_characteristics)
+            reana_user_characteristics["access_token"] = secrets.token_urlsafe(16)
+            user = User(**reana_user_characteristics)
             create_user_workspace(user.get_user_workspace())
             Session.add(user)
             Session.commit()
-            click.echo(user_characteristics["access_token"])
+            # create invenio user
+            register_user(email=email, password=password)
+            click.echo(reana_user_characteristics["access_token"])
     except Exception as e:
         click.echo("Something went wrong: {0}".format(e))
         sys.exit(1)

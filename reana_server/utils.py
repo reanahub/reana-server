@@ -12,9 +12,12 @@ import csv
 import io
 import json
 import logging
+import re
 import secrets
+import sys
 from uuid import UUID, uuid4
 
+import click
 import fs
 import requests
 import yaml
@@ -332,3 +335,18 @@ def _get_user_by_criteria(id_, email):
     except StatementError as e:
         print(e)
         return None
+
+
+def _validate_password(ctx, param, value):
+    if len(value) < 6:
+        click.secho("ERROR: Password length must be at least 6 characters", fg="red")
+        sys.exit(1)
+    return value
+
+
+def _validate_email(ctx, param, value):
+    regex = r"^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w{2,3}$"
+    if not re.search(regex, value):
+        click.secho("ERROR: Invalid email format", fg="red")
+        sys.exit(1)
+    return value
