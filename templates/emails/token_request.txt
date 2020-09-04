@@ -1,0 +1,17 @@
+Dear REANA administrator,
+
+There is a new access token request for {{ reana_url }}:
+
+{{ user_data }}
+
+To grant the user token, please run:
+
+$ kubectl exec -i -t deployment/reana-server -- flask reana-admin token-grant -e {{ user_email }} --admin-access-token $REANA_ACCESS_TOKEN
+
+To reject the user token, please run:
+
+$ kubectl exec -i -t deployment/reana-server -- flask reana-admin token-revoke -e {{ user_email }} --admin-access-token $REANA_ACCESS_TOKEN
+
+Thanks,
+
+<{{ reana_url }}>

@@ -20,6 +20,7 @@ prune docs/_build
 recursive-include docs *.py
 recursive-include docs *.png
 recursive-include docs *.rst
+recursive-include templates *.txt
 recursive-include tests *.py
 recursive-include tests *.txt
 global-exclude *.py[co] .DS_Store

@@ -12,9 +12,8 @@ import logging
 import traceback
 
 from bravado.exception import HTTPError
-from flask import Blueprint, jsonify, make_response, redirect, request
+from flask import Blueprint, jsonify, render_template, request
 from flask_login import current_user
-from invenio_oauthclient.utils import get_safe_redirect_target
 from reana_db.models import AuditLogAction
 from reana_commons.email import send_email
 
@@ -424,8 +423,12 @@ def request_token():
             "access_token",
             "access_token_status",
         ]
-        email_body = "New user access token request:\n\n" + "\n".join(
-            [f"{f}: {getattr(user, f, None)}" for f in fields]
+        user_data = "\n".join([f"{f}: {getattr(user, f, None)}" for f in fields])
+        email_body = render_template(
+            "emails/token_request.txt",
+            user_data=user_data,
+            user_email=user.email,
+            reana_url=REANA_URL,
         )
         send_email(ADMIN_EMAIL, email_subject, email_body)
         return (

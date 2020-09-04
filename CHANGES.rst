@@ -4,6 +4,7 @@ Changes
 Version master (UNRELEASED)
 ---------------------------
 
+- Introduces templating system for email bodies.
 - Uses python3.8
 - Pins all Python dependencies allowing to easily rebuild component images at later times.
 - Adds new endpoint to request user tokens.
