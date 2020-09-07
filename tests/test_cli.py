@@ -34,7 +34,7 @@ def test_export_users(default_user):
         ]
     )
     result = runner.invoke(
-        reana_admin, ["users-export", "--admin-access-token", default_user.access_token]
+        reana_admin, ["user-export", "--admin-access-token", default_user.access_token]
     )
     assert result.output == expected_csv_file.getvalue()
 
@@ -59,7 +59,7 @@ def test_import_users(app, session, default_user):
         result = runner.invoke(
             reana_admin,
             [
-                "users-import",
+                "user-import",
                 "--admin-access-token",
                 default_user.access_token,
                 "--file",

@@ -92,7 +92,7 @@ def users_create_default(email, password, id_):
         sys.exit(1)
 
 
-@reana_admin.command("users-list", help="List users according to the search criteria.")
+@reana_admin.command("user-list", help="List users according to the search criteria.")
 @click.option("--id", help="The id of the user.")
 @click.option("-e", "--email", help="The email of the user.")
 @click.option("--user-access-token", help="The access token of the user.")
@@ -139,7 +139,7 @@ def list_users(ctx, id, email, user_access_token, admin_access_token, output_for
         )
 
 
-@reana_admin.command("users-create", help="Create a new user.")
+@reana_admin.command("user-create", help="Create a new user.")
 @click.option("-e", "--email", required=True, help="The email of the user.")
 @click.option("--user-access-token", help="The access token of the user.")
 @admin_access_token_option
@@ -162,7 +162,7 @@ def create_user(ctx, email, user_access_token, admin_access_token):
         )
 
 
-@reana_admin.command("users-export")
+@reana_admin.command("user-export")
 @admin_access_token_option
 @click.pass_context
 def export_users(ctx, admin_access_token):
@@ -178,7 +178,7 @@ def export_users(ctx, admin_access_token):
         )
 
 
-@reana_admin.command("users-import")
+@reana_admin.command("user-import")
 @admin_access_token_option
 @click.option(
     "-f",
