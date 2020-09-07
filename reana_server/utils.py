@@ -23,6 +23,7 @@ import requests
 import yaml
 from flask import current_app as app
 from flask import url_for
+from jinja2 import Environment, PackageLoader, select_autoescape
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_db.database import Session
 from reana_db.models import User, UserTokenStatus, UserTokenType, Workflow
@@ -350,3 +351,24 @@ def _validate_email(ctx, param, value):
         click.secho("ERROR: Invalid email format", fg="red")
         sys.exit(1)
     return value
+
+
+class JinjaEnv:
+    """Jinja Environment singleton instance."""
+
+    _instance = None
+
+    @staticmethod
+    def _get():
+        if JinjaEnv._instance is None:
+            JinjaEnv._instance = Environment(
+                loader=PackageLoader("reana_server", "templates"),
+                autoescape=select_autoescape(["html", "xml"]),
+            )
+        return JinjaEnv._instance
+
+    @staticmethod
+    def render_template(template_path, **kwargs):
+        """Render template replacing kwargs appropriately."""
+        template = JinjaEnv._get().get_template(template_path)
+        return template.render(**kwargs)

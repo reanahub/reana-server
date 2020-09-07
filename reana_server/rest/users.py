@@ -12,7 +12,7 @@ import logging
 import traceback
 
 from bravado.exception import HTTPError
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, jsonify, request
 from flask_login import current_user
 from reana_db.models import AuditLogAction
 from reana_commons.email import send_email
@@ -23,6 +23,7 @@ from reana_server.utils import (
     _get_user_from_invenio_user,
     _get_users,
     get_user_from_token,
+    JinjaEnv,
 )
 
 blueprint = Blueprint("users", __name__)
@@ -424,7 +425,7 @@ def request_token():
             "access_token_status",
         ]
         user_data = "\n".join([f"{f}: {getattr(user, f, None)}" for f in fields])
-        email_body = render_template(
+        email_body = JinjaEnv.render_template(
             "emails/token_request.txt",
             user_data=user_data,
             user_email=user.email,

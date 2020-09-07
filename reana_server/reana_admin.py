@@ -19,14 +19,16 @@ import click
 import tablib
 from flask.cli import with_appcontext
 from invenio_accounts.utils import register_user
+from reana_commons.config import REANAConfig
 from reana_commons.email import send_email
 from reana_commons.errors import REANAEmailNotificationError
 from reana_commons.utils import click_table_printer
 from reana_db.database import Session
 from reana_db.models import AuditLogAction, User, UserTokenStatus
 
-from reana_server.config import ADMIN_USER_ID, REANA_URL
+from reana_server.config import ADMIN_EMAIL, ADMIN_USER_ID, REANA_URL
 from reana_server.status import STATUS_OBJECT_TYPES
+
 from reana_server.utils import (
     _create_user,
     _export_users,
@@ -36,6 +38,7 @@ from reana_server.utils import (
     _validate_email,
     _validate_password,
     create_user_workspace,
+    JinjaEnv,
 )
 
 
@@ -217,7 +220,7 @@ def token_grant(admin_access_token, id_, email):
             error_msg = f"User {id_ or email} does not exist."
         elif user.access_token:
             error_msg = (
-                f"User {user.id_} ({user.email}) has already an" " active access token."
+                f"User {user.id_} ({user.email}) has already an active access token."
             )
         if error_msg:
             click.secho(f"ERROR: {error_msg}", fg="red")
@@ -241,10 +244,12 @@ def token_grant(admin_access_token, id_, email):
         admin.log_action(AuditLogAction.grant_token, {"reana_admin": log_msg})
         # send notification to user by email
         email_subject = "REANA access token granted"
-        email_body = (
-            f"Dear {user.full_name},\n\nYour REANA access token has"
-            f" been granted, please find it on https://{REANA_URL}/profile"
-            "\n\nThe REANA support team"
+        email_body = JinjaEnv.render_template(
+            "emails/token_granted.txt",
+            user_full_name=user.full_name,
+            reana_url=REANA_URL,
+            ui_config=REANAConfig.load("ui"),
+            sender_email=ADMIN_EMAIL,
         )
         send_email(user.email, email_subject, email_body)
 
@@ -298,9 +303,12 @@ def token_revoke(admin_access_token, id_, email):
         admin.log_action(AuditLogAction.revoke_token, {"reana_admin": log_msg})
         # send notification to user by email
         email_subject = "REANA access token revoked"
-        email_body = (
-            f"Dear {user.full_name},\n\nYour REANA access token has"
-            " been revoked.\n\nThe REANA support team"
+        email_body = JinjaEnv.render_template(
+            "emails/token_revoked.txt",
+            user_full_name=user.full_name,
+            reana_url=REANA_URL,
+            ui_config=REANAConfig.load("ui"),
+            sender_email=ADMIN_EMAIL,
         )
         send_email(user.email, email_subject, email_body)
 

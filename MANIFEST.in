@@ -16,11 +16,11 @@ include Dockerfile
 include .dockerignore
 recursive-include reana_server *.py
 recursive-include reana_server *.json
+recursive-include reana_server/templates *.txt
 prune docs/_build
 recursive-include docs *.py
 recursive-include docs *.png
 recursive-include docs *.rst
-recursive-include templates *.txt
 recursive-include tests *.py
 recursive-include tests *.txt
 global-exclude *.py[co] .DS_Store
