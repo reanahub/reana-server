@@ -46,12 +46,13 @@ def get_config():
             application/json:
               {
                 "announcement": "This is a QA instance",
-                "pooling_secs": 15,
+                "chat_url": "https://mattermost.web.cern.ch/it-dep/channels/reana",
+                "client_pyvenv": "/afs/cern.ch/user/r/reana/public/reana/bin/activate",
                 "docs_url": "http://docs.reana.io/",
                 "forum_url": "https://forum.reana.io/",
-                "mattermost_url": "https://mattermost.web.cern.ch/it-dep/channels/reana",
-                "sso": True,
-                "local_users": True
+                "local_users": True,
+                "pooling_secs": 15,
+                "sso": True
               }
         500:
           description: >-
