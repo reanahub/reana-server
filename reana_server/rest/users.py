@@ -16,6 +16,7 @@ from flask import Blueprint, jsonify, request
 from flask_login import current_user
 from reana_db.models import AuditLogAction
 from reana_commons.email import send_email
+from reana_commons.errors import REANAEmailNotificationError
 
 from reana_server.config import ADMIN_EMAIL, REANA_URL
 from reana_server.utils import (
@@ -431,7 +432,11 @@ def request_token():
             user_email=user.email,
             reana_url=REANA_URL,
         )
-        send_email(ADMIN_EMAIL, email_subject, email_body)
+        try:
+            send_email(ADMIN_EMAIL, email_subject, email_body)
+        except REANAEmailNotificationError:
+            logging.error(traceback.format_exc())
+
         return (
             jsonify(
                 {
