@@ -21,6 +21,9 @@ from reana_commons.config import (
 # This database URI import is necessary for Invenio-DB
 from reana_db.config import SQLALCHEMY_DATABASE_URI
 
+SQLALCHEMY_TRACK_MODIFICATIONS = False
+"""Track modifications flag."""
+
 AVAILABLE_WORKFLOW_ENGINES = ["yadage", "cwl", "serial"]
 """Available workflow engines."""
 
