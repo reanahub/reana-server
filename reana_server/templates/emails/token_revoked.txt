@@ -1,6 +1,6 @@
 Dear {{ user_full_name }},
 
-Your {{ reana_url }} access token has been revoked.
+Your {{ reana_hostname }} access token has been revoked.
 
 If you need any assistance, please see our:
 {% if ui_config.chat_url %}

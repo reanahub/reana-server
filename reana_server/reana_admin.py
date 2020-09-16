@@ -26,7 +26,7 @@ from reana_commons.utils import click_table_printer
 from reana_db.database import Session
 from reana_db.models import AuditLogAction, User, UserTokenStatus
 
-from reana_server.config import ADMIN_EMAIL, ADMIN_USER_ID, REANA_URL
+from reana_server.config import ADMIN_EMAIL, ADMIN_USER_ID, REANA_HOSTNAME
 from reana_server.status import STATUS_OBJECT_TYPES
 
 from reana_server.utils import (
@@ -247,7 +247,7 @@ def token_grant(admin_access_token, id_, email):
         email_body = JinjaEnv.render_template(
             "emails/token_granted.txt",
             user_full_name=user.full_name,
-            reana_url=REANA_URL,
+            reana_hostname=REANA_HOSTNAME,
             ui_config=REANAConfig.load("ui"),
             sender_email=ADMIN_EMAIL,
         )
@@ -306,7 +306,7 @@ def token_revoke(admin_access_token, id_, email):
         email_body = JinjaEnv.render_template(
             "emails/token_revoked.txt",
             user_full_name=user.full_name,
-            reana_url=REANA_URL,
+            reana_hostname=REANA_HOSTNAME,
             ui_config=REANAConfig.load("ui"),
             sender_email=ADMIN_EMAIL,
         )
@@ -363,7 +363,7 @@ def status_report(types, email, admin_access_token):
 
         if email:
             status_report_body = (
-                f'Status report for {REANA_URL or "REANA service"}\n'
+                f'Status report for {REANA_HOSTNAME or "REANA service"}\n'
                 "---\n" + status_report_output
             )
 

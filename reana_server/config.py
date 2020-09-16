@@ -31,7 +31,7 @@ ADMIN_USER_ID = "00000000-0000-0000-0000-000000000000"
 
 SHARED_VOLUME_PATH = os.getenv("SHARED_VOLUME_PATH", "/var/reana")
 
-REANA_URL = os.getenv("REANA_URL")
+REANA_HOSTNAME = os.getenv("REANA_HOSTNAME")
 
 REANA_SSO_CERN_CONSUMER_KEY = os.getenv("CERN_CONSUMER_KEY", "CHANGE_ME")
 
@@ -107,8 +107,8 @@ SESSION_COOKIE_SAMESITE = "Lax"
 
 #: In production use the following configuration plus adding  the hostname/ip
 #: of the reverse proxy in front of REANA-Server.
-if REANA_URL:
-    APP_ALLOWED_HOSTS = [REANA_URL]
+if REANA_HOSTNAME:
+    APP_ALLOWED_HOSTS = [REANA_HOSTNAME]
 
 # Security configuration
 # ======================

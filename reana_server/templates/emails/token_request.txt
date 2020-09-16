@@ -1,6 +1,6 @@
 Dear REANA administrator,
 
-There is a new access token request for {{ reana_url }}:
+There is a new access token request for {{ reana_hostname }}:
 
 {{ user_data }}
 
@@ -14,4 +14,4 @@ $ kubectl exec -i -t deployment/reana-server -- flask reana-admin token-revoke -
 
 Thanks,
 
-<{{ reana_url }}>
+<{{ reana_hostname }}>

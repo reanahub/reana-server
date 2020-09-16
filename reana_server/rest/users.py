@@ -18,7 +18,7 @@ from reana_db.models import AuditLogAction
 from reana_commons.email import send_email
 from reana_commons.errors import REANAEmailNotificationError
 
-from reana_server.config import ADMIN_EMAIL, REANA_URL
+from reana_server.config import ADMIN_EMAIL, REANA_HOSTNAME
 from reana_server.utils import (
     _create_user,
     _get_user_from_invenio_user,
@@ -416,7 +416,7 @@ def request_token():
             user = get_user_from_token(request.args.get("access_token"))
         user.request_access_token()
         user.log_action(AuditLogAction.request_token)
-        email_subject = f"[{REANA_URL}] Token request ({user.email})"
+        email_subject = f"[{REANA_HOSTNAME}] Token request ({user.email})"
         fields = [
             "id_",
             "email",
@@ -430,7 +430,7 @@ def request_token():
             "emails/token_request.txt",
             user_data=user_data,
             user_email=user.email,
-            reana_url=REANA_URL,
+            reana_hostname=REANA_HOSTNAME,
         )
         try:
             send_email(ADMIN_EMAIL, email_subject, email_body)

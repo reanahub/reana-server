@@ -4,6 +4,7 @@ Changes
 Version master (UNRELEASED)
 ---------------------------
 
+- Renames ``REANA_URL`` configuration variable to more precise ``REANA_HOSTNAME``.
 - Introduces templating system for email bodies.
 - Uses python3.8
 - Pins all Python dependencies allowing to easily rebuild component images at later times.
