@@ -78,6 +78,8 @@ def get_user():  # noqa
                   type: string
                 access_token:
                   type: string
+                disk_usage:
+                  type: string
           examples:
             application/json:
               [
@@ -85,11 +87,13 @@ def get_user():  # noqa
                   "id": "00000000-0000-0000-0000-000000000000",
                   "email": "user@reana.info",
                   "access_token": "Drmhze6EPcv0fN_81Bj-nA",
+                  "disk_usage": "408"
                 },
                 {
                   "id": "00000000-0000-0000-0000-000000000001",
                   "email": "user2@reana.info",
                   "access_token": "Drmhze6EPcv0fN_81Bj-nB",
+                  "disk_usage": "408"
                 },
               ]
         403:
@@ -123,7 +127,10 @@ def get_user():  # noqa
             users_response = []
             for user in users:
                 user_response = dict(
-                    id_=user.id_, email=user.email, access_token=user.access_token
+                    id_=user.id_,
+                    email=user.email,
+                    access_token=user.access_token,
+                    disk_usage=user.get_user_disk_usage(),
                 )
                 users_response.append(user_response)
             return jsonify(users_response), 200
@@ -178,12 +185,15 @@ def create_user():  # noqa
                 type: string
               access_token:
                 type: string
+              disk_usage:
+                  type: string
           examples:
             application/json:
               {
                 "id_": "00000000-0000-0000-0000-000000000000",
                 "email": "user@reana.info",
-                "access_token": "Drmhze6EPcv0fN_81Bj-nA"
+                "access_token": "Drmhze6EPcv0fN_81Bj-nA",
+                "disk_usage": "0"
               }
         403:
           description: >-
@@ -209,6 +219,7 @@ def create_user():  # noqa
                     "id_": user.id_,
                     "email": user.email,
                     "access_token": user.access_token,
+                    "disk_usage": user.get_user_disk_usage(),
                 }
             ),
             201,
@@ -268,7 +279,8 @@ def get_you():
                     "requested_at": "Mon, 25 May 2020 10:39:57 GMT",
                 },
                 "full_name": "John Doe",
-                "username": "jdoe"
+                "username": "jdoe",
+                "disk_usage": "408"
               }
         401:
           description: >-
@@ -320,6 +332,7 @@ def get_you():
                         },
                         "full_name": me.full_name,
                         "username": me.username,
+                        "disk_usage": me.get_user_disk_usage(),
                     }
                 ),
                 200,

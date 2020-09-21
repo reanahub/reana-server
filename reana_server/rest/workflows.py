@@ -11,7 +11,6 @@ import json
 import logging
 import traceback
 
-import fs
 import requests
 from bravado.exception import HTTPError
 from flask import Blueprint, Response
@@ -21,7 +20,6 @@ from flask_login import current_user
 from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_commons.errors import REANAValidationError
 from reana_commons.operational_options import validate_operational_options
-from reana_commons.utils import get_workspace_disk_usage
 from reana_db.database import Session
 from reana_db.models import Workflow, WorkflowStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
@@ -32,7 +30,6 @@ from reana_server.api_client import (
     current_rwc_api_client,
     current_workflow_submission_publisher,
 )
-from reana_server.config import SHARED_VOLUME_PATH
 from reana_server.utils import (
     clone_workflow,
     RequestStreamWithLen,
@@ -2189,15 +2186,9 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
         summarize = bool(parameters.get("summarize", False))
         block_size = parameters.get("block_size")
-        reana_fs = fs.open_fs(SHARED_VOLUME_PATH)
-        if reana_fs.exists(workflow.workspace_path):
-            absolute_workspace_path = reana_fs.getospath(workflow.workspace_path)
-            disk_usage_info = get_workspace_disk_usage(
-                absolute_workspace_path, summarize=summarize, block_size=block_size
-            )
-        else:
-            raise ValueError("Workspace does not exist.")
-
+        disk_usage_info = workflow.get_workspace_disk_usage(
+            summarize=summarize, block_size=block_size
+        )
         response = {
             "workflow_id": workflow.id_,
             "workflow_name": workflow.name,

@@ -647,11 +647,13 @@
               "application/json": [
                 {
                   "access_token": "Drmhze6EPcv0fN_81Bj-nA",
+                  "disk_usage": "408",
                   "email": "user@reana.info",
                   "id": "00000000-0000-0000-0000-000000000000"
                 },
                 {
                   "access_token": "Drmhze6EPcv0fN_81Bj-nB",
+                  "disk_usage": "408",
                   "email": "user2@reana.info",
                   "id": "00000000-0000-0000-0000-000000000001"
                 }
@@ -661,6 +663,9 @@
               "items": {
                 "properties": {
                   "access_token": {
+                    "type": "string"
+                  },
+                  "disk_usage": {
                     "type": "string"
                   },
                   "email": {
@@ -732,6 +737,7 @@
             "examples": {
               "application/json": {
                 "access_token": "Drmhze6EPcv0fN_81Bj-nA",
+                "disk_usage": "0",
                 "email": "user@reana.info",
                 "id_": "00000000-0000-0000-0000-000000000000"
               }
@@ -739,6 +745,9 @@
             "schema": {
               "properties": {
                 "access_token": {
+                  "type": "string"
+                },
+                "disk_usage": {
                   "type": "string"
                 },
                 "email": {
@@ -2464,6 +2473,7 @@
             "description": "User information correspoding to the session cookie sent in the request.",
             "examples": {
               "application/json": {
+                "disk_usage": "408",
                 "email": "user@reana.info",
                 "full_name": "John Doe",
                 "reana_token": {
