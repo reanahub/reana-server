@@ -802,6 +802,30 @@
             "type": "boolean"
           },
           {
+            "description": "Filter workflows by name.",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Sort workflows by creation date (asc, desc).",
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Filter workflows by list of statuses.",
+            "in": "query",
+            "items": {
+              "type": "string"
+            },
+            "name": "status",
+            "required": false,
+            "type": "array"
+          },
+          {
             "description": "Size format, either 'b' (bytes) or 'k' (kilobytes).",
             "in": "query",
             "name": "block_size",

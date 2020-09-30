@@ -81,6 +81,23 @@ def get_workflows(**kwargs):  # noqa
           description: Optional flag to show more information.
           required: false
           type: boolean
+        - name: search
+          in: query
+          description: Filter workflows by name.
+          required: false
+          type: string
+        - name: sort
+          in: query
+          description: Sort workflows by creation date (asc, desc).
+          required: false
+          type: string
+        - name: status
+          in: query
+          description: Filter workflows by list of statuses.
+          required: false
+          type: array
+          items:
+            type: string
         - name: block_size
           in: query
           description: Size format, either 'b' (bytes) or 'k' (kilobytes).
@@ -197,11 +214,17 @@ def get_workflows(**kwargs):  # noqa
         else:
             user = get_user_from_token(request.args.get("access_token"))
         type_ = request.args.get("type", "batch")
+        search = request.args.get("search")
+        sort = request.args.get("sort", "desc")
+        status = request.args.getlist("status")
         verbose = json.loads(request.args.get("verbose", "false").lower())
         block_size = request.args.get("block_size")
         response, http_response = current_rwc_api_client.api.get_workflows(
             user=str(user.id_),
             type=type_,
+            search=search,
+            sort=sort,
+            status=status or None,
             verbose=bool(verbose),
             block_size=block_size,
             **kwargs,
