@@ -80,6 +80,8 @@ def get_user():  # noqa
                   type: string
                 disk_usage:
                   type: string
+                cpu_usage:
+                  type: string
           examples:
             application/json:
               [
@@ -87,13 +89,15 @@ def get_user():  # noqa
                   "id": "00000000-0000-0000-0000-000000000000",
                   "email": "user@reana.info",
                   "access_token": "Drmhze6EPcv0fN_81Bj-nA",
-                  "disk_usage": "408"
+                  "disk_usage": "408",
+                  "cpu_usage": "70536"
                 },
                 {
                   "id": "00000000-0000-0000-0000-000000000001",
                   "email": "user2@reana.info",
                   "access_token": "Drmhze6EPcv0fN_81Bj-nB",
-                  "disk_usage": "408"
+                  "disk_usage": "408",
+                  "cpu_usage": "70536"
                 },
               ]
         403:
@@ -131,6 +135,7 @@ def get_user():  # noqa
                     email=user.email,
                     access_token=user.access_token,
                     disk_usage=user.get_user_disk_usage(),
+                    cpu_usage=user.get_user_cpu_usage(),
                 )
                 users_response.append(user_response)
             return jsonify(users_response), 200
@@ -187,13 +192,16 @@ def create_user():  # noqa
                 type: string
               disk_usage:
                   type: string
+              cpu_usage:
+                  type: string
           examples:
             application/json:
               {
                 "id_": "00000000-0000-0000-0000-000000000000",
                 "email": "user@reana.info",
                 "access_token": "Drmhze6EPcv0fN_81Bj-nA",
-                "disk_usage": "0"
+                "disk_usage": "0",
+                "cpu_usage": "0"
               }
         403:
           description: >-
@@ -220,6 +228,7 @@ def create_user():  # noqa
                     "email": user.email,
                     "access_token": user.access_token,
                     "disk_usage": user.get_user_disk_usage(),
+                    "cpu_usage": user.get_user_cpu_usage(),
                 }
             ),
             201,
@@ -280,7 +289,8 @@ def get_you():
                 },
                 "full_name": "John Doe",
                 "username": "jdoe",
-                "disk_usage": "408"
+                "disk_usage": "408",
+                "cpu_usage": "70536"
               }
         401:
           description: >-
@@ -333,6 +343,7 @@ def get_you():
                         "full_name": me.full_name,
                         "username": me.username,
                         "disk_usage": me.get_user_disk_usage(),
+                        "cpu_usage": me.get_user_cpu_usage(),
                     }
                 ),
                 200,
