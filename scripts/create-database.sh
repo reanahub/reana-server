@@ -12,6 +12,7 @@ set -e
 echo 'Creating REANA database...'
 reana-db init
 reana-db alembic init
+reana-db quota create-default-resources
 echo 'REANA database created.'
 
 # Create Invenio DB
