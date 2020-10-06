@@ -142,6 +142,10 @@ def get_you():
         elif "access_token" in request.args:
             me = get_user_from_token(request.args.get("access_token"))
         if me:
+            # Temporary patch until https://github.com/reanahub/reana-db/issues/88
+            # is implemented
+            quota = me.get_quota_usage()
+            quota["disk"]["usage"] = float(quota["disk"]["usage"][:-1])
             return (
                 jsonify(
                     {
@@ -155,7 +159,7 @@ def get_you():
                         },
                         "full_name": me.full_name,
                         "username": me.username,
-                        "quota": me.get_quota_usage(),
+                        "quota": quota,
                     }
                 ),
                 200,
