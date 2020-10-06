@@ -408,64 +408,6 @@ def test_get_files(app, default_user, _get_user_mock):
             assert res.status_code == 200
 
 
-def test_get_user(app, default_user):
-    """Test get_user view."""
-    with app.test_client() as client:
-        res = client.get(
-            url_for("users.get_user"),
-            query_string={
-                "id_": default_user.id_,
-                "email": default_user.email,
-                "user_token": default_user.access_token,
-            },
-        )
-        assert res.status_code == 403
-
-        res = client.get(
-            url_for("users.get_user"),
-            query_string={
-                "id_": default_user.id_,
-                "email": default_user.email,
-                "access_token": default_user.access_token,
-            },
-        )
-        assert res.status_code == 200
-
-
-def test_create_user(app, default_user):
-    """Test create_user view."""
-    with app.test_client() as client:
-        res = client.post(
-            url_for("users.create_user"),
-            query_string={
-                "id_": default_user.id_,
-                "email": default_user.email,
-                "user_token": default_user.access_token,
-            },
-        )
-        assert res.status_code == 403
-
-        res = client.post(
-            url_for("users.create_user"),
-            query_string={
-                "id_": default_user.id_,
-                "email": default_user.email,
-                "access_token": default_user.access_token,
-            },
-        )
-        assert res.status_code == 403
-
-    with app.test_client() as client:
-        res = client.post(
-            url_for("users.create_user"),
-            query_string={
-                "email": "test_email",
-                "access_token": default_user.access_token,
-            },
-        )
-        assert res.status_code == 201
-
-
 def test_move_files(app, default_user, _get_user_mock):
     """Test move_files view."""
     with app.test_client() as client:

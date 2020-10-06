@@ -20,224 +20,12 @@ from reana_commons.errors import REANAEmailNotificationError
 
 from reana_server.config import ADMIN_EMAIL, REANA_HOSTNAME
 from reana_server.utils import (
-    _create_user,
     _get_user_from_invenio_user,
-    _get_users,
     get_user_from_token,
     JinjaEnv,
 )
 
 blueprint = Blueprint("users", __name__)
-
-
-@blueprint.route("/users", methods=["GET"])
-def get_user():  # noqa
-    r"""Endpoint to get user information from the server.
-    ---
-    get:
-      summary: Get user information. Requires the admin api key.
-      description: >-
-        Get user information.
-      operationId: get_user
-      produces:
-        - application/json
-      parameters:
-        - name: email
-          in: query
-          description: Not required. The email of the user.
-          required: false
-          type: string
-        - name: id_
-          in: query
-          description: Not required. UUID of the user.
-          required: false
-          type: string
-        - name: user_token
-          in: query
-          description: Not required. API key of the admin.
-          required: false
-          type: string
-        - name: access_token
-          in: query
-          description: Required. API key of the admin.
-          required: true
-          type: string
-      responses:
-        200:
-          description: >-
-            Users matching criteria were found.
-            Returns all stored user information.
-          schema:
-            type: array
-            items:
-              type: object
-              properties:
-                id_:
-                  type: string
-                email:
-                  type: string
-                access_token:
-                  type: string
-                disk_usage:
-                  type: string
-                cpu_usage:
-                  type: string
-          examples:
-            application/json:
-              [
-                {
-                  "id": "00000000-0000-0000-0000-000000000000",
-                  "email": "user@reana.info",
-                  "access_token": "Drmhze6EPcv0fN_81Bj-nA",
-                  "disk_usage": "408",
-                  "cpu_usage": "70536"
-                },
-                {
-                  "id": "00000000-0000-0000-0000-000000000001",
-                  "email": "user2@reana.info",
-                  "access_token": "Drmhze6EPcv0fN_81Bj-nB",
-                  "disk_usage": "408",
-                  "cpu_usage": "70536"
-                },
-              ]
-        403:
-          description: >-
-            Request failed. The incoming payload seems malformed.
-        404:
-          description: >-
-            Request failed. User does not exist.
-          examples:
-            application/json:
-              {
-                "message": "User 00000000-0000-0000-0000-000000000000 does not
-                            exist."
-              }
-        500:
-          description: >-
-            Request failed. Internal server error.
-          examples:
-            application/json:
-              {
-                "message": "Error while querying."
-              }
-    """
-    try:
-        user_id = request.args.get("id_")
-        user_email = request.args.get("email")
-        user_token = request.args.get("user_token")
-        access_token = request.args.get("access_token")
-        users = _get_users(user_id, user_email, user_token, access_token)
-        if users:
-            users_response = []
-            for user in users:
-                user_response = dict(
-                    id_=user.id_,
-                    email=user.email,
-                    access_token=user.access_token,
-                    disk_usage=user.get_user_disk_usage(),
-                    cpu_usage=user.get_user_cpu_usage(),
-                )
-                users_response.append(user_response)
-            return jsonify(users_response), 200
-        else:
-            return jsonify({"message": "User {} does not exist.".format(user_id)}, 404)
-    except ValueError:
-        return jsonify({"message": "Action not permitted."}), 403
-    except Exception as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 500
-
-
-@blueprint.route("/users", methods=["POST"])
-def create_user():  # noqa
-    r"""Endpoint to create users.
-
-    ---
-    post:
-      summary: Creates a new user with the provided information.
-      description: >-
-        This resource creates a new user with the provided
-        information (email, id). Requires the admin api key.
-      operationId: create_user
-      produces:
-        - application/json
-      parameters:
-        - name: email
-          in: query
-          description: Required. The email of the user.
-          required: true
-          type: string
-        - name: user_token
-          in: query
-          description: Required. API key of the user.
-          required: false
-          type: string
-        - name: access_token
-          in: query
-          description: Required. API key of the admin.
-          required: true
-          type: string
-      responses:
-        201:
-          description: >-
-            User created successfully. Returns the access_token and a message.
-          schema:
-            type: object
-            properties:
-              id_:
-                type: string
-              email:
-                type: string
-              access_token:
-                type: string
-              disk_usage:
-                  type: string
-              cpu_usage:
-                  type: string
-          examples:
-            application/json:
-              {
-                "id_": "00000000-0000-0000-0000-000000000000",
-                "email": "user@reana.info",
-                "access_token": "Drmhze6EPcv0fN_81Bj-nA",
-                "disk_usage": "0",
-                "cpu_usage": "0"
-              }
-        403:
-          description: >-
-            Request failed. The incoming payload seems malformed.
-        500:
-          description: >-
-            Request failed. Internal server error.
-          examples:
-            application/json:
-              {
-                "message": "Internal server error."
-              }
-    """
-    try:
-        user_email = request.args.get("email")
-        user_token = request.args.get("user_token")
-        access_token = request.args.get("access_token")
-        user = _create_user(user_email, user_token, access_token)
-        return (
-            jsonify(
-                {
-                    "message": "User was successfully created.",
-                    "id_": user.id_,
-                    "email": user.email,
-                    "access_token": user.access_token,
-                    "disk_usage": user.get_user_disk_usage(),
-                    "cpu_usage": user.get_user_cpu_usage(),
-                }
-            ),
-            201,
-        )
-    except ValueError:
-        return jsonify({"message": "Action not permitted."}), 403
-    except Exception as e:
-        logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 500
 
 
 @blueprint.route("/you", methods=["GET"])
@@ -278,6 +66,23 @@ def get_you():
                     type: string
                   requested_at:
                     type: string
+              quota:
+                type: object
+                properties:
+                  disk:
+                    type: object
+                    properties:
+                      usage:
+                        type: number
+                      limit:
+                        type: number
+                  cpu:
+                    type: object
+                    properties:
+                      usage:
+                        type: number
+                      limit:
+                        type: number
           examples:
             application/json:
               {
@@ -289,8 +94,16 @@ def get_you():
                 },
                 "full_name": "John Doe",
                 "username": "jdoe",
-                "disk_usage": "408",
-                "cpu_usage": "70536"
+                "quota": {
+                  "cpu": {
+                    "limit": 200000,
+                    "usage": 70536
+                  },
+                  "disk": {
+                    "limit": 200000,
+                    "usage": 408
+                  }
+                }
               }
         401:
           description: >-
@@ -342,8 +155,7 @@ def get_you():
                         },
                         "full_name": me.full_name,
                         "username": me.username,
-                        "disk_usage": me.get_user_disk_usage(),
-                        "cpu_usage": me.get_user_cpu_usage(),
+                        "quota": me.get_quota_usage(),
                     }
                 ),
                 200,

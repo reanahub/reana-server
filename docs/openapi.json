@@ -603,187 +603,6 @@
         "summary": "Requests a new access token for the authenticated user."
       }
     },
-    "/api/users": {
-      "get": {
-        "description": "Get user information.",
-        "operationId": "get_user",
-        "parameters": [
-          {
-            "description": "Not required. The email of the user.",
-            "in": "query",
-            "name": "email",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "description": "Not required. UUID of the user.",
-            "in": "query",
-            "name": "id_",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "description": "Not required. API key of the admin.",
-            "in": "query",
-            "name": "user_token",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "description": "Required. API key of the admin.",
-            "in": "query",
-            "name": "access_token",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Users matching criteria were found. Returns all stored user information.",
-            "examples": {
-              "application/json": [
-                {
-                  "access_token": "Drmhze6EPcv0fN_81Bj-nA",
-                  "cpu_usage": "70536",
-                  "disk_usage": "408",
-                  "email": "user@reana.info",
-                  "id": "00000000-0000-0000-0000-000000000000"
-                },
-                {
-                  "access_token": "Drmhze6EPcv0fN_81Bj-nB",
-                  "cpu_usage": "70536",
-                  "disk_usage": "408",
-                  "email": "user2@reana.info",
-                  "id": "00000000-0000-0000-0000-000000000001"
-                }
-              ]
-            },
-            "schema": {
-              "items": {
-                "properties": {
-                  "access_token": {
-                    "type": "string"
-                  },
-                  "cpu_usage": {
-                    "type": "string"
-                  },
-                  "disk_usage": {
-                    "type": "string"
-                  },
-                  "email": {
-                    "type": "string"
-                  },
-                  "id_": {
-                    "type": "string"
-                  }
-                },
-                "type": "object"
-              },
-              "type": "array"
-            }
-          },
-          "403": {
-            "description": "Request failed. The incoming payload seems malformed."
-          },
-          "404": {
-            "description": "Request failed. User does not exist.",
-            "examples": {
-              "application/json": {
-                "message": "User 00000000-0000-0000-0000-000000000000 does not exist."
-              }
-            }
-          },
-          "500": {
-            "description": "Request failed. Internal server error.",
-            "examples": {
-              "application/json": {
-                "message": "Error while querying."
-              }
-            }
-          }
-        },
-        "summary": "Get user information. Requires the admin api key."
-      },
-      "post": {
-        "description": "This resource creates a new user with the provided information (email, id). Requires the admin api key.",
-        "operationId": "create_user",
-        "parameters": [
-          {
-            "description": "Required. The email of the user.",
-            "in": "query",
-            "name": "email",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "description": "Required. API key of the user.",
-            "in": "query",
-            "name": "user_token",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "description": "Required. API key of the admin.",
-            "in": "query",
-            "name": "access_token",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "201": {
-            "description": "User created successfully. Returns the access_token and a message.",
-            "examples": {
-              "application/json": {
-                "access_token": "Drmhze6EPcv0fN_81Bj-nA",
-                "cpu_usage": "0",
-                "disk_usage": "0",
-                "email": "user@reana.info",
-                "id_": "00000000-0000-0000-0000-000000000000"
-              }
-            },
-            "schema": {
-              "properties": {
-                "access_token": {
-                  "type": "string"
-                },
-                "cpu_usage": {
-                  "type": "string"
-                },
-                "disk_usage": {
-                  "type": "string"
-                },
-                "email": {
-                  "type": "string"
-                },
-                "id_": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "403": {
-            "description": "Request failed. The incoming payload seems malformed."
-          },
-          "500": {
-            "description": "Request failed. Internal server error.",
-            "examples": {
-              "application/json": {
-                "message": "Internal server error."
-              }
-            }
-          }
-        },
-        "summary": "Creates a new user with the provided information."
-      }
-    },
     "/api/workflows": {
       "get": {
         "description": "This resource return all current workflows in JSON format.",
@@ -2506,10 +2325,18 @@
             "description": "User information correspoding to the session cookie sent in the request.",
             "examples": {
               "application/json": {
-                "cpu_usage": "70536",
-                "disk_usage": "408",
                 "email": "user@reana.info",
                 "full_name": "John Doe",
+                "quota": {
+                  "cpu": {
+                    "limit": 200000,
+                    "usage": 70536
+                  },
+                  "disk": {
+                    "limit": 200000,
+                    "usage": 408
+                  }
+                },
                 "reana_token": {
                   "requested_at": "Mon, 25 May 2020 10:39:57 GMT",
                   "status": "active",
@@ -2522,6 +2349,33 @@
               "properties": {
                 "email": {
                   "type": "string"
+                },
+                "quota": {
+                  "properties": {
+                    "cpu": {
+                      "properties": {
+                        "limit": {
+                          "type": "number"
+                        },
+                        "usage": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "disk": {
+                      "properties": {
+                        "limit": {
+                          "type": "number"
+                        },
+                        "usage": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
                 },
                 "reana_token": {
                   "properties": {
