@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from invenio_accounts.models import SessionActivity
 from reana_commons.config import SHARED_VOLUME_PATH
 from reana_db.database import Session
-from reana_db.models import Workflow, WorkflowStatus
+from reana_db.models import Workflow, WorkflowStatus, InteractiveSession
 
 
 class REANAStatus:
@@ -54,9 +54,14 @@ class InteractiveSessionsStatus(REANAStatus):
 
     def get_active(self):
         """Get the number of active interactive sessions."""
+        non_active_statuses = [
+            WorkflowStatus.stopped,
+            WorkflowStatus.deleted,
+            WorkflowStatus.failed,
+        ]
         active_interactive_sessions = (
-            Session.query(Workflow)
-            .filter(Workflow.interactive_session.isnot(None))
+            Session.query(InteractiveSession)
+            .filter(InteractiveSession.status.notin_(non_active_statuses))
             .count()
         )
         return active_interactive_sessions
