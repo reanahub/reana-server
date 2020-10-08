@@ -17,11 +17,10 @@ from flask import Blueprint, Response
 from flask import current_app as app
 from flask import jsonify, request, stream_with_context
 from flask_login import current_user
-from reana_commons.config import INTERACTIVE_SESSION_TYPES
 from reana_commons.errors import REANAValidationError
 from reana_commons.operational_options import validate_operational_options
 from reana_db.database import Session
-from reana_db.models import Workflow, WorkflowStatus
+from reana_db.models import Workflow, RunStatus, InteractiveSessionType
 from reana_db.utils import _get_workflow_with_uuid_or_name
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
@@ -390,7 +389,7 @@ def create_workflow():  # noqa
         ).result()
         if git_data:
             Workflow.update_workflow_status(
-                Session, response["workflow_id"], WorkflowStatus.queued
+                Session, response["workflow_id"], RunStatus.queued
             )
             current_workflow_submission_publisher.publish_workflow_submission(
                 user_id=str(user.id_),
@@ -895,17 +894,17 @@ def start_workflow(workflow_id_or_name):  # noqa
             workflow.type_, parameters["operational_options"]
         )
         if "restart" in parameters:
-            if workflow.status not in [WorkflowStatus.finished, WorkflowStatus.failed]:
+            if workflow.status not in [RunStatus.finished, RunStatus.failed]:
                 raise ValueError("Only finished or failed workflows can be restarted.")
             workflow = clone_workflow(
                 workflow, parameters.get("reana_specification", None)
             )
-        elif workflow.status != WorkflowStatus.created:
+        elif workflow.status != RunStatus.created:
             raise ValueError(
                 "Workflow {} is already {} and cannot be started "
                 "again.".format(workflow.get_full_workflow_name(), workflow.status.name)
             )
-        Workflow.update_workflow_status(Session, workflow.id_, WorkflowStatus.queued)
+        Workflow.update_workflow_status(Session, workflow.id_, RunStatus.queued)
         current_workflow_submission_publisher.publish_workflow_submission(
             user_id=str(user.id_),
             workflow_id_or_name=workflow.get_full_workflow_name(),
@@ -915,7 +914,7 @@ def start_workflow(workflow_id_or_name):  # noqa
             "message": "Workflow submitted.",
             "workflow_id": workflow.id_,
             "workflow_name": workflow.name,
-            "status": WorkflowStatus.queued.name,
+            "status": RunStatus.queued.name,
             "run_number": workflow.run_number,
             "user": str(user.id_),
         }
@@ -1853,13 +1852,14 @@ def open_interactive_session(workflow_id_or_name, interactive_session_type):  # 
         else:
             user = get_user_from_token(request.args.get("access_token"))
 
-        if interactive_session_type not in INTERACTIVE_SESSION_TYPES:
+        if interactive_session_type not in InteractiveSessionType.__members__:
             return (
                 jsonify(
                     {
                         "message": "Interactive session type {0} not found, try "
                         "with one of: {1}".format(
-                            interactive_session_type, INTERACTIVE_SESSION_TYPES
+                            interactive_session_type,
+                            [e.name for e in InteractiveSessionType],
                         )
                     }
                 ),

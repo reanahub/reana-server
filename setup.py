@@ -19,7 +19,7 @@ readme = open("README.rst").read()
 history = open("CHANGES.rst").read()
 
 tests_require = [
-    "pytest-reana>=0.7.0.dev20200707,<0.8.0",
+    "pytest-reana>=0.8.0a1,<0.9.0",
 ]
 
 extras_require = {
@@ -48,8 +48,8 @@ setup_requires = [
 install_requires = [
     "marshmallow>2.13.0,<=2.20.1",
     "pyOpenSSL==17.5.0",
-    "reana-commons[kubernetes]>=0.8.0a3,<0.9.0",
-    "reana-db>=0.8.0a4,<0.9.0",
+    "reana-commons[kubernetes]>=0.8.0a4,<0.9.0",
+    "reana-db>=0.8.0a5,<0.9.0",
     "requests==2.20.0",
     "rfc3987==1.3.7",
     "strict-rfc3339==0.7",

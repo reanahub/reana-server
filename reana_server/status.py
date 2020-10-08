@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from invenio_accounts.models import SessionActivity
 from reana_commons.config import SHARED_VOLUME_PATH
 from reana_db.database import Session
-from reana_db.models import Workflow, WorkflowStatus, InteractiveSession
+from reana_db.models import Workflow, RunStatus, InteractiveSession
 
 
 class REANAStatus:
@@ -55,9 +55,9 @@ class InteractiveSessionsStatus(REANAStatus):
     def get_active(self):
         """Get the number of active interactive sessions."""
         non_active_statuses = [
-            WorkflowStatus.stopped,
-            WorkflowStatus.deleted,
-            WorkflowStatus.failed,
+            RunStatus.stopped,
+            RunStatus.deleted,
+            RunStatus.failed,
         ]
         active_interactive_sessions = (
             Session.query(InteractiveSession)
@@ -225,7 +225,7 @@ class WorkflowsStatus(REANAStatus):
         inactivity_threshold = datetime.now() - timedelta(hours=12)
         number = (
             Session.query(Workflow)
-            .filter(Workflow.status == WorkflowStatus.running)
+            .filter(Workflow.status == RunStatus.running)
             .filter(Workflow.run_started_at <= inactivity_threshold)
             .filter(Workflow.updated <= inactivity_threshold)
             .count()
@@ -242,10 +242,10 @@ class WorkflowsStatus(REANAStatus):
     def get_status(self):
         """Get status summary for REANA workflows."""
         return {
-            "running": self.get_workflows_by_status(WorkflowStatus.running),
-            "finished": self.get_workflows_by_status(WorkflowStatus.finished),
+            "running": self.get_workflows_by_status(RunStatus.running),
+            "finished": self.get_workflows_by_status(RunStatus.finished),
             "stuck": self.stuck_workflows(),
-            "queued": self.get_workflows_by_status(WorkflowStatus.queued),
+            "queued": self.get_workflows_by_status(RunStatus.queued),
             "restarts": self.restarted_workflows(),
             "git_source": self.git_workflows(),
         }

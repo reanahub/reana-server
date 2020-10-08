@@ -103,8 +103,8 @@ python-dateutil==2.8.1    # via alembic, bravado, bravado-core, kubernetes
 python-editor==1.0.4      # via alembic
 pytz==2020.1              # via babel, bravado-core, celery, fs
 pyyaml==5.3.1             # via bravado, bravado-core, kubernetes, reana-commons, swagger-spec-validator
-reana-commons[kubernetes]==0.8.0a3	# via reana-db, reana-server (setup.py)
-reana-db==0.8.0a4	# via reana-server (setup.py)
+reana-commons[kubernetes]==0.8.0a4	# via reana-db, reana-server (setup.py)
+reana-db==0.8.0a5	# via reana-server (setup.py)
 redis==3.5.3              # via invenio-accounts, invenio-celery
 requests-oauthlib==1.1.0  # via flask-oauthlib, invenio-oauth2server, invenio-oauthclient, kubernetes
 requests==2.20.0          # via bravado, kubernetes, reana-server (setup.py), requests-oauthlib

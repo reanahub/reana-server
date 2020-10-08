@@ -16,8 +16,7 @@ import pytest
 from flask import url_for
 from mock import Mock, patch
 from pytest_reana.test_utils import make_mock_api_client
-from reana_commons.config import INTERACTIVE_SESSION_TYPES
-from reana_db.models import User
+from reana_db.models import User, InteractiveSessionType
 
 from reana_server.utils import (
     _create_and_associate_local_user,
@@ -447,7 +446,7 @@ def test_move_files(app, default_user, _get_user_mock):
 
 @pytest.mark.parametrize(
     ("interactive_session_type", "expected_status_code"),
-    [(int_session_type, 200) for int_session_type in INTERACTIVE_SESSION_TYPES]
+    [(int_session_type.name, 200) for int_session_type in InteractiveSessionType]
     + [("wrong-interactive-type", 404)],
 )
 def test_open_interactive_session(
