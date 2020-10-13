@@ -51,7 +51,7 @@ def get_config():
                 "docs_url": "http://docs.reana.io/",
                 "forum_url": "https://forum.reana.io/",
                 "local_users": True,
-                "pooling_secs": 15,
+                "polling_secs": 15,
                 "sso": True
               }
         500:

@@ -39,7 +39,7 @@
                 "docs_url": "http://docs.reana.io/",
                 "forum_url": "https://forum.reana.io/",
                 "local_users": true,
-                "pooling_secs": 15,
+                "polling_secs": 15,
                 "sso": true
               }
             },
