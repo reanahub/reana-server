@@ -2329,12 +2329,26 @@
                 "full_name": "John Doe",
                 "quota": {
                   "cpu": {
-                    "limit": 200000,
-                    "usage": 70536
+                    "health": "healthy",
+                    "limit": {
+                      "human_readable": "3m 20s",
+                      "raw": 200000
+                    },
+                    "usage": {
+                      "human_readable": "1m 10s",
+                      "raw": 70536
+                    }
                   },
                   "disk": {
-                    "limit": 200000,
-                    "usage": 408
+                    "health": "healthy",
+                    "limit": {
+                      "human_readable": "50 MB",
+                      "raw": 52430000
+                    },
+                    "usage": {
+                      "human_readable": "766 KB",
+                      "raw": 784384
+                    }
                   }
                 },
                 "reana_token": {
@@ -2354,22 +2368,60 @@
                   "properties": {
                     "cpu": {
                       "properties": {
+                        "health": {
+                          "type": "string"
+                        },
                         "limit": {
-                          "type": "number"
+                          "properties": {
+                            "human_readable": {
+                              "type": "string"
+                            },
+                            "raw": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
                         },
                         "usage": {
-                          "type": "number"
+                          "properties": {
+                            "human_readable": {
+                              "type": "string"
+                            },
+                            "raw": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
                         }
                       },
                       "type": "object"
                     },
                     "disk": {
                       "properties": {
+                        "health": {
+                          "type": "string"
+                        },
                         "limit": {
-                          "type": "number"
+                          "properties": {
+                            "human_readable": {
+                              "type": "string"
+                            },
+                            "raw": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
                         },
                         "usage": {
-                          "type": "number"
+                          "properties": {
+                            "human_readable": {
+                              "type": "string"
+                            },
+                            "raw": {
+                              "type": "number"
+                            }
+                          },
+                          "type": "object"
                         }
                       },
                       "type": "object"

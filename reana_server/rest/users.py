@@ -73,16 +73,40 @@ def get_you():
                     type: object
                     properties:
                       usage:
-                        type: number
+                        type: object
+                        properties:
+                          raw:
+                            type: number
+                          human_readable:
+                            type: string
                       limit:
-                        type: number
+                        type: object
+                        properties:
+                          raw:
+                            type: number
+                          human_readable:
+                            type: string
+                      health:
+                        type: string
                   cpu:
                     type: object
                     properties:
                       usage:
-                        type: number
+                        type: object
+                        properties:
+                          raw:
+                            type: number
+                          human_readable:
+                            type: string
                       limit:
-                        type: number
+                        type: object
+                        properties:
+                          raw:
+                            type: number
+                          human_readable:
+                            type: string
+                      health:
+                        type: string
           examples:
             application/json:
               {
@@ -96,12 +120,26 @@ def get_you():
                 "username": "jdoe",
                 "quota": {
                   "cpu": {
-                    "limit": 200000,
-                    "usage": 70536
+                    "limit": {
+                      "raw": 200000,
+                      "human_readable": "3m 20s"
+                    },
+                    "usage": {
+                      "raw": 70536,
+                      "human_readable": "1m 10s"
+                    },
+                    "health": "healthy"
                   },
                   "disk": {
-                    "limit": 200000,
-                    "usage": 408
+                    "limit": {
+                      "raw": 52430000,
+                      "human_readable": "50 MB"
+                    },
+                    "usage": {
+                      "raw": 784384,
+                      "human_readable": "766 KB"
+                    },
+                    "health": "healthy"
                   }
                 }
               }
