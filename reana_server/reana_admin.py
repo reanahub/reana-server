@@ -27,6 +27,7 @@ from reana_db.config import DEFAULT_QUOTA_LIMITS
 from reana_db.database import Session
 from reana_db.models import (
     AuditLogAction,
+    QuotaHealth,
     Resource,
     User,
     UserResource,
@@ -419,11 +420,17 @@ def list_quota_usage(
     try:
         response = _get_users(id, email, user_access_token, admin_access_token)
         headers = ["id", "email", "cpu-used", "cpu-limit", "disk-used", "disk-limit"]
-        health_order = {"healthy": 0, "warning": 1, "critical": 2}
+        health_order = {
+            QuotaHealth.healthy.name: 0,
+            QuotaHealth.warning.name: 1,
+            QuotaHealth.critical.name: 2,
+        }
         data = []
         colours = []
         health = []
         for user in response:
+            if str(user.id_) == ADMIN_USER_ID:
+                continue
             (disk, cpu,) = user.get_quota_usage().values()
             data.append(
                 (
@@ -435,9 +442,11 @@ def list_quota_usage(
                     disk.get("limit", {}).get(human_readable) or "-",
                 )
             )
-
             health_ordered = max(
-                [disk.get("health"), cpu.get("health")],
+                [
+                    disk.get("health", QuotaHealth.healthy.name),
+                    cpu.get("health", QuotaHealth.healthy.name),
+                ],
                 key=lambda key: health_order[key],
             )
             colours.append(REANA_RESOURCE_HEALTH_COLORS[health_ordered])

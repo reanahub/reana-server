@@ -58,7 +58,7 @@ def build_openapi_spec(publish):
         title=package,
         version=ver,
         info=dict(description=desc),
-        plugins=("apispec.ext.flask", "apispec.ext.marshmallow"),
+        plugins=("apispec.ext.flask",),
     )
 
     # Add marshmallow schemas to the specification here

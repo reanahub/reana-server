@@ -97,11 +97,6 @@ def get_workflows(**kwargs):  # noqa
           type: array
           items:
             type: string
-        - name: block_size
-          in: query
-          description: Size format, either 'b' (bytes) or 'k' (kilobytes).
-          required: false
-          type: string
         - name: page
           in: query
           description: Results page number (pagination).
@@ -133,7 +128,12 @@ def get_workflows(**kwargs):  # noqa
                     status:
                       type: string
                     size:
-                      type: string
+                      type: object
+                      properties:
+                        raw:
+                          type: number
+                        human_readable:
+                          type: string
                     user:
                       type: string
                     created:
@@ -147,7 +147,10 @@ def get_workflows(**kwargs):  # noqa
                   "id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                   "name": "mytest.1",
                   "status": "running",
-                  "size": "10M",
+                  "size":{
+                    "raw": 10490000,
+                    "human_readable": "10 MB"
+                  },
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
@@ -155,7 +158,10 @@ def get_workflows(**kwargs):  # noqa
                   "id": "3c9b117c-d40a-49e3-a6de-5f89fcada5a3",
                   "name": "mytest.2",
                   "status": "finished",
-                  "size": "12M",
+                  "size":{
+                    "raw": 12580000,
+                    "human_readable": "12 MB"
+                  },
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
@@ -163,7 +169,10 @@ def get_workflows(**kwargs):  # noqa
                   "id": "72e3ee4f-9cd3-4dc7-906c-24511d9f5ee3",
                   "name": "mytest.3",
                   "status": "created",
-                  "size": "180K",
+                  "size":{
+                    "raw": 184320,
+                    "human_readable": "180 KB"
+                  },
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 },
@@ -171,7 +180,10 @@ def get_workflows(**kwargs):  # noqa
                   "id": "c4c0a1a6-beef-46c7-be04-bf4b3beca5a1",
                   "name": "mytest.4",
                   "status": "created",
-                  "size": "1G",
+                  "size": {
+                    "raw": 1074000000,
+                    "human_readable": "1 GB"
+                  },
                   "user": "00000000-0000-0000-0000-000000000000",
                   "created": "2018-06-13T09:47:35.66097",
                 }
@@ -217,7 +229,6 @@ def get_workflows(**kwargs):  # noqa
         sort = request.args.get("sort", "desc")
         status = request.args.getlist("status")
         verbose = json.loads(request.args.get("verbose", "false").lower())
-        block_size = request.args.get("block_size")
         response, http_response = current_rwc_api_client.api.get_workflows(
             user=str(user.id_),
             type=type_,
@@ -225,7 +236,6 @@ def get_workflows(**kwargs):  # noqa
             sort=sort,
             status=status or None,
             verbose=bool(verbose),
-            block_size=block_size,
             **kwargs,
         ).result()
 
@@ -1461,7 +1471,12 @@ def get_files(workflow_id_or_name, **kwargs):  # noqa
                     last-modified:
                       type: string
                     size:
-                      type: integer
+                      type: object
+                      properties:
+                        raw:
+                          type: number
+                        human_readable:
+                          type: string
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
@@ -2155,16 +2170,29 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
                     name:
                       type: string
                     size:
-                      type: string
+                      type: object
+                      properties:
+                        raw:
+                          type: number
+                        human_readable:
+                          type: string
           examples:
             application/json:
               {
                 "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                 "workflow_name": "mytest.1",
                 "disk_usage_info": [{'name': 'file1.txt',
-                                     'size': '12KB'},
+                                      'size': {
+                                        'raw': 12580000,
+                                        'human_readable': '12 MB'
+                                       }
+                                    },
                                     {'name': 'plot.png',
-                                     'size': '100KB'}]
+                                     'size': {
+                                       'raw': 184320,
+                                       'human_readable': '100 KB'
+                                      }
+                                    }]
               }
         400:
           description: >-
@@ -2208,10 +2236,7 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
             raise ValueError("workflow_id_or_name is not supplied")
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
         summarize = bool(parameters.get("summarize", False))
-        block_size = parameters.get("block_size")
-        disk_usage_info = workflow.get_workspace_disk_usage(
-            summarize=summarize, block_size=block_size
-        )
+        disk_usage_info = workflow.get_workspace_disk_usage(summarize=summarize)
         response = {
             "workflow_id": workflow.id_,
             "workflow_name": workflow.name,
