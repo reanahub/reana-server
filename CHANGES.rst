@@ -1,32 +1,33 @@
 Changes
 =======
 
-Version master (UNRELEASED)
----------------------------
+Version 0.7.0 (2020-10-20)
+--------------------------
 
-- Renames ``REANA_URL`` configuration variable to more precise ``REANA_HOSTNAME``.
-- Introduces templating system for email bodies.
-- Uses python3.8
-- Pins all Python dependencies allowing to easily rebuild component images at later times.
 - Adds new endpoint to request user tokens.
 - Adds email notifications on relevant events such as user token granted/revoked.
+- Adds new templating system for notification email bodies.
 - Adds possibility to query logs for a single workflow step.
 - Adds endpoint to retrieve the workflow specification used for the workflow run.
 - Adds preview flag to download file endpoint.
-- Validates submitted operational options before starting a workflow.
-- Includes workflow progress in the workflow list endpoint response payload.
-- Allows uploading empty files.
-- Adds new block size which specifies the type of units to use for disk size.
+- Adds validation of submitted operational options before starting a workflow.
+- Adds possibility to upload empty files.
+- Adds new block size option to specify the type of units to use for disk size.
+- Adds a possibility to upload new workflow definitions before restarting a workflow.
+- Adds new command to generate status report for the REANA administrators; useful as a cronjob.
+- Adds user token management commands to grant and revoke user tokens.
+- Adds support for local user management.
+- Adds pinning of all Python dependencies allowing to easily rebuild component images at later times.
 - Fixes bug related to rescheduling deleted workflows.
-- Workflow restart accepts now new workflow specifications.
-- Adds new command to generate a status report for the REANA system (useful as cronjob).
-- Adds user token management commands (grant/revoke).
-- Extends import/export commands with new user model fields.
-- Installs submodels in editable mode for live code updates.
-- Adds Black formatter support.
-- Bumps to Invenio-Accounts 1.3.0 to support REST API.
-- Adds support to local users.
-- Renames ``/api/me`` to ``/api/you`` due to conflict with Invenio-Accounts.
+- Changes ``REANA_URL`` configuration variable to more precise ``REANA_HOSTNAME``.
+- Changes workflow list endpoint response payload to include workflow progress information.
+- Changes import/export commands with respect to new user model fields.
+- Changes submodule installation in editable mode for live code updates for developers.
+- Changes pre-requisites to Invenio-Accounts 1.3.0 to support REST API.
+- Changes ``/api/me`` to ``/api/you`` endpoint due to conflict with Invenio-Accounts.
+- Changes base image to use Python 3.8.
+- Changes code formatting to respect ``black`` coding style.
+- Changes documentation to single-page layout.
 
 Version 0.6.1 (2020-05-25)
 --------------------------
