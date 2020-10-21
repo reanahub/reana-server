@@ -24,7 +24,13 @@ from reana_commons.email import send_email
 from reana_commons.errors import REANAEmailNotificationError
 from reana_commons.utils import click_table_printer
 from reana_db.database import Session
-from reana_db.models import AuditLogAction, User, UserTokenStatus
+from reana_db.models import (
+    AuditLogAction,
+    Resource,
+    User,
+    UserResource,
+    UserTokenStatus,
+)
 
 from reana_server.config import ADMIN_EMAIL, ADMIN_USER_ID, REANA_HOSTNAME
 from reana_server.status import STATUS_OBJECT_TYPES
@@ -462,5 +468,72 @@ def list_quota_usage(
         logging.debug(str(e))
         click.echo(
             click.style("User could not be retrieved: \n{}".format(str(e)), fg="red"),
+            err=True,
+        )
+
+
+@reana_admin.command("quota-resources", help="List available quota resources.")
+@admin_access_token_option
+@click.pass_context
+def list_quota_resources(ctx, admin_access_token):
+    """List quota resources."""
+    resource_names = [resource.name for resource in Resource.query]
+    click.echo("\n".join(resource_names))
+
+
+@reana_admin.command("quota-set", help="List available quota resources.")
+@click.option("--id", "id_", help="The id of the user.")
+@click.option("-e", "--email", help="The email of the user.")
+@click.option("--resource-name", "-r", help="Name of resource.", required=True)
+@click.option(
+    "--limit", "-l", help="New limit in canonical unit.", required=True, type=int
+)
+@admin_access_token_option
+@click.pass_context
+def set_quota_limit(ctx, admin_access_token, id_, email, resource_name, limit):
+    """Set quota limit per resource."""
+    try:
+        error_msg = None
+        user = _get_user_by_criteria(id_, email)
+        resource = Resource.query.filter_by(name=resource_name).one_or_none()
+        if not user:
+            error_msg = f"ERROR: Provided user {id_ or email} does not exist."
+        elif not resource:
+            error_msg = (
+                "ERROR: Provided resource name does not exist. Available "
+                f"resources are {[resource.name for resource in Resource.query]}."
+            )
+        if error_msg:
+            click.secho(
+                error_msg, fg="red", err=True,
+            )
+            sys.exit(1)
+
+        user_resource = UserResource.query.filter_by(
+            user=user, resource=resource
+        ).one_or_none()
+        if user_resource:
+            user_resource.quota_limit = limit
+            Session.add(user_resource)
+        else:
+            # Create user resource in case there isn't one. Useful for old users.
+            user.resources.append(
+                UserResource(
+                    user_id=user.id_,
+                    resource_id=resource.id_,
+                    quota_limit=limit,
+                    quota_used=0,
+                )
+            )
+        Session.commit()
+        click.secho(
+            f"Quota limit for {resource.name} successfully set for user {user.id_} ({user.email}).",
+            fg="green",
+        )
+    except Exception as e:
+        logging.debug(traceback.format_exc())
+        logging.debug(str(e))
+        click.echo(
+            click.style("Quota could not be set: \n{}".format(str(e)), fg="red"),
             err=True,
         )
