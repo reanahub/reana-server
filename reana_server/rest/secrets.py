@@ -16,7 +16,7 @@ from flask import Blueprint, jsonify, request
 from reana_commons.errors import REANASecretAlreadyExists, REANASecretDoesNotExist
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 
-from reana_server.utils import signin_required
+from reana_server.decorators import signin_required
 
 
 blueprint = Blueprint("secrets", __name__)

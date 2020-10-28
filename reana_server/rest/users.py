@@ -18,7 +18,9 @@ from reana_commons.email import send_email
 from reana_commons.errors import REANAEmailNotificationError
 
 from reana_server.config import ADMIN_EMAIL, REANA_HOSTNAME
-from reana_server.utils import JinjaEnv, signin_required
+from reana_server.decorators import signin_required
+from reana_server.utils import JinjaEnv
+
 
 blueprint = Blueprint("users", __name__)
 

@@ -8,9 +8,7 @@
 
 """REANA Server administrator command line tool."""
 
-import functools
 import logging
-import os
 import secrets
 import sys
 import traceback
@@ -35,6 +33,7 @@ from reana_db.models import (
 )
 
 from reana_server.config import ADMIN_EMAIL, ADMIN_USER_ID, REANA_HOSTNAME
+from reana_server.decorators import admin_access_token_option
 from reana_server.status import STATUS_OBJECT_TYPES
 
 from reana_server.utils import (
@@ -48,22 +47,6 @@ from reana_server.utils import (
     create_user_workspace,
     JinjaEnv,
 )
-
-
-def admin_access_token_option(func):
-    """Click option to load admin access token."""
-
-    @click.option(
-        "--admin-access-token",
-        required=True,
-        default=os.environ.get("REANA_ADMIN_ACCESS_TOKEN"),
-        help="The access token of an administrator.",
-    )
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
-
-    return wrapper
 
 
 @click.group()

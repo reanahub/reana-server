@@ -32,11 +32,12 @@ from reana_server.config import (
     REANA_GITLAB_URL,
     REANA_HOSTNAME,
 )
+from reana_server.decorators import signin_required
 from reana_server.utils import (
     _format_gitlab_secrets,
     _get_gitlab_hook_id,
-    signin_required,
 )
+
 
 blueprint = Blueprint("gitlab", __name__)
 

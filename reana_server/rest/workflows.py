@@ -19,7 +19,7 @@ from flask import jsonify, request, stream_with_context
 from reana_commons.errors import REANAValidationError
 from reana_commons.operational_options import validate_operational_options
 from reana_db.database import Session
-from reana_db.models import Workflow, RunStatus, InteractiveSessionType
+from reana_db.models import InteractiveSessionType, RunStatus, Workflow
 from reana_db.utils import _get_workflow_with_uuid_or_name
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
@@ -28,12 +28,12 @@ from reana_server.api_client import (
     current_rwc_api_client,
     current_workflow_submission_publisher,
 )
+from reana_server.decorators import check_quota, signin_required
 from reana_server.utils import (
-    clone_workflow,
     RequestStreamWithLen,
     _get_reana_yaml_from_gitlab,
+    clone_workflow,
     is_uuid_v4,
-    signin_required,
 )
 
 try:
@@ -251,6 +251,7 @@ def get_workflows(user, **kwargs):  # noqa
 
 @blueprint.route("/workflows", methods=["POST"])
 @signin_required(include_gitlab_login=True)
+@check_quota
 def create_workflow(user):  # noqa
     r"""Create a workflow.
 
@@ -764,6 +765,7 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
 
 @blueprint.route("/workflows/<workflow_id_or_name>/start", methods=["POST"])
 @signin_required()
+@check_quota
 def start_workflow(workflow_id_or_name, user):  # noqa
     r"""Start workflow.
     ---
@@ -1061,6 +1063,7 @@ def set_workflow_status(workflow_id_or_name, user):  # noqa
 
 @blueprint.route("/workflows/<workflow_id_or_name>/workspace", methods=["POST"])
 @signin_required()
+@check_quota
 def upload_file(workflow_id_or_name, user):  # noqa
     r"""Upload file to workspace.
 
@@ -1724,6 +1727,7 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b, user):  # no
     methods=["POST"],
 )
 @signin_required()
+@check_quota
 def open_interactive_session(
     workflow_id_or_name, interactive_session_type, user
 ):  # noqa
