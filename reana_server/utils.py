@@ -9,20 +9,22 @@
 
 import base64
 import csv
+import functools
 import io
 import json
 import logging
 import re
 import secrets
 import sys
+import traceback
 from uuid import UUID, uuid4
 
 import click
 import fs
 import requests
 import yaml
-from flask import current_app as app
-from flask import url_for
+from flask import current_app as app, jsonify, request, url_for
+from flask_login import current_user
 from jinja2 import Environment, PackageLoader, select_autoescape
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_db.database import Session
@@ -372,3 +374,30 @@ class JinjaEnv:
         """Render template replacing kwargs appropriately."""
         template = JinjaEnv._get().get_template(template_path)
         return template.render(**kwargs)
+
+
+def signin_required(include_gitlab_login=False):
+    """Check if the user is signed in or the access token is valid and return the user."""
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                user = None
+                if current_user.is_authenticated:
+                    user = _get_user_from_invenio_user(current_user.email)
+                elif include_gitlab_login and "X-Gitlab-Token" in request.headers:
+                    user = get_user_from_token(request.headers["X-Gitlab-Token"])
+                elif "access_token" in request.args:
+                    user = get_user_from_token(request.args.get("access_token"))
+                if not user:
+                    return jsonify(message="User not signed in"), 401
+            except ValueError as e:
+                logging.error(traceback.format_exc())
+                return jsonify({"message": str(e)}), 403
+
+            return func(*args, **kwargs, user=user)
+
+        return wrapper
+
+    return decorator

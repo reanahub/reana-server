@@ -16,19 +16,16 @@ from flask import (
     Blueprint,
     current_app,
     jsonify,
-    make_response,
     redirect,
     request,
     url_for,
 )
-from flask_login import current_user
 from flask_login.utils import _create_identifier
 from invenio_oauthclient.utils import get_safe_redirect_target
 from itsdangerous import BadData, TimedJSONWebSignatureSerializer
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from werkzeug.local import LocalProxy
 
-from reana_server.api_client import current_rwc_api_client
 from reana_server.config import (
     REANA_GITLAB_OAUTH_APP_ID,
     REANA_GITLAB_OAUTH_APP_SECRET,
@@ -38,8 +35,7 @@ from reana_server.config import (
 from reana_server.utils import (
     _format_gitlab_secrets,
     _get_gitlab_hook_id,
-    _get_user_from_invenio_user,
-    get_user_from_token,
+    signin_required,
 )
 
 blueprint = Blueprint("gitlab", __name__)
@@ -84,7 +80,8 @@ def gitlab_connect():
 
 
 @blueprint.route("/gitlab", methods=["GET"])
-def gitlab_oauth():  # noqa
+@signin_required()
+def gitlab_oauth(user):  # noqa
     r"""Endpoint to authorize REANA on GitLab.
     ---
     get:
@@ -136,10 +133,6 @@ def gitlab_oauth():  # noqa
             Request failed. Internal controller error.
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
         if "code" in request.args:
             # Verifies state parameter and obtain next url
             state_token = request.args.get("state")
@@ -179,7 +172,8 @@ def gitlab_oauth():  # noqa
 
 
 @blueprint.route("/gitlab/projects", methods=["GET"])
-def gitlab_projects():  # noqa
+@signin_required()
+def gitlab_projects(user):  # noqa
     r"""Endpoint to retrieve GitLab projects.
     ---
     get:
@@ -207,10 +201,6 @@ def gitlab_projects():  # noqa
             Request failed. Internal controller error.
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
         secrets_store = REANAUserSecretsStore(str(user.id_))
         gitlab_token = secrets_store.get_secret_value("gitlab_access_token")
         gitlab_user = secrets_store.get_secret_value("gitlab_user")
@@ -242,7 +232,7 @@ def gitlab_projects():  # noqa
 
 
 @blueprint.route("/gitlab/webhook", methods=["POST", "DELETE"])
-def gitlab_webhook():  # noqa
+def gitlab_webhook(user):  # noqa
     r"""Endpoint to setup a GitLab webhook.
     ---
     post:
@@ -312,10 +302,6 @@ def gitlab_webhook():  # noqa
     """
 
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
         secrets_store = REANAUserSecretsStore(str(user.id_))
         gitlab_token = secrets_store.get_secret_value("gitlab_access_token")
         parameters = request.json

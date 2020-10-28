@@ -12,24 +12,20 @@ import logging
 import traceback
 
 from bravado.exception import HTTPError
-from flask import Blueprint, jsonify, request
-from flask_login import current_user
+from flask import Blueprint, jsonify
 from reana_db.models import AuditLogAction
 from reana_commons.email import send_email
 from reana_commons.errors import REANAEmailNotificationError
 
 from reana_server.config import ADMIN_EMAIL, REANA_HOSTNAME
-from reana_server.utils import (
-    _get_user_from_invenio_user,
-    get_user_from_token,
-    JinjaEnv,
-)
+from reana_server.utils import JinjaEnv, signin_required
 
 blueprint = Blueprint("users", __name__)
 
 
 @blueprint.route("/you", methods=["GET"])
-def get_you():
+@signin_required()
+def get_you(user):
     r"""Endpoint to get user information.
 
     ---
@@ -174,26 +170,21 @@ def get_you():
               }
     """
     try:
-        me = None
-        if current_user.is_authenticated:
-            me = _get_user_from_invenio_user(current_user.email)
-        elif "access_token" in request.args:
-            me = get_user_from_token(request.args.get("access_token"))
-        if me:
+        if user:
             return (
                 jsonify(
                     {
-                        "email": me.email,
+                        "email": user.email,
                         "reana_token": {
-                            "value": me.access_token,
-                            "status": me.access_token_status,
-                            "requested_at": me.latest_access_token.created
-                            if me.latest_access_token
+                            "value": user.access_token,
+                            "status": user.access_token_status,
+                            "requested_at": user.latest_access_token.created
+                            if user.latest_access_token
                             else None,
                         },
-                        "full_name": me.full_name,
-                        "username": me.username,
-                        "quota": me.get_quota_usage(),
+                        "full_name": user.full_name,
+                        "username": user.username,
+                        "quota": user.get_quota_usage(),
                     }
                 ),
                 200,
@@ -211,7 +202,8 @@ def get_you():
 
 
 @blueprint.route("/token", methods=["PUT"])
-def request_token():
+@signin_required()
+def request_token(user):
     r"""Endpoint to request user access token.
 
     ---
@@ -283,11 +275,6 @@ def request_token():
               }
     """
     try:
-        user = None
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        elif "access_token" in request.args:
-            user = get_user_from_token(request.args.get("access_token"))
         user.request_access_token()
         user.log_action(AuditLogAction.request_token)
         email_subject = f"[{REANA_HOSTNAME}] Token request ({user.email})"

@@ -12,19 +12,19 @@ import json
 import logging
 import traceback
 
-from bravado.exception import HTTPError
 from flask import Blueprint, jsonify, request
-from flask_login import current_user
 from reana_commons.errors import REANASecretAlreadyExists, REANASecretDoesNotExist
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 
-from reana_server.utils import _get_user_from_invenio_user, get_user_from_token
+from reana_server.utils import signin_required
+
 
 blueprint = Blueprint("secrets", __name__)
 
 
 @blueprint.route("/secrets/", methods=["POST"])
-def add_secrets():  # noqa
+@signin_required()
+def add_secrets(user):  # noqa
     r"""Endpoint to create user secrets.
 
     ---
@@ -112,10 +112,6 @@ def add_secrets():  # noqa
               }
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
         secrets_store = REANAUserSecretsStore(str(user.id_))
         overwrite = json.loads(request.args.get("overwrite"))
         secrets_store.add_secrets(request.json, overwrite=overwrite)
@@ -130,7 +126,8 @@ def add_secrets():  # noqa
 
 
 @blueprint.route("/secrets", methods=["GET"])
-def get_secrets():  # noqa
+@signin_required()
+def get_secrets(user):  # noqa
     r"""Endpoint to retrieve user secrets.
 
     ---
@@ -197,10 +194,6 @@ def get_secrets():  # noqa
               }
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
         secrets_store = REANAUserSecretsStore(str(user.id_))
         user_secrets = secrets_store.get_secrets()
         return jsonify(user_secrets), 200
@@ -212,7 +205,8 @@ def get_secrets():  # noqa
 
 
 @blueprint.route("/secrets/", methods=["DELETE"])
-def delete_secrets():  # noqa
+@signin_required()
+def delete_secrets(user):  # noqa
     r"""Endpoint to delete user secrets.
 
     ---
@@ -289,10 +283,6 @@ def delete_secrets():  # noqa
               }
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
         secrets_store = REANAUserSecretsStore(str(user.id_))
         deleted_secrets_list = secrets_store.delete_secrets(request.json)
         return jsonify(deleted_secrets_list), 200

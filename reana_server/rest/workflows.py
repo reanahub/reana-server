@@ -16,7 +16,6 @@ from bravado.exception import HTTPError
 from flask import Blueprint, Response
 from flask import current_app as app
 from flask import jsonify, request, stream_with_context
-from flask_login import current_user
 from reana_commons.errors import REANAValidationError
 from reana_commons.operational_options import validate_operational_options
 from reana_db.database import Session
@@ -33,9 +32,8 @@ from reana_server.utils import (
     clone_workflow,
     RequestStreamWithLen,
     _get_reana_yaml_from_gitlab,
-    _get_user_from_invenio_user,
-    get_user_from_token,
     is_uuid_v4,
+    signin_required,
 )
 
 try:
@@ -53,7 +51,8 @@ blueprint = Blueprint("workflows", __name__)
         "size": fields.Int(validate=validate.Range(min=1)),
     }
 )
-def get_workflows(**kwargs):  # noqa
+@signin_required()
+def get_workflows(user, **kwargs):  # noqa
     r"""Get all current workflows in REANA.
 
     ---
@@ -220,10 +219,6 @@ def get_workflows(**kwargs):  # noqa
               }
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
         type_ = request.args.get("type", "batch")
         search = request.args.get("search")
         sort = request.args.get("sort", "desc")
@@ -255,7 +250,8 @@ def get_workflows(**kwargs):  # noqa
 
 
 @blueprint.route("/workflows", methods=["POST"])
-def create_workflow():  # noqa
+@signin_required(include_gitlab_login=True)
+def create_workflow(user):  # noqa
     r"""Create a workflow.
 
     ---
@@ -345,12 +341,6 @@ def create_workflow():  # noqa
             Request failed. Not implemented.
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        elif "X-Gitlab-Token" in request.headers:
-            user = get_user_from_token(request.headers["X-Gitlab-Token"])
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
         if request.json:
             if "object_kind" in request.json:
                 (
@@ -422,7 +412,8 @@ def create_workflow():  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/specification", methods=["GET"])
-def get_workflow_specification(workflow_id_or_name):  # noqa
+@signin_required()
+def get_workflow_specification(workflow_id_or_name, user):  # noqa
     r"""Get workflow specification.
 
     ---
@@ -500,10 +491,6 @@ def get_workflow_specification(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
@@ -535,7 +522,8 @@ def get_workflow_specification(workflow_id_or_name):  # noqa
         "size": fields.Int(validate=validate.Range(min=1)),
     }
 )
-def get_workflow_logs(workflow_id_or_name, **kwargs):  # noqa
+@signin_required()
+def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
     r"""Get workflow logs.
 
     ---
@@ -634,10 +622,6 @@ def get_workflow_logs(workflow_id_or_name, **kwargs):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
         steps = request.json or None
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -662,7 +646,8 @@ def get_workflow_logs(workflow_id_or_name, **kwargs):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/status", methods=["GET"])
-def get_workflow_status(workflow_id_or_name):  # noqa
+@signin_required()
+def get_workflow_status(workflow_id_or_name, user):  # noqa
     r"""Get workflow status.
 
     ---
@@ -758,11 +743,6 @@ def get_workflow_status(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
-
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
@@ -783,7 +763,8 @@ def get_workflow_status(workflow_id_or_name):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/start", methods=["POST"])
-def start_workflow(workflow_id_or_name):  # noqa
+@signin_required()
+def start_workflow(workflow_id_or_name, user):  # noqa
     r"""Start workflow.
     ---
     post:
@@ -892,10 +873,6 @@ def start_workflow(workflow_id_or_name):  # noqa
               }
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
         parameters = request.json
@@ -944,7 +921,8 @@ def start_workflow(workflow_id_or_name):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/status", methods=["PUT"])
-def set_workflow_status(workflow_id_or_name):  # noqa
+@signin_required()
+def set_workflow_status(workflow_id_or_name, user):  # noqa
     r"""Set workflow status.
     ---
     put:
@@ -1058,11 +1036,6 @@ def set_workflow_status(workflow_id_or_name):  # noqa
               }
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
-
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
         status = request.args.get("status")
@@ -1087,7 +1060,8 @@ def set_workflow_status(workflow_id_or_name):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/workspace", methods=["POST"])
-def upload_file(workflow_id_or_name):  # noqa
+@signin_required()
+def upload_file(workflow_id_or_name, user):  # noqa
     r"""Upload file to workspace.
 
     ---
@@ -1170,11 +1144,6 @@ def upload_file(workflow_id_or_name):  # noqa
               }
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
-
         if not request.args.get("file_name"):
             return jsonify({"message": "No file_name provided"}), 400
         if not ("application/octet-stream" in request.headers.get("Content-Type")):
@@ -1221,7 +1190,8 @@ def upload_file(workflow_id_or_name):  # noqa
 @blueprint.route(
     "/workflows/<workflow_id_or_name>/workspace/<path:file_name>", methods=["GET"]
 )
-def download_file(workflow_id_or_name, file_name):  # noqa
+@signin_required()
+def download_file(workflow_id_or_name, file_name, user):  # noqa
     r"""Download a file from the workspace.
 
     ---
@@ -1286,11 +1256,6 @@ def download_file(workflow_id_or_name, file_name):  # noqa
               }
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
-
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
         preview = "preview" in request.args
@@ -1324,7 +1289,8 @@ def download_file(workflow_id_or_name, file_name):  # noqa
 @blueprint.route(
     "/workflows/<workflow_id_or_name>/workspace/<path:file_name>", methods=["DELETE"]
 )
-def delete_file(workflow_id_or_name, file_name):  # noqa
+@signin_required()
+def delete_file(workflow_id_or_name, file_name, user):  # noqa
     r"""Delete a file from the workspace.
 
     ---
@@ -1386,11 +1352,6 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
               }
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
-
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
@@ -1419,7 +1380,8 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
         "size": fields.Int(validate=validate.Range(min=1)),
     }
 )
-def get_files(workflow_id_or_name, **kwargs):  # noqa
+@signin_required()
+def get_files(workflow_id_or_name, user, **kwargs):  # noqa
     r"""List all files contained in a workspace.
 
     ---
@@ -1509,11 +1471,6 @@ def get_files(workflow_id_or_name, **kwargs):  # noqa
               }
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
-
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
@@ -1534,7 +1491,8 @@ def get_files(workflow_id_or_name, **kwargs):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/parameters", methods=["GET"])
-def get_workflow_parameters(workflow_id_or_name):  # noqa
+@signin_required()
+def get_workflow_parameters(workflow_id_or_name, user):  # noqa
     r"""Get workflow input parameters.
 
     ---
@@ -1616,11 +1574,6 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
-
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
@@ -1644,7 +1597,8 @@ def get_workflow_parameters(workflow_id_or_name):  # noqa
     "/workflows/<workflow_id_or_name_a>/diff/" "<workflow_id_or_name_b>",
     methods=["GET"],
 )
-def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
+@signin_required()
+def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b, user):  # noqa
     r"""Get differences between two workflows.
 
     ---
@@ -1737,11 +1691,6 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
-
         brief = json.loads(request.args.get("brief", "false").lower())
         context_lines = request.args.get("context_lines", 5)
         if not workflow_id_or_name_a or not workflow_id_or_name_b:
@@ -1774,7 +1723,10 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
     "/workflows/<workflow_id_or_name>/open/" "<interactive_session_type>",
     methods=["POST"],
 )
-def open_interactive_session(workflow_id_or_name, interactive_session_type):  # noqa
+@signin_required()
+def open_interactive_session(
+    workflow_id_or_name, interactive_session_type, user
+):  # noqa
     r"""Start an interactive session inside the workflow workspace.
 
     ---
@@ -1862,11 +1814,6 @@ def open_interactive_session(workflow_id_or_name, interactive_session_type):  # 
             Request failed. Internal controller error.
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
-
         if interactive_session_type not in InteractiveSessionType.__members__:
             return (
                 jsonify(
@@ -1906,7 +1853,8 @@ def open_interactive_session(workflow_id_or_name, interactive_session_type):  # 
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/close/", methods=["POST"])
-def close_interactive_session(workflow_id_or_name):  # noqa
+@signin_required()
+def close_interactive_session(workflow_id_or_name, user):  # noqa
     r"""Close an interactive workflow session.
 
     ---
@@ -1976,10 +1924,6 @@ def close_interactive_session(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
         if not workflow_id_or_name:
             raise KeyError("workflow_id_or_name is not supplied")
         response, http_response = current_rwc_api_client.api.close_interactive_session(
@@ -2002,7 +1946,8 @@ def close_interactive_session(workflow_id_or_name):  # noqa
 
 
 @blueprint.route("/workflows/move_files/<workflow_id_or_name>", methods=["PUT"])
-def move_files(workflow_id_or_name):  # noqa
+@signin_required()
+def move_files(workflow_id_or_name, user):  # noqa
     r"""Move files within workspace.
     ---
     put:
@@ -2089,11 +2034,6 @@ def move_files(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
-
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
         source = request.args.get("source")
@@ -2118,7 +2058,8 @@ def move_files(workflow_id_or_name):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/disk_usage", methods=["GET"])
-def get_workflow_disk_usage(workflow_id_or_name):  # noqa
+@signin_required()
+def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
     r"""Get workflow disk usage.
 
     ---
@@ -2226,10 +2167,6 @@ def get_workflow_disk_usage(workflow_id_or_name):  # noqa
             Request failed. Internal controller error.
     """
     try:
-        if current_user.is_authenticated:
-            user = _get_user_from_invenio_user(current_user.email)
-        else:
-            user = get_user_from_token(request.args.get("access_token"))
         parameters = request.json or {}
 
         if not workflow_id_or_name:

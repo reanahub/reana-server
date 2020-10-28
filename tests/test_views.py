@@ -32,7 +32,13 @@ def test_get_workflows(app, default_user, _get_user_mock):
             make_mock_api_client("reana-workflow-controller")(),
         ):
             res = client.get(
-                url_for("workflows.get_workflows"), query_string={"type": "batch"}
+                url_for("workflows.get_workflows"), query_string={"type": "batch"},
+            )
+            assert res.status_code == 401
+
+            res = client.get(
+                url_for("workflows.get_workflows"),
+                query_string={"access_token": "wrongtoken", "type": "batch"},
             )
             assert res.status_code == 403
 
@@ -54,6 +60,12 @@ def test_create_workflow(app, default_user, _get_user_mock):
             make_mock_api_client("reana-workflow-controller")(),
         ):
             res = client.post(url_for("workflows.create_workflow"))
+            assert res.status_code == 401
+
+            res = client.post(
+                url_for("workflows.create_workflow"),
+                query_string={"access_token": "wrongtoken",},
+            )
             assert res.status_code == 403
 
             # remote repository given as spec, not implemented
@@ -135,6 +147,14 @@ def test_get_workflow_specification(
             res = client.get(
                 url_for("workflows.get_workflow_specification", workflow_id_or_name="1")
             )
+            assert res.status_code == 401
+
+            res = client.get(
+                url_for(
+                    "workflows.get_workflow_specification", workflow_id_or_name="1"
+                ),
+                query_string={"access_token": "wrongtoken"},
+            )
             assert res.status_code == 403
 
             res = client.get(
@@ -172,6 +192,12 @@ def test_get_workflow_logs(app, default_user, _get_user_mock):
             res = client.get(
                 url_for("workflows.get_workflow_logs", workflow_id_or_name="1")
             )
+            assert res.status_code == 401
+
+            res = client.get(
+                url_for("workflows.get_workflow_logs", workflow_id_or_name="1"),
+                query_string={"access_token": "wrongtoken"},
+            )
             assert res.status_code == 403
 
             res = client.get(
@@ -191,7 +217,12 @@ def test_get_workflow_status(app, default_user, _get_user_mock):
             make_mock_api_client("reana-workflow-controller")(),
         ):
             res = client.get(
-                url_for("workflows.get_workflow_status", workflow_id_or_name="1")
+                url_for("workflows.get_workflow_status", workflow_id_or_name="1"),
+            )
+            assert res.status_code == 401
+            res = client.get(
+                url_for("workflows.get_workflow_status", workflow_id_or_name="1"),
+                query_string={"access_token": "wrongtoken"},
             )
             assert res.status_code == 403
 
@@ -212,6 +243,12 @@ def test_set_workflow_status(app, default_user, _get_user_mock):
         ):
             res = client.put(
                 url_for("workflows.set_workflow_status", workflow_id_or_name="1")
+            )
+            assert res.status_code == 401
+
+            res = client.put(
+                url_for("workflows.set_workflow_status", workflow_id_or_name="1"),
+                query_string={"access_token": "wrongtoken"},
             )
             assert res.status_code == 403
 
@@ -242,6 +279,16 @@ def test_upload_file(app, default_user, _get_user_mock):
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
                 query_string={"file_name": "test_upload.txt"},
+                input_stream=BytesIO(file_content),
+            )
+            assert res.status_code == 401
+
+            res = client.post(
+                url_for("workflows.upload_file", workflow_id_or_name="1"),
+                query_string={
+                    "file_name": "test_upload.txt",
+                    "access_token": "wrongtoken",
+                },
                 input_stream=BytesIO(file_content),
             )
             assert res.status_code == 403
@@ -317,7 +364,21 @@ def test_download_file(app, default_user, _get_user_mock):
                     workflow_id_or_name="1",
                     file_name="test_download",
                 ),
-                query_string={"file_name": "test_upload.txt"},
+                query_string={"file_name": "test_upload.txt",},
+            )
+            assert res.status_code == 401
+
+        with patch("reana_server.rest.workflows.requests"):
+            res = client.get(
+                url_for(
+                    "workflows.download_file",
+                    workflow_id_or_name="1",
+                    file_name="test_download",
+                ),
+                query_string={
+                    "file_name": "test_upload.txt",
+                    "access_token": "wrongtoken",
+                },
             )
             assert res.status_code == 403
 
@@ -362,6 +423,16 @@ def test_delete_file(app, default_user, _get_user_mock):
                     file_name="test_delete.txt",
                 )
             )
+            assert res.status_code == 401
+
+            res = client.delete(
+                url_for(
+                    "workflows.delete_file",
+                    workflow_id_or_name="1",
+                    file_name="test_delete.txt",
+                ),
+                query_string={"access_token": "wrongtoken",},
+            )
             assert res.status_code == 403
 
             res = client.delete(
@@ -383,6 +454,12 @@ def test_get_files(app, default_user, _get_user_mock):
             make_mock_api_client("reana-workflow-controller")(),
         ):
             res = client.get(url_for("workflows.get_files", workflow_id_or_name="1"))
+            assert res.status_code == 401
+
+            res = client.get(
+                url_for("workflows.get_files", workflow_id_or_name="1"),
+                query_string={"access_token": "wrongtoken"},
+            )
             assert res.status_code == 403
 
             res = client.get(
@@ -420,6 +497,17 @@ def test_move_files(app, default_user, _get_user_mock):
                     "user": default_user.id_,
                     "source": "source.txt",
                     "target": "target.txt",
+                },
+            )
+            assert res.status_code == 401
+
+            res = client.put(
+                url_for("workflows.move_files", workflow_id_or_name="1"),
+                query_string={
+                    "user": default_user.id_,
+                    "source": "source.txt",
+                    "target": "target.txt",
+                    "access_token": "wrongtoken",
                 },
             )
             assert res.status_code == 403
