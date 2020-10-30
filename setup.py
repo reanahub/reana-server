@@ -77,6 +77,7 @@ install_requires = [
     "invenio-db[postgresql]>=1.0.5,<1.1.0",
     "SQLAlchemy-Utils[encrypted]>=0.33.0,<0.36.0",
     "six>=1.12.0",  # required by Flask-Breadcrumbs
+    "celery<5.0.0",
 ]
 
 packages = find_packages()

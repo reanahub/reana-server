@@ -2,14 +2,14 @@
 REANA-Server
 ############
 
-.. image:: https://img.shields.io/travis/reanahub/reana-server.svg
-   :target: https://travis-ci.org/reanahub/reana-server
+.. image:: https://github.com/reanahub/reana-server/workflows/CI/badge.svg
+   :target: https://github.com/reanahub/reana-server/actions
 
 .. image:: https://readthedocs.org/projects/reana-server/badge/?version=latest
    :target: https://reana-server.readthedocs.io/en/latest/?badge=latest
 
-.. image:: https://img.shields.io/coveralls/reanahub/reana-server.svg
-   :target: https://coveralls.io/r/reanahub/reana-server
+.. image:: https://codecov.io/gh/reanahub/reana-server/branch/master/graph/badge.svg
+   :target: https://codecov.io/gh/reanahub/reana-server
 
 .. image:: https://badges.gitter.im/Join%20Chat.svg
    :target: https://gitter.im/reanahub/reana?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge
