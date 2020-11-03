@@ -18,6 +18,7 @@ from reana_db.models import AuditLogAction
 from reana_commons.email import send_email
 from reana_commons.errors import REANAEmailNotificationError
 
+from reana_server import __version__
 from reana_server.config import ADMIN_EMAIL, REANA_HOSTNAME
 from reana_server.utils import (
     _create_user,
@@ -249,6 +250,8 @@ def get_you():
             properties:
               email:
                 type: string
+              reana_server_version:
+                type: string
               reana_token:
                 type: object
                 properties:
@@ -262,6 +265,7 @@ def get_you():
             application/json:
               {
                 "email": "user@reana.info",
+                "reana_server_version": "0.7.0",
                 "reana_token": {
                     "value": "Drmhze6EPcv0fN_81Bj-nA",
                     "status": "active",
@@ -311,6 +315,7 @@ def get_you():
                 jsonify(
                     {
                         "email": me.email,
+                        "reana_server_version": __version__,
                         "reana_token": {
                             "value": me.access_token,
                             "status": me.access_token_status,

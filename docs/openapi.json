@@ -2466,6 +2466,7 @@
               "application/json": {
                 "email": "user@reana.info",
                 "full_name": "John Doe",
+                "reana_server_version": "0.7.0",
                 "reana_token": {
                   "requested_at": "Mon, 25 May 2020 10:39:57 GMT",
                   "status": "active",
@@ -2477,6 +2478,9 @@
             "schema": {
               "properties": {
                 "email": {
+                  "type": "string"
+                },
+                "reana_server_version": {
                   "type": "string"
                 },
                 "reana_token": {
