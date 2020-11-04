@@ -412,9 +412,8 @@ def list_quota_usage(
         colours = []
         health = []
         for user in response:
-            if str(user.id_) == ADMIN_USER_ID:
-                continue
-            (disk, cpu,) = user.get_quota_usage().values()
+            quota_usage = user.get_quota_usage()
+            disk, cpu = quota_usage.get("disk"), quota_usage.get("cpu")
             data.append(
                 (
                     str(user.id_),
@@ -435,16 +434,17 @@ def list_quota_usage(
             colours.append(REANA_RESOURCE_HEALTH_COLORS[health_ordered])
             health.append(health_ordered)
 
-        data, colours, _ = (
-            list(t)
-            for t in zip(
-                *sorted(
-                    zip(data, colours, health),
-                    key=lambda t: health_order[t[2]],
-                    reverse=True,
+        if data and colours and health:
+            data, colours, _ = (
+                list(t)
+                for t in zip(
+                    *sorted(
+                        zip(data, colours, health),
+                        key=lambda t: health_order[t[2]],
+                        reverse=True,
+                    )
                 )
             )
-        )
 
         if output_format:
             tablib_data = tablib.Dataset()
