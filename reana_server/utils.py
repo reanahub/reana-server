@@ -240,7 +240,7 @@ def _format_gitlab_secrets(gitlab_response):
     }
 
 
-def _get_gitlab_hook_id(response, project_id, gitlab_token):
+def _get_gitlab_hook_id(project_id, gitlab_token):
     """Return REANA hook id from a GitLab project if it is connected.
 
     By checking its webhooks and comparing them to REANA ones.
@@ -256,11 +256,14 @@ def _get_gitlab_hook_id(response, project_id, gitlab_token):
     )
     response_json = requests.get(gitlab_hooks_url).json()
     create_workflow_url = url_for("workflows.create_workflow", _external=True)
-    if response.status_code == 200 and response_json:
+    if response_json:
         reana_hook_id = next(
-            hook["id"]
-            for hook in response_json
-            if hook["url"] and hook["url"] == create_workflow_url
+            (
+                hook["id"]
+                for hook in response_json
+                if hook["url"] and hook["url"] == create_workflow_url
+            ),
+            None,
         )
     return reana_hook_id
 

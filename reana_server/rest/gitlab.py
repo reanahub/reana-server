@@ -16,7 +16,6 @@ from flask import (
     Blueprint,
     current_app,
     jsonify,
-    make_response,
     redirect,
     request,
     url_for,
@@ -28,7 +27,6 @@ from itsdangerous import BadData, TimedJSONWebSignatureSerializer
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from werkzeug.local import LocalProxy
 
-from reana_server.api_client import current_rwc_api_client
 from reana_server.config import (
     REANA_GITLAB_OAUTH_APP_ID,
     REANA_GITLAB_OAUTH_APP_SECRET,
@@ -219,9 +217,7 @@ def gitlab_projects():  # noqa
         projects = dict()
         if response.status_code == 200:
             for gitlab_project in response.json():
-                hook_id = _get_gitlab_hook_id(
-                    response, gitlab_project["id"], gitlab_token
-                )
+                hook_id = _get_gitlab_hook_id(gitlab_project["id"], gitlab_token)
                 projects[gitlab_project["id"]] = {
                     "name": gitlab_project["name"],
                     "path": gitlab_project["path_with_namespace"],
@@ -229,11 +225,10 @@ def gitlab_projects():  # noqa
                     "hook_id": hook_id,
                 }
             return jsonify(projects), 200
-        else:
-            return (
-                jsonify({"message": "Project list could not be retrieved"}),
-                response.status_code,
-            )
+        return (
+            jsonify({"message": "Project list could not be retrieved"}),
+            response.status_code,
+        )
     except ValueError:
         return jsonify({"message": "Token is not valid."}), 403
     except Exception as e:

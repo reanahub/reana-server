@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 0.7.1 (UNRELEASED)
+--------------------------
+
+- Fixes problem on GitLab integration preventing the synchronisation of projects with existing webhooks.
+
 Version 0.7.0 (2020-10-20)
 --------------------------
 
