@@ -1,10 +1,13 @@
 Changes
 =======
 
-Version 0.7.1 (UNRELEASED)
+Version 0.7.1 (2020-11-10)
 --------------------------
 
-- Fixes problem on GitLab integration preventing the synchronisation of projects with existing webhooks.
+- Fixes REANA <-> GItLab synchronisation for projects having additional external webhooks.
+- Fixes restarting of Yadage and CWL workflows.
+- Fixes conflicting ``kombu`` installation requirements by requiring Celery version 4.
+- Changes ``/api/you`` endpoint to include REANA server version information.
 
 Version 0.7.0 (2020-10-20)
 --------------------------
