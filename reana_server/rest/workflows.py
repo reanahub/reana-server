@@ -16,11 +16,18 @@ from bravado.exception import HTTPError
 from flask import Blueprint, Response
 from flask import current_app as app
 from flask import jsonify, request, stream_with_context
-from reana_commons.errors import REANAValidationError
+from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.operational_options import validate_operational_options
 from reana_db.database import Session
-from reana_db.models import InteractiveSessionType, RunStatus, Workflow
-from reana_db.utils import _get_workflow_with_uuid_or_name
+from reana_db.models import (
+    InteractiveSessionType,
+    ResourceType,
+    ResourceUnit,
+    RunStatus,
+    UserResource,
+    Workflow,
+)
+from reana_db.utils import _get_workflow_with_uuid_or_name, get_default_quota_resource
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
 
@@ -1154,8 +1161,32 @@ def upload_file(workflow_id_or_name, user):  # noqa
                 "message": "Internal server error."
               }
     """
+
+    def _prevent_disk_quota_excess(user, file_bytes, filename):
+        """
+        Prevent potential disk quota excess.
+
+        E.g. when uploading big files.
+        """
+        disk_resource = get_default_quota_resource(ResourceType.disk.name)
+        user_resource = UserResource.query.filter_by(
+            user_id=user.id_, resource_id=disk_resource.id_
+        ).first()
+        if (
+            user_resource.quota_limit > 0
+            and user_resource.quota_used + file_bytes > user_resource.quota_limit
+        ):
+            human_readable_limit = ResourceUnit.human_readable_unit(
+                ResourceUnit.bytes_, user_resource.quota_limit
+            )
+            raise REANAQuotaExceededError(
+                f"Uploading file {filename} would exceed the disk quota limit "
+                f"({human_readable_limit}). Aborting."
+            )
+
     try:
-        if not request.args.get("file_name"):
+        filename = request.args.get("file_name")
+        if not filename:
             return jsonify({"message": "No file_name provided"}), 400
         if not ("application/octet-stream" in request.headers.get("Content-Type")):
             return (
@@ -1172,6 +1203,7 @@ def upload_file(workflow_id_or_name, user):  # noqa
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
+        _prevent_disk_quota_excess(user, request.content_length, filename)
         api_url = current_rwc_api_client.swagger_spec.__dict__.get("api_url")
         endpoint = current_rwc_api_client.api.upload_file.operation.path_name.format(
             workflow_id_or_name=workflow_id_or_name
@@ -1190,7 +1222,7 @@ def upload_file(workflow_id_or_name, user):  # noqa
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
-    except ValueError as e:
+    except (REANAQuotaExceededError, ValueError) as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
     except Exception as e:
