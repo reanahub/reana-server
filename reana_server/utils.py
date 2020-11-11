@@ -239,7 +239,7 @@ def _format_gitlab_secrets(gitlab_response):
     }
 
 
-def _get_gitlab_hook_id(response, project_id, gitlab_token):
+def _get_gitlab_hook_id(project_id, gitlab_token):
     """Return REANA hook id from a GitLab project if it is connected.
 
     By checking its webhooks and comparing them to REANA ones.
@@ -255,11 +255,14 @@ def _get_gitlab_hook_id(response, project_id, gitlab_token):
     )
     response_json = requests.get(gitlab_hooks_url).json()
     create_workflow_url = url_for("workflows.create_workflow", _external=True)
-    if response.status_code == 200 and response_json:
+    if response_json:
         reana_hook_id = next(
-            hook["id"]
-            for hook in response_json
-            if hook["url"] and hook["url"] == create_workflow_url
+            (
+                hook["id"]
+                for hook in response_json
+                if hook["url"] and hook["url"] == create_workflow_url
+            ),
+            None,
         )
     return reana_hook_id
 
@@ -299,7 +302,7 @@ class RequestStreamWithLen(object):
         return self.limitedstream.limit
 
 
-def clone_workflow(workflow, reana_spec):
+def clone_workflow(workflow, reana_spec, restart_type):
     """Create a copy of workflow in DB for restarting."""
     try:
         cloned_workflow = Workflow(
@@ -307,7 +310,7 @@ def clone_workflow(workflow, reana_spec):
             name=workflow.name,
             owner_id=workflow.owner_id,
             reana_specification=reana_spec or workflow.reana_specification,
-            type_=workflow.type_,
+            type_=restart_type or workflow.type_,
             logs="",
             workspace_path=workflow.workspace_path,
             restart=True,

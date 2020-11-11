@@ -882,17 +882,25 @@ def start_workflow(workflow_id_or_name, user):  # noqa
         parameters["operational_options"] = validate_operational_options(
             workflow.type_, parameters["operational_options"]
         )
+        restart_type = None
         if "restart" in parameters:
             if workflow.status not in [RunStatus.finished, RunStatus.failed]:
                 raise ValueError("Only finished or failed workflows can be restarted.")
+            restart_type = (
+                parameters.get("reana_specification", {})
+                .get("workflow", {})
+                .get("type", None)
+            )
             workflow = clone_workflow(
-                workflow, parameters.get("reana_specification", None)
+                workflow, parameters.get("reana_specification", None), restart_type
             )
         elif workflow.status != RunStatus.created:
             raise ValueError(
                 "Workflow {} is already {} and cannot be started "
                 "again.".format(workflow.get_full_workflow_name(), workflow.status.name)
             )
+        if "yadage" in (workflow.type_, restart_type):
+            parameters["operational_options"].update({"accept_metadir": True})
         Workflow.update_workflow_status(Session, workflow.id_, RunStatus.queued)
         current_workflow_submission_publisher.publish_workflow_submission(
             user_id=str(user.id_),
