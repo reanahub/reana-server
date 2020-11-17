@@ -214,7 +214,7 @@ def get_workflows(**kwargs):  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError:
         logging.error(traceback.format_exc())
         return jsonify({"message": "Your request contains not valid JSON."}), 400
     except ValueError as e:
@@ -1733,7 +1733,7 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b):  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
-    except json.JSONDecodeError as e:
+    except json.JSONDecodeError:
         logging.error(traceback.format_exc())
         return jsonify({"message": "Your request contains not valid JSON."}), 400
     except ValueError as e:

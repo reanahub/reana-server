@@ -253,7 +253,7 @@ def token_grant(admin_access_token, id_, email):
         )
         send_email(user.email, email_subject, email_body)
 
-    except click.exceptions.Abort as e:
+    except click.exceptions.Abort:
         click.echo("Grant token aborted.")
     except REANAEmailNotificationError as e:
         click.secho(

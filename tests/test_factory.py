@@ -13,4 +13,4 @@ from reana_server.factory import create_app
 
 def test_create_app():
     """Test create_app() method."""
-    app = create_app()
+    create_app()
