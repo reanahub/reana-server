@@ -90,7 +90,7 @@ check_pytest () {
 }
 
 check_dockerfile () {
-    docker run -i --rm hadolint/hadolint < Dockerfile
+    docker run -i --rm hadolint/hadolint:v1.18.2 < Dockerfile
 }
 
 check_docker_build () {
