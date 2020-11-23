@@ -100,7 +100,7 @@ def _create_user(email, user_access_token, admin_access_token):
         user = User(**user_parameters)
         Session.add(user)
         Session.commit()
-    except (InvalidRequestError, IntegrityError) as e:
+    except (InvalidRequestError, IntegrityError):
         Session.rollback()
         raise ValueError("Could not create user, " "possible constraint violation")
     return user

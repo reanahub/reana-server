@@ -6,6 +6,7 @@
 
 # Install base image and its dependencies
 FROM python:3.8-slim
+# hadolint ignore=DL3008, DL3009, DL3013, DL3015
 RUN apt-get update && \
     apt-get install -y \
       gcc \
@@ -27,6 +28,7 @@ ARG DEBUG=0
 RUN if [ "${DEBUG}" -gt 0 ]; then pip install -e ".[debug]"; else pip install .; fi;
 
 # Are we building with locally-checked-out shared modules?
+# hadolint ignore=SC2102
 RUN if test -e modules/reana-commons; then pip install -e modules/reana-commons[kubernetes] --upgrade; fi
 RUN if test -e modules/reana-db; then pip install -e modules/reana-db --upgrade; fi
 
@@ -41,4 +43,4 @@ ENV TERM=xterm \
 EXPOSE 5000
 
 # Run server
-CMD uwsgi --ini uwsgi.ini
+CMD ["uwsgi --ini uwsgi.ini"]

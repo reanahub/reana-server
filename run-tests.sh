@@ -64,6 +64,10 @@ check_black () {
     black --check .
 }
 
+check_flake8 () {
+    flake8 .
+}
+
 check_openapi_spec () {
     FLASK_APP=reana_server/app.py python ./scripts/generate_openapi_spec.py
     diff -q -w temp_openapi.json docs/openapi.json
@@ -85,6 +89,10 @@ check_pytest () {
     stop_db_container
 }
 
+check_dockerfile () {
+    docker run -i --rm hadolint/hadolint:v1.18.2 < Dockerfile
+}
+
 check_docker_build () {
     docker build -t reanahub/reana-server .
 }
@@ -93,10 +101,12 @@ check_all () {
     check_script
     check_pydocstyle
     check_black
+    check_flake8
     check_openapi_spec
     check_manifest
     check_sphinx
     check_pytest
+    check_dockerfile
     check_docker_build
 }
 
@@ -111,10 +121,12 @@ do
         --check-shellscript) check_script;;
         --check-pydocstyle) check_pydocstyle;;
         --check-black) check_black;;
+        --check-flake8) check_flake8;;
         --check-openapi-spec) check_openapi_spec;;
         --check-manifest) check_manifest;;
         --check-sphinx) check_sphinx;;
         --check-pytest) check_pytest;;
+        --check-dockerfile) check_dockerfile;;
         --check-docker-build) check_docker_build;;
         *)
     esac

@@ -8,6 +8,7 @@ include LICENSE
 include *.rst
 include *.sh
 include *.txt
+include .flake8
 include pytest.ini
 include docs/*.json
 include scripts/*
