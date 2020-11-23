@@ -115,18 +115,14 @@ jobs:
 
   python-tests:
     runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        python-version: [3.6, 3.7, 3.8]
-
     steps:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Setup Python
         uses: actions/setup-python@v2
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: 3.8
 
       - name: Install Python dependencies
         run: |
@@ -141,7 +137,6 @@ jobs:
         run: ./run-tests.sh --check-pytest
 
       - name: Codecov Coverage
-        if: matrix.python-version == 3.8
         uses: codecov/codecov-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
