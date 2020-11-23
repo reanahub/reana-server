@@ -116,6 +116,11 @@ PROXYFIX_CONFIG = {"x_proto": 1}
 APP_DEFAULT_SECURE_HEADERS["content_security_policy"] = {}
 APP_HEALTH_BLUEPRINT_ENABLED = False
 
+# Rate limiting configuration
+# ===========================
+RATELIMIT_AUTHENTICATED_USER = "20 per second"
+RATELIMIT_GUEST_USER = "20 per second"
+
 # Flask-Breadcrumbs needs this variable set
 # =========================================
 BREADCRUMBS_ROOT = "breadcrumbs"

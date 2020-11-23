@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 0.7.2 (UNRELEASED)
+--------------------------
+
+- Changes rate limiting defaults to allow up to 20 connections per second.
+
 Version 0.7.1 (2020-11-10)
 --------------------------
 
