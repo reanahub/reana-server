@@ -7,7 +7,6 @@
 alembic==1.4.3            # via flask-alembic, reana-db
 amqp==2.6.1               # via kombu
 appdirs==1.4.4            # via fs
-appnope==0.1.0            # via ipython
 attrs==20.3.0             # via jsonschema
 babel==2.9.0              # via flask-babelex
 backcall==0.2.0           # via ipython
