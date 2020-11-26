@@ -48,6 +48,7 @@ serializer = LocalProxy(
 
 
 @blueprint.route("/gitlab/connect")
+@signin_required()
 def gitlab_connect():
     r"""Endpoint to init the REANA connection to GitLab.
 
@@ -230,6 +231,7 @@ def gitlab_projects(user):  # noqa
 
 
 @blueprint.route("/gitlab/webhook", methods=["POST", "DELETE"])
+@signin_required()
 def gitlab_webhook(user):  # noqa
     r"""Endpoint to setup a GitLab webhook.
     ---
