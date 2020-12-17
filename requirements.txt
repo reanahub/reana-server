@@ -51,7 +51,7 @@ google-auth==1.20.1       # via kubernetes
 idna==2.7                 # via email-validator, jsonschema, requests
 infinity==1.5             # via intervals
 intervals==0.9.0          # via wtforms-components
-invenio-accounts==1.3.0   # via invenio-oauth2server, invenio-oauthclient, invenio-userprofiles, reana-server (setup.py)
+invenio-accounts==1.4.2   # via invenio-oauth2server, invenio-oauthclient, invenio-userprofiles, reana-server (setup.py)
 invenio-app==1.2.6        # via reana-server (setup.py)
 invenio-base==1.2.3       # via invenio-accounts, invenio-app, invenio-celery, invenio-db, invenio-i18n, invenio-rest, reana-server (setup.py)
 invenio-cache==1.0.0      # via invenio-app, reana-server (setup.py)
