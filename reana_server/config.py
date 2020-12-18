@@ -70,8 +70,12 @@ SECURITY_EMAIL_SUBJECT_REGISTER = _("Welcome to REANA Server!")
 ACCOUNTS_USERINFO_HEADERS = True
 #: Disable password recovery by users.
 SECURITY_RECOVERABLE = False
-#: Disable user to confirm their email address.
-SECURITY_CONFIRMABLE = False
+#: Enable user to confirm their email address.
+SECURITY_CONFIRMABLE = True
+#: Disable user login without confirming their email address.
+SECURITY_LOGIN_WITHOUT_CONFIRMATION = False
+#: Value to be used for the confirmation email link in the API application.
+ACCOUNTS_REST_CONFIRM_EMAIL_ENDPOINT = "/confirm-email"
 #: Disable password change by users.
 SECURITY_CHANGEABLE = False
 #: Modify sign in validaiton error to avoid leaking extra information.
