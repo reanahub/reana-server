@@ -2539,6 +2539,8 @@
         "summary": "Gets information about authenticated user."
       }
     },
+    "/confirm": {},
+    "/confirm/{token}": {},
     "/login/": {},
     "/logout/": {},
     "/oauth/authorized/{remote_app}/": {},

@@ -581,7 +581,11 @@ def test_create_and_associate_local_user(app, session):
     mock_user = Mock(email="johndoe@reana.io")
     user = session.query(User).filter_by(email=mock_user.email).one_or_none()
     assert user is None
-    _create_and_associate_local_user(None, user=mock_user)
+    with patch(
+        "reana_server.utils._send_confirmation_email"
+    ) as send_confirmation_email:
+        _create_and_associate_local_user(None, user=mock_user)
+        send_confirmation_email.assert_called_once()
     user = session.query(User).filter_by(email=mock_user.email).one_or_none()
     assert user
     assert user.email == mock_user.email

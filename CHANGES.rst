@@ -1,6 +1,12 @@
 Changes
 =======
 
+
+Version 0.7.3 (UNRELEASED)
+--------------------------
+- Adds email confirmation check after signing up.
+
+
 Version 0.7.2 (2020-11-24)
 --------------------------
 
@@ -10,7 +16,7 @@ Version 0.7.2 (2020-11-24)
 Version 0.7.1 (2020-11-10)
 --------------------------
 
-- Fixes REANA <-> GItLab synchronisation for projects having additional external webhooks.
+- Fixes REANA <-> GitLab synchronisation for projects having additional external webhooks.
 - Fixes restarting of Yadage and CWL workflows.
 - Fixes conflicting ``kombu`` installation requirements by requiring Celery version 4.
 - Changes ``/api/you`` endpoint to include REANA server version information.
