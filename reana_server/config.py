@@ -76,6 +76,8 @@ SECURITY_CONFIRMABLE = True
 SECURITY_LOGIN_WITHOUT_CONFIRMATION = False
 #: Value to be used for the confirmation email link in the API application.
 ACCOUNTS_REST_CONFIRM_EMAIL_ENDPOINT = "/confirm-email"
+#: URL endpoint for login.
+SECURITY_LOGIN_URL = "/signin"
 #: Disable password change by users.
 SECURITY_CHANGEABLE = False
 #: Modify sign in validaiton error to avoid leaking extra information.
