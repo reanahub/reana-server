@@ -55,9 +55,6 @@ redoc = [
     }
 ]
 
-# Autodoc mocking to fix ReadTheDocs builds missing system dependencies
-autodoc_mock_imports = ["reana-commons[kubernetes]"]
-
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
