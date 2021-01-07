@@ -14,4 +14,4 @@ $ kubectl exec -i -t deployment/reana-server -- flask reana-admin token-revoke -
 
 Thanks,
 
-<{{ reana_hostname }}>
+{{ reana_hostname }}

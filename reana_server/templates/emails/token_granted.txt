@@ -1,6 +1,9 @@
 Dear {{ user_full_name }},
 
-Your {{ reana_hostname }} access token has been granted. Please find it at <https://{{ reana_hostname}}/profile>.
+Your {{ reana_hostname }} access token has been granted.
+Please find it at the following link:
+
+    https://{{ reana_hostname}}/profile
 
 {% include 'emails/assistance_links.txt' %}
 
