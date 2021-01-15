@@ -4,6 +4,10 @@ There is a new access token request for {{ reana_hostname }}:
 
 {{ user_data }}
 
+To obtain administration credentials, please run:
+
+$ export REANA_ACCESS_TOKEN=$(kubectl get secret reana-admin-access-token -o json | jq -r '.data | map_values(@base64d) | .ADMIN_ACCESS_TOKEN')
+
 To grant the user token, please run:
 
 $ kubectl exec -i -t deployment/reana-server -- flask reana-admin token-grant -e {{ user_email }} --admin-access-token $REANA_ACCESS_TOKEN

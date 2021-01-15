@@ -5,7 +5,7 @@ Changes
 Version 0.7.3 (UNRELEASED)
 --------------------------
 - Adds email confirmation check after signing up.
-
+- Changes email notifications with enriched instructions on how to grant user tokens.
 
 Version 0.7.2 (2020-11-24)
 --------------------------
