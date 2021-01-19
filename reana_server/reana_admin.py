@@ -336,8 +336,40 @@ def token_revoke(admin_access_token, id_, email):
 def status_report(types, email, admin_access_token):
     """Retrieve a status report summary of the REANA system."""
 
+    def _print_row(data, column_widths):
+        return (
+            "  {email:<{email_width}} | {used:>{used_width}} | {limit:>{limit_width}} "
+            "| {percentage:>{percentage_width}}\n".format(**data, **column_widths)
+        )
+
+    def _format_quota_statuses(type_, statuses):
+        formatted_statuses = type_.upper()
+        for status_name, data in statuses.items():
+            if not data:
+                continue
+            formatted_statuses += f"\n{status_name}:\n"
+            columns = {
+                "email": "EMAIL",
+                "used": "USED",
+                "limit": "LIMIT",
+                "percentage": "PERCENTAGE",
+            }
+            column_widths = {
+                "email_width": max([len(item["email"]) for item in data]),
+                "used_width": max([len(item["used"]) for item in data]),
+                "limit_width": max([len(item["limit"]) for item in data]),
+                "percentage_width": len("percentage"),
+            }
+            formatted_statuses += _print_row(columns, column_widths)
+            for row in data:
+                formatted_statuses += _print_row(row, column_widths)
+
+        return formatted_statuses
+
     def _format_statuses(type_, statuses):
         """Format statuses dictionary object."""
+        if type_ == "quota-usage":
+            return _format_quota_statuses(type_, statuses)
         formatted_statuses = type_.upper() + "\n"
         for stat_name, stat_value in statuses.items():
             formatted_statuses += f"{stat_name}: {stat_value}\n"

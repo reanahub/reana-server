@@ -69,6 +69,13 @@ def get_user_from_token(access_token):
     return user
 
 
+def get_usage_percentage(usage, limit):
+    """Usage percentage."""
+    if limit == 0:
+        return ""
+    return "{:.1%}".format(usage / limit)
+
+
 def _get_users(_id, email, user_access_token, admin_access_token):
     """Return all users matching search criteria."""
     admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()

@@ -24,8 +24,8 @@ from reana_db.models import (
     ResourceType,
     ResourceUnit,
 )
-from sqlalchemy import func
-from sqlalchemy.orm import aliased
+from reana_server.utils import get_usage_percentage
+from sqlalchemy import desc
 
 
 class REANAStatus:
@@ -279,73 +279,52 @@ class QuotaUsageStatus(REANAStatus):
         """
         super().__init__(from_=from_, until=until, user=user)
 
-    def get_top_five_resource_usage_users(
-        self, resource_filter, order, user_resource_filter=True
-    ):
-        """Query returning top five users according to filter."""
-        user_resource_subq = (
+    def format_user_data(self, users):
+        """Format user data with human readable units."""
+        return [
+            {
+                "email": user.user.email,
+                "used": ResourceUnit.human_readable_unit(
+                    user.resource.unit, user.quota_used
+                ),
+                "limit": ResourceUnit.human_readable_unit(
+                    user.resource.unit, user.quota_limit
+                ),
+                "percentage": get_usage_percentage(user.quota_used, user.quota_limit),
+            }
+            for user in users
+        ]
+
+    def get_top_five_percentage(self, resource_type):
+        """Get the top five users with highest quota usage percentage."""
+        users = (
             Session.query(UserResource)
-            .filter(user_resource_filter)
             .join(UserResource.resource)
-            .filter(resource_filter)
-            .subquery()
+            .filter(Resource.type_ == resource_type)
+            .filter(UserResource.quota_limit != 0)
+            .order_by(desc(UserResource.quota_used * 100.0 / UserResource.quota_limit))
+            .limit(5)
         )
-        subq_alias = aliased(UserResource, user_resource_subq)
-        return (
-            Session.query(User, subq_alias)
-            .join(subq_alias, UserResource)
-            .group_by(User, UserResource, subq_alias)
-            .order_by(order)
-            .limit(10)
-        )
+        return self.format_user_data(users)
 
-    def get_top_five_all(self, resource_type):
+    def get_top_five(self, resource_type):
         """Get the top five users according to quota usage."""
-        users = self.get_top_five_resource_usage_users(
-            Resource.type_ == resource_type, func.sum(UserResource.quota_used).desc()
+        users = (
+            Session.query(UserResource)
+            .join(UserResource.resource)
+            .filter(Resource.type_ == resource_type)
+            .order_by(UserResource.quota_used.desc())
+            .limit(5)
         )
-        return {
-            user.email: {
-                "id": str(user.id_),
-                "used": ResourceUnit.human_readable_unit(
-                    user_resource.resource.unit, user_resource.quota_used
-                ),
-                "limit": ResourceUnit.human_readable_unit(
-                    user_resource.resource.unit, user_resource.quota_limit
-                ),
-            }
-            for user, user_resource in users
-        }
-
-    def get_top_five_limited(self, resource_type):
-        """Get the top five users with quota limit according to quota usage."""
-        users = self.get_top_five_resource_usage_users(
-            Resource.type_ == resource_type,
-            (
-                func.sum(UserResource.quota_used) / func.sum(UserResource.quota_limit)
-            ).desc(),
-            UserResource.quota_limit != 0,
-        )
-        return {
-            user.email: {
-                "id": str(user.id_),
-                "used": ResourceUnit.human_readable_unit(
-                    user_resource.resource.unit, user_resource.quota_used
-                ),
-                "limit": ResourceUnit.human_readable_unit(
-                    user_resource.resource.unit, user_resource.quota_limit
-                ),
-            }
-            for user, user_resource in users
-        }
+        return self.format_user_data(users)
 
     def get_status(self):
         """Get status summary for REANA system."""
         return {
-            "top_five_all_disk": self.get_top_five_all(ResourceType.disk),
-            "top_five_all_cpu": self.get_top_five_all(ResourceType.cpu),
-            "top_five_limited_disk": self.get_top_five_limited(ResourceType.disk),
-            "top_five_limited_cpu": self.get_top_five_limited(ResourceType.cpu),
+            "top_five_disk": self.get_top_five(ResourceType.disk),
+            "top_five_cpu": self.get_top_five(ResourceType.cpu),
+            "top_five_disk_percentage": self.get_top_five_percentage(ResourceType.disk),
+            "top_five_cpu_percentage": self.get_top_five_percentage(ResourceType.cpu),
         }
 
 
