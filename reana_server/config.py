@@ -71,10 +71,12 @@ SECURITY_EMAIL_SUBJECT_REGISTER = _("Welcome to REANA Server!")
 ACCOUNTS_USERINFO_HEADERS = True
 #: Disable password recovery by users.
 SECURITY_RECOVERABLE = False
-REANA_USER_CONFIRMATION = strtobool(os.getenv("REANA_USER_CONFIRMATION", "true"))
+REANA_USER_EMAIL_CONFIRMATION = strtobool(
+    os.getenv("REANA_USER_EMAIL_CONFIRMATION", "true")
+)
 #: Enable user to confirm their email address.
-SECURITY_CONFIRMABLE = REANA_USER_CONFIRMATION
-if REANA_USER_CONFIRMATION:
+SECURITY_CONFIRMABLE = REANA_USER_EMAIL_CONFIRMATION
+if REANA_USER_EMAIL_CONFIRMATION:
     #: Disable user login without confirming their email address.
     SECURITY_LOGIN_WITHOUT_CONFIRMATION = False
     #: Value to be used for the confirmation email link in the API application.

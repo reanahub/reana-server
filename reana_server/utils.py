@@ -42,7 +42,7 @@ from reana_server.config import (
     ADMIN_USER_ID,
     REANA_GITLAB_URL,
     REANA_HOSTNAME,
-    REANA_USER_CONFIRMATION,
+    REANA_USER_EMAIL_CONFIRMATION,
 )
 
 
@@ -183,7 +183,7 @@ def _create_and_associate_local_user(sender, user, **kwargs):
     user_fullname = user.email
     username = user.email
     reana_user = _create_and_associate_reana_user(user_email, user_fullname, username)
-    if REANA_USER_CONFIRMATION:
+    if REANA_USER_EMAIL_CONFIRMATION:
         _send_confirmation_email(kwargs.get("confirm_token"), reana_user)
     return reana_user
 
