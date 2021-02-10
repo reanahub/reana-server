@@ -22,7 +22,7 @@ cffi==1.14.3              # via cryptography
 chardet==3.0.4            # via requests
 checksumdir==1.1.9        # via reana-commons
 click==7.1.2              # via flask, flask-shell-ipython, reana-commons
-cryptography==3.2.1       # via invenio-accounts, pyopenssl, reana-db, sqlalchemy-utils
+cryptography==3.3.2       # via invenio-accounts, pyopenssl, reana-db, sqlalchemy-utils
 decorator==4.4.2          # via ipython, validators
 dnspython==2.0.0          # via email-validator
 email-validator==1.1.2    # via invenio-accounts
