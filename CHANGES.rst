@@ -1,6 +1,13 @@
 Changes
 =======
 
+
+Version 0.7.3 (2021-02-03)
+--------------------------
+
+- Adds optional email confirmation step after users sign up.
+- Changes email notifications with enriched instructions on how to grant user tokens.
+
 Version 0.7.2 (2020-11-24)
 --------------------------
 

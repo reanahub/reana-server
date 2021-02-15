@@ -6,14 +6,13 @@
 
 # Install base image and its dependencies
 FROM python:3.8-slim
-# hadolint ignore=DL3008, DL3009, DL3013, DL3015
+# hadolint ignore=DL3008, DL3009, DL3015
 RUN apt-get update && \
     apt-get install -y \
       gcc \
       vim-tiny \
       libffi-dev \
-      procps && \
-    pip install --upgrade pip
+      procps
 
 # Install dependencies
 COPY requirements.txt /code/

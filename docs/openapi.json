@@ -33,11 +33,13 @@
             "description": "Configuration information to consume by Reana-UI.",
             "examples": {
               "application/json": {
+                "admin_email": "admin@example.org",
                 "announcement": "This is a QA instance",
                 "chat_url": "https://mattermost.web.cern.ch/it-dep/channels/reana",
                 "client_pyvenv": "/afs/cern.ch/user/r/reana/public/reana/bin/activate",
                 "docs_url": "http://docs.reana.io/",
                 "forum_url": "https://forum.reana.io/",
+                "hide_signup": false,
                 "local_users": true,
                 "polling_secs": 15,
                 "sso": true
@@ -2522,13 +2524,15 @@
         "summary": "Gets information about authenticated user."
       }
     },
-    "/login/": {},
+    "/confirm": {},
+    "/confirm/{token}": {},
     "/logout/": {},
     "/oauth/authorized/{remote_app}/": {},
     "/oauth/disconnect/{remote_app}/": {},
     "/oauth/login/{remote_app}/": {},
     "/oauth/signup/{remote_app}/": {},
     "/oauth/static/{filename}": {},
+    "/signin": {},
     "/signup/": {}
   },
   "swagger": "2.0",

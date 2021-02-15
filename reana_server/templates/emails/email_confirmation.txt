@@ -1,0 +1,12 @@
+Dear {{ user_full_name }},
+
+Your {{ reana_hostname }} account has been created successfully.
+Please confirm your email address by accessing the following link:
+
+    https://{{ reana_hostname}}/confirm/{{ confirm_token }}
+
+{% include 'emails/assistance_links.txt' %}
+
+Best regards,
+
+REANA notification system

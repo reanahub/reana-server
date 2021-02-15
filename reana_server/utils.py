@@ -23,6 +23,8 @@ import requests
 import yaml
 from flask import current_app as app, url_for
 from jinja2 import Environment, PackageLoader, select_autoescape
+from reana_commons.config import REANAConfig
+from reana_commons.email import send_email
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_db.database import Session
 from reana_db.models import User, UserTokenStatus, UserTokenType, Workflow
@@ -34,7 +36,13 @@ from sqlalchemy.exc import (
 )
 from werkzeug.wsgi import LimitedStream
 
-from reana_server.config import ADMIN_USER_ID, REANA_GITLAB_URL
+from reana_server.config import (
+    ADMIN_EMAIL,
+    ADMIN_USER_ID,
+    REANA_GITLAB_URL,
+    REANA_HOSTNAME,
+    REANA_USER_EMAIL_CONFIRMATION,
+)
 
 
 def is_uuid_v4(uuid_or_name):
@@ -162,12 +170,28 @@ def _create_and_associate_oauth_user(sender, account_info, **kwargs):
     return _create_and_associate_reana_user(user_email, user_fullname, username)
 
 
+def _send_confirmation_email(confirm_token, user):
+    """Compose and send sign-up confirmation email."""
+    email_body = JinjaEnv.render_template(
+        "emails/email_confirmation.txt",
+        user_full_name=user.full_name,
+        reana_hostname=REANA_HOSTNAME,
+        ui_config=REANAConfig.load("ui"),
+        sender_email=ADMIN_EMAIL,
+        confirm_token=confirm_token,
+    )
+    send_email(user.email, "Confirm your REANA email address", email_body)
+
+
 def _create_and_associate_local_user(sender, user, **kwargs):
     # TODO: Add fullname and username in sign up form eventually?
     user_email = user.email
     user_fullname = user.email
     username = user.email
-    return _create_and_associate_reana_user(user_email, user_fullname, username)
+    reana_user = _create_and_associate_reana_user(user_email, user_fullname, username)
+    if REANA_USER_EMAIL_CONFIRMATION:
+        _send_confirmation_email(kwargs.get("confirm_token"), reana_user)
+    return reana_user
 
 
 def _create_and_associate_reana_user(email, fullname, username):

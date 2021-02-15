@@ -1,0 +1,8 @@
+If you need any assistance, please see our:
+{% if ui_config.chat_url %}
+  - Chat channel: {{ ui_config.chat_url }}
+{%- endif -%}
+{%- if ui_config.forum_url %}
+  - User forum: {{ ui_config.forum_url }}
+{%- endif %}
+  - Email support: {{ sender_email }}

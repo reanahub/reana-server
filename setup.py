@@ -69,7 +69,7 @@ install_requires = [
     "invenio-logging>=1.2.0,<1.3.0",
     "invenio-mail>=1.0.2,<1.1.0",
     # From auth bundle
-    "invenio-accounts>=1.3.0,<1.4.0",
+    "invenio-accounts>=1.4.2,<1.4.3",
     "invenio-oauth2server>=1.0.5,<1.1.0",
     "invenio-oauthclient>=1.1.3,<1.2.0",
     "invenio-userprofiles>=1.0.1,<1.1.0",

@@ -8,6 +8,7 @@
 
 """REANA Server administrator command line tool."""
 
+import datetime
 import logging
 import secrets
 import sys
@@ -78,8 +79,10 @@ def users_create_default(email, password, id_):
             create_user_workspace(user.get_user_workspace())
             Session.add(user)
             Session.commit()
-            # create invenio user
-            register_user(email=email, password=password)
+            # create invenio user, passing `confirmed_at` to mark it as confirmed
+            register_user(
+                email=email, password=password, confirmed_at=datetime.datetime.now()
+            )
             click.echo(reana_user_characteristics["access_token"])
     except Exception as e:
         click.echo("Something went wrong: {0}".format(e))

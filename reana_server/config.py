@@ -11,6 +11,7 @@
 import copy
 import os
 
+from distutils.util import strtobool
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
 from invenio_oauthclient.contrib import cern
 from reana_commons.config import (
@@ -70,8 +71,18 @@ SECURITY_EMAIL_SUBJECT_REGISTER = _("Welcome to REANA Server!")
 ACCOUNTS_USERINFO_HEADERS = True
 #: Disable password recovery by users.
 SECURITY_RECOVERABLE = False
-#: Disable user to confirm their email address.
-SECURITY_CONFIRMABLE = False
+REANA_USER_EMAIL_CONFIRMATION = strtobool(
+    os.getenv("REANA_USER_EMAIL_CONFIRMATION", "true")
+)
+#: Enable user to confirm their email address.
+SECURITY_CONFIRMABLE = REANA_USER_EMAIL_CONFIRMATION
+if REANA_USER_EMAIL_CONFIRMATION:
+    #: Disable user login without confirming their email address.
+    SECURITY_LOGIN_WITHOUT_CONFIRMATION = False
+    #: Value to be used for the confirmation email link in the API application.
+    ACCOUNTS_REST_CONFIRM_EMAIL_ENDPOINT = "/confirm-email"
+#: URL endpoint for login.
+SECURITY_LOGIN_URL = "/signin"
 #: Disable password change by users.
 SECURITY_CHANGEABLE = False
 #: Modify sign in validaiton error to avoid leaking extra information.
