@@ -872,7 +872,7 @@ def start_workflow(workflow_id_or_name):  # noqa
         parameters = request.json
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
         parameters["operational_options"] = validate_operational_options(
-            workflow.type_, parameters["operational_options"]
+            workflow.type_, parameters.get("operational_options", {})
         )
         restart_type = None
         if "restart" in parameters:

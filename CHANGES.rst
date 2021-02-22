@@ -1,6 +1,10 @@
 Changes
 =======
 
+Version 0.7.4 (UNRELEASED)
+--------------------------
+
+- Fixes start workflow endpoint to work with unspecified ``operational_options`` parameter
 
 Version 0.7.3 (2021-02-03)
 --------------------------
