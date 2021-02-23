@@ -1,7 +1,7 @@
 Changes
 =======
 
-Version 0.7.4 (UNRELEASED)
+Version 0.7.4 (2021-03-17)
 --------------------------
 
 - Adds configuration to set a timeout between ``reana_ready`` checks. (``REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY``)
