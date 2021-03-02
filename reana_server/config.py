@@ -168,3 +168,9 @@ REANA_GITLAB_URL = "https://{}".format(os.getenv("REANA_GITLAB_HOST", "CHANGE_ME
 # Email configuration
 # ===================
 ADMIN_EMAIL = os.getenv("REANA_EMAIL_SENDER", "CHANGE_ME")
+
+
+# Workflow scheduler
+# ==================
+REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY = 1
+"""How many seconds to wait between retries in case of REANA not ready to run more workflows."""
