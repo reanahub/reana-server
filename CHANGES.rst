@@ -5,6 +5,7 @@ Version 0.7.4 (UNRELEASED)
 --------------------------
 
 - Fixes start workflow endpoint to work with unspecified ``operational_options`` parameter
+- Fixes workflow scheduling bug in which failed worfklows would count as running, reaching ``REANA_MAX_CONCURRENT_BATCH_WORKFLOWS`` and therefore, blocking the ``job-submission`` queue.
 
 Version 0.7.3 (2021-02-03)
 --------------------------
