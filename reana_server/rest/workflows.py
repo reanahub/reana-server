@@ -1394,6 +1394,7 @@ def delete_file(workflow_id_or_name, file_name):  # noqa
 @blueprint.route("/workflows/<workflow_id_or_name>/workspace", methods=["GET"])
 @use_kwargs(
     {
+        "file_name": fields.String(),
         "page": fields.Int(validate=validate.Range(min=1)),
         "size": fields.Int(validate=validate.Range(min=1)),
     }
@@ -1419,6 +1420,11 @@ def get_files(workflow_id_or_name, **kwargs):  # noqa
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: file_name
+          in: query
+          description: File name(s) (glob) to list.
           required: false
           type: string
         - name: page
