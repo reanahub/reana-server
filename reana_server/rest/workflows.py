@@ -27,6 +27,7 @@ from reana_db.models import Workflow, WorkflowStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
+from werkzeug.datastructures import Headers
 
 from reana_server.api_client import (
     current_rwc_api_client,
@@ -1286,6 +1287,9 @@ def download_file(workflow_id_or_name, file_name):  # noqa
             Response(
                 stream_with_context(req.iter_content(chunk_size=1024)),
                 content_type=req.headers["Content-Type"],
+                headers=Headers(
+                    [("Content-Disposition", req.headers.get("Content-Disposition"))]
+                ),
             ),
             req.status_code,
         )
