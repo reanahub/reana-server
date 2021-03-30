@@ -96,7 +96,7 @@ ptyprocess==0.6.0         # via pexpect
 pyasn1-modules==0.2.8     # via google-auth
 pyasn1==0.4.8             # via pyasn1-modules, rsa
 pycparser==2.20           # via cffi
-pygments==2.7.2           # via ipython
+pygments==2.7.4           # via ipython
 pyjwt==1.7.1              # via invenio-accounts, invenio-oauth2server
 pyopenssl==17.5.0         # via reana-server (setup.py)
 pyrsistent==0.17.3        # via jsonschema
