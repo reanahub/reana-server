@@ -231,13 +231,25 @@ class WorkflowsStatus(REANAStatus):
 
         return number
 
-    def stuck_workflows(self):
-        """Get the number of stuck workflows."""
+    def stuck_in_running_workflows(self):
+        """Get the number of stuck running workflows."""
         inactivity_threshold = datetime.now() - timedelta(hours=12)
         number = (
             Session.query(Workflow)
             .filter(Workflow.status == RunStatus.running)
             .filter(Workflow.run_started_at <= inactivity_threshold)
+            .filter(Workflow.updated <= inactivity_threshold)
+            .count()
+        )
+
+        return number
+
+    def stuck_in_pending_workflows(self):
+        """Get the number of stuck pending workflows."""
+        inactivity_threshold = datetime.now() - timedelta(minutes=20)
+        number = (
+            Session.query(Workflow)
+            .filter(Workflow.status == RunStatus.pending)
             .filter(Workflow.updated <= inactivity_threshold)
             .count()
         )
@@ -255,7 +267,8 @@ class WorkflowsStatus(REANAStatus):
         return {
             "running": self.get_workflows_by_status(RunStatus.running),
             "finished": self.get_workflows_by_status(RunStatus.finished),
-            "stuck": self.stuck_workflows(),
+            "stuck in running": self.stuck_in_running_workflows(),
+            "stuck in pending": self.stuck_in_pending_workflows(),
             "queued": self.get_workflows_by_status(RunStatus.queued),
             "restarts": self.restarted_workflows(),
             "git_source": self.git_workflows(),
