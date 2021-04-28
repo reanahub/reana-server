@@ -1,7 +1,7 @@
 Changes
 =======
 
-Version 0.7.5 (UNRELEASED)
+Version 0.7.5 (2021-04-28)
 --------------------------
 - Adds support for listing files using glob patterns.
 - Adds support for glob patterns and directory downloads, packaging the content into a zip file.
