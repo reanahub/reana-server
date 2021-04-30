@@ -2035,6 +2035,13 @@
             "type": "string"
           },
           {
+            "description": "File name(s) (glob) to list.",
+            "in": "query",
+            "name": "file_name",
+            "required": false,
+            "type": "string"
+          },
+          {
             "description": "Results page number (pagination).",
             "in": "query",
             "name": "page",

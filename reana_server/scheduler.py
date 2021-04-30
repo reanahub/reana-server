@@ -10,17 +10,70 @@
 
 import json
 import logging
+from time import sleep
 
 from bravado.exception import HTTPBadGateway, HTTPNotFound
+from kubernetes.client.rest import ApiException
+from sqlalchemy.exc import SQLAlchemyError
+
+from reana_commons.config import REANA_MAX_CONCURRENT_BATCH_WORKFLOWS
 from reana_commons.consumer import BaseConsumer
-from reana_commons.tasks import reana_ready
-from reana_db.database import Session
-from reana_db.models import Workflow
+from reana_commons.k8s.api_client import current_k8s_corev1_api_client
+from reana_db.models import Workflow, RunStatus
 
 from reana_server.api_client import (
     current_rwc_api_client,
     current_workflow_submission_publisher,
 )
+from reana_server.config import REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY
+
+
+def check_predefined_conditions():
+    """Check Kubernetes predefined conditions for the nodes."""
+    try:
+        node_info = json.loads(
+            current_k8s_corev1_api_client.list_node(
+                _preload_content=False
+            ).data.decode()
+        )
+        for node in node_info["items"]:
+            # check based on the predefined conditions about the
+            # node status: MemoryPressure, OutOfDisk, KubeletReady
+            #              DiskPressure, PIDPressure,
+            for condition in node.get("status", {}).get("conditions", {}):
+                if not condition.get("status"):
+                    return False
+    except ApiException as e:
+        logging.error("Something went wrong while getting node information.")
+        logging.error(e)
+        return False
+    return True
+
+
+def doesnt_exceed_max_reana_workflow_count():
+    """Check upper limit on running REANA batch workflows."""
+    try:
+        running_workflows = Workflow.query.filter_by(status=RunStatus.running).count()
+        if running_workflows >= REANA_MAX_CONCURRENT_BATCH_WORKFLOWS:
+            return False
+    except SQLAlchemyError as e:
+        logging.error(
+            "Something went wrong while querying for number of running workflows."
+        )
+        logging.error(e)
+        return False
+    return True
+
+
+def reana_ready():
+    """Check if REANA can start new workflows."""
+    for check_condition in [
+        check_predefined_conditions,
+        doesnt_exceed_max_reana_workflow_count,
+    ]:
+        if not check_condition():
+            return False
+    return True
 
 
 class WorkflowExecutionScheduler(BaseConsumer):
@@ -130,8 +183,10 @@ class WorkflowExecutionScheduler(BaseConsumer):
                     self.requeue_workflow(**workflow_submission)
         else:
             logging.info(
-                f"REANA not ready to run workflow "
-                f'{workflow_submission["workflow_id_or_name"]}, '
-                f"requeueing ..."
+                "REANA not ready to run workflow "
+                f'{workflow_submission["workflow_id_or_name"]}. '
+                "Requeueing workflow and retrying in "
+                f"{REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY} second(s) ..."
             )
             self.requeue_workflow(**workflow_submission)
+            sleep(REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY)

@@ -1,6 +1,17 @@
 Changes
 =======
 
+Version 0.7.5 (2021-04-28)
+--------------------------
+- Adds support for listing files using glob patterns.
+- Adds support for glob patterns and directory downloads, packaging the content into a zip file.
+
+Version 0.7.4 (2021-03-17)
+--------------------------
+
+- Adds configuration to set a timeout between ``reana_ready`` checks. (``REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY``)
+- Fixes start workflow endpoint to work with unspecified ``operational_options`` parameter
+- Fixes workflow scheduling bug in which failed worfklows would count as running, reaching ``REANA_MAX_CONCURRENT_BATCH_WORKFLOWS`` and therefore, blocking the ``job-submission`` queue.
 
 Version 0.7.3 (2021-02-03)
 --------------------------

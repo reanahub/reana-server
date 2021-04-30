@@ -30,6 +30,7 @@ from reana_db.models import (
 from reana_db.utils import _get_workflow_with_uuid_or_name, get_default_quota_resource
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
+from werkzeug.datastructures import Headers
 
 from reana_server.api_client import (
     current_rwc_api_client,
@@ -887,7 +888,7 @@ def start_workflow(workflow_id_or_name, user):  # noqa
         parameters = request.json
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
         parameters["operational_options"] = validate_operational_options(
-            workflow.type_, parameters["operational_options"]
+            workflow.type_, parameters.get("operational_options", {})
         )
         restart_type = None
         if "restart" in parameters:
@@ -1315,6 +1316,9 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
             Response(
                 stream_with_context(req.iter_content(chunk_size=1024)),
                 content_type=req.headers["Content-Type"],
+                headers=Headers(
+                    [("Content-Disposition", req.headers.get("Content-Disposition"))]
+                ),
             ),
             req.status_code,
         )
@@ -1419,6 +1423,7 @@ def delete_file(workflow_id_or_name, file_name, user):  # noqa
 @blueprint.route("/workflows/<workflow_id_or_name>/workspace", methods=["GET"])
 @use_kwargs(
     {
+        "file_name": fields.String(),
         "page": fields.Int(validate=validate.Range(min=1)),
         "size": fields.Int(validate=validate.Range(min=1)),
     }
@@ -1445,6 +1450,11 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: file_name
+          in: query
+          description: File name(s) (glob) to list.
           required: false
           type: string
         - name: page
