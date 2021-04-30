@@ -111,7 +111,7 @@ redis==3.5.3              # via invenio-accounts, invenio-celery
 requests-oauthlib==1.1.0  # via flask-oauthlib, invenio-oauth2server, invenio-oauthclient, kubernetes
 requests==2.20.0          # via bravado, kubernetes, reana-server (setup.py), requests-oauthlib
 rfc3987==1.3.7            # via jsonschema, reana-server (setup.py)
-rsa==4.6                  # via google-auth
+rsa==4.7                  # via google-auth
 simplejson==3.17.2        # via bravado, bravado-core
 simplekv==0.14.1          # via flask-kvsession-invenio, invenio-accounts
 six==1.15.0               # via bravado, bravado-core, cryptography, flask-breadcrumbs, flask-cors, flask-kvsession-invenio, flask-limiter, flask-menu, flask-talisman, fs, google-auth, invenio-app, invenio-base, invenio-logging, invenio-oauthclient, jsonschema, kubernetes, limits, mock, pyopenssl, python-dateutil, reana-server (setup.py), sqlalchemy-utils, swagger-spec-validator, validators, websocket-client, wtforms-alchemy, wtforms-components
