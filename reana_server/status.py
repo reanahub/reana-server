@@ -8,21 +8,34 @@
 
 """Status module for REANA."""
 
+import logging
 import subprocess
 from datetime import datetime, timedelta
 
 from invenio_accounts.models import SessionActivity
-from reana_commons.config import SHARED_VOLUME_PATH
+from reana_commons.config import (
+    REANA_COMPONENT_PREFIX,
+    REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
+    REANA_RUNTIME_KUBERNETES_NAMESPACE,
+    SHARED_VOLUME_PATH,
+)
+from reana_commons.job_utils import kubernetes_memory_to_bytes
+from reana_commons.k8s.api_client import (
+    current_k8s_corev1_api_client,
+    current_k8s_custom_objects_api_client,
+)
 from reana_db.database import Session
 from reana_db.models import (
-    Workflow,
-    RunStatus,
     InteractiveSession,
-    User,
+    Job,
+    JobStatus,
     Resource,
-    UserResource,
     ResourceType,
     ResourceUnit,
+    RunStatus,
+    User,
+    UserResource,
+    Workflow,
 )
 from reana_server.utils import get_usage_percentage
 from sqlalchemy import desc
@@ -36,6 +49,10 @@ class REANAStatus:
         self.from_ = from_ or (datetime.now() - timedelta(days=1))
         self.until = until or datetime.now()
         self.user = user
+        self.namespaces = {
+            REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
+            REANA_RUNTIME_KUBERNETES_NAMESPACE,
+        }
 
     def execute_cmd(self, cmd):
         """Execute a command."""
@@ -332,7 +349,7 @@ class QuotaUsageStatus(REANAStatus):
         return self.format_user_data(users)
 
     def get_status(self):
-        """Get status summary for REANA system."""
+        """Get status summary for REANA quota usage."""
         return {
             "top_five_disk": self.get_top_five(ResourceType.disk),
             "top_five_cpu": self.get_top_five(ResourceType.cpu),
@@ -341,12 +358,183 @@ class QuotaUsageStatus(REANAStatus):
         }
 
 
+class NodesStatus(REANAStatus):
+    """Class to retrieve statistics related to REANA cluster nodes."""
+
+    def get_nodes(self):
+        """Get list of all node names."""
+        nodes = current_k8s_corev1_api_client.list_node()
+        return [node.metadata.name for node in nodes.items]
+
+    def get_unschedulable_nodes(self):
+        """Get list of node names that are not schedulable."""
+        nodes = current_k8s_corev1_api_client.list_node(
+            field_selector="spec.unschedulable=true"
+        )
+        return [node.metadata.name for node in nodes.items]
+
+    def get_memory_usage(self):
+        """Get nodes memory usage."""
+        result = dict()
+        nodes = current_k8s_corev1_api_client.list_node()
+        for node in nodes.items:
+            result[node.metadata.name] = {"capacity": node.status.capacity["memory"]}
+
+        try:
+            node_metrics = current_k8s_custom_objects_api_client.list_cluster_custom_object(
+                "metrics.k8s.io", "v1beta1", "nodes"
+            )
+            for node_metric in node_metrics.get("items", []):
+                node_name = node_metric["metadata"]["name"]
+                result[node_name]["usage"] = node_metric["usage"]["memory"]
+
+                node_capacity = result[node_name]["capacity"]
+                node_usage = result[node_name]["usage"]
+                node_usage_percentage = round(
+                    kubernetes_memory_to_bytes(node_usage)
+                    / kubernetes_memory_to_bytes(node_capacity)
+                    * 100
+                )
+                result[node_name]["percentage"] = f"{node_usage_percentage}%"
+        except ApiException as e:
+            logging.error("Error while calling `metrics.k8s.io` API.")
+            logging.error(e)
+            return {}
+
+        return result
+
+    def get_friendly_memory_usage(self):
+        """Get nodes email-friendly memory usage."""
+        output_memory_usage = ""
+        memory_usage = self.get_memory_usage()
+        if memory_usage:
+            for node, memory in memory_usage.items():
+                output_memory_usage += f"\n  {node}: {memory.get('usage')}/{memory.get('capacity')} ({memory.get('percentage')})"
+        return output_memory_usage
+
+    def get_status(self):
+        """Get status summary for REANA nodes."""
+        return {
+            "unschedulable_nodes": self.get_unschedulable_nodes(),
+            "memory_usage": self.get_friendly_memory_usage(),
+        }
+
+
+class PodsStatus(REANAStatus):
+    """Class to retrieve statistics related to REANA cluster pods."""
+
+    def __init__(self, from_=None, until=None, user=None):
+        """Initialise PodStatus class.
+
+        :param from_: From which moment in time to collect information. Not
+            implemented yet.
+        :param until: Until which moment in time to collect information. Not
+            implemented yet.
+        :param user: A REANA-DB user model.
+        :type from_: datetime
+        :type until: datetime
+        :type user: reana_db.models.User
+        """
+        self.statuses = ["Running", "Pending", "Suceeded", "Failed", "Unknown"]
+        super().__init__(from_=from_, until=until, user=user)
+
+    def get_pods_by_status(self, status, namespace):
+        """Get pod name list by status."""
+        pods = current_k8s_corev1_api_client.list_namespaced_pod(
+            namespace, field_selector=f"status.phase={status}",
+        )
+        return [pod.metadata.name for pod in pods.items]
+
+    def get_friendly_pods_by_status(self, status, namespace):
+        """Get pod name list by status."""
+        pods = self.get_pods_by_status(status, namespace)
+
+        return "\n  ".join(["", *pods])
+
+    def get_status(self):
+        """Get status summary for REANA pods."""
+        return {
+            f"{ns}_{status.lower()}_pods": self.get_friendly_pods_by_status(status, ns)
+            for ns in self.namespaces
+            for status in self.statuses
+        }
+
+
+class JobsStatus(REANAStatus):
+    """Class to retrieve statistics related to REANA cluster jobs."""
+
+    def __init__(self, from_=None, until=None, user=None):
+        """Initialise PodStatus class.
+
+        :param from_: From which moment in time to collect information. Not
+            implemented yet.
+        :param until: Until which moment in time to collect information. Not
+            implemented yet.
+        :param user: A REANA-DB user model.
+        :type from_: datetime
+        :type until: datetime
+        :type user: reana_db.models.User
+        """
+        self.compute_backends = ["Kubernetes", "HTCondor", "Slurm"]
+        self.statuses = [
+            JobStatus.running,
+            JobStatus.finished,
+            JobStatus.failed,
+            JobStatus.queued,
+        ]
+        super().__init__(from_=from_, until=until, user=user)
+
+    def get_jobs_by_status_and_compute_backend(self, status, compute_backend=None):
+        """Get the number of jobs in status ``status`` from ``compute_backend``."""
+        # number = Session.query(Job).filter(Job.status == status).count()
+        query = Session.query(Job).filter(Job.status == status)
+        if compute_backend:
+            query = query.filter(Job.compute_backend == compute_backend)
+
+        return query.count()
+
+    def get_k8s_jobs_by_status(self, status):
+        """Get from k8s API jobs in ``status`` status."""
+        pods = current_k8s_corev1_api_client.list_namespaced_pod(
+            REANA_RUNTIME_KUBERNETES_NAMESPACE, field_selector=f"status.phase={status}",
+        )
+
+        job_pods = [
+            pod.metadata.name
+            for pod in pods.items
+            if pod.metadata.name.startswith(f"{REANA_COMPONENT_PREFIX}-run-job")
+        ]
+
+        return job_pods
+
+    def get_status(self):
+        """Get status summary for REANA jobs."""
+        job_statuses = {
+            compute_backend.lower(): {
+                status.name: self.get_jobs_by_status_and_compute_backend(
+                    status, compute_backend=compute_backend
+                )
+                for status in self.statuses
+            }
+            for compute_backend in self.compute_backends
+        }
+
+        job_statuses["kubernetes_api"] = {
+            "running": len(self.get_k8s_jobs_by_status("Running")),
+            "pending": len(self.get_k8s_jobs_by_status("Pending")),
+        }
+        return job_statuses
+
+
 STATUS_OBJECT_TYPES = {
     "interactive-sessions": InteractiveSessionsStatus,
     "workflows": WorkflowsStatus,
     "users": UsersStatus,
     "system": SystemStatus,
     "storage": StorageStatus,
+    "nodes": NodesStatus,
+    "pods": PodsStatus,
+    "jobs": JobsStatus,
     "quota-usage": QuotaUsageStatus,
 }
 """High level REANA objects to extract information from."""

@@ -382,19 +382,21 @@ def status_report(types, email, admin_access_token):
     try:
         types = STATUS_OBJECT_TYPES.keys() if "all" in types else types
         status_report_output = ""
+        hostname = REANA_HOSTNAME or "REANA service"
         for type_ in types:
             statuses_obj = STATUS_OBJECT_TYPES[type_]()
             statuses = statuses_obj.get_status()
             status_report_output += _format_statuses(type_, statuses) + "\n"
 
-        if email:
-            status_report_body = (
-                f'Status report for {REANA_HOSTNAME or "REANA service"}\n'
-                "---\n" + status_report_output
-            )
+        status_report_body = (
+            f"Status report for {hostname}\n---\n{status_report_output}"
+        )
 
-            send_email(email, "REANA system status report", status_report_body)
+        if email:
+            send_email(email, f"{hostname} system status report", status_report_body)
             click.echo(f"Status report successfully sent by email to {email}.")
+        else:
+            click.echo(status_report_body)
     except REANAEmailNotificationError as e:
         click.secho(
             "Something went wrong while sending email:\n{}".format(e),
