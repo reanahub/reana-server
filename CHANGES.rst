@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 0.8.0 (UNRELEASED)
+---------------------------
+
+- Adds users quota accounting.
+- Adds ``include_progress`` and ``include_workspace_size`` query args to workflow list endpoint.
+
 Version 0.7.5 (2021-04-28)
 --------------------------
 - Adds support for listing files using glob patterns.

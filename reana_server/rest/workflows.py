@@ -57,6 +57,8 @@ blueprint = Blueprint("workflows", __name__)
     {
         "page": fields.Int(validate=validate.Range(min=1)),
         "size": fields.Int(validate=validate.Range(min=1)),
+        "include_progress": fields.Bool(location="query"),
+        "include_workspace_size": fields.Bool(location="query"),
     }
 )
 @signin_required()
@@ -114,6 +116,14 @@ def get_workflows(user, **kwargs):  # noqa
           description: Number of results per page (pagination).
           required: false
           type: integer
+        - name: include_progress
+          in: query
+          description: Include progress information of the workflows.
+          type: boolean
+        - name: include_workspace_size
+          in: query
+          description: Include size information of the workspace.
+          type: boolean
       responses:
         200:
           description: >-

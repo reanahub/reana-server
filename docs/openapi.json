@@ -668,6 +668,18 @@
             "name": "size",
             "required": false,
             "type": "integer"
+          },
+          {
+            "description": "Include progress information of the workflows.",
+            "in": "query",
+            "name": "include_progress",
+            "type": "boolean"
+          },
+          {
+            "description": "Include size information of the workspace.",
+            "in": "query",
+            "name": "include_workspace_size",
+            "type": "boolean"
           }
         ],
         "produces": [
@@ -2395,7 +2407,7 @@
                     }
                   }
                 },
-                "reana_server_version": "0.7.0",
+                "reana_server_version": "0.8.0",
                 "reana_token": {
                   "requested_at": "Mon, 25 May 2020 10:39:57 GMT",
                   "status": "active",
