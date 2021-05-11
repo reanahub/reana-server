@@ -113,6 +113,7 @@ setup(
             "reana_server_secrets = reana_server.rest.secrets:blueprint",
             "reana_server_gitlab = reana_server.rest.gitlab:blueprint",
             "reana_server_config = reana_server.rest.config:blueprint",
+            "reana_server_status = reana_server.rest.status:blueprint",
         ],
     },
     include_package_data=True,

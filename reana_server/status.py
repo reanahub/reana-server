@@ -8,13 +8,17 @@
 
 """Status module for REANA."""
 
+import enum
 import logging
 import subprocess
 from datetime import datetime, timedelta
 
 from invenio_accounts.models import SessionActivity
+from kubernetes.client.rest import ApiException
+from marshmallow import Schema, fields
 from reana_commons.config import (
     REANA_COMPONENT_PREFIX,
+    REANA_COMPUTE_BACKENDS,
     REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
     SHARED_VOLUME_PATH,
@@ -390,16 +394,16 @@ class NodesStatus(REANAStatus):
 
                 node_capacity = result[node_name]["capacity"]
                 node_usage = result[node_name]["usage"]
-                node_usage_percentage = round(
-                    kubernetes_memory_to_bytes(node_usage)
-                    / kubernetes_memory_to_bytes(node_capacity)
-                    * 100
+                node_usage_percentage = ClusterHealth.get_percentage(
+                    kubernetes_memory_to_bytes(node_usage),
+                    kubernetes_memory_to_bytes(node_capacity),
                 )
                 result[node_name]["percentage"] = f"{node_usage_percentage}%"
         except ApiException as e:
-            logging.error("Error while calling `metrics.k8s.io` API.")
+            msg = "Error while calling `metrics.k8s.io` API."
+            logging.error(msg)
             logging.error(e)
-            return {}
+            return {"error": msg}
 
         return result
 
@@ -407,6 +411,8 @@ class NodesStatus(REANAStatus):
         """Get nodes email-friendly memory usage."""
         output_memory_usage = ""
         memory_usage = self.get_memory_usage()
+        if "error" in memory_usage:
+            return memory_usage["error"]
         if memory_usage:
             for node, memory in memory_usage.items():
                 output_memory_usage += f"\n  {node}: {memory.get('usage')}/{memory.get('capacity')} ({memory.get('percentage')})"
@@ -475,7 +481,7 @@ class JobsStatus(REANAStatus):
         :type until: datetime
         :type user: reana_db.models.User
         """
-        self.compute_backends = ["Kubernetes", "HTCondor", "Slurm"]
+        self.compute_backends = REANA_COMPUTE_BACKENDS.values()
         self.statuses = [
             JobStatus.running,
             JobStatus.finished,
@@ -486,7 +492,6 @@ class JobsStatus(REANAStatus):
 
     def get_jobs_by_status_and_compute_backend(self, status, compute_backend=None):
         """Get the number of jobs in status ``status`` from ``compute_backend``."""
-        # number = Session.query(Job).filter(Job.status == status).count()
         query = Session.query(Job).filter(Job.status == status)
         if compute_backend:
             query = query.filter(Job.compute_backend == compute_backend)
@@ -524,6 +529,110 @@ class JobsStatus(REANAStatus):
             "pending": len(self.get_k8s_jobs_by_status("Pending")),
         }
         return job_statuses
+
+
+class ClusterHealthStatus(enum.Enum):
+    """Enumeration of cluster health statuses."""
+
+    healthy = 0
+    warning = 1
+    critical = 2
+
+
+class ClusterHealth:
+    """Class to retrieve REANA cluster health information."""
+
+    def __init__(self):
+        """Initialise Cluster Health class."""
+        self.node = self.get_node_health()
+        self.job = self.get_job_health()
+        self.workflow = self.get_workflow_health()
+        self.session = self.get_session_health()
+
+    @staticmethod
+    def get_health_status(percentage):
+        """Calculate quota health status."""
+        health = ClusterHealthStatus.healthy
+        if percentage >= 50:
+            if percentage >= 75:
+                health = ClusterHealthStatus.critical
+            else:
+                health = ClusterHealthStatus.warning
+        return health.name
+
+    @staticmethod
+    def get_percentage(amount, total):
+        """Get percentage value based on ``amount`` and ``total``."""
+        return round((amount / total if total else 0) * 100)
+
+    def get_node_health(self):
+        """Get cluster nodes health information."""
+        nodes_status_obj = NodesStatus()
+
+        total = len(nodes_status_obj.get_nodes())
+        unschedulable = len(nodes_status_obj.get_unschedulable_nodes())
+        percentage = ClusterHealth.get_percentage(unschedulable, total)
+
+        return {
+            "available": total - unschedulable,
+            "unschedulable": unschedulable,
+            "percentage": percentage,
+            "health": ClusterHealthStatus.critical.name
+            if unschedulable > 0
+            else ClusterHealthStatus.healthy.name,
+            "sort": 0,
+        }
+
+    def get_job_health(self):
+        """Get cluster jobs health information."""
+        jobs_status_obj = JobsStatus()
+
+        running = len(jobs_status_obj.get_k8s_jobs_by_status("Running"))
+        pending = len(jobs_status_obj.get_k8s_jobs_by_status("Pending"))
+        total = running + pending
+        percentage = ClusterHealth.get_percentage(pending, total)
+
+        return {
+            "running": running,
+            "pending": pending,
+            "percentage": percentage,
+            "health": ClusterHealth.get_health_status(percentage),
+            "sort": 1,
+        }
+
+    def get_workflow_health(self):
+        """Get cluster workflows health information."""
+        wf_status_obj = WorkflowsStatus()
+
+        running = wf_status_obj.get_workflows_by_status(RunStatus.running)
+        queued = wf_status_obj.get_workflows_by_status(RunStatus.queued)
+        pending = wf_status_obj.get_workflows_by_status(RunStatus.pending)
+        total = running + queued + pending
+        percentage = ClusterHealth.get_percentage(queued + pending, total)
+
+        return {
+            "running": running,
+            "queued": queued,
+            "pending": pending,
+            "percentage": percentage,
+            "health": ClusterHealth.get_health_status(percentage),
+            "sort": 2,
+        }
+
+    def get_session_health(self):
+        """Get cluster sessions health information."""
+        session_status_obj = InteractiveSessionsStatus()
+
+        return {"active": session_status_obj.get_active(), "sort": 3}
+
+
+class ClusterHealthSchema(Schema):
+    """Cluster health marshmallow schema."""
+
+    node = fields.Dict(keys=fields.Str(), values=fields.Int())
+    job = fields.Dict(keys=fields.Str(), values=fields.Int())
+    workflow = fields.Dict(keys=fields.Str(), values=fields.Int())
+    session = fields.Dict(keys=fields.Str(), values=fields.Int())
 
 
 STATUS_OBJECT_TYPES = {

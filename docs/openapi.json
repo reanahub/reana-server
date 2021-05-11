@@ -525,6 +525,130 @@
         "summary": "Add user secrets to REANA."
       }
     },
+    "/api/status": {
+      "get": {
+        "description": "Retrieve cluster health status.",
+        "operationId": "status",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Cluster health status information.",
+            "examples": {
+              "application/json": {
+                "job": {
+                  "health": "healthy",
+                  "pending": 2,
+                  "percentage": 20,
+                  "running": 8,
+                  "sort": 1
+                },
+                "node": {
+                  "health": "healthy",
+                  "percentage": 33,
+                  "sort": 0,
+                  "total": 4,
+                  "unschedulable": 2
+                },
+                "session": {
+                  "active": 3,
+                  "sort": 3
+                },
+                "workflow": {
+                  "health": "warning",
+                  "pending": 2,
+                  "percentage": 50,
+                  "queued": 2,
+                  "running": 4,
+                  "sort": 2
+                }
+              }
+            },
+            "schema": {
+              "properties": {
+                "job": {
+                  "properties": {
+                    "health": {
+                      "type": "string"
+                    },
+                    "pending": {
+                      "type": "number"
+                    },
+                    "percentage": {
+                      "type": "number"
+                    },
+                    "running": {
+                      "type": "number"
+                    },
+                    "sort": {
+                      "type": "number"
+                    }
+                  },
+                  "type": "object"
+                },
+                "node": {
+                  "properties": {
+                    "available": {
+                      "type": "number"
+                    },
+                    "health": {
+                      "type": "string"
+                    },
+                    "percentage": {
+                      "type": "number"
+                    },
+                    "sort": {
+                      "type": "number"
+                    },
+                    "unschedulable": {
+                      "type": "number"
+                    }
+                  },
+                  "type": "object"
+                },
+                "session": {
+                  "properties": {
+                    "active": {
+                      "type": "number"
+                    },
+                    "sort": {
+                      "type": "number"
+                    }
+                  },
+                  "type": "object"
+                },
+                "workflow": {
+                  "properties": {
+                    "health": {
+                      "type": "string"
+                    },
+                    "pending": {
+                      "type": "number"
+                    },
+                    "percentage": {
+                      "type": "number"
+                    },
+                    "queued": {
+                      "type": "number"
+                    },
+                    "running": {
+                      "type": "number"
+                    },
+                    "sort": {
+                      "type": "number"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Retrieve cluster health status"
+      }
+    },
     "/api/token": {
       "put": {
         "description": "This resource allows the user to create an empty REANA access token and mark it as requested.",
