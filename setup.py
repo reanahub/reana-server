@@ -58,9 +58,8 @@ install_requires = [
     "uwsgi-tools>=1.1.1",
     "uwsgitop>=0.10",
     "webcolors==1.7",
+    "click<8.0.0",
     # Invenio dependencies
-    "Flask>=1.0.4",
-    "werkzeug>=0.16.1,<0.17",
     "invenio-app>=1.2.6,<1.3.0",
     "invenio-base>=1.2.3,<1.3.0",
     "invenio-cache>=1.0.0,<1.1.0",
@@ -70,7 +69,7 @@ install_requires = [
     "invenio-mail>=1.0.2,<1.1.0",
     # From auth bundle
     "invenio-accounts>=1.4.2,<1.4.3",
-    "invenio-oauth2server>=1.0.5,<1.1.0",
+    "invenio-oauth2server>=1.0.5,<1.1.1",
     "invenio-oauthclient>=1.1.3,<1.2.0",
     "invenio-userprofiles>=1.0.1,<1.1.0",
     # Invenio database
