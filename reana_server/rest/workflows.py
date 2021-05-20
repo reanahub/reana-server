@@ -414,6 +414,7 @@ def create_workflow(user):  # noqa
                 user_id=str(user.id_),
                 workflow_id_or_name=response["workflow_id"],
                 parameters=request.json,
+                # TODO: send complexity
             )
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -924,6 +925,7 @@ def start_workflow(workflow_id_or_name, user):  # noqa
             user_id=str(user.id_),
             workflow_id_or_name=workflow.get_full_workflow_name(),
             parameters=parameters,
+            priority=workflow.complexity.value,
         )
         response = {
             "message": "Workflow submitted.",

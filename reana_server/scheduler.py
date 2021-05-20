@@ -103,6 +103,7 @@ class WorkflowExecutionScheduler(BaseConsumer):
                 queues=self.queue,
                 callbacks=[self.on_message],
                 accept=[self.message_default_format],
+                prefetch_count=1,  # receive only one message at a time
             )
         ]
 
@@ -116,7 +117,10 @@ class WorkflowExecutionScheduler(BaseConsumer):
         """
         try:
             current_workflow_submission_publisher.publish_workflow_submission(
-                kwargs["user"], kwargs["workflow_id_or_name"], kwargs["parameters"]
+                kwargs["user"],
+                kwargs["workflow_id_or_name"],
+                kwargs["parameters"],
+                kwargs.get("priority", 0),
             )
             logging.error(
                 f"Requeueing workflow " f'{kwargs["workflow_id_or_name"]} ...'
@@ -138,6 +142,8 @@ class WorkflowExecutionScheduler(BaseConsumer):
         """On new workflow_submission event handler."""
         message.ack()
         workflow_submission = json.loads(workflow_submission)
+        # FIXME: this was added for debugging purposes, needs to be removed
+        workflow_submission.pop("priority", None)
         if reana_ready():
             logging.info("Starting queued workflow: {}".format(workflow_submission))
             workflow_submission["status"] = "start"
