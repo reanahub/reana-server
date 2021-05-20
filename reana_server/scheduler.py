@@ -14,6 +14,7 @@ from time import sleep
 
 from bravado.exception import HTTPBadGateway, HTTPNotFound
 from kubernetes.client.rest import ApiException
+from sqlalchemy import or_
 from sqlalchemy.exc import SQLAlchemyError
 
 from reana_commons.config import REANA_MAX_CONCURRENT_BATCH_WORKFLOWS
@@ -53,7 +54,12 @@ def check_predefined_conditions():
 def doesnt_exceed_max_reana_workflow_count():
     """Check upper limit on running REANA batch workflows."""
     try:
-        running_workflows = Workflow.query.filter_by(status=RunStatus.running).count()
+        running_workflows = Workflow.query.filter(
+            or_(
+                Workflow.status == RunStatus.pending,
+                Workflow.status == RunStatus.running,
+            )
+        ).count()
         if running_workflows >= REANA_MAX_CONCURRENT_BATCH_WORKFLOWS:
             return False
     except SQLAlchemyError as e:
