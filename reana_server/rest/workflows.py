@@ -10,6 +10,7 @@
 import json
 import logging
 import traceback
+import copy
 
 import requests
 from bravado.exception import HTTPError
@@ -18,6 +19,7 @@ from flask import current_app as app
 from flask import jsonify, request, stream_with_context
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.operational_options import validate_operational_options
+from reana_commons.yadage import yadage_load_from_workspace
 from reana_db.database import Session
 from reana_db.models import (
     InteractiveSessionType,
@@ -36,6 +38,7 @@ from reana_server.api_client import (
     current_rwc_api_client,
     current_workflow_submission_publisher,
 )
+from reana_server.complexity import estimate_complexity
 from reana_server.decorators import check_quota, signin_required
 from reana_server.utils import (
     RequestStreamWithLen,
@@ -898,8 +901,9 @@ def start_workflow(workflow_id_or_name, user):  # noqa
             raise ValueError("workflow_id_or_name is not supplied")
         parameters = request.json
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
-        parameters["operational_options"] = validate_operational_options(
-            workflow.type_, parameters.get("operational_options", {})
+        operational_options = parameters.get("operational_options", {})
+        operational_options = validate_operational_options(
+            workflow.type_, operational_options
         )
         restart_type = None
         if "restart" in parameters:
@@ -919,7 +923,21 @@ def start_workflow(workflow_id_or_name, user):  # noqa
                 "again.".format(workflow.get_full_workflow_name(), workflow.status.name)
             )
         if "yadage" in (workflow.type_, restart_type):
-            parameters["operational_options"].update({"accept_metadir": True})
+            # Load Yadage workflow specification
+            operational_options.update({"accept_metadir": True})
+            workflow_file = workflow.reana_specification["workflow"].get("file")
+            toplevel = operational_options.get("toplevel", "")
+            workflow_spec = yadage_load_from_workspace(
+                workflow.workspace_path, workflow_file, toplevel,
+            )
+            reana_specification = copy.deepcopy(workflow.reana_specification)
+            reana_specification["workflow"]["specification"] = workflow_spec
+            workflow.reana_specification = reana_specification
+        # Estimate complexity
+        workflow.complexity = estimate_complexity(
+            workflow.type_, workflow.reana_specification
+        )
+        Session.commit()
         Workflow.update_workflow_status(Session, workflow.id_, RunStatus.queued)
         current_workflow_submission_publisher.publish_workflow_submission(
             user_id=str(user.id_),
