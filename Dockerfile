@@ -28,7 +28,7 @@ RUN if [ "${DEBUG}" -gt 0 ]; then pip install -e ".[debug]"; else pip install .;
 
 # Are we building with locally-checked-out shared modules?
 # hadolint ignore=SC2102
-RUN if test -e modules/reana-commons; then pip install -e modules/reana-commons[kubernetes] --upgrade; fi
+RUN if test -e modules/reana-commons; then pip install -e modules/reana-commons[kubernetes,yadage] --upgrade; fi
 RUN if test -e modules/reana-db; then pip install -e modules/reana-db --upgrade; fi
 
 # Check if there are broken requirements

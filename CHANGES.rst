@@ -6,6 +6,11 @@ Version 0.8.0 (UNRELEASED)
 
 - Adds users quota accounting.
 - Adds ``include_progress`` and ``include_workspace_size`` query args to workflow list endpoint.
+- Adds workflow prioritization in the queue by complexity
+- Adds ``priority`` and ``min_job_memory`` params to workflow submission publisher.
+- Adds Yadage workflow specification loading to ``start_workflow`` endpoint.
+- Adds a check in scheduler if at least one workflow job could be started in Kubernetes.
+- Changes workflow execution consumer to receive only one message at a time.
 
 Version 0.7.5 (2021-04-28)
 --------------------------

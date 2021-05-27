@@ -11,6 +11,7 @@
 import json
 import logging
 from time import sleep
+from functools import partial
 
 from bravado.exception import HTTPBadGateway, HTTPNotFound
 from kubernetes.client.rest import ApiException
@@ -27,6 +28,16 @@ from reana_server.api_client import (
     current_workflow_submission_publisher,
 )
 from reana_server.config import REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY
+from reana_server.status import NodesStatus
+
+
+def check_memory_availability(workflow_min_job_memory):
+    """Check if at least one workflow job could be started in Kubernetes."""
+    nodes = NodesStatus().get_available_memory()
+    if not nodes:
+        return True
+    max_node_available_memory = max(nodes)
+    return max_node_available_memory >= workflow_min_job_memory
 
 
 def check_predefined_conditions():
@@ -71,11 +82,12 @@ def doesnt_exceed_max_reana_workflow_count():
     return True
 
 
-def reana_ready():
+def reana_ready(workflow_min_job_memory):
     """Check if REANA can start new workflows."""
     for check_condition in [
         check_predefined_conditions,
         doesnt_exceed_max_reana_workflow_count,
+        partial(check_memory_availability, workflow_min_job_memory),
     ]:
         if not check_condition():
             return False
@@ -120,7 +132,8 @@ class WorkflowExecutionScheduler(BaseConsumer):
                 kwargs["user"],
                 kwargs["workflow_id_or_name"],
                 kwargs["parameters"],
-                kwargs.get("priority", 0),
+                priority=kwargs.get("priority", 0),
+                min_job_memory=kwargs.get("min_job_memory", 0),
             )
             logging.error(
                 f"Requeueing workflow " f'{kwargs["workflow_id_or_name"]} ...'
@@ -142,11 +155,11 @@ class WorkflowExecutionScheduler(BaseConsumer):
         """On new workflow_submission event handler."""
         message.ack()
         workflow_submission = json.loads(workflow_submission)
-        # FIXME: this was added for debugging purposes, needs to be removed
-        workflow_submission.pop("priority", None)
-        if reana_ready():
+        workflow_min_job_memory = workflow_submission.pop("min_job_memory", 0)
+        if reana_ready(workflow_min_job_memory):
             logging.info("Starting queued workflow: {}".format(workflow_submission))
             workflow_submission["status"] = "start"
+            priority = workflow_submission.pop("priority", 0)
             try:
                 requeue = True
                 started = False
@@ -192,7 +205,11 @@ class WorkflowExecutionScheduler(BaseConsumer):
                 )
             finally:
                 if not started and requeue:
-                    self.requeue_workflow(**workflow_submission)
+                    self.requeue_workflow(
+                        **workflow_submission,
+                        priority=priority,
+                        min_job_memory=workflow_min_job_memory,
+                    )
         else:
             logging.info(
                 "REANA not ready to run workflow "
@@ -200,5 +217,7 @@ class WorkflowExecutionScheduler(BaseConsumer):
                 "Requeueing workflow and retrying in "
                 f"{REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY} second(s) ..."
             )
-            self.requeue_workflow(**workflow_submission)
+            self.requeue_workflow(
+                **workflow_submission, min_job_memory=workflow_min_job_memory
+            )
             sleep(REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY)

@@ -38,6 +38,14 @@ REANA_SSO_CERN_CONSUMER_KEY = os.getenv("CERN_CONSUMER_KEY", "CHANGE_ME")
 
 REANA_SSO_CERN_CONSUMER_SECRET = os.getenv("CERN_CONSUMER_SECRET", "CHANGE_ME")
 
+REANA_KUBERNETES_DEFAULT_JOBS_MEMORY_LIMIT = "4Gi"
+"""Default memory limit for user job containers."""
+
+REANA_COMPLEXITY_JOBS_MEMORY_LIMIT = os.getenv(
+    "REANA_KUBERNETES_JOBS_MEMORY_LIMIT", REANA_KUBERNETES_DEFAULT_JOBS_MEMORY_LIMIT
+)
+"""Maximum default memory limit for user job containers for workflow complexity estimation."""
+
 
 # Invenio configuration
 # =====================

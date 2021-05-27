@@ -377,14 +377,35 @@ class NodesStatus(REANAStatus):
         )
         return [node.metadata.name for node in nodes.items]
 
+    def get_nodes_memory(self):
+        """Get list of all node memory capacities."""
+        try:
+            nodes = current_k8s_corev1_api_client.list_node()
+            return [
+                kubernetes_memory_to_bytes(node.status.capacity["memory"])
+                for node in nodes.items
+            ]
+        except ValueError as e:
+            # FIXME: after new Kubernetes release this should be not needed
+            msg = "Error while retreiving k8s list of nodes."
+            logging.error(msg)
+            logging.error(e)
+            return []
+
+    def get_total_memory(self):
+        """Get total memory from all nodes."""
+        return sum(self.get_nodes_memory())
+
     def get_memory_usage(self):
         """Get nodes memory usage."""
         result = dict()
-        nodes = current_k8s_corev1_api_client.list_node()
-        for node in nodes.items:
-            result[node.metadata.name] = {"capacity": node.status.capacity["memory"]}
-
         try:
+            nodes = current_k8s_corev1_api_client.list_node()
+            for node in nodes.items:
+                result[node.metadata.name] = {
+                    "capacity": node.status.capacity["memory"]
+                }
+
             node_metrics = current_k8s_custom_objects_api_client.list_cluster_custom_object(
                 "metrics.k8s.io", "v1beta1", "nodes"
             )
@@ -399,13 +420,27 @@ class NodesStatus(REANAStatus):
                     kubernetes_memory_to_bytes(node_capacity),
                 )
                 result[node_name]["percentage"] = f"{node_usage_percentage}%"
+                result[node_name]["available"] = node_capacity - node_usage
         except ApiException as e:
             msg = "Error while calling `metrics.k8s.io` API."
             logging.error(msg)
             logging.error(e)
             return {"error": msg}
+        except ValueError as e:
+            # FIXME: after new Kubernetes release this should be not needed
+            msg = "Error while retreiving k8s list of nodes."
+            logging.error(msg)
+            logging.error(e)
+            return {"error": msg}
 
         return result
+
+    def get_available_memory(self):
+        """Get list of available nodes memory."""
+        nodes = self.get_memory_usage()
+        if not nodes or "error" in nodes:
+            return []
+        return [node.get("available") for node in nodes.values()]
 
     def get_friendly_memory_usage(self):
         """Get nodes email-friendly memory usage."""

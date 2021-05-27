@@ -11,8 +11,33 @@
 import os
 from functools import reduce
 
-from reana_db.models import WorkflowComplexity
 from reana_commons.job_utils import kubernetes_memory_to_bytes
+from reana_commons.config import MQ_MAX_PRIORITY
+
+from reana_server.status import NodesStatus
+from reana_server.config import REANA_COMPLEXITY_JOBS_MEMORY_LIMIT
+
+
+def get_workflow_min_job_memory(complexity):
+    """Return minimal job memory from workflow complexity.
+
+    :param complexity: workflow complexity list which consists of number of initial jobs and the memory in bytes they require. (e.g. [(8, 1073741824), (5, 2147483648)])
+    :return: minimal job memory (e.g. 1073741824)
+    """
+    if not complexity:
+        return 0
+    return min(complexity, key=lambda x: x[1])[1]
+
+
+def calculate_workflow_priority(complexity):
+    """Calculate workflow priority based on its complexity."""
+    if not complexity:
+        return 0
+    wf_memory = int(reduce(lambda sum, item: sum + item[0] * item[1], complexity, 0))
+    total_cluster_memory = NodesStatus().get_total_memory()
+    if not total_cluster_memory or wf_memory > total_cluster_memory:
+        return 0
+    return int(round(1 - wf_memory / total_cluster_memory, 2) * MQ_MAX_PRIORITY)
 
 
 def estimate_complexity(workflow_type, reana_yaml):
@@ -38,17 +63,8 @@ def estimate_complexity(workflow_type, reana_yaml):
     try:
         complexity = estimator.estimate_complexity()
     except Exception:
-        return None
-
-    # Summing up parrarel jobs times memory to determine the workflow complexity
-    memory = reduce(lambda sum, item: sum + item[0] * item[1], complexity, 0)
-
-    # FIXME: Values should be configuranble
-    if memory <= kubernetes_memory_to_bytes("8Gi"):
-        return WorkflowComplexity.espresso
-    if memory <= kubernetes_memory_to_bytes("40Gi"):
-        return WorkflowComplexity.medium
-    return WorkflowComplexity.hard
+        return []
+    return complexity
 
 
 class ComplexityEstimatorBase:
@@ -89,8 +105,9 @@ class ComplexityEstimatorBase:
 
     def _get_memory_limit(self, step):
         """Get memory limit value."""
-        default_memory_limit = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_LIMIT", "8Gi")
-        memory_limit = step.get("kubernetes_memory_limit", default_memory_limit)
+        memory_limit = step.get(
+            "kubernetes_memory_limit", REANA_COMPLEXITY_JOBS_MEMORY_LIMIT
+        )
         return kubernetes_memory_to_bytes(memory_limit)
 
 

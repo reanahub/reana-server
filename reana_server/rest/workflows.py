@@ -10,7 +10,6 @@
 import json
 import logging
 import traceback
-import copy
 
 import requests
 from bravado.exception import HTTPError
@@ -38,7 +37,11 @@ from reana_server.api_client import (
     current_rwc_api_client,
     current_workflow_submission_publisher,
 )
-from reana_server.complexity import estimate_complexity
+from reana_server.complexity import (
+    estimate_complexity,
+    calculate_workflow_priority,
+    get_workflow_min_job_memory,
+)
 from reana_server.decorators import check_quota, signin_required
 from reana_server.utils import (
     RequestStreamWithLen,
@@ -417,7 +420,6 @@ def create_workflow(user):  # noqa
                 user_id=str(user.id_),
                 workflow_id_or_name=response["workflow_id"],
                 parameters=request.json,
-                # TODO: send complexity
             )
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -925,25 +927,23 @@ def start_workflow(workflow_id_or_name, user):  # noqa
         if "yadage" in (workflow.type_, restart_type):
             # Load Yadage workflow specification
             operational_options.update({"accept_metadir": True})
-            workflow_file = workflow.reana_specification["workflow"].get("file")
             toplevel = operational_options.get("toplevel", "")
-            workflow_spec = yadage_load_from_workspace(
-                workflow.workspace_path, workflow_file, toplevel,
+            workflow.reana_specification = yadage_load_from_workspace(
+                workflow.workspace_path, workflow.reana_specification, toplevel,
             )
-            reana_specification = copy.deepcopy(workflow.reana_specification)
-            reana_specification["workflow"]["specification"] = workflow_spec
-            workflow.reana_specification = reana_specification
         # Estimate complexity
-        workflow.complexity = estimate_complexity(
-            workflow.type_, workflow.reana_specification
-        )
+        complexity = estimate_complexity(workflow.type_, workflow.reana_specification)
+        workflow.complexity = complexity
+        workflow.status = RunStatus.queued
+        workflow_priority = calculate_workflow_priority(complexity)
+        workflow_min_job_memory = get_workflow_min_job_memory(complexity)
         Session.commit()
-        Workflow.update_workflow_status(Session, workflow.id_, RunStatus.queued)
         current_workflow_submission_publisher.publish_workflow_submission(
             user_id=str(user.id_),
             workflow_id_or_name=workflow.get_full_workflow_name(),
             parameters=parameters,
-            priority=workflow.complexity.value,
+            priority=workflow_priority,
+            min_job_memory=workflow_min_job_memory,
         )
         response = {
             "message": "Workflow submitted.",
