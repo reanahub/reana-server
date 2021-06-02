@@ -126,7 +126,7 @@ traitlets==5.0.5          # via ipython, matplotlib-inline
 typing-extensions==3.10.0.0  # via bravado
 ua-parser==0.10.0         # via invenio-accounts
 uritools==3.0.2           # via invenio-app, invenio-oauthclient
-urllib3==1.24.3           # via kubernetes, requests
+urllib3==1.26.5           # via kubernetes, requests
 uwsgi-tools==1.1.1        # via reana-server (setup.py)
 uwsgi==2.0.19.1           # via reana-server (setup.py)
 uwsgitop==0.11            # via reana-server (setup.py)
