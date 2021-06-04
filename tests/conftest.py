@@ -15,6 +15,8 @@ import os
 import flask_login
 import pytest
 from mock import Mock, patch
+from reana_commons.config import MQ_DEFAULT_QUEUES
+from reana_commons.publisher import WorkflowSubmissionPublisher
 
 from reana_server.factory import create_app
 
@@ -42,3 +44,12 @@ def _get_user_mock():
     mocked_get_user = Mock(return_value=mocked_user)
     with patch("flask_login.utils._get_user", mocked_get_user):
         yield flask_login.utils._get_user
+
+
+@pytest.fixture()
+def in_memory_workflow_submission_publisher(in_memory_queue_connection):
+    with patch.dict(MQ_DEFAULT_QUEUES["workflow-submission"]["exchange"], {"name": ""}):
+        in_memory_wsp = WorkflowSubmissionPublisher(
+            connection=in_memory_queue_connection
+        )
+    return in_memory_wsp

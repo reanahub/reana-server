@@ -28,7 +28,10 @@ from reana_server.api_client import (
     current_rwc_api_client,
     current_workflow_submission_publisher,
 )
-from reana_server.config import REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY
+from reana_server.config import (
+    REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY,
+    REANA_SCHEDULER_RETRY_DELAY,
+)
 from reana_server.status import NodesStatus
 
 
@@ -141,10 +144,10 @@ class WorkflowExecutionScheduler(BaseConsumer):
                 kwargs["parameters"],
                 priority=kwargs.get("priority", 0),
                 min_job_memory=kwargs.get("min_job_memory", 0),
+                retry_count=kwargs.get("retry_count", 0) + 1,
+                delay=REANA_SCHEDULER_RETRY_DELAY,
             )
-            logging.error(
-                f"Requeueing workflow " f'{kwargs["workflow_id_or_name"]} ...'
-            )
+            logging.info(f"Requeueing workflow " f'{kwargs["workflow_id_or_name"]} ...')
         except KeyError:
             logging.error(
                 f"Wrong parameters to requeue workflow:\n"
@@ -163,6 +166,7 @@ class WorkflowExecutionScheduler(BaseConsumer):
         message.ack()
         workflow_submission = json.loads(workflow_submission)
         workflow_min_job_memory = workflow_submission.pop("min_job_memory", 0)
+        retry_count = workflow_submission.pop("retry_count", 0)
         if reana_ready(workflow_min_job_memory):
             logging.info("Starting queued workflow: {}".format(workflow_submission))
             workflow_submission["status"] = "start"
@@ -225,6 +229,8 @@ class WorkflowExecutionScheduler(BaseConsumer):
                 f"{REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY} second(s) ..."
             )
             self.requeue_workflow(
-                **workflow_submission, min_job_memory=workflow_min_job_memory
+                **workflow_submission,
+                min_job_memory=workflow_min_job_memory,
+                retry_count=retry_count,
             )
             sleep(REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY)

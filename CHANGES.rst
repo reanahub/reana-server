@@ -11,6 +11,7 @@ Version 0.8.0 (UNRELEASED)
 - Adds Yadage workflow specification loading to ``start_workflow`` endpoint.
 - Adds a check in scheduler if at least one workflow job could be started in Kubernetes.
 - Changes workflow execution consumer to receive only one message at a time.
+- Changes workflow execution scheduler to delay rescheduled workflows and count number of retries.
 
 Version 0.7.5 (2021-04-28)
 --------------------------
