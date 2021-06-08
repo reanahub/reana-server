@@ -15,12 +15,13 @@ from functools import partial
 
 from bravado.exception import HTTPBadGateway, HTTPNotFound
 from kubernetes.client.rest import ApiException
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.exc import SQLAlchemyError
 
 from reana_commons.config import REANA_MAX_CONCURRENT_BATCH_WORKFLOWS
 from reana_commons.consumer import BaseConsumer
 from reana_commons.k8s.api_client import current_k8s_corev1_api_client
+from reana_db.database import Session
 from reana_db.models import Workflow, RunStatus
 
 from reana_server.api_client import (
@@ -64,22 +65,28 @@ def check_predefined_conditions():
 
 def doesnt_exceed_max_reana_workflow_count():
     """Check upper limit on running REANA batch workflows."""
+    doesnt_exceed = True
     try:
-        running_workflows = Workflow.query.filter(
-            or_(
-                Workflow.status == RunStatus.pending,
-                Workflow.status == RunStatus.running,
+        running_workflows = (
+            Session.query(func.count())
+            .filter(
+                or_(
+                    Workflow.status == RunStatus.pending,
+                    Workflow.status == RunStatus.running,
+                )
             )
-        ).count()
+            .scalar()
+        )
         if running_workflows >= REANA_MAX_CONCURRENT_BATCH_WORKFLOWS:
-            return False
+            doesnt_exceed = False
     except SQLAlchemyError as e:
         logging.error(
             "Something went wrong while querying for number of running workflows."
         )
         logging.error(e)
-        return False
-    return True
+        doesnt_exceed = False
+    Session.commit()
+    return doesnt_exceed
 
 
 def reana_ready(workflow_min_job_memory):
