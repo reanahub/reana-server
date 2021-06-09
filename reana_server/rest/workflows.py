@@ -39,10 +39,10 @@ from reana_server.api_client import (
 )
 from reana_server.complexity import (
     estimate_complexity,
-    calculate_workflow_priority,
     get_workflow_min_job_memory,
 )
 from reana_server.decorators import check_quota, signin_required
+from reana_server.status import NodesStatus
 from reana_server.utils import (
     RequestStreamWithLen,
     _get_reana_yaml_from_gitlab,
@@ -898,6 +898,24 @@ def start_workflow(workflow_id_or_name, user):  # noqa
                 "message": "Status resume is not supported yet."
               }
     """
+
+    def _load_yadage_spec(workflow, operational_options):
+        """Load and save in DB the Yadage workflow specification."""
+        operational_options.update({"accept_metadir": True})
+        toplevel = operational_options.get("toplevel", "")
+        workflow.reana_specification = yadage_load_from_workspace(
+            workflow.workspace_path, workflow.reana_specification, toplevel,
+        )
+        Session.commit()
+
+    def _calculate_complexity(workflow):
+        """Place workflow in queue and calculate and set its complexity."""
+        complexity = estimate_complexity(workflow.type_, workflow.reana_specification)
+        workflow.complexity = complexity
+        workflow.status = RunStatus.queued
+        Session.commit()
+        return complexity
+
     try:
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -925,19 +943,11 @@ def start_workflow(workflow_id_or_name, user):  # noqa
                 "again.".format(workflow.get_full_workflow_name(), workflow.status.name)
             )
         if "yadage" in (workflow.type_, restart_type):
-            # Load Yadage workflow specification
-            operational_options.update({"accept_metadir": True})
-            toplevel = operational_options.get("toplevel", "")
-            workflow.reana_specification = yadage_load_from_workspace(
-                workflow.workspace_path, workflow.reana_specification, toplevel,
-            )
-        # Estimate complexity
-        complexity = estimate_complexity(workflow.type_, workflow.reana_specification)
-        workflow.complexity = complexity
-        workflow.status = RunStatus.queued
-        workflow_priority = calculate_workflow_priority(complexity)
+            _load_yadage_spec(workflow, operational_options)
+        complexity = _calculate_complexity(workflow)
+        total_cluster_memory = NodesStatus().get_total_memory()
+        workflow_priority = workflow.get_priority(total_cluster_memory)
         workflow_min_job_memory = get_workflow_min_job_memory(complexity)
-        Session.commit()
         current_workflow_submission_publisher.publish_workflow_submission(
             user_id=str(user.id_),
             workflow_id_or_name=workflow.get_full_workflow_name(),

@@ -8,13 +8,8 @@
 
 """REANA workflow complexity estimation."""
 
-import os
-from functools import reduce
-
 from reana_commons.job_utils import kubernetes_memory_to_bytes
-from reana_commons.config import MQ_MAX_PRIORITY
 
-from reana_server.status import NodesStatus
 from reana_server.config import REANA_COMPLEXITY_JOBS_MEMORY_LIMIT
 
 
@@ -27,17 +22,6 @@ def get_workflow_min_job_memory(complexity):
     if not complexity:
         return 0
     return min(complexity, key=lambda x: x[1])[1]
-
-
-def calculate_workflow_priority(complexity):
-    """Calculate workflow priority based on its complexity."""
-    if not complexity:
-        return 0
-    wf_memory = int(reduce(lambda sum, item: sum + item[0] * item[1], complexity, 0))
-    total_cluster_memory = NodesStatus().get_total_memory()
-    if not total_cluster_memory or wf_memory > total_cluster_memory:
-        return 0
-    return int(round(1 - wf_memory / total_cluster_memory, 2) * MQ_MAX_PRIORITY)
 
 
 def estimate_complexity(workflow_type, reana_yaml):
