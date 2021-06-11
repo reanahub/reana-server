@@ -26,8 +26,9 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from reana_commons.config import REANAConfig
 from reana_commons.email import send_email
 from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.yadage import yadage_load_from_workspace
 from reana_db.database import Session
-from reana_db.models import User, UserTokenStatus, UserTokenType, Workflow
+from reana_db.models import RunStatus, User, UserTokenStatus, UserTokenType, Workflow
 from sqlalchemy.exc import (
     IntegrityError,
     InvalidRequestError,
@@ -36,6 +37,8 @@ from sqlalchemy.exc import (
 )
 from werkzeug.wsgi import LimitedStream
 
+from reana_server.api_client import current_workflow_submission_publisher
+from reana_server.complexity import get_workflow_min_job_memory, estimate_complexity
 from reana_server.config import (
     ADMIN_EMAIL,
     ADMIN_USER_ID,
@@ -82,6 +85,39 @@ def get_usage_percentage(usage, limit):
     if limit == 0:
         return ""
     return "{:.1%}".format(usage / limit)
+
+
+def publish_workflow_submission(workflow, user_id, total_cluster_memory, parameters):
+    """Publish workflow submission."""
+    complexity = _calculate_complexity(workflow)
+    workflow_priority = workflow.get_priority(total_cluster_memory)
+    workflow_min_job_memory = get_workflow_min_job_memory(complexity)
+    current_workflow_submission_publisher.publish_workflow_submission(
+        user_id=str(user_id),
+        workflow_id_or_name=workflow.get_full_workflow_name(),
+        parameters=parameters,
+        priority=workflow_priority,
+        min_job_memory=workflow_min_job_memory,
+    )
+
+
+def _calculate_complexity(workflow):
+    """Place workflow in queue and calculate and set its complexity."""
+    complexity = estimate_complexity(workflow.type_, workflow.reana_specification)
+    workflow.complexity = complexity
+    workflow.status = RunStatus.queued
+    Session.commit()
+    return complexity
+
+
+def _load_yadage_spec(workflow, operational_options):
+    """Load and save in DB the Yadage workflow specification."""
+    operational_options.update({"accept_metadir": True})
+    toplevel = operational_options.get("toplevel", "")
+    workflow.reana_specification = yadage_load_from_workspace(
+        workflow.workspace_path, workflow.reana_specification, toplevel,
+    )
+    Session.commit()
 
 
 def _get_users(_id, email, user_access_token, admin_access_token):

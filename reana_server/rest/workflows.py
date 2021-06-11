@@ -18,7 +18,6 @@ from flask import current_app as app
 from flask import jsonify, request, stream_with_context
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.operational_options import validate_operational_options
-from reana_commons.yadage import yadage_load_from_workspace
 from reana_db.database import Session
 from reana_db.models import (
     InteractiveSessionType,
@@ -33,19 +32,14 @@ from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
 from werkzeug.datastructures import Headers
 
-from reana_server.api_client import (
-    current_rwc_api_client,
-    current_workflow_submission_publisher,
-)
-from reana_server.complexity import (
-    estimate_complexity,
-    get_workflow_min_job_memory,
-)
-from reana_server.decorators import check_quota, signin_required
+from reana_server.api_client import current_rwc_api_client
 from reana_server.status import NodesStatus
+from reana_server.decorators import check_quota, signin_required
 from reana_server.utils import (
     RequestStreamWithLen,
+    _load_yadage_spec,
     _get_reana_yaml_from_gitlab,
+    publish_workflow_submission,
     clone_workflow,
     is_uuid_v4,
 )
@@ -413,14 +407,14 @@ def create_workflow(user):  # noqa
             workflow=workflow_dict, user=str(user.id_)
         ).result()
         if git_data:
-            Workflow.update_workflow_status(
-                Session, response["workflow_id"], RunStatus.queued
+            workflow = _get_workflow_with_uuid_or_name(
+                response["workflow_id"], str(user.id_)
             )
-            current_workflow_submission_publisher.publish_workflow_submission(
-                user_id=str(user.id_),
-                workflow_id_or_name=response["workflow_id"],
-                parameters=request.json,
-            )
+            if workflow.type_ == "yadage":
+                _load_yadage_spec(workflow, workflow_dict["operational_options"])
+            cluster_memory = NodesStatus().get_total_memory()
+            parameters = request.json
+            publish_workflow_submission(workflow, user.id_, cluster_memory, parameters)
         return jsonify(response), http_response.status_code
     except HTTPError as e:
         logging.error(traceback.format_exc())
@@ -898,24 +892,6 @@ def start_workflow(workflow_id_or_name, user):  # noqa
                 "message": "Status resume is not supported yet."
               }
     """
-
-    def _load_yadage_spec(workflow, operational_options):
-        """Load and save in DB the Yadage workflow specification."""
-        operational_options.update({"accept_metadir": True})
-        toplevel = operational_options.get("toplevel", "")
-        workflow.reana_specification = yadage_load_from_workspace(
-            workflow.workspace_path, workflow.reana_specification, toplevel,
-        )
-        Session.commit()
-
-    def _calculate_complexity(workflow):
-        """Place workflow in queue and calculate and set its complexity."""
-        complexity = estimate_complexity(workflow.type_, workflow.reana_specification)
-        workflow.complexity = complexity
-        workflow.status = RunStatus.queued
-        Session.commit()
-        return complexity
-
     try:
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
@@ -944,17 +920,8 @@ def start_workflow(workflow_id_or_name, user):  # noqa
             )
         if "yadage" in (workflow.type_, restart_type):
             _load_yadage_spec(workflow, operational_options)
-        complexity = _calculate_complexity(workflow)
-        total_cluster_memory = NodesStatus().get_total_memory()
-        workflow_priority = workflow.get_priority(total_cluster_memory)
-        workflow_min_job_memory = get_workflow_min_job_memory(complexity)
-        current_workflow_submission_publisher.publish_workflow_submission(
-            user_id=str(user.id_),
-            workflow_id_or_name=workflow.get_full_workflow_name(),
-            parameters=parameters,
-            priority=workflow_priority,
-            min_job_memory=workflow_min_job_memory,
-        )
+        cluster_memory = NodesStatus().get_total_memory()
+        publish_workflow_submission(workflow, user.id_, cluster_memory, parameters)
         response = {
             "message": "Workflow submitted.",
             "workflow_id": workflow.id_,

@@ -49,7 +49,7 @@ serializer = LocalProxy(
 
 @blueprint.route("/gitlab/connect")
 @signin_required()
-def gitlab_connect():
+def gitlab_connect(**kwargs):
     r"""Endpoint to init the REANA connection to GitLab.
 
     ---
