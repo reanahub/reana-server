@@ -145,7 +145,7 @@ class WorkflowExecutionScheduler(BaseConsumer):
                 priority=kwargs.get("priority", 0),
                 min_job_memory=kwargs.get("min_job_memory", 0),
                 retry_count=kwargs.get("retry_count", 0) + 1,
-                delay=REANA_SCHEDULER_RETRY_DELAY,
+                delay=REANA_SCHEDULER_RETRY_DELAY * 1000,
             )
             logging.info(f"Requeueing workflow " f'{kwargs["workflow_id_or_name"]} ...')
         except KeyError:
