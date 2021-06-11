@@ -1433,6 +1433,7 @@ def delete_file(workflow_id_or_name, file_name, user):  # noqa
         "file_name": fields.String(),
         "page": fields.Int(validate=validate.Range(min=1)),
         "size": fields.Int(validate=validate.Range(min=1)),
+        "search": fields.String(),
     }
 )
 @signin_required()
@@ -1474,6 +1475,11 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
           description: Number of results per page (pagination).
           required: false
           type: integer
+        - name: search
+          in: query
+          description: Filter workflow workspace files.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -1535,7 +1541,7 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.get_files(
-            user=str(user.id_), workflow_id_or_name=workflow_id_or_name, **kwargs
+            user=str(user.id_), workflow_id_or_name=workflow_id_or_name, **kwargs,
         ).result()
 
         return jsonify(http_response.json()), http_response.status_code
