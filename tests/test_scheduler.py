@@ -39,6 +39,8 @@ def test_scheduler_starts_workflows(
         reana_ready=Mock(return_value=True),
         current_rwc_api_client=mock_rwc_api_client,
         current_workflow_submission_publisher=in_memory_workflow_submission_publisher,
+        REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY=0,
+        REANA_SCHEDULER_SECONDS_RETRY_DELAY=0,
     ):
         consume_queue(scheduler, limit=1)
     assert in_memory_queue_connection.channel().queues["workflow-submission"].empty()
@@ -60,6 +62,8 @@ def test_scheduler_requeues_workflows(
         "reana_server.scheduler",
         reana_ready=Mock(return_value=False),
         current_workflow_submission_publisher=in_memory_workflow_submission_publisher,
+        REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY=0,
+        REANA_SCHEDULER_SECONDS_RETRY_DELAY=0,
     ):
         consume_queue(scheduler, limit=1)
         assert (
@@ -94,6 +98,8 @@ def test_scheduler_requeues_on_rwc_failure(
         reana_ready=Mock(return_value=True),
         current_rwc_api_client=mock_rwc_api_client,
         current_workflow_submission_publisher=in_memory_workflow_submission_publisher,
+        REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY=0,
+        REANA_SCHEDULER_SECONDS_RETRY_DELAY=0,
     ):
         consume_queue(scheduler, limit=1)
         assert (

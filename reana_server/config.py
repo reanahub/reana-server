@@ -175,8 +175,10 @@ ADMIN_EMAIL = os.getenv("REANA_EMAIL_SENDER", "CHANGE_ME")
 
 # Workflow scheduler
 # ==================
-REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY = 60
+REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY = os.getenv(
+    "REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY"
+)
 """How many seconds to wait between retries in case of REANA not ready to run more workflows."""
 
-REANA_SCHEDULER_RETRY_DELAY = 60
+REANA_SCHEDULER_SECONDS_RETRY_DELAY = os.getenv("REANA_SCHEDULER_SECONDS_RETRY_DELAY")
 """How many seconds for a workflow to be delayed once rescheduled."""
