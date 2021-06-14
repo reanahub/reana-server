@@ -143,10 +143,19 @@ class YadageComplexityEstimator(ComplexityEstimatorBase):
                 .get("resources", [])
             )
             compute_backend = next(
-                filter(lambda r: "compute_backend" in r.keys(), resources), {},
+                filter(
+                    lambda r: isinstance(r, dict) and "compute_backend" in r.keys(),
+                    resources,
+                ),
+                {},
             )
             k8s_memory_limit = next(
-                filter(lambda r: "kubernetes_memory_limit" in r.keys(), resources), {},
+                filter(
+                    lambda r: isinstance(r, dict)
+                    and "kubernetes_memory_limit" in r.keys(),
+                    resources,
+                ),
+                {},
             )
             jobs = self._get_number_of_jobs(compute_backend)
             memory_limit = self._get_memory_limit(k8s_memory_limit)
