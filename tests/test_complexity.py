@@ -33,7 +33,11 @@ def test_get_workflow_min_job_memory(complexity, min_job_memory):
 
 def test_estimate_complexity(yadage_workflow_spec_loaded):
     """Test estimate_complexity."""
-    with patch("reana_server.complexity.REANA_COMPLEXITY_JOBS_MEMORY_LIMIT", "4Gi"):
+    with patch.multiple(
+        "reana_server.complexity",
+        REANA_COMPLEXITY_JOBS_MEMORY_LIMIT="4Gi",
+        REANA_WORKFLOW_SCHEDULING_POLICY="balanced",
+    ):
         assert estimate_complexity("yadage", yadage_workflow_spec_loaded) == [
             (1, 4294967296.0)
         ]

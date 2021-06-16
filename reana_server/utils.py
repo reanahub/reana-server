@@ -90,7 +90,7 @@ def get_usage_percentage(usage, limit):
 def publish_workflow_submission(workflow, user_id, total_cluster_memory, parameters):
     """Publish workflow submission."""
     complexity = _calculate_complexity(workflow)
-    workflow_priority = workflow.get_priority(total_cluster_memory)
+    workflow_priority = workflow.get_priority(total_cluster_memory) if complexity else 0
     workflow_min_job_memory = get_workflow_min_job_memory(complexity)
     current_workflow_submission_publisher.publish_workflow_submission(
         user_id=str(user_id),

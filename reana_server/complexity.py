@@ -10,7 +10,11 @@
 
 from reana_commons.job_utils import kubernetes_memory_to_bytes
 
-from reana_server.config import REANA_COMPLEXITY_JOBS_MEMORY_LIMIT
+from reana_server.config import (
+    REANA_COMPLEXITY_JOBS_MEMORY_LIMIT,
+    REANA_WORKFLOW_SCHEDULING_POLICY,
+    REANA_WORKFLOW_SCHEDULING_POLICIES,
+)
 
 
 def get_workflow_min_job_memory(complexity):
@@ -42,6 +46,16 @@ def estimate_complexity(workflow_type, reana_yaml):
             raise Exception(
                 "Workflow type '{0}' is not supported".format(workflow_type)
             )
+
+    scheduling_policy = REANA_WORKFLOW_SCHEDULING_POLICY
+    if scheduling_policy not in REANA_WORKFLOW_SCHEDULING_POLICIES:
+        raise ValueError(
+            'Workflow scheduling policy "{0}" is not valid.'.format(scheduling_policy)
+        )
+
+    # No need to estimate the complexity for "fifo" strategy
+    if scheduling_policy == "fifo":
+        return []
 
     estimator = build_estimator(workflow_type, reana_yaml)
     try:

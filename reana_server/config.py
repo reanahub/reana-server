@@ -41,6 +41,14 @@ REANA_SSO_CERN_CONSUMER_SECRET = os.getenv("CERN_CONSUMER_SECRET", "CHANGE_ME")
 REANA_COMPLEXITY_JOBS_MEMORY_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_LIMIT")
 """Maximum memory limit for user job containers for workflow complexity estimation."""
 
+REANA_WORKFLOW_SCHEDULING_POLICY = os.getenv("REANA_WORKFLOW_SCHEDULING_POLICY", "fifo")
+
+REANA_WORKFLOW_SCHEDULING_POLICIES = ["fifo", "balanced"]
+"""REANA workflow scheduling policies.
+- ``fifo``: first-in first-out strategy starting workflows as they come.
+- ``balanced``: a weighted strategy taking into account existing multi-user workloads and the DAG complexity of incoming workflows.
+"""
+
 
 # Invenio configuration
 # =====================
