@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018 CERN.
+# Copyright (C) 2017, 2018, 2021 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -183,10 +183,12 @@ ADMIN_EMAIL = os.getenv("REANA_EMAIL_SENDER", "CHANGE_ME")
 
 # Workflow scheduler
 # ==================
-REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY = os.getenv(
-    "REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY"
+REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY = int(
+    os.getenv("REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY", "600")
 )
 """How many seconds to wait between retries in case of REANA not ready to run more workflows."""
 
-REANA_SCHEDULER_SECONDS_RETRY_DELAY = os.getenv("REANA_SCHEDULER_SECONDS_RETRY_DELAY")
+REANA_SCHEDULER_SECONDS_RETRY_DELAY = int(
+    os.getenv("REANA_SCHEDULER_SECONDS_RETRY_DELAY", "60")
+)
 """How many seconds for a workflow to be delayed once rescheduled."""
