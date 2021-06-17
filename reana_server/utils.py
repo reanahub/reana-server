@@ -45,6 +45,8 @@ from reana_server.config import (
     REANA_GITLAB_URL,
     REANA_HOSTNAME,
     REANA_USER_EMAIL_CONFIRMATION,
+    REANA_WORKFLOW_SCHEDULING_POLICY,
+    REANA_WORKFLOW_SCHEDULING_POLICIES,
 )
 
 
@@ -87,11 +89,27 @@ def get_usage_percentage(usage, limit):
     return "{:.1%}".format(usage / limit)
 
 
-def publish_workflow_submission(workflow, user_id, total_cluster_memory, parameters):
+def publish_workflow_submission(workflow, user_id, parameters):
     """Publish workflow submission."""
-    complexity = _calculate_complexity(workflow)
-    workflow_priority = workflow.get_priority(total_cluster_memory) if complexity else 0
-    workflow_min_job_memory = get_workflow_min_job_memory(complexity)
+    from reana_server.status import NodesStatus
+
+    Workflow.update_workflow_status(Session, workflow.id_, RunStatus.queued)
+
+    scheduling_policy = REANA_WORKFLOW_SCHEDULING_POLICY
+    if scheduling_policy not in REANA_WORKFLOW_SCHEDULING_POLICIES:
+        raise ValueError(
+            'Workflow scheduling policy "{0}" is not valid.'.format(scheduling_policy)
+        )
+
+    # No need to estimate the complexity for "fifo" strategy
+    if scheduling_policy == "fifo":
+        workflow_priority = 0
+        workflow_min_job_memory = 0
+    else:
+        total_cluster_memory = NodesStatus().get_total_memory()
+        complexity = _calculate_complexity(workflow)
+        workflow_priority = workflow.get_priority(total_cluster_memory)
+        workflow_min_job_memory = get_workflow_min_job_memory(complexity)
     current_workflow_submission_publisher.publish_workflow_submission(
         user_id=str(user_id),
         workflow_id_or_name=workflow.get_full_workflow_name(),
@@ -105,7 +123,6 @@ def _calculate_complexity(workflow):
     """Place workflow in queue and calculate and set its complexity."""
     complexity = estimate_complexity(workflow.type_, workflow.reana_specification)
     workflow.complexity = complexity
-    workflow.status = RunStatus.queued
     Session.commit()
     return complexity
 

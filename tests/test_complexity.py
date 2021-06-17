@@ -8,6 +8,7 @@
 
 """Test workflow complexity estimation."""
 
+import mock
 import pytest
 from mock import patch
 
@@ -31,13 +32,10 @@ def test_get_workflow_min_job_memory(complexity, min_job_memory):
     assert get_workflow_min_job_memory(complexity) == min_job_memory
 
 
+@mock.patch("reana_server.complexity.REANA_COMPLEXITY_JOBS_MEMORY_LIMIT", "4Gi")
+@mock.patch("reana_server.utils.REANA_WORKFLOW_SCHEDULING_POLICY", "balanced")
 def test_estimate_complexity(yadage_workflow_spec_loaded):
     """Test estimate_complexity."""
-    with patch.multiple(
-        "reana_server.complexity",
-        REANA_COMPLEXITY_JOBS_MEMORY_LIMIT="4Gi",
-        REANA_WORKFLOW_SCHEDULING_POLICY="balanced",
-    ):
-        assert estimate_complexity("yadage", yadage_workflow_spec_loaded) == [
-            (1, 4294967296.0)
-        ]
+    assert estimate_complexity("yadage", yadage_workflow_spec_loaded) == [
+        (1, 4294967296.0)
+    ]

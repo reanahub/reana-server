@@ -33,7 +33,6 @@ from webargs.flaskparser import use_kwargs
 from werkzeug.datastructures import Headers
 
 from reana_server.api_client import current_rwc_api_client
-from reana_server.status import NodesStatus
 from reana_server.decorators import check_quota, signin_required
 from reana_server.utils import (
     RequestStreamWithLen,
@@ -412,9 +411,8 @@ def create_workflow(user):  # noqa
             )
             if workflow.type_ == "yadage":
                 _load_yadage_spec(workflow, workflow_dict["operational_options"])
-            cluster_memory = NodesStatus().get_total_memory()
             parameters = request.json
-            publish_workflow_submission(workflow, user.id_, cluster_memory, parameters)
+            publish_workflow_submission(workflow, user.id_, parameters)
         return jsonify(response), http_response.status_code
     except HTTPError as e:
         logging.error(traceback.format_exc())
@@ -920,8 +918,7 @@ def start_workflow(workflow_id_or_name, user):  # noqa
             )
         if "yadage" in (workflow.type_, restart_type):
             _load_yadage_spec(workflow, operational_options)
-        cluster_memory = NodesStatus().get_total_memory()
-        publish_workflow_submission(workflow, user.id_, cluster_memory, parameters)
+        publish_workflow_submission(workflow, user.id_, parameters)
         response = {
             "message": "Workflow submitted.",
             "workflow_id": workflow.id_,
