@@ -24,14 +24,8 @@ from reana_commons.k8s.api_client import current_k8s_corev1_api_client
 from reana_db.database import Session
 from reana_db.models import Workflow, RunStatus
 
-from reana_server.api_client import (
-    current_rwc_api_client,
-    current_workflow_submission_publisher,
-)
-from reana_server.config import (
-    REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY,
-    REANA_SCHEDULER_SECONDS_RETRY_DELAY,
-)
+from reana_server.api_client import current_rwc_api_client
+from reana_server.config import REANA_SCHEDULER_REQUEUE_SLEEP
 from reana_server.status import NodesStatus
 
 
@@ -129,48 +123,17 @@ class WorkflowExecutionScheduler(BaseConsumer):
             )
         ]
 
-    def requeue_workflow(self, **kwargs):
-        """Send a workflow back to the queue.
-
-        We do not use ``message.requeue()`` because it cannot be used after
-        ``message.ack()``, and we cannot wait to validate all the checks
-        (``reana_ready()`` and calling RWC) without calling ``message.ack()``
-        and getting a new call to on_message with the same workflow.
-        """
-        try:
-            current_workflow_submission_publisher.publish_workflow_submission(
-                kwargs["user"],
-                kwargs["workflow_id_or_name"],
-                kwargs["parameters"],
-                priority=kwargs.get("priority", 0),
-                min_job_memory=kwargs.get("min_job_memory", 0),
-                retry_count=kwargs.get("retry_count", 0) + 1,
-                delay=REANA_SCHEDULER_SECONDS_RETRY_DELAY * 1000,
-            )
-            logging.info(f"Requeueing workflow " f'{kwargs["workflow_id_or_name"]} ...')
-        except KeyError:
-            logging.error(
-                f"Wrong parameters to requeue workflow:\n"
-                f"{kwargs}\n"
-                f"Did reana_commons.publisher.WorkflowSubmissionPublisher's "
-                f"method publish_workflow_submission change its signature?",
-                exc_info=True,
-            )
-        except Exception:
-            logging.error(
-                "An error has occurred while requeueing worfklow", exc_info=True
-            )
-
     def on_message(self, workflow_submission, message):
         """On new workflow_submission event handler."""
-        message.ack()
         workflow_submission = json.loads(workflow_submission)
+        logging.info("Received workflow: {}".format(workflow_submission))
         workflow_min_job_memory = workflow_submission.pop("min_job_memory", 0)
-        retry_count = workflow_submission.pop("retry_count", 0)
         if reana_ready(workflow_min_job_memory):
             logging.info("Starting queued workflow: {}".format(workflow_submission))
+            workflow_submission.pop("priority", 0)
+            # FIXME: remove this once `retry_count` won't be sent from publisher
+            workflow_submission.pop("retry_count", 0)
             workflow_submission["status"] = "start"
-            priority = workflow_submission.pop("priority", 0)
             try:
                 requeue = True
                 started = False
@@ -215,22 +178,15 @@ class WorkflowExecutionScheduler(BaseConsumer):
                     f"Something went wrong while calling RWC :\n" f"{e}", exc_info=True
                 )
             finally:
+                sleep(REANA_SCHEDULER_REQUEUE_SLEEP)
                 if not started and requeue:
-                    self.requeue_workflow(
-                        **workflow_submission,
-                        priority=priority,
-                        min_job_memory=workflow_min_job_memory,
-                    )
+                    message.reject(requeue=True)
+                else:
+                    message.ack()
         else:
             logging.info(
                 "REANA not ready to run workflow "
                 f'{workflow_submission["workflow_id_or_name"]}. '
-                "Requeueing workflow and retrying in "
-                f"{REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY} second(s) ..."
             )
-            self.requeue_workflow(
-                **workflow_submission,
-                min_job_memory=workflow_min_job_memory,
-                retry_count=retry_count,
-            )
-            sleep(REANA_SCHEDULER_SECONDS_TO_WAIT_FOR_REANA_READY)
+            sleep(REANA_SCHEDULER_REQUEUE_SLEEP)
+            message.reject(requeue=True)
