@@ -415,12 +415,14 @@ class NodesStatus(REANAStatus):
 
                 node_capacity = result[node_name]["capacity"]
                 node_usage = result[node_name]["usage"]
+
+                node_usage_bytes = kubernetes_memory_to_bytes(node_usage)
+                node_capacity_bytes = kubernetes_memory_to_bytes(node_capacity)
                 node_usage_percentage = ClusterHealth.get_percentage(
-                    kubernetes_memory_to_bytes(node_usage),
-                    kubernetes_memory_to_bytes(node_capacity),
+                    node_usage_bytes, node_capacity_bytes,
                 )
                 result[node_name]["percentage"] = f"{node_usage_percentage}%"
-                result[node_name]["available"] = node_capacity - node_usage
+                result[node_name]["available"] = node_capacity_bytes - node_usage_bytes
         except ApiException as e:
             msg = "Error while calling `metrics.k8s.io` API."
             logging.error(msg)
@@ -439,8 +441,20 @@ class NodesStatus(REANAStatus):
         """Get list of available nodes memory."""
         nodes = self.get_memory_usage()
         if not nodes or "error" in nodes:
+            # Cannot detect available memory; return empty list
             return []
-        return [node.get("available") for node in nodes.values()]
+        available_memory_information = [
+            node.get("available") for node in nodes.values()
+        ]
+        if all(
+            isinstance(n, float) or isinstance(n, int)
+            for n in available_memory_information
+        ):
+            return available_memory_information
+        else:
+            # [None] values were detected on some Kubernetes 1.20 clusters with
+            # older Kind versions on GNU/Linux; return empty list
+            return []
 
     def get_friendly_memory_usage(self):
         """Get nodes email-friendly memory usage."""
