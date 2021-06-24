@@ -131,8 +131,6 @@ class WorkflowExecutionScheduler(BaseConsumer):
         if reana_ready(workflow_min_job_memory):
             logging.info("Starting queued workflow: {}".format(workflow_submission))
             workflow_submission.pop("priority", 0)
-            # FIXME: remove this once `retry_count` won't be sent from publisher
-            workflow_submission.pop("retry_count", 0)
             workflow_submission["status"] = "start"
             try:
                 requeue = True

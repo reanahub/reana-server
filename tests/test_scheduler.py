@@ -11,23 +11,20 @@
 
 from bravado.exception import HTTPError
 from mock import DEFAULT, Mock, patch
+from reana_commons.publisher import WorkflowSubmissionPublisher
 
 from reana_server.scheduler import WorkflowExecutionScheduler
 
 
 def test_scheduler_starts_workflows(
-    in_memory_workflow_submission_publisher,
-    in_memory_queue_connection,
-    default_in_memory_producer,
-    consume_queue,
+    in_memory_queue_connection, default_in_memory_producer, consume_queue,
 ):
     """Test message is consumed from the queue."""
     workflow_name = "workflow.1"
     scheduler = WorkflowExecutionScheduler(connection=in_memory_queue_connection)
+    in_memory_wsp = WorkflowSubmissionPublisher(connection=in_memory_queue_connection)
 
-    in_memory_workflow_submission_publisher.publish_workflow_submission(
-        "1", workflow_name, {}
-    )
+    in_memory_wsp.publish_workflow_submission("1", workflow_name, {})
     mock_rwc_api_client = Mock()
     mock_result_obj = Mock()
     mock_response = Mock()
@@ -45,17 +42,13 @@ def test_scheduler_starts_workflows(
 
 
 def test_scheduler_requeues_workflows(
-    in_memory_workflow_submission_publisher,
-    in_memory_queue_connection,
-    default_in_memory_producer,
-    consume_queue,
+    in_memory_queue_connection, default_in_memory_producer, consume_queue,
 ):
     """Test that the scheduler requeues workflows if conditions not met."""
     scheduler = WorkflowExecutionScheduler(connection=in_memory_queue_connection)
+    in_memory_wsp = WorkflowSubmissionPublisher(connection=in_memory_queue_connection)
 
-    in_memory_workflow_submission_publisher.publish_workflow_submission(
-        "1", "workflow.1", {}
-    )
+    in_memory_wsp.publish_workflow_submission("1", "workflow.1", {})
     with patch.multiple(
         "reana_server.scheduler",
         reana_ready=Mock(return_value=False),
@@ -70,17 +63,13 @@ def test_scheduler_requeues_workflows(
 
 
 def test_scheduler_requeues_on_rwc_failure(
-    in_memory_workflow_submission_publisher,
-    in_memory_queue_connection,
-    default_in_memory_producer,
-    consume_queue,
+    in_memory_queue_connection, default_in_memory_producer, consume_queue,
 ):
     """Test scheduler requeues requests if RWC fails to start workflows."""
     scheduler = WorkflowExecutionScheduler(connection=in_memory_queue_connection)
+    in_memory_wsp = WorkflowSubmissionPublisher(connection=in_memory_queue_connection)
 
-    in_memory_workflow_submission_publisher.publish_workflow_submission(
-        "1", "workflow.1", {}
-    )
+    in_memory_wsp.publish_workflow_submission("1", "workflow.1", {})
     mock_rwc_api_client = Mock()
     mock_result_obj = Mock()
     mock_response = Mock()
