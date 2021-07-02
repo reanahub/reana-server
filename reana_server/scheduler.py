@@ -88,11 +88,13 @@ def doesnt_exceed_max_reana_workflow_count():
 
 def reana_ready(workflow_min_job_memory):
     """Check if REANA can start new workflows."""
-    for check_condition in [
-        check_predefined_conditions,
-        doesnt_exceed_max_reana_workflow_count,
-        partial(check_memory_availability, workflow_min_job_memory),
-    ]:
+    conditions = [check_predefined_conditions, doesnt_exceed_max_reana_workflow_count]
+
+    # Do not calculate memory availability on fifo strategy
+    if workflow_min_job_memory:
+        conditions.append(partial(check_memory_availability, workflow_min_job_memory))
+
+    for check_condition in conditions:
         if not check_condition():
             return False
     return True
