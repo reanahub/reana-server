@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 0.7.6 (2021-07-05)
+--------------------------
+
+- Changes internal dependencies.
+
 Version 0.7.5 (2021-04-28)
 --------------------------
 - Adds support for listing files using glob patterns.

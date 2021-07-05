@@ -7,7 +7,6 @@
 alembic==1.4.2            # via flask-alembic, reana-db
 amqp==2.6.1               # via kombu
 appdirs==1.4.4            # via fs
-appnope==0.1.0            # via ipython
 attrs==19.3.0             # via jsonschema
 babel==2.8.0              # via flask-babelex
 backcall==0.2.0           # via ipython
@@ -21,10 +20,11 @@ certifi==2020.6.20        # via kubernetes, requests
 cffi==1.14.1              # via cryptography
 chardet==3.0.4            # via requests
 checksumdir==1.1.9        # via reana-commons
-click==7.1.2              # via flask, flask-shell-ipython, reana-commons
+click==7.1.2              # via flask, flask-shell-ipython, reana-commons, reana-server (setup.py)
 cryptography==3.0         # via invenio-accounts, pyopenssl, reana-db, sqlalchemy-utils
 decorator==4.4.2          # via ipython, traitlets, validators
 dnspython==2.0.0          # via email-validator
+docutils==0.16            # via reana-server (setup.py)
 email-validator==1.1.1    # via invenio-accounts
 flask-alembic==2.0.1      # via invenio-db
 flask-babelex==0.9.4      # via flask-security, invenio-i18n, invenio-oauth2server, invenio-oauthclient, invenio-userprofiles
@@ -104,7 +104,7 @@ python-dateutil==2.8.1    # via alembic, bravado, bravado-core, kubernetes
 python-editor==1.0.4      # via alembic
 pytz==2020.1              # via babel, bravado-core, celery, fs
 pyyaml==5.3.1             # via bravado, bravado-core, kubernetes, reana-commons, swagger-spec-validator
-reana-commons[kubernetes]==0.7.5a2  # via reana-db, reana-server (setup.py)
+reana-commons[kubernetes]==0.7.5  # via reana-db, reana-server (setup.py)
 reana-db==0.7.3           # via reana-server (setup.py)
 redis==3.5.3              # via invenio-accounts, invenio-celery
 requests-oauthlib==1.1.0  # via flask-oauthlib, invenio-oauth2server, invenio-oauthclient, kubernetes
