@@ -14,8 +14,14 @@ Version 0.8.0 (UNRELEASED)
 - Adds configuration environment variable to set workflow scheduling policy (``REANA_WORKFLOW_SCHEDULING_POLICY``).
 - Adds configuration environment variable to set a timeout between consuming workflows (``REANA_SCHEDULER_REQUEUE_SLEEP``).
 
+Version 0.7.6 (2021-07-05)
+--------------------------
+
+- Changes internal dependencies.
+
 Version 0.7.5 (2021-04-28)
 --------------------------
+
 - Adds support for listing files using glob patterns.
 - Adds support for glob patterns and directory downloads, packaging the content into a zip file.
 
