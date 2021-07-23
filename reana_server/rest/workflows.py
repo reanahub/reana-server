@@ -16,6 +16,7 @@ from bravado.exception import HTTPError
 from flask import Blueprint, Response
 from flask import current_app as app
 from flask import jsonify, request, stream_with_context
+from reana_commons.config import REANA_WORKFLOW_ENGINES
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.operational_options import validate_operational_options
 from reana_db.database import Session
@@ -387,7 +388,7 @@ def create_workflow(user):  # noqa
             be provided"
             )
 
-        if workflow_engine not in app.config["AVAILABLE_WORKFLOW_ENGINES"]:
+        if workflow_engine not in REANA_WORKFLOW_ENGINES:
             raise Exception("Unknown workflow type.")
 
         workflow_name = request.args.get("workflow_name", workflow_name)

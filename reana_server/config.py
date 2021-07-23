@@ -25,9 +25,6 @@ from reana_db.config import SQLALCHEMY_DATABASE_URI
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 """Track modifications flag."""
 
-AVAILABLE_WORKFLOW_ENGINES = ["yadage", "cwl", "serial", "snakemake"]
-"""Available workflow engines."""
-
 ADMIN_USER_ID = "00000000-0000-0000-0000-000000000000"
 
 SHARED_VOLUME_PATH = os.getenv("SHARED_VOLUME_PATH", "/var/reana")
