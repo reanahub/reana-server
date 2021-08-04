@@ -15,6 +15,7 @@ import logging
 import re
 import secrets
 import sys
+import os
 from uuid import UUID, uuid4
 
 import click
@@ -23,7 +24,7 @@ import requests
 import yaml
 from flask import current_app as app, url_for
 from jinja2 import Environment, PackageLoader, select_autoescape
-from reana_commons.config import REANAConfig
+from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK
 from reana_commons.email import send_email
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.yadage import yadage_load_from_workspace
@@ -63,9 +64,9 @@ def is_uuid_v4(uuid_or_name):
 
 def create_user_workspace(user_workspace_path):
     """Create user workspace directory."""
-    reana_fs = fs.open_fs(app.config["SHARED_VOLUME_PATH"])
-    if not reana_fs.exists(user_workspace_path):
-        reana_fs.makedirs(user_workspace_path)
+    if not os.path.isdir(user_workspace_path):
+        os.umask(REANA_WORKFLOW_UMASK)
+        os.makedirs(user_workspace_path, exist_ok=True)
 
 
 def get_user_from_token(access_token):
