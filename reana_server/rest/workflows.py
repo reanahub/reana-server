@@ -2236,20 +2236,13 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
-        summarize = bool(parameters.get("summarize", False))
-        search = parameters.get("search", None)
-        disk_usage_info = workflow.get_workspace_disk_usage(
-            summarize=summarize, search=search
-        )
-        response = {
-            "workflow_id": workflow.id_,
-            "workflow_name": workflow.name,
-            "user": str(user.id_),
-            "disk_usage_info": disk_usage_info,
-        }
+        response, http_response = current_rwc_api_client.api.get_workflow_disk_usage(
+            workflow_id_or_name=workflow_id_or_name,
+            user=str(user.id_),
+            parameters=parameters,
+        ).result()
 
-        return jsonify(response), 200
+        return jsonify(response), http_response.status_code
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
