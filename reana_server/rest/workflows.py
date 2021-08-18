@@ -401,10 +401,15 @@ def create_workflow(user):  # noqa
         workflow_dict["operational_options"] = validate_operational_options(
             workflow_engine, reana_spec_file.get("inputs", {}).get("options", {})
         )
+        workspace_root_path = reana_spec_file.get("workspace", {}).get(
+            "root_path", None
+        )
         if git_data:
             workflow_dict["git_data"] = git_data
         response, http_response = current_rwc_api_client.api.create_workflow(
-            workflow=workflow_dict, user=str(user.id_)
+            workflow=workflow_dict,
+            user=str(user.id_),
+            workspace_root_path=workspace_root_path,
         ).result()
         if git_data:
             workflow = _get_workflow_with_uuid_or_name(
