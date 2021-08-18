@@ -48,7 +48,16 @@ def create_app(config_mapping=None):
     app.register_blueprint(blueprint_settings)
 
     # Register API routes
-    from .rest import config, gitlab, ping, secrets, status, users, workflows  # noqa
+    from .rest import (
+        config,
+        gitlab,
+        ping,
+        secrets,
+        status,
+        users,
+        workflows,
+        workspaces,
+    )  # noqa
 
     app.register_blueprint(ping.blueprint, url_prefix="/api")
     app.register_blueprint(workflows.blueprint, url_prefix="/api")
@@ -57,6 +66,7 @@ def create_app(config_mapping=None):
     app.register_blueprint(gitlab.blueprint, url_prefix="/api")
     app.register_blueprint(config.blueprint, url_prefix="/api")
     app.register_blueprint(status.blueprint, url_prefix="/api")
+    app.register_blueprint(workspaces.blueprint, url_prefix="/api")
 
     @app.teardown_appcontext
     def shutdown_session(response_or_exc):

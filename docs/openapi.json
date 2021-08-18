@@ -272,6 +272,52 @@
         "summary": "Ping the server (healthcheck)"
       }
     },
+    "/api/workspaces": {
+      "get":{
+        "consumes": [
+          "application/json"
+        ],
+        "description": "Get the list of available workspaces.",
+        "operationId": "workspaces",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "This resource reports the available workspaces in the cluster.",
+            "examples": {
+              "application/json": {
+                "workspaces_available": ["/usr/share","/eos/home","/var/reana"],
+                "default": "/usr/share"
+              }
+            },
+            "schema": {
+              "properties": {
+                "workspaces_available": {
+                  "type": "array",
+                  "items": {
+                    "type":"string"
+                  }
+                },
+                "default": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal server error."
+              }
+            }
+          }
+        },
+        "summary": "Get the list of available workspaces."
+      }
+    },
     "/api/secrets": {
       "get": {
         "description": "Get user secrets.",
