@@ -16,7 +16,7 @@ RUN apt-get update && \
 
 # Install dependencies
 COPY requirements.txt /code/
-RUN pip install -r /code/requirements.txt
+RUN pip install --no-cache-dir -r /code/requirements.txt
 
 # Copy cluster component source code
 WORKDIR /code
