@@ -272,52 +272,6 @@
         "summary": "Ping the server (healthcheck)"
       }
     },
-    "/api/workspaces": {
-      "get":{
-        "consumes": [
-          "application/json"
-        ],
-        "description": "Get the list of available workspaces.",
-        "operationId": "workspaces",
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "This resource reports the available workspaces in the cluster.",
-            "examples": {
-              "application/json": {
-                "workspaces_available": ["/usr/share","/eos/home","/var/reana"],
-                "default": "/usr/share"
-              }
-            },
-            "schema": {
-              "properties": {
-                "workspaces_available": {
-                  "type": "array",
-                  "items": {
-                    "type":"string"
-                  }
-                },
-                "default": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Request failed. Internal server error.",
-            "examples": {
-              "application/json": {
-                "message": "Internal server error."
-              }
-            }
-          }
-        },
-        "summary": "Get the list of available workspaces."
-      }
-    },
     "/api/secrets": {
       "get": {
         "description": "Get user secrets.",
@@ -2535,6 +2489,45 @@
           }
         },
         "summary": "Returns the requested file."
+      }
+    },
+    "/api/workspaces": {
+      "get": {
+        "description": "This resource reports the available workspaces in the cluster.",
+        "operationId": "workspaces",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The response contains the list of all workspaces.",
+            "examples": {
+              "application/json": {
+                "default": "/usr/share",
+                "workspaces_available": [
+                  "/usr/share",
+                  "/eos/home",
+                  "/var/reana"
+                ]
+              }
+            },
+            "schema": {
+              "properties": {
+                "workspaces_available": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Get the list of available workspaces."
       }
     },
     "/api/you": {
