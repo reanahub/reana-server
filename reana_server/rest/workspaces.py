@@ -55,7 +55,7 @@ def workspaces():  # noqa
     """
     try:
         response = {
-            "workspaces_available": WORKSPACE_PATHS,
+            "workspaces_available": list(WORKSPACE_PATHS.values()),
             "default": DEFAULT_WORKSPACE_PATH,
         }
         return jsonify(response), 200
