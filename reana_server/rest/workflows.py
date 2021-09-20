@@ -60,6 +60,7 @@ blueprint = Blueprint("workflows", __name__)
         "size": fields.Int(validate=validate.Range(min=1)),
         "include_progress": fields.Bool(location="query"),
         "include_workspace_size": fields.Bool(location="query"),
+        "workflow_id_or_name": fields.Str(),
     }
 )
 @signin_required()
@@ -125,6 +126,11 @@ def get_workflows(user, **kwargs):  # noqa
           in: query
           description: Include size information of the workspace.
           type: boolean
+        - name: workflow_id_or_name
+          in: query
+          description: Optional analysis UUID or name to filter.
+          required: false
+          type: string
       responses:
         200:
           description: >-
