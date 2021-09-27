@@ -8,6 +8,8 @@
 
 """REANA workflow complexity estimation."""
 
+from typing import List, Tuple
+
 from reana_commons.job_utils import kubernetes_memory_to_bytes
 
 from reana_server.config import REANA_COMPLEXITY_JOBS_MEMORY_LIMIT
@@ -38,6 +40,8 @@ def estimate_complexity(workflow_type, reana_yaml):
             return YadageComplexityEstimator(reana_yaml)
         elif workflow_type == "cwl":
             return CWLComplexityEstimator(reana_yaml)
+        elif workflow_type == "snakemake":
+            return SnakemakeComplexityEstimator(reana_yaml)
         else:
             raise Exception(
                 "Workflow type '{0}' is not supported".format(workflow_type)
@@ -89,8 +93,8 @@ class ComplexityEstimatorBase:
 
     def _get_memory_limit(self, step):
         """Get memory limit value."""
-        memory_limit = step.get(
-            "kubernetes_memory_limit", REANA_COMPLEXITY_JOBS_MEMORY_LIMIT
+        memory_limit = (
+            step.get("kubernetes_memory_limit") or REANA_COMPLEXITY_JOBS_MEMORY_LIMIT
         )
         return kubernetes_memory_to_bytes(memory_limit)
 
@@ -371,3 +375,36 @@ class CWLComplexityEstimator(ComplexityEstimatorBase):
         steps = self._populate_complexity(steps)
         steps = self._filter_initial_steps(steps, initial_step)
         return steps
+
+
+class SnakemakeComplexityEstimator(ComplexityEstimatorBase):
+    """REANA Snakemake workflow complexity estimation."""
+
+    def _calculate_complexity(
+        self, job_dependencies: List[str]
+    ) -> List[Tuple[int, float]]:
+        """Calculate complexity of an array of job dependencies."""
+        spec_steps = self.specification.get("steps", [])
+        jobs_count = len(job_dependencies)
+        memory_limit = 0
+        for dep in job_dependencies:
+            step = next(filter(lambda step: step["name"] == dep, spec_steps))
+            memory_limit += self._get_memory_limit(step)
+        memory_limit = memory_limit / jobs_count
+        return [(jobs_count, memory_limit)]
+
+    def _get_max_complexity(
+        self, complexity: List[Tuple[int, float]]
+    ) -> List[Tuple[int, float]]:
+        """Get complexity of maximum concurrent job(s) allocated memory."""
+        return [max(complexity, key=lambda item: item[0] * item[1])]
+
+    def estimate_complexity(self) -> List[Tuple[int, float]]:
+        """Estimate complexity array in parsed Snakemake workflow tree."""
+        # dict of jobs and job dependencies
+        job_dependencies = self.specification.get("job_dependencies", {})
+        complexity = []
+        for job_deps in job_dependencies.values():
+            if job_deps:
+                complexity += self._calculate_complexity(job_deps)
+        return self._get_max_complexity(complexity)
