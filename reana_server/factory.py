@@ -56,7 +56,7 @@ def create_app(config_mapping=None):
         status,
         users,
         workflows,
-        workspaces,
+        info,
     )  # noqa
 
     app.register_blueprint(ping.blueprint, url_prefix="/api")
@@ -66,7 +66,7 @@ def create_app(config_mapping=None):
     app.register_blueprint(gitlab.blueprint, url_prefix="/api")
     app.register_blueprint(config.blueprint, url_prefix="/api")
     app.register_blueprint(status.blueprint, url_prefix="/api")
-    app.register_blueprint(workspaces.blueprint, url_prefix="/api")
+    app.register_blueprint(info.blueprint, url_prefix="/api")
 
     @app.teardown_appcontext
     def shutdown_session(response_or_exc):

@@ -240,6 +240,60 @@
         "summary": "Set a webhook on a user project from GitLab"
       }
     },
+    "/api/info": {
+      "get": {
+        "description": "This resource reports information about cluster capabilities.",
+        "operationId": "info",
+        "parameters": [
+          {
+            "description": "The API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The response contains general info about the cluster.",
+            "examples": {
+              "application/json": {
+                "default_workspace": {
+                  "title": "Default workspace",
+                  "value": "/usr/share"
+                },
+                "workspaces_available": {
+                  "title": "List of available workspaces",
+                  "value": [
+                    "/usr/share",
+                    "/eos/home",
+                    "/var/reana"
+                  ]
+                }
+              }
+            },
+            "schema": {
+              "properties": {
+                "default_workspace": {
+                  "type": "object"
+                },
+                "workspaces_available": {
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error."
+          }
+        },
+        "summary": "Get information about the cluster capabilities."
+      }
+    },
     "/api/ping": {
       "get": {
         "description": "Ping the server.",
@@ -2496,45 +2550,6 @@
           }
         },
         "summary": "Returns the requested file."
-      }
-    },
-    "/api/workspaces": {
-      "get": {
-        "description": "This resource reports the available workspaces in the cluster.",
-        "operationId": "workspaces",
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Request succeeded. The response contains the list of all workspaces.",
-            "examples": {
-              "application/json": {
-                "default": "/usr/share",
-                "workspaces_available": [
-                  "/usr/share",
-                  "/eos/home",
-                  "/var/reana"
-                ]
-              }
-            },
-            "schema": {
-              "properties": {
-                "workspaces_available": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Request failed. Internal controller error."
-          }
-        },
-        "summary": "Get the list of available workspaces."
       }
     },
     "/api/you": {
