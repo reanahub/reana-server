@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -43,7 +43,7 @@ clean_old_db_container () {
 
 start_db_container () {
     echo '==> [INFO] Starting DB container...'
-    docker run --rm --name postgres__reana-server -p 5432:5432 -e POSTGRES_PASSWORD=mysecretpassword -d postgres:9.6.2
+    docker run --rm --name postgres__reana-server -p 5432:5432 -e POSTGRES_PASSWORD=mysecretpassword -d postgres:12.8
     _check_ready "Postgres" _db_check
 }
 

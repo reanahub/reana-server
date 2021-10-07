@@ -10,9 +10,10 @@ Version 0.8.0 (UNRELEASED)
 - Adds ``priority`` and ``min_job_memory`` params to workflow submission publisher.
 - Adds Yadage workflow specification loading to ``start_workflow`` endpoint.
 - Adds a check in scheduler if at least one workflow job could be started in Kubernetes.
-- Changes workflow execution consumer to receive only one message at a time.
 - Adds configuration environment variable to set workflow scheduling policy (``REANA_WORKFLOW_SCHEDULING_POLICY``).
 - Adds configuration environment variable to set a timeout between consuming workflows (``REANA_SCHEDULER_REQUEUE_SLEEP``).
+- Changes workflow execution consumer to receive only one message at a time.
+- Changes to PostgreSQL 12.8
 
 Version 0.7.6 (2021-07-05)
 --------------------------
