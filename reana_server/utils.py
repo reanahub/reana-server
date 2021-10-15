@@ -297,7 +297,7 @@ def _get_reana_yaml_from_gitlab(webhook_data, user_id):
         gitlab_api.format(project_id, reana_yaml, branch, gitlab_token)
     )
     return (
-        yaml.load(yaml_file.content),
+        yaml.load(yaml_file.content, Loader=yaml.FullLoader),
         webhook_data["project"]["path_with_namespace"],
         webhook_data["project"]["name"],
         branch,
