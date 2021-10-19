@@ -8,7 +8,7 @@
 
 """REANA workflow complexity estimation."""
 
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 from reana_commons.job_utils import kubernetes_memory_to_bytes
 
@@ -381,7 +381,7 @@ class SnakemakeComplexityEstimator(ComplexityEstimatorBase):
     """REANA Snakemake workflow complexity estimation."""
 
     def _calculate_complexity(
-        self, job_dependencies: List[str]
+        self, job_dependencies: Dict[str, List[str]]
     ) -> List[Tuple[int, float]]:
         """Calculate complexity of an array of job dependencies."""
         spec_steps = self.specification.get("steps", [])
@@ -399,12 +399,27 @@ class SnakemakeComplexityEstimator(ComplexityEstimatorBase):
         """Get complexity of maximum concurrent job(s) allocated memory."""
         return [max(complexity, key=lambda item: item[0] * item[1])]
 
+    def _filter_repeated_dependencies(
+        self, job_dependencies: Dict[str, List[str]]
+    ) -> Dict[str, List[str]]:
+        """Filter out repeated dependencies to guess paralellization."""
+        filtered_job_deps = {}
+        for job, deps in job_dependencies.items():
+            filtered_job_deps[job] = set(deps).difference(
+                # flatten job deps
+                subjob_dep
+                for job_dep in deps
+                for subjob_dep in job_dependencies[job_dep]
+            )
+        return filtered_job_deps
+
     def estimate_complexity(self) -> List[Tuple[int, float]]:
         """Estimate complexity array in parsed Snakemake workflow tree."""
         # dict of jobs and job dependencies
         job_dependencies = self.specification.get("job_dependencies", {})
+        filtered_job_deps = self._filter_repeated_dependencies(job_dependencies)
         complexity = []
-        for job_deps in job_dependencies.values():
+        for job_deps in filtered_job_deps.values():
             if job_deps:
                 complexity += self._calculate_complexity(job_deps)
         return self._get_max_complexity(complexity)

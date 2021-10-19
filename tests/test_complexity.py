@@ -42,18 +42,40 @@ def test_estimate_complexity(yadage_workflow_spec_loaded):
 
 
 @pytest.mark.parametrize(
-    "scatterA_mem, scatterB_mem, gather_mem, complexity",
+    "job_deps, scatterA_mem, scatterB_mem, gather_mem, complexity",
     [
-        ("6Gi", "4Gi", None, (2, 5368709120.0)),
-        ("2Gi", "2Gi", "1Gi", (2, 2147483648.0)),
-        ("2Gi", "2Gi", "4.1Gi", (1, 4402341478.4)),  # 4.1Gi > 2Gi + 2Gi
+        (None, "6Gi", "4Gi", None, (2, 5368709120.0)),
+        (None, "2Gi", "2Gi", "1Gi", (2, 2147483648.0)),
+        (
+            {
+                "all": ["gather"],
+                "gather": ["scatterA", "scatterB"],
+                "scatterA": [],
+                "scatterB": ["scatterA"],  # no paralellization
+            },
+            "2Gi",
+            "2Gi",
+            "1Gi",
+            (1, 2147483648.0),
+        ),
+        # 4.1Gi > 2Gi + 2Gi - gather job consumes more than two parallel scatter jobs
+        (None, "2Gi", "2Gi", "4.1Gi", (1, 4402341478.4)),
     ],
 )
 @mock.patch("reana_server.complexity.REANA_COMPLEXITY_JOBS_MEMORY_LIMIT", "4Gi")
 def test_estimate_complexity_snakemake(
-    snakemake_workflow_spec_loaded, scatterA_mem, scatterB_mem, gather_mem, complexity
+    snakemake_workflow_spec_loaded,
+    job_deps,
+    scatterA_mem,
+    scatterB_mem,
+    gather_mem,
+    complexity,
 ):
     """Test ``estimate_complexity`` in Snakemake workflows."""
+    if job_deps:
+        snakemake_workflow_spec_loaded["workflow"]["specification"][
+            "job_dependencies"
+        ] = job_deps
     wf_steps = snakemake_workflow_spec_loaded["workflow"]["specification"]["steps"]
     # scatter A
     wf_steps[0]["kubernetes_memory_limit"] = scatterA_mem

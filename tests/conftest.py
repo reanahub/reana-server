@@ -15,8 +15,6 @@ import os
 import flask_login
 import pytest
 from mock import Mock, patch
-from reana_commons.config import MQ_DEFAULT_QUEUES
-from reana_commons.publisher import WorkflowSubmissionPublisher
 
 from reana_server.factory import create_app
 
