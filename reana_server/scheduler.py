@@ -13,7 +13,7 @@ import logging
 from time import sleep
 from functools import partial
 
-from bravado.exception import HTTPBadGateway, HTTPNotFound
+from bravado.exception import HTTPBadGateway, HTTPNotFound, HTTPConflict
 from kubernetes.client.rest import ApiException
 from sqlalchemy import func, or_
 from sqlalchemy.exc import SQLAlchemyError
@@ -147,35 +147,35 @@ class WorkflowExecutionScheduler(BaseConsumer):
                 if http_response.status_code == 200:
                     started = True
                     logging.info(
-                        f"Workflow "
-                        f'{http_response_json["workflow_id"]} '
-                        f"successfully started."
+                        f'Workflow {http_response_json["workflow_id"]} successfully started.'
                     )
                 else:
                     logging.error(
-                        f"RWC returned an unexpected status code:\n"
-                        f"{http_response_json}"
+                        f"RWC returned an unexpected status code:\n {http_response_json}"
                     )
 
             except HTTPBadGateway as api_e:
                 logging.error(
-                    f"Workflow failed to start because "
-                    f"RWC got an error while calling an external"
-                    f"service (i.e. DB):\n"
-                    f"{api_e}",
+                    "Workflow failed to start because RWC got an error while calling"
+                    f"an external service (i.e. DB):\n {api_e}",
                     exc_info=True,
                 )
             except HTTPNotFound as not_found_e:
                 logging.error(
-                    f"Workflow failed to start because "
-                    f"workflow does not exist or was deleted \n"
+                    "Workflow failed to start because it does not exist or was deleted \n"
                     f"{not_found_e}",
+                    exc_info=True,
+                )
+                requeue = False
+            except HTTPConflict as e:
+                logging.error(
+                    f"Workflow failed to start because of Rabbit MQ message conflict.\n {e}",
                     exc_info=True,
                 )
                 requeue = False
             except Exception as e:
                 logging.error(
-                    f"Something went wrong while calling RWC :\n" f"{e}", exc_info=True
+                    f"Something went wrong while calling RWC:\n {e}", exc_info=True
                 )
             finally:
                 sleep(REANA_SCHEDULER_REQUEUE_SLEEP)
@@ -185,8 +185,7 @@ class WorkflowExecutionScheduler(BaseConsumer):
                     message.ack()
         else:
             logging.info(
-                "REANA not ready to run workflow "
-                f'{workflow_submission["workflow_id_or_name"]}. '
+                f'REANA not ready to run workflow {workflow_submission["workflow_id_or_name"]}.'
             )
             sleep(REANA_SCHEDULER_REQUEUE_SLEEP)
             message.reject(requeue=True)
