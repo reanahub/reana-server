@@ -9,15 +9,14 @@
 """Flask application configuration."""
 
 import copy
+import logging
 import os
+import re
 
 from distutils.util import strtobool
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
 from invenio_oauthclient.contrib import cern
-from reana_commons.config import (
-    REANA_COMPONENT_PREFIX,
-    REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES,
-)
+from reana_commons.config import REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES
 
 # This database URI import is necessary for Invenio-DB
 from reana_db.config import SQLALCHEMY_DATABASE_URI
@@ -135,10 +134,43 @@ PROXYFIX_CONFIG = {"x_proto": 1}
 APP_DEFAULT_SECURE_HEADERS["content_security_policy"] = {}
 APP_HEALTH_BLUEPRINT_ENABLED = False
 
-# Rate limiting configuration
+# Rate limiting configuration using invenio-app
 # ===========================
-RATELIMIT_AUTHENTICATED_USER = "20 per second"
-RATELIMIT_GUEST_USER = "20 per second"
+
+
+def _is_valid_rate_limit(rate_limit: str) -> bool:
+    return bool(
+        re.match(r"[0-9]+(\sper\s|\/)(second|minute|hour|day|month|year)", rate_limit)
+    )
+
+
+def _get_rate_limit(env_variable: str, default: str) -> str:
+    env_value = os.getenv(env_variable)
+
+    if not env_value:
+        logging.warning(
+            f"API rate limit config {env_variable} environment variable is not present. "
+            f"Using default value: {default}"
+        )
+        # assuming default has correct format
+        return default
+
+    if _is_valid_rate_limit(env_value):
+        return env_value
+    else:
+        logging.warning(
+            f"API rate limit config {env_variable} environment variable has incorrect format. "
+            f"Incorrect value: {env_value}. Using default value: {default}"
+        )
+        # assuming default has correct format
+        return default
+
+
+# Note: users that are connecting via reana-client will be treated as guests by the Invenio framework
+RATELIMIT_GUEST_USER = _get_rate_limit("REANA_RATELIMIT_GUEST_USER", "20 per second")
+RATELIMIT_AUTHENTICATED_USER = _get_rate_limit(
+    "REANA_RATELIMIT_AUTHENTICATED_USER", "20 per second"
+)
 
 # Flask-Breadcrumbs needs this variable set
 # =========================================
