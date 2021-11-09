@@ -59,6 +59,7 @@ install_requires = [
     "uwsgitop>=0.10",
     "webcolors==1.7",
     "click<8.0.0",
+    "wtforms<3.0.0",
     # Invenio dependencies
     "invenio-app>=1.2.6,<1.3.0",
     "invenio-base>=1.2.3,<1.3.0",
