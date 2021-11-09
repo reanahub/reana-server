@@ -50,7 +50,7 @@ install_requires = [
     "pyOpenSSL==17.5.0",
     "reana-commons[kubernetes,yadage]>=0.8.0a34,<0.9.0",
     "reana-db>=0.8.0a22,<0.9.0",
-    "requests==2.20.0",
+    "requests==2.25.0",
     "rfc3987==1.3.7",
     "strict-rfc3339==0.7",
     "tablib>=0.12.1",

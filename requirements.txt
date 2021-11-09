@@ -118,7 +118,7 @@ reana-commons[kubernetes,yadage]==0.8.0a34	# via reana-db, reana-server (setup.p
 reana-db==0.8.0a22	# via reana-server (setup.py)
 redis==3.5.3              # via invenio-accounts, invenio-celery
 requests-oauthlib==1.1.0  # via flask-oauthlib, invenio-oauth2server, invenio-oauthclient, kubernetes
-requests[security]==2.20.0  # via bravado, kubernetes, packtivity, reana-server (setup.py), requests-oauthlib, yadage, yadage-schemas
+requests[security]==2.25.0  # via bravado, kubernetes, packtivity, reana-server (setup.py), requests-oauthlib, yadage, yadage-schemas
 rfc3987==1.3.7            # via jsonschema, reana-server (setup.py)
 rsa==4.7.2                # via google-auth
 simplejson==3.17.5        # via bravado, bravado-core
@@ -134,7 +134,7 @@ traitlets==5.1.0          # via ipython, matplotlib-inline
 typing-extensions==3.10.0.2  # via bravado
 ua-parser==0.10.0         # via invenio-accounts
 uritools==3.0.2           # via invenio-app, invenio-oauthclient
-urllib3==1.24.3           # via kubernetes, requests
+urllib3==1.26.7           # via kubernetes, requests
 uwsgi-tools==1.1.1        # via reana-server (setup.py)
 uwsgi==2.0.20             # via reana-server (setup.py)
 uwsgitop==0.11            # via reana-server (setup.py)
