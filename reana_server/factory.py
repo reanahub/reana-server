@@ -26,7 +26,7 @@ from reana_db.database import Session
 
 def create_app(config_mapping=None):
     """REANA Server application factory."""
-    logging.basicConfig(level=REANA_LOG_LEVEL, format=REANA_LOG_FORMAT)
+    logging.basicConfig(level=REANA_LOG_LEVEL, format=REANA_LOG_FORMAT, force=True)
     app = Flask(__name__)
     app.config.from_object("reana_server.config")
     if config_mapping:
