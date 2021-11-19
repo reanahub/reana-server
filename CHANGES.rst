@@ -5,6 +5,7 @@ Version 0.8.2 (UNRELEASED)
 --------------------------
 
 - Adds email validation to the ``user-create`` command used by the REANA administrators.
+- Changes ``/api/status`` endpoint to calculate the cluster health status based on the availablity instead of the usage.
 
 Version 0.8.1 (2021-11-29)
 --------------------------

@@ -21,6 +21,7 @@ from reana_commons.config import (
     REANA_COMPUTE_BACKENDS,
     REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
+    REANA_MAX_CONCURRENT_BATCH_WORKFLOWS,
     SHARED_VOLUME_PATH,
 )
 from reana_commons.job_utils import kubernetes_memory_to_bytes
@@ -37,12 +38,13 @@ from reana_db.models import (
     ResourceType,
     ResourceUnit,
     RunStatus,
-    User,
     UserResource,
     Workflow,
 )
-from reana_server.utils import get_usage_percentage
 from sqlalchemy import desc
+
+from reana_server.config import REANA_KUBERNETES_JOBS_MEMORY_LIMIT_IN_BYTES
+from reana_server.utils import get_usage_percentage
 
 
 class REANAStatus:
@@ -579,6 +581,17 @@ class JobsStatus(REANAStatus):
         }
         return job_statuses
 
+    def get_total_slots(self):
+        """Get total amount of job slots available in REANA cluster."""
+        total_cluster_memory = NodesStatus().get_total_memory()
+        jobs_memory_limit = REANA_KUBERNETES_JOBS_MEMORY_LIMIT_IN_BYTES
+        slots = (
+            round(total_cluster_memory / jobs_memory_limit)
+            if total_cluster_memory and jobs_memory_limit
+            else None
+        )
+        return slots
+
 
 class ClusterHealthStatus(enum.Enum):
     """Enumeration of cluster health statuses."""
@@ -600,19 +613,26 @@ class ClusterHealth:
 
     @staticmethod
     def get_health_status(percentage):
-        """Calculate quota health status."""
+        """Calculate quota health status based on cluster availability."""
         health = ClusterHealthStatus.healthy
-        if percentage >= 50:
-            if percentage >= 75:
-                health = ClusterHealthStatus.critical
-            else:
-                health = ClusterHealthStatus.warning
+        if percentage <= 50:
+            health = ClusterHealthStatus.warning
+        if percentage <= 25:
+            health = ClusterHealthStatus.critical
+
         return health.name
 
     @staticmethod
-    def get_percentage(amount, total):
-        """Get percentage value based on ``amount`` and ``total``."""
-        return round((amount / total if total else 0) * 100)
+    def get_percentage(used, total):
+        """Get usage percentage based on ``used`` and ``total``."""
+        percentage = 100 - round((used / total if total else 0) * 100)
+        return percentage if percentage > 0 else 0
+
+    @staticmethod
+    def get_available(unavailable, total):
+        """Get available cluster resources based on ``unavailable`` and ``total``."""
+        available = total - unavailable
+        return available if available > 0 else 0
 
     def get_node_health(self):
         """Get cluster nodes health information."""
@@ -620,15 +640,15 @@ class ClusterHealth:
 
         total = len(nodes_status_obj.get_nodes())
         unschedulable = len(nodes_status_obj.get_unschedulable_nodes())
+        available = ClusterHealth.get_available(unschedulable, total)
         percentage = ClusterHealth.get_percentage(unschedulable, total)
 
         return {
-            "available": total - unschedulable,
+            "available": available,
             "unschedulable": unschedulable,
+            "total": total,
             "percentage": percentage,
-            "health": ClusterHealthStatus.critical.name
-            if unschedulable > 0
-            else ClusterHealthStatus.healthy.name,
+            "health": ClusterHealth.get_health_status(percentage),
             "sort": 0,
         }
 
@@ -638,12 +658,16 @@ class ClusterHealth:
 
         running = len(jobs_status_obj.get_k8s_jobs_by_status("Running"))
         pending = len(jobs_status_obj.get_k8s_jobs_by_status("Pending"))
-        total = running + pending
-        percentage = ClusterHealth.get_percentage(pending, total)
+        used = running + pending
+        total = jobs_status_obj.get_total_slots() or used
+        available = ClusterHealth.get_available(used, total)
+        percentage = ClusterHealth.get_percentage(used, total)
 
         return {
             "running": running,
             "pending": pending,
+            "available": available,
+            "total": total,
             "percentage": percentage,
             "health": ClusterHealth.get_health_status(percentage),
             "sort": 1,
@@ -656,13 +680,17 @@ class ClusterHealth:
         running = wf_status_obj.get_workflows_by_status(RunStatus.running)
         queued = wf_status_obj.get_workflows_by_status(RunStatus.queued)
         pending = wf_status_obj.get_workflows_by_status(RunStatus.pending)
-        total = running + queued + pending
-        percentage = ClusterHealth.get_percentage(queued + pending, total)
+        total = REANA_MAX_CONCURRENT_BATCH_WORKFLOWS
+        used = running + pending
+        available = ClusterHealth.get_available(used, total)
+        percentage = ClusterHealth.get_percentage(used, total)
 
         return {
             "running": running,
             "queued": queued,
             "pending": pending,
+            "available": available,
+            "total": total,
             "percentage": percentage,
             "health": ClusterHealth.get_health_status(percentage),
             "sort": 2,

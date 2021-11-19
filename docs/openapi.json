@@ -592,17 +592,20 @@
             "examples": {
               "application/json": {
                 "job": {
-                  "health": "healthy",
-                  "pending": 2,
-                  "percentage": 20,
-                  "running": 8,
-                  "sort": 1
+                  "available": 3,
+                  "health": "warning",
+                  "pending": 3,
+                  "percentage": 38,
+                  "running": 2,
+                  "sort": 1,
+                  "total": 8
                 },
                 "node": {
+                  "available": 8,
                   "health": "healthy",
-                  "percentage": 33,
+                  "percentage": 80,
                   "sort": 0,
-                  "total": 4,
+                  "total": 10,
                   "unschedulable": 2
                 },
                 "session": {
@@ -610,12 +613,14 @@
                   "sort": 3
                 },
                 "workflow": {
-                  "health": "warning",
+                  "available": 24,
+                  "health": "healthy",
                   "pending": 2,
-                  "percentage": 50,
+                  "percentage": 80,
                   "queued": 2,
                   "running": 4,
-                  "sort": 2
+                  "sort": 2,
+                  "total": 30
                 }
               }
             },
@@ -623,6 +628,9 @@
               "properties": {
                 "job": {
                   "properties": {
+                    "available": {
+                      "type": "number"
+                    },
                     "health": {
                       "type": "string"
                     },
@@ -636,6 +644,9 @@
                       "type": "number"
                     },
                     "sort": {
+                      "type": "number"
+                    },
+                    "total": {
                       "type": "number"
                     }
                   },
@@ -653,6 +664,9 @@
                       "type": "number"
                     },
                     "sort": {
+                      "type": "number"
+                    },
+                    "total": {
                       "type": "number"
                     },
                     "unschedulable": {
@@ -674,6 +688,9 @@
                 },
                 "workflow": {
                   "properties": {
+                    "available": {
+                      "type": "number"
+                    },
                     "health": {
                       "type": "string"
                     },
@@ -690,6 +707,9 @@
                       "type": "number"
                     },
                     "sort": {
+                      "type": "number"
+                    },
+                    "total": {
                       "type": "number"
                     }
                   },

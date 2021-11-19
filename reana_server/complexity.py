@@ -12,7 +12,7 @@ from typing import Dict, List, Tuple
 
 from reana_commons.job_utils import kubernetes_memory_to_bytes
 
-from reana_server.config import REANA_COMPLEXITY_JOBS_MEMORY_LIMIT
+from reana_server.config import REANA_KUBERNETES_JOBS_MEMORY_LIMIT
 
 
 def get_workflow_min_job_memory(complexity):
@@ -94,7 +94,7 @@ class ComplexityEstimatorBase:
     def _get_memory_limit(self, step):
         """Get memory limit value."""
         memory_limit = (
-            step.get("kubernetes_memory_limit") or REANA_COMPLEXITY_JOBS_MEMORY_LIMIT
+            step.get("kubernetes_memory_limit") or REANA_KUBERNETES_JOBS_MEMORY_LIMIT
         )
         return kubernetes_memory_to_bytes(memory_limit)
 

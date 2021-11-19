@@ -16,6 +16,7 @@ from distutils.util import strtobool
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
 from invenio_oauthclient.contrib import cern
 from reana_commons.config import REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES
+from reana_commons.job_utils import kubernetes_memory_to_bytes
 
 # This database URI import is necessary for Invenio-DB
 from reana_db.config import SQLALCHEMY_DATABASE_URI
@@ -33,8 +34,15 @@ REANA_SSO_CERN_CONSUMER_KEY = os.getenv("CERN_CONSUMER_KEY", "CHANGE_ME")
 
 REANA_SSO_CERN_CONSUMER_SECRET = os.getenv("CERN_CONSUMER_SECRET", "CHANGE_ME")
 
-REANA_COMPLEXITY_JOBS_MEMORY_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_LIMIT")
+REANA_KUBERNETES_JOBS_MEMORY_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_LIMIT")
 """Maximum memory limit for user job containers for workflow complexity estimation."""
+
+REANA_KUBERNETES_JOBS_MEMORY_LIMIT_IN_BYTES = (
+    kubernetes_memory_to_bytes(REANA_KUBERNETES_JOBS_MEMORY_LIMIT)
+    if REANA_KUBERNETES_JOBS_MEMORY_LIMIT
+    else 0
+)
+"""Maximum memory limit for user job containers in bytes."""
 
 REANA_WORKFLOW_SCHEDULING_POLICY = os.getenv("REANA_WORKFLOW_SCHEDULING_POLICY", "fifo")
 

@@ -51,9 +51,13 @@ def status(**kwargs):  # noqa
                     type: string
                   sort:
                     type: number
+                  total:
+                    type: number
               job:
                 type: object
                 properties:
+                  available:
+                    type: number
                   running:
                     type: number
                   pending:
@@ -64,9 +68,13 @@ def status(**kwargs):  # noqa
                     type: string
                   sort:
                     type: number
+                  total:
+                    type: number
               workflow:
                 type: object
                 properties:
+                  available:
+                    type: number
                   running:
                     type: number
                   queued:
@@ -79,6 +87,8 @@ def status(**kwargs):  # noqa
                     type: string
                   sort:
                     type: number
+                  total:
+                    type: number
               session:
                 type: object
                 properties:
@@ -90,16 +100,19 @@ def status(**kwargs):  # noqa
             application/json:
               {
                 "job": {
-                    "pending": 2,
-                    "running": 8,
-                    "percentage": 20,
-                    "health": "healthy",
+                    "total": 8,
+                    "pending": 3,
+                    "running": 2,
+                    "available": 3,
+                    "percentage": 38,
+                    "health": "warning",
                     "sort": 1
                 },
                 "node": {
-                    "total": 4,
+                    "total": 10,
+                    "available": 8,
                     "unschedulable": 2,
-                    "percentage": 33,
+                    "percentage": 80,
                     "health": "healthy",
                     "sort": 0
                 },
@@ -108,11 +121,13 @@ def status(**kwargs):  # noqa
                     "sort": 3
                 },
                 "workflow": {
+                    "total": 30,
+                    "available": 24,
                     "queued": 2,
                     "running": 4,
                     "pending": 2,
-                    "percentage": 50,
-                    "health": "warning",
+                    "percentage": 80,
+                    "health": "healthy",
                     "sort": 2
                 }
               }

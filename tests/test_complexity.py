@@ -32,7 +32,7 @@ def test_get_workflow_min_job_memory(complexity, min_job_memory):
     assert get_workflow_min_job_memory(complexity) == min_job_memory
 
 
-@mock.patch("reana_server.complexity.REANA_COMPLEXITY_JOBS_MEMORY_LIMIT", "4Gi")
+@mock.patch("reana_server.complexity.REANA_KUBERNETES_JOBS_MEMORY_LIMIT", "4Gi")
 @mock.patch("reana_server.utils.REANA_WORKFLOW_SCHEDULING_POLICY", "balanced")
 def test_estimate_complexity(yadage_workflow_spec_loaded):
     """Test estimate_complexity."""
@@ -62,7 +62,7 @@ def test_estimate_complexity(yadage_workflow_spec_loaded):
         (None, "2Gi", "2Gi", "4.1Gi", (1, 4402341478.4)),
     ],
 )
-@mock.patch("reana_server.complexity.REANA_COMPLEXITY_JOBS_MEMORY_LIMIT", "4Gi")
+@mock.patch("reana_server.complexity.REANA_KUBERNETES_JOBS_MEMORY_LIMIT", "4Gi")
 def test_estimate_complexity_snakemake(
     snakemake_workflow_spec_loaded,
     job_deps,
