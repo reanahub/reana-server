@@ -28,6 +28,7 @@ from reana_db.models import (
     AuditLogAction,
     QuotaHealth,
     Resource,
+    ResourceType,
     User,
     UserResource,
     UserTokenStatus,
@@ -503,12 +504,12 @@ def list_quota_usage(
 
 
 @reana_admin.command("quota-resources", help="List available quota resources.")
-@admin_access_token_option
 @click.pass_context
-def list_quota_resources(ctx, admin_access_token):
+def list_quota_resources(ctx):
     """List quota resources."""
-    resource_names = [resource.name for resource in Resource.query]
-    click.echo("\n".join(resource_names))
+    click.echo("Available resources are:")
+    for resource in Resource.query:
+        click.echo(f"{resource.type_.name} ({resource.name})")
 
 
 @reana_admin.command(
@@ -519,31 +520,56 @@ def list_quota_resources(ctx, admin_access_token):
     "--email",
     "emails",
     multiple=True,
+    required=True,
     help=(
         "The emails of the users. "
         "E.g. --email johndoe@example.org --email janedoe@example.org"
     ),
 )
-@click.option("--resource-name", "-r", help="Name of resource.", required=True)
+@click.option(
+    "--resource", "-r", "resource_type", help="Specify quota resource. e.g. cpu, disk."
+)
+@click.option("--resource-name", "-n", help="Name of resource.")
 @click.option(
     "--limit", "-l", help="New limit in canonical unit.", required=True, type=int
 )
-@admin_access_token_option
 @click.pass_context
-def set_quota_limit(ctx, admin_access_token, emails, resource_name, limit):
+def set_quota_limit(ctx, emails, resource_type, resource_name, limit):
     """Set quota limits to the given users per resource."""
     try:
         for email in emails:
             error_msg = None
+            resource = None
             user = _get_user_by_criteria(None, email)
-            resource = Resource.query.filter_by(name=resource_name).one_or_none()
+
+            if resource_name:
+                resource = Resource.query.filter_by(name=resource_name).one_or_none()
+            elif resource_type in ResourceType._member_names_:
+                resources = Resource.query.filter_by(type_=resource_type).all()
+                if resources and len(resources) > 1:
+                    click.secho(
+                        f"ERROR: There are more than one `{resource_type}` resource. "
+                        "Please provide resource name with `--resource-name` option to specify the exact resource.",
+                        fg="red",
+                        err=True,
+                    )
+                    sys.exit(1)
+                else:
+                    resource = resources[0]
+
             if not user:
                 error_msg = f"ERROR: Provided user {email} does not exist."
             elif not resource:
+                resources = [
+                    f"{resource.type_.name} ({resource.name})"
+                    for resource in Resource.query
+                ]
                 error_msg = (
-                    "ERROR: Provided resource name does not exist. Available "
-                    f"resources are {[resource.name for resource in Resource.query]}."
+                    f"ERROR: Provided resource `{resource_name or resource_type}` does not exist. "
+                    if resource_name or resource_type
+                    else "ERROR: Please provide a resource. "
                 )
+                error_msg += f"Available resources are: {', '.join(resources)}."
             if error_msg:
                 click.secho(
                     error_msg, fg="red", err=True,
@@ -568,7 +594,7 @@ def set_quota_limit(ctx, admin_access_token, emails, resource_name, limit):
                 )
         Session.commit()
         click.secho(
-            f"Quota limit {limit} for '{resource.name}' successfully set to users {emails}.",
+            f"Quota limit {limit} for '{resource.type_.name} ({resource.name})' successfully set to users {emails}.",
             fg="green",
         )
     except Exception as e:
@@ -584,16 +610,18 @@ def set_quota_limit(ctx, admin_access_token, emails, resource_name, limit):
     "quota-set-default-limits",
     help="Set default quota limits to users that do not have any.",
 )
-@admin_access_token_option
 @click.pass_context
-def set_default_quota_limit(ctx, admin_access_token):
+def set_default_quota_limit(ctx):
     """Set default quota limits to users that do not have any."""
     users_without_quota_limits = User.query.filter(~User.resources.any()).all()
+    if not users_without_quota_limits:
+        click.secho("There are no users without quota limits.", fg="green")
+        sys.exit(0)
     for resource in Resource.query:
         ctx.invoke(
             set_quota_limit,
-            admin_access_token=admin_access_token,
             emails=[user.email for user in users_without_quota_limits],
             resource_name=resource.name,
+            resource_type=resource.type_.name,
             limit=DEFAULT_QUOTA_LIMITS.get(resource.type_.name),
         )
