@@ -112,7 +112,7 @@ def get_you(user):
             application/json:
               {
                 "email": "user@reana.info",
-                "reana_server_version": "0.8.0",
+                "reana_server_version": "0.8.1",
                 "reana_token": {
                     "value": "Drmhze6EPcv0fN_81Bj-nA",
                     "status": "active",

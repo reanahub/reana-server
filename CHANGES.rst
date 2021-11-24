@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 0.8.1 (2021-11-29)
+--------------------------
+
+- Changes ``quota-set`` command used by the REANA administrators to use the resource type along with a resource name for specifying the resource.
+- Changes email validation used in ``create-admin-user`` command by the REANA administrators to be more permissive.
+
 Version 0.8.0 (2021-11-22)
 ---------------------------
 

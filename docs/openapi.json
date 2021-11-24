@@ -3,7 +3,7 @@
   "info": {
     "description": "Submit workflows to be run on REANA Cloud",
     "title": "REANA Server",
-    "version": "0.8.0"
+    "version": "0.8.1"
   },
   "parameters": {},
   "paths": {
@@ -2599,7 +2599,7 @@
                     }
                   }
                 },
-                "reana_server_version": "0.8.0",
+                "reana_server_version": "0.8.1",
                 "reana_token": {
                   "requested_at": "Mon, 25 May 2020 10:39:57 GMT",
                   "status": "active",
