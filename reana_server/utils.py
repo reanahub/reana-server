@@ -19,11 +19,13 @@ import os
 from uuid import UUID, uuid4
 
 import click
-import fs
 import requests
 import yaml
-from flask import current_app as app, url_for
+from flask import url_for
 from jinja2 import Environment, PackageLoader, select_autoescape
+from marshmallow.exceptions import ValidationError
+from marshmallow.validate import Email
+
 from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK
 from reana_commons.email import send_email
 from reana_commons.k8s.secrets import REANAUserSecretsStore
@@ -36,7 +38,6 @@ from sqlalchemy.exc import (
     SQLAlchemyError,
     StatementError,
 )
-from werkzeug.wsgi import LimitedStream
 
 from reana_server.api_client import current_workflow_submission_publisher
 from reana_server.complexity import get_workflow_min_job_memory, estimate_complexity
@@ -432,9 +433,18 @@ def _validate_password(ctx, param, value):
     return value
 
 
+def is_valid_email(value: str) -> bool:  # noqa: D103
+    try:
+        validator = Email()
+        validator(value)
+        return True
+    except ValidationError:
+        return False
+
+
 def _validate_email(ctx, param, value):
-    regex = r"^[a-z0-9]+[\._]?[a-z0-9]+[@]\w+[.]\w{2,3}$"
-    if not re.search(regex, value):
+    """Validate email callback for click CLI option."""
+    if not is_valid_email(value):
         click.secho("ERROR: Invalid email format", fg="red")
         sys.exit(1)
     return value
