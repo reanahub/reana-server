@@ -145,25 +145,8 @@ def _is_valid_rate_limit(rate_limit: str) -> bool:
 
 
 def _get_rate_limit(env_variable: str, default: str) -> str:
-    env_value = os.getenv(env_variable)
-
-    if not env_value:
-        logging.warning(
-            f"API rate limit config {env_variable} environment variable is not present. "
-            f"Using default value: {default}"
-        )
-        # assuming default has correct format
-        return default
-
-    if _is_valid_rate_limit(env_value):
-        return env_value
-    else:
-        logging.warning(
-            f"API rate limit config {env_variable} environment variable has incorrect format. "
-            f"Incorrect value: {env_value}. Using default value: {default}"
-        )
-        # assuming default has correct format
-        return default
+    env_value = os.getenv(env_variable, "")
+    return env_value if _is_valid_rate_limit(env_value) else default
 
 
 # Note: users that are connecting via reana-client will be treated as guests by the Invenio framework
