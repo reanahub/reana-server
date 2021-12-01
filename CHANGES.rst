@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 0.8.2 (UNRELEASED)
+--------------------------
+
+- Adds email validation to the ``user-create`` command used by the REANA administrators.
+
 Version 0.8.1 (2021-11-29)
 --------------------------
 

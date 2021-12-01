@@ -57,7 +57,13 @@ def reana_admin():
 
 
 @reana_admin.command("create-admin-user")
-@click.option("--email", "-e", callback=_validate_email, required=True)
+@click.option(
+    "-e",
+    "--email",
+    callback=_validate_email,
+    required=True,
+    help="The email of the admin user.",
+)
 @click.option("--password", "-p", callback=_validate_password, required=True)
 @click.option("-i", "--id", "id_", default=ADMIN_USER_ID)
 @with_appcontext
@@ -138,7 +144,13 @@ def list_users(ctx, id, email, user_access_token, admin_access_token, output_for
 
 
 @reana_admin.command("user-create", help="Create a new user.")
-@click.option("-e", "--email", required=True, help="The email of the user.")
+@click.option(
+    "-e",
+    "--email",
+    callback=_validate_email,
+    required=True,
+    help="The email of the user.",
+)
 @click.option("--user-access-token", help="The access token of the user.")
 @admin_access_token_option
 @click.pass_context
