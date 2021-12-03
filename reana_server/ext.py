@@ -8,7 +8,10 @@
 
 """Flask extension REANA-Server."""
 
+import logging
+
 from flask_menu import Menu
+from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 
 from reana_server import config
 
@@ -18,6 +21,9 @@ class REANA(object):
 
     def __init__(self, app=None):
         """Extension initialization."""
+        logging.basicConfig(level=REANA_LOG_LEVEL, format=REANA_LOG_FORMAT, force=True)
+        werkzeug_logger = logging.getLogger("werkzeug")
+        werkzeug_logger.propagate = False
         if app:
             self.app = app
             self.init_app(app)

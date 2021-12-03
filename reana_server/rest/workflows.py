@@ -14,20 +14,17 @@ import traceback
 import requests
 from bravado.exception import HTTPError
 from flask import Blueprint, Response
-from flask import current_app as app
 from flask import jsonify, request, stream_with_context
 from reana_commons.config import REANA_WORKFLOW_ENGINES
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.operational_options import validate_operational_options
 from reana_commons.workspaces import validate_workspace
-from reana_db.database import Session
 from reana_db.models import (
     InteractiveSessionType,
     ResourceType,
     ResourceUnit,
     RunStatus,
     UserResource,
-    Workflow,
 )
 from reana_db.utils import _get_workflow_with_uuid_or_name, get_default_quota_resource
 from webargs import fields, validate

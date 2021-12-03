@@ -9,7 +9,6 @@
 """Flask application configuration."""
 
 import copy
-import logging
 import os
 import re
 
