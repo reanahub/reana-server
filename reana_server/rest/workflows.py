@@ -1316,7 +1316,7 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
     try:
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-        preview = "preview" in request.args
+        preview = request.args.get("preview", False) or False
         api_url = current_rwc_api_client.swagger_spec.__dict__.get("api_url")
         endpoint = current_rwc_api_client.api.download_file.operation.path_name.format(
             workflow_id_or_name=workflow_id_or_name, file_name=file_name
@@ -1326,16 +1326,16 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
             params={"preview": preview, "user": str(user.id_)},
             stream=True,
         )
-        return (
-            Response(
-                stream_with_context(req.iter_content(chunk_size=1024)),
-                content_type=req.headers["Content-Type"],
-                headers=Headers(
-                    [("Content-Disposition", req.headers.get("Content-Disposition"))]
-                ),
-            ),
-            req.status_code,
+        response = Response(
+            stream_with_context(req.iter_content(chunk_size=1024)),
+            content_type=req.headers["Content-Type"],
         )
+        if req.headers.get("Content-Disposition"):
+            response.headers["Content-Disposition"] = req.headers.get(
+                "Content-Disposition"
+            )
+        return response, req.status_code
+
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
