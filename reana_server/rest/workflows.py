@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -18,7 +18,7 @@ from flask import jsonify, request, stream_with_context
 from reana_commons.config import REANA_WORKFLOW_ENGINES
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.operational_options import validate_operational_options
-from reana_commons.workspaces import validate_workspace
+from reana_commons.validation import validate_workspace, validate_workflow_name
 from reana_db.models import (
     InteractiveSessionType,
     ResourceType,
@@ -396,6 +396,7 @@ def create_workflow(user):  # noqa
             raise Exception("Unknown workflow type.")
 
         workflow_name = request.args.get("workflow_name", workflow_name)
+        validate_workflow_name(workflow_name)
         if is_uuid_v4(workflow_name):
             return jsonify({"message": "Workflow name cannot be a valid UUIDv4."}), 400
         workflow_dict = {
