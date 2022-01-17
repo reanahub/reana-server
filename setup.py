@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -48,7 +48,7 @@ setup_requires = [
 install_requires = [
     "marshmallow>2.13.0,<=2.20.1",
     "pyOpenSSL==17.5.0",
-    "reana-commons[kubernetes,yadage]>=0.8.0,<0.9.0",
+    "reana-commons[kubernetes,yadage]>=0.8.2a2,<0.9.0",
     "reana-db>=0.8.0,<0.9.0",
     "requests==2.25.0",
     "rfc3987==1.3.7",
