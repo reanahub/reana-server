@@ -70,7 +70,7 @@ invenio-oauth2server==1.1.0  # via reana-server (setup.py)
 invenio-oauthclient==1.1.3  # via reana-server (setup.py)
 invenio-rest==1.2.3       # via invenio-accounts
 invenio-userprofiles==1.0.1  # via reana-server (setup.py)
-ipython==7.28.0           # via flask-shell-ipython
+ipython==7.31.1           # via flask-shell-ipython
 itsdangerous==1.1.0       # via flask, flask-kvsession-invenio, flask-security, flask-wtf
 jedi==0.18.0              # via ipython
 jinja2==2.11.3            # via flask, flask-babelex
