@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -9,6 +9,7 @@
 """Flask application configuration."""
 
 import copy
+import json
 import os
 import re
 
@@ -51,6 +52,9 @@ REANA_WORKFLOW_SCHEDULING_POLICIES = ["fifo", "balanced"]
 - ``fifo``: first-in first-out strategy starting workflows as they come.
 - ``balanced``: a weighted strategy taking into account existing multi-user workloads and the DAG complexity of incoming workflows.
 """
+
+SUPPORTED_COMPUTE_BACKENDS = json.loads(os.getenv("REANA_COMPUTE_BACKENDS", "[]")) or []
+"""List of supported compute backends."""
 
 
 # Invenio configuration

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2021 CERN.
+# Copyright (C) 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -18,6 +18,7 @@ from reana_commons.config import (
     DEFAULT_WORKSPACE_PATH,
 )
 
+from reana_server.config import SUPPORTED_COMPUTE_BACKENDS
 from reana_server.decorators import signin_required
 
 blueprint = Blueprint("info", __name__)
@@ -63,7 +64,15 @@ def info(user, **kwargs):  # noqa
                 "default_workspace": {
                     "title": "Default workspace",
                     "value": "/usr/share"
-                }
+                },
+                "compute_backends": {
+                    "title": "List of supported compute backends",
+                    "value": [
+                        "kubernetes",
+                        "htcondorcern",
+                        "slurmcern"
+                    ]
+              }
               }
         500:
           description: >-
@@ -77,6 +86,10 @@ def info(user, **kwargs):  # noqa
             ),
             default_workspace=dict(
                 title="Default workspace", value=DEFAULT_WORKSPACE_PATH
+            ),
+            compute_backends=dict(
+                title="List of supported compute backends",
+                value=SUPPORTED_COMPUTE_BACKENDS,
             ),
         )
         return InfoSchema().dump(info)
@@ -93,3 +106,4 @@ class InfoSchema(Schema):
         keys=fields.Str(), values=fields.List(fields.Str())
     )
     default_workspace = fields.Dict(keys=fields.Str(), values=fields.Str())
+    compute_backends = fields.Dict(keys=fields.Str(), values=fields.List(fields.Str()))

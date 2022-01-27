@@ -261,6 +261,14 @@
             "description": "Request succeeded. The response contains general info about the cluster.",
             "examples": {
               "application/json": {
+                "compute_backends": {
+                  "title": "List of supported compute backends",
+                  "value": [
+                    "kubernetes",
+                    "htcondorcern",
+                    "slurmcern"
+                  ]
+                },
                 "default_workspace": {
                   "title": "Default workspace",
                   "value": "/usr/share"
