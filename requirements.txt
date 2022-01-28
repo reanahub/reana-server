@@ -18,7 +18,7 @@ bravado-core==5.17.0      # via bravado
 bravado==10.3.2           # via reana-commons
 cachelib==0.4.1           # via flask-oauthlib, invenio-oauth2server
 cachetools==4.2.4         # via google-auth
-celery==4.4.7             # via flask-celeryext, invenio-celery, reana-server (setup.py)
+celery==5.2.2             # via flask-celeryext, invenio-celery, reana-server (setup.py)
 certifi==2021.5.30        # via kubernetes, requests
 cffi==1.14.6              # via cryptography
 chardet==3.0.4            # via requests
