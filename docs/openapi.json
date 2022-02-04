@@ -3,7 +3,7 @@
   "info": {
     "description": "Submit workflows to be run on REANA Cloud",
     "title": "REANA Server",
-    "version": "0.8.1"
+    "version": "0.8.2"
   },
   "parameters": {},
   "paths": {
