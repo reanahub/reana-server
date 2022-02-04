@@ -127,7 +127,7 @@ pyrsistent==0.18.1        # via jsonschema
 python-dateutil==2.8.2    # via bravado, bravado-core, kubernetes
 pytz==2021.3              # via babel, bravado-core, celery, fs
 pyyaml==5.4.1             # via bravado, bravado-core, kubernetes, packtivity, reana-commons, swagger-spec-validator, yadage, yadage-schemas
-reana-commons[kubernetes,yadage]==0.8.3a1  # via reana-db, reana-server (setup.py)
+reana-commons[kubernetes,yadage]==0.8.3  # via reana-db, reana-server (setup.py)
 reana-db==0.8.1           # via reana-server (setup.py)
 redis==4.1.2              # via invenio-accounts, invenio-celery
 requests-oauthlib==1.1.0  # via flask-oauthlib, invenio-oauth2server, invenio-oauthclient, kubernetes
