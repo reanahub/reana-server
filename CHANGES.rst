@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 0.8.3 (UNRELEASED)
+--------------------------
+
+- Adds Kubernetes job memory limits validation before publishing workflow submission.
+
 Version 0.8.2 (2022-02-07)
 --------------------------
 

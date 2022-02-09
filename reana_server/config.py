@@ -45,6 +45,18 @@ REANA_KUBERNETES_JOBS_MEMORY_LIMIT_IN_BYTES = (
 )
 """Maximum memory limit for user job containers in bytes."""
 
+REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT = os.getenv(
+    "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT"
+)
+"""Maximum memory limit that users can assign to their job containers."""
+
+REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT_IN_BYTES = (
+    kubernetes_memory_to_bytes(REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT)
+    if REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT
+    else 0
+)
+"""Maximum memory limit that users can assign to their job containers in bytes."""
+
 REANA_WORKFLOW_SCHEDULING_POLICY = os.getenv("REANA_WORKFLOW_SCHEDULING_POLICY", "fifo")
 
 REANA_WORKFLOW_SCHEDULING_POLICIES = ["fifo", "balanced"]

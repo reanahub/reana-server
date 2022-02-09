@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2021 CERN.
+# Copyright (C) 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -11,8 +11,33 @@
 from typing import Dict, List, Tuple
 
 from reana_commons.job_utils import kubernetes_memory_to_bytes
+from reana_commons.errors import REANAKubernetesMemoryLimitExceeded
 
-from reana_server.config import REANA_KUBERNETES_JOBS_MEMORY_LIMIT
+from reana_server.config import (
+    REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
+    REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
+    REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT_IN_BYTES,
+)
+
+
+def validate_job_memory_limits(complexity: List[Tuple[int, float]]) -> None:
+    """Validate that job memory limits does not exceed the maximum memory limit that users can assign to their job containers.
+
+    :param complexity: workflow complexity list which consists of number of initial jobs and the memory in bytes they require. (e.g. [(8, 1073741824), (5, 2147483648)])
+    :raises REANAKubernetesMemoryLimitExceeded: If workflow job memory limits exceed the maximum memory limit that users can assign to their job containers.
+    """
+    if not complexity:
+        return None
+    max_job_memory = max(complexity, key=lambda x: x[1])[1]
+
+    if (
+        REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT_IN_BYTES
+        and max_job_memory > REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT_IN_BYTES
+    ):
+        raise REANAKubernetesMemoryLimitExceeded(
+            f'The "kubernetes_memory_limit" provided in the workflow exceeds the limit ({REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT}).'
+        )
+    return None
 
 
 def get_workflow_min_job_memory(complexity):

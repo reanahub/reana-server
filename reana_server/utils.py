@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -40,7 +40,11 @@ from sqlalchemy.exc import (
 )
 
 from reana_server.api_client import current_workflow_submission_publisher
-from reana_server.complexity import get_workflow_min_job_memory, estimate_complexity
+from reana_server.complexity import (
+    get_workflow_min_job_memory,
+    estimate_complexity,
+    validate_job_memory_limits,
+)
 from reana_server.config import (
     ADMIN_EMAIL,
     ADMIN_USER_ID,
@@ -112,6 +116,7 @@ def publish_workflow_submission(workflow, user_id, parameters):
         complexity = _calculate_complexity(workflow)
         workflow_priority = workflow.get_priority(total_cluster_memory)
         workflow_min_job_memory = get_workflow_min_job_memory(complexity)
+        validate_job_memory_limits(complexity)
     current_workflow_submission_publisher.publish_workflow_submission(
         user_id=str(user_id),
         workflow_id_or_name=workflow.get_full_workflow_name(),
