@@ -12,7 +12,6 @@ import csv
 import io
 import json
 import logging
-import re
 import secrets
 import sys
 import os
@@ -119,7 +118,7 @@ def publish_workflow_submission(workflow, user_id, parameters):
         validate_job_memory_limits(complexity)
     current_workflow_submission_publisher.publish_workflow_submission(
         user_id=str(user_id),
-        workflow_id_or_name=workflow.get_full_workflow_name(),
+        workflow_id_or_name=str(workflow.id_),
         parameters=parameters,
         priority=workflow_priority,
         min_job_memory=workflow_min_job_memory,
