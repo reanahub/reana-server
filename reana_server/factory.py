@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -57,6 +57,7 @@ def create_app(config_mapping=None):
         users,
         workflows,
         info,
+        launch,
     )  # noqa
 
     app.register_blueprint(ping.blueprint, url_prefix="/api")
@@ -67,6 +68,7 @@ def create_app(config_mapping=None):
     app.register_blueprint(config.blueprint, url_prefix="/api")
     app.register_blueprint(status.blueprint, url_prefix="/api")
     app.register_blueprint(info.blueprint, url_prefix="/api")
+    app.register_blueprint(launch.blueprint, url_prefix="/api")
 
     @app.teardown_appcontext
     def shutdown_session(response_or_exc):

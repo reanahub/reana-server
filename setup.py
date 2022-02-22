@@ -114,6 +114,7 @@ setup(
             "reana_server_config = reana_server.rest.config:blueprint",
             "reana_server_status = reana_server.rest.status:blueprint",
             "reana_server_info = reana_server.rest.info:blueprint",
+            "reana_server_launch = reana_server.rest.launch:blueprint",
         ],
     },
     include_package_data=True,

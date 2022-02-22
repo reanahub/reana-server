@@ -1,6 +1,11 @@
 Changes
 =======
 
+Version 0.9.0 (UNRELEASED)
+--------------------------
+
+- Adds new ``/api/launch`` endpoint that allows running workflows from remote sources.
+
 Version 0.8.4 (2022-02-23)
 --------------------------
 

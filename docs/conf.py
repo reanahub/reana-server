@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -216,7 +216,11 @@ texinfo_documents = [
 autodoc_mock_imports = ["secrets"]
 
 rest_api_modules = [
+    "reana_server.rest.config",
+    "reana_server.rest.info",
+    "reana_server.rest.launch",
     "reana_server.rest.ping",
+    "reana_server.rest.status",
     "reana_server.rest.users",
     "reana_server.rest.workflows",
 ]

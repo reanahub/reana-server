@@ -302,6 +302,88 @@
         "summary": "Get information about the cluster capabilities."
       }
     },
+    "/api/launch": {
+      "post": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "This resource expects a remote reference to a REANA specification file needed to launch a workflow via URL.",
+        "operationId": "launch",
+        "parameters": [
+          {
+            "description": "The remote origin data required to launch a workflow.",
+            "in": "body",
+            "name": "data",
+            "schema": {
+              "properties": {
+                "name": {
+                  "description": "Workflow name.",
+                  "type": "string"
+                },
+                "parameters": {
+                  "description": "Workflow parameters.",
+                  "type": "string"
+                },
+                "url": {
+                  "description": "Remote origin URL where the REANA specification file is hosted.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "url"
+              ],
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. Information of the workflow launched.",
+            "examples": {
+              "application/json": {
+                "message": "The workflow has been successfully submitted.",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest.1"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "workflow_id": {
+                  "type": "string"
+                },
+                "workflow_name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming payload seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Malformed request."
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal server error."
+              }
+            }
+          }
+        },
+        "summary": "Launch workflow from a remote REANA specification file."
+      }
+    },
     "/api/ping": {
       "get": {
         "description": "Ping the server.",
