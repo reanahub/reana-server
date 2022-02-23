@@ -1,7 +1,7 @@
 Changes
 =======
 
-Version 0.8.4 (UNRELEASED)
+Version 0.8.4 (2022-02-23)
 --------------------------
 
 - Changes workflow scheduler to count number of workflow retries.
