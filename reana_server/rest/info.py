@@ -10,13 +10,11 @@
 
 import logging
 import traceback
-from flask import Blueprint, jsonify
 
+from flask import Blueprint, jsonify
 from marshmallow import Schema, fields
-from reana_commons.config import (
-    WORKSPACE_PATHS,
-    DEFAULT_WORKSPACE_PATH,
-)
+
+from reana_commons.config import DEFAULT_WORKSPACE_PATH, WORKSPACE_PATHS
 
 from reana_server.config import SUPPORTED_COMPUTE_BACKENDS
 from reana_server.decorators import signin_required

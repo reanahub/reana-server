@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -10,6 +10,7 @@ FROM python:3.8-slim
 RUN apt-get update && \
     apt-get install -y \
       gcc \
+      git \
       vim-tiny \
       libffi-dev \
       procps
@@ -28,7 +29,7 @@ RUN if [ "${DEBUG}" -gt 0 ]; then pip install -e ".[debug]"; else pip install .;
 
 # Are we building with locally-checked-out shared modules?
 # hadolint ignore=SC2102
-RUN if test -e modules/reana-commons; then pip install -e modules/reana-commons[kubernetes,yadage] --upgrade; fi
+RUN if test -e modules/reana-commons; then pip install -e modules/reana-commons[kubernetes,yadage,snakemake,cwl] --upgrade; fi
 RUN if test -e modules/reana-db; then pip install -e modules/reana-db --upgrade; fi
 
 # Check if there are broken requirements

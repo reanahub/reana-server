@@ -17,8 +17,8 @@ from flask import Blueprint, Response
 from flask import jsonify, request, stream_with_context
 from reana_commons.config import REANA_WORKFLOW_ENGINES
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
-from reana_commons.operational_options import validate_operational_options
-from reana_commons.validation import validate_workspace, validate_workflow_name
+from reana_commons.validation.operational_options import validate_operational_options
+from reana_commons.validation.utils import validate_workflow_name
 from reana_db.models import (
     InteractiveSessionType,
     ResourceType,
@@ -33,6 +33,7 @@ from werkzeug.datastructures import Headers
 
 from reana_server.api_client import current_rwc_api_client
 from reana_server.decorators import check_quota, signin_required
+from reana_server.validation import validate_workspace_path
 from reana_server.utils import (
     RequestStreamWithLen,
     _load_yadage_spec,
@@ -406,9 +407,8 @@ def create_workflow(user):  # noqa
         workflow_dict["operational_options"] = validate_operational_options(
             workflow_engine, reana_spec_file.get("inputs", {}).get("options", {})
         )
-        workspace_root_path = validate_workspace(
-            reana_spec_file.get("workspace", {}).get("root_path")
-        )
+        workspace_root_path = reana_spec_file.get("workspace", {}).get("root_path")
+        validate_workspace_path(reana_spec_file)
         if git_data:
             workflow_dict["git_data"] = git_data
         response, http_response = current_rwc_api_client.api.create_workflow(
