@@ -14,6 +14,7 @@ import json
 import logging
 import secrets
 import sys
+import shutil
 import os
 from uuid import UUID, uuid4
 
@@ -25,7 +26,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from marshmallow.exceptions import ValidationError
 from marshmallow.validate import Email
 
-from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK
+from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK, SHARED_VOLUME_PATH
 from reana_commons.email import send_email
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.yadage import yadage_load_from_workspace
@@ -71,6 +72,27 @@ def create_user_workspace(user_workspace_path):
     if not os.path.isdir(user_workspace_path):
         os.umask(REANA_WORKFLOW_UMASK)
         os.makedirs(user_workspace_path, exist_ok=True)
+
+
+def get_fetched_workflows_dir(user_id: str) -> str:
+    """Return temporary directory for fetching workflow files."""
+    tmpdir = os.path.join(
+        SHARED_VOLUME_PATH, "users", user_id, "workflowsfetched", str(uuid4())
+    )
+    create_user_workspace(tmpdir)
+    return tmpdir
+
+
+def remove_fetched_workflows_dir(tmpdir: str) -> None:
+    """Remove temporary directory used for fetching workflow files."""
+    if tmpdir and os.path.isdir(tmpdir):
+        shutil.rmtree(tmpdir)
+
+
+def mv_workflow_files(source: str, target: str) -> None:
+    """Move files from one directory to another."""
+    for entry in os.listdir(source):
+        shutil.move(os.path.join(source, entry), target)
 
 
 def get_user_from_token(access_token):

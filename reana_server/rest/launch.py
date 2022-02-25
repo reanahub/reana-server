@@ -10,10 +10,28 @@ import json
 import logging
 import traceback
 
+from bravado.exception import HTTPError
 from flask import Blueprint, jsonify
+from jsonschema import ValidationError
 from marshmallow import Schema
 from webargs import fields
 from webargs.flaskparser import use_kwargs
+
+from reana_commons.errors import REANAValidationError
+from reana_commons.specification import load_reana_spec
+from reana_commons.validation.utils import validate_workflow_name
+from reana_db.utils import _get_workflow_with_uuid_or_name
+
+from reana_server.api_client import current_rwc_api_client
+from reana_server.decorators import signin_required
+from reana_server.fetcher import get_fetcher
+from reana_server.utils import (
+    get_fetched_workflows_dir,
+    mv_workflow_files,
+    publish_workflow_submission,
+    remove_fetched_workflows_dir,
+)
+from reana_server.validation import validate_workflow
 
 
 blueprint = Blueprint("launch", __name__)
@@ -27,7 +45,8 @@ blueprint = Blueprint("launch", __name__)
         "parameters": fields.Str(),
     }
 )
-def launch(url, name, parameters="{}"):
+@signin_required()
+def launch(user, url, name="", parameters="{}"):
     r"""Endpoint to launch a REANA workflow from URL.
 
     ---
@@ -97,18 +116,56 @@ def launch(url, name, parameters="{}"):
               }
     """
     try:
-        # FIXME: Information to retrieve once the workflow is submitted.
-        mock_data = {
-            "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
-            "workflow_name": "mytest.1",
+        user_id = str(user.id_)
+        tmpdir = get_fetched_workflows_dir(user_id)
+
+        # Fetch and load workflow spec
+        fetcher = get_fetcher(url, tmpdir)
+        fetcher.fetch()
+        spec_path = fetcher.workflow_spec_path()
+        reana_yaml = load_reana_spec(spec_path)
+
+        # Validate workflow spec
+        input_parameters = json.loads(parameters)
+        validate_workflow(reana_yaml, input_parameters)
+
+        workflow_name = name.replace(" ", "") or "workflow"
+        validate_workflow_name(workflow_name)
+
+        # Create workflow
+        workflow_dict = {
+            "reana_specification": reana_yaml,
+            "workflow_name": workflow_name,
+            "operational_options": {},
+            "launcher_url": url,
+        }
+        response, http_response = current_rwc_api_client.api.create_workflow(
+            workflow=workflow_dict, user=user_id,
+        ).result()
+
+        workflow = _get_workflow_with_uuid_or_name(response["workflow_id"], user_id)
+        mv_workflow_files(tmpdir, workflow.workspace_path)
+
+        # Start the workflow
+        parameters = {"input_parameters": input_parameters}
+        publish_workflow_submission(workflow, user.id_, parameters)
+        response_data = {
+            "workflow_id": workflow.id_,
+            "workflow_name": workflow.name,
             "message": "The workflow has been successfully submitted.",
         }
-        print(url, name, json.loads(parameters))
-        return LaunchSchema().dump(mock_data)
-
+        return LaunchSchema().dump(response_data)
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except (REANAValidationError, ValueError, ValidationError) as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 400
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
+    finally:
+        remove_fetched_workflows_dir(tmpdir)
 
 
 class LaunchSchema(Schema):

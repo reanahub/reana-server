@@ -119,6 +119,7 @@ class WorkflowFetcherGit(WorkflowFetcherBase):
         if self._git_ref:
             repository.remote().fetch(self._git_ref, depth=1)
             repository.git.checkout(self._git_ref)
+        shutil.rmtree(os.path.join(self._output_dir, ".git"))
 
 
 class WorkflowFetcherYaml(WorkflowFetcherBase):
@@ -236,11 +237,11 @@ def get_fetcher(url: str, output_dir: str) -> WorkflowFetcherBase:
 
     if extension == ".git":
         return WorkflowFetcherGit(url, output_dir)
+    elif extension == ".zip":
+        return WorkflowFetcherZip(url, output_dir, archive_name=basename)
     elif parsed_url.netloc == "github.com":
         return _get_github_fetcher(url, output_dir)
     elif extension in WORKFLOW_SPEC_EXTENSIONS:
         return WorkflowFetcherYaml(url, output_dir, spec_name=basename)
-    elif extension == ".zip":
-        return WorkflowFetcherZip(url, output_dir, archive_name=basename)
     else:
         raise ValueError("Cannot handle given url")
