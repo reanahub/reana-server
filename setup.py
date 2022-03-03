@@ -46,6 +46,7 @@ setup_requires = [
 ]
 
 install_requires = [
+    "gitpython>=3.1",
     "marshmallow>2.13.0,<=2.20.1",
     "pyOpenSSL==17.5.0",
     "reana-commons[kubernetes,yadage]>=0.9.0a2,<0.10.0",

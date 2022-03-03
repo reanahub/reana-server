@@ -223,3 +223,11 @@ REANA_SCHEDULER_REQUEUE_SLEEP = float(os.getenv("REANA_SCHEDULER_REQUEUE_SLEEP",
 
 REANA_SCHEDULER_REQUEUE_COUNT = int(os.getenv("REANA_SCHEDULER_REQUEUE_COUNT", "200"))
 """How many times to requeue workflow, in case of error or busy cluster, before failing it."""
+
+# Workflow fetcher
+# ================
+WORKFLOW_SPEC_FILENAMES = ["reana.yaml", "reana.yml"]
+"""Filenames to use when discovering workflow specifications."""
+
+WORKFLOW_SPEC_EXTENSIONS = [".yaml", ".yml"]
+"""Valid file extensions of workflow specifications."""
