@@ -4,6 +4,7 @@ Changes
 Version 0.9.0 (UNRELEASED)
 --------------------------
 
+- Adds configuration environment variable to set an API rate limit for slow endpoints (``REANA_RATELIMIT_SLOW``).
 - Adds new ``/api/launch`` endpoint that allows running workflows from remote sources.
 - Adds the possibility to fetch the workflow specification from a remote URL.
 - Adds REANA specification validation utilities.

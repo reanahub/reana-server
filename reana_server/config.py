@@ -14,6 +14,7 @@ import os
 import re
 
 from distutils.util import strtobool
+from limits.util import parse
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
 from invenio_oauthclient.contrib import cern
 from reana_commons.config import REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES
@@ -161,15 +162,13 @@ APP_HEALTH_BLUEPRINT_ENABLED = False
 # ===========================
 
 
-def _is_valid_rate_limit(rate_limit: str) -> bool:
-    return bool(
-        re.match(r"[0-9]+(\sper\s|\/)(second|minute|hour|day|month|year)", rate_limit)
-    )
-
-
 def _get_rate_limit(env_variable: str, default: str) -> str:
     env_value = os.getenv(env_variable, "")
-    return env_value if _is_valid_rate_limit(env_value) else default
+    try:
+        parse(env_value)
+        return env_value
+    except ValueError:
+        return default
 
 
 # Note: users that are connecting via reana-client will be treated as guests by the Invenio framework
@@ -177,6 +176,11 @@ RATELIMIT_GUEST_USER = _get_rate_limit("REANA_RATELIMIT_GUEST_USER", "20 per sec
 RATELIMIT_AUTHENTICATED_USER = _get_rate_limit(
     "REANA_RATELIMIT_AUTHENTICATED_USER", "20 per second"
 )
+REANA_RATELIMIT_SLOW = _get_rate_limit("REANA_RATELIMIT_SLOW", "1/5 second")
+
+RATELIMIT_PER_ENDPOINT = {
+    "launch.launch": REANA_RATELIMIT_SLOW,
+}
 
 # Flask-Breadcrumbs needs this variable set
 # =========================================
