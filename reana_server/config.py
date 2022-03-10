@@ -231,3 +231,6 @@ WORKFLOW_SPEC_FILENAMES = ["reana.yaml", "reana.yml"]
 
 WORKFLOW_SPEC_EXTENSIONS = [".yaml", ".yml"]
 """Valid file extensions of workflow specifications."""
+
+REGEX_CHARS_TO_REPLACE = re.compile("[^a-zA-Z0-9_]+")
+"""Regex matching groups of characters that need to be replaced in workflow names."""

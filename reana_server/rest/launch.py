@@ -129,7 +129,7 @@ def launch(user, url, name="", parameters="{}"):
         input_parameters = json.loads(parameters)
         validate_workflow(reana_yaml, input_parameters)
 
-        workflow_name = name.replace(" ", "") or "workflow"
+        workflow_name = name.replace(" ", "") or fetcher.generate_workflow_name()
         validate_workflow_name(workflow_name)
 
         # Create workflow

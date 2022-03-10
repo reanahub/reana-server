@@ -18,20 +18,45 @@ import zipfile
 
 from git import Repo
 
-from reana_server.config import WORKFLOW_SPEC_EXTENSIONS, WORKFLOW_SPEC_FILENAMES
+from reana_server.config import (
+    REGEX_CHARS_TO_REPLACE,
+    WORKFLOW_SPEC_EXTENSIONS,
+    WORKFLOW_SPEC_FILENAMES,
+)
+
+
+class ParsedUrl:
+    """Utility class to parse and get information about a given URL."""
+
+    def __init__(self, url: str):
+        """Initialize the ParsedUrl class.
+
+        :param url: URL to be parsed.
+        """
+        self.original_url = url
+        self._parsed_url = urlparse(url)
+        self.path = self._parsed_url.path.rstrip("/")
+        self.dirname, self.basename = os.path.split(self.path)
+        self.basename_without_extension, self.extension = os.path.splitext(
+            self.basename
+        )
+        self.hostname = self._parsed_url.hostname
+        self.netloc = self._parsed_url.netloc
 
 
 class WorkflowFetcherBase(ABC):
     """Fetch the specification of a workflow."""
 
-    def __init__(self, url: str, output_dir: str, spec: Optional[str] = None):
+    def __init__(
+        self, parsed_url: ParsedUrl, output_dir: str, spec: Optional[str] = None
+    ):
         """Initialize the workflow specification fetcher.
 
-        :param url: URL of the workflow specification to fetch.
+        :param parsed_url: Parsed URL of the workflow specification to fetch.
         :param output_dir: Directory where all the data will be saved to.
         :param spec: Optional path to the workflow specification.
         """
-        self._url = url
+        self._parsed_url = parsed_url
         self._output_dir = os.path.abspath(output_dir)
         self._spec = spec
 
@@ -39,6 +64,23 @@ class WorkflowFetcherBase(ABC):
     def fetch(self) -> None:
         """Fetch the workflow specification."""
         pass
+
+    @abstractmethod
+    def generate_workflow_name(self) -> str:
+        """Generate a workflow name from the given URL.
+
+        :returns: Generated workflow name.
+        """
+        pass
+
+    @staticmethod
+    def _clean_workflow_name(name: str) -> str:
+        """Replace invalid characters in the provided workflow name with dashes.
+
+        :param name: Workflow name to be cleaned.
+        :returns: Prettified workflow name.
+        """
+        return REGEX_CHARS_TO_REPLACE.sub("-", name).strip("-")
 
     def _discover_workflow_specs(self, dir: Optional[str] = None) -> List[str]:
         """Discover if there is a workflow specification in the given directory.
@@ -98,65 +140,98 @@ class WorkflowFetcherGit(WorkflowFetcherBase):
 
     def __init__(
         self,
-        url: str,
+        parsed_url: ParsedUrl,
         output_dir: str,
         git_ref: Optional[str] = None,
         spec: Optional[str] = None,
     ):
         """Initialize the workflow specification fetcher.
 
-        :param url: URL of the git repository containing the workflow specification.
+        :param parsed_url: Parsed URL of the git repository containing the workflow specification.
         :param output_dir: Directory where all the data will be saved to.
         :param git_ref: Optional reference to a specific git branch/commit.
         :param spec: Optional path to the workflow specification.
         """
-        super().__init__(url, output_dir, spec)
+        super().__init__(parsed_url, output_dir, spec)
         self._git_ref = git_ref
 
     def fetch(self) -> None:
         """Fetch workflow specification from a Git repository."""
-        repository = Repo.clone_from(self._url, self._output_dir, depth=1)
+        repository = Repo.clone_from(
+            self._parsed_url.original_url, self._output_dir, depth=1
+        )
         if self._git_ref:
             repository.remote().fetch(self._git_ref, depth=1)
             repository.git.checkout(self._git_ref)
         shutil.rmtree(os.path.join(self._output_dir, ".git"))
 
+    def generate_workflow_name(self) -> str:
+        """Generate a workflow name from the given repository URL.
+
+        The repository's name is used as the name for the workflow.
+        If a Git reference is provided, it is appended to the workflow name.
+
+        :returns: Generated workflow name.
+        """
+        repository_name = self._parsed_url.basename_without_extension
+        if self._git_ref:
+            workflow_name = f"{repository_name}-{self._git_ref}"
+        else:
+            workflow_name = repository_name
+        return self._clean_workflow_name(workflow_name)
+
 
 class WorkflowFetcherYaml(WorkflowFetcherBase):
     """Fetch the specification of a workflow from a given URL pointing to a YAML file."""
 
-    def __init__(self, url: str, output_dir: str, spec_name: str):
+    def __init__(self, parsed_url: ParsedUrl, output_dir: str):
         """Initialize the workflow specification fetcher.
 
-        :param url: URL of the workflow specification to fetch.
+        :param parsed_url: Parsed URL of the workflow specification to fetch.
         :param output_dir: Directory where all the data will be saved to.
-        :param spec_name: Filename of the workflow specification file to be fetched.
         """
-        super().__init__(url, output_dir, spec_name)
+        super().__init__(parsed_url, output_dir, spec=parsed_url.basename)
 
     def fetch(self) -> None:
         """Fetch workflow specification from a given URL."""
         workflow_spec_path = os.path.join(self._output_dir, self._spec)
-        urlretrieve(self._url, workflow_spec_path)
+        urlretrieve(self._parsed_url.original_url, workflow_spec_path)
+
+    def generate_workflow_name(self) -> str:
+        """Generate a workflow name from the given URL to the YAML specification file.
+
+        The workflow name is the path to the YAML specification file.
+
+        :returns: Generated workflow name.
+        """
+        workflow_name = None
+        if self._parsed_url.basename in WORKFLOW_SPEC_FILENAMES:
+            # We omit the name of the specification file if it is standard
+            # (e.g. `reana.yaml` or `reana.yml`)
+            workflow_name = self._clean_workflow_name(self._parsed_url.dirname)
+        if not workflow_name:
+            workflow_name = self._clean_workflow_name(
+                f"{self._parsed_url.dirname}-{self._parsed_url.basename_without_extension}"
+            )
+        return workflow_name
 
 
 class WorkflowFetcherZip(WorkflowFetcherBase):
     """Fetch the specification of a workflow from a zip archive."""
 
-    def __init__(self, url: str, output_dir: str, archive_name: str):
+    def __init__(self, parsed_url: ParsedUrl, output_dir: str):
         """Initialize the workflow specification fetcher.
 
-        :param url: URL of the workflow specification to fetch.
+        :param parsed_url: Parsed URL of the workflow specification to fetch.
         :param output_dir: Directory where all the data will be saved to.
-        :param archive_name: Filename of the zip archive to be fetched.
         """
-        super().__init__(url, output_dir)
-        self._archive_name = archive_name
+        super().__init__(parsed_url, output_dir)
+        self._archive_name = self._parsed_url.basename
 
     def fetch(self) -> None:
         """Fetch workflow specification from a zip archive."""
         archive_path = os.path.join(self._output_dir, self._archive_name)
-        urlretrieve(self._url, archive_path)
+        urlretrieve(self._parsed_url.original_url, archive_path)
         with zipfile.ZipFile(archive_path, "r") as zip_file:
             zip_file.extractall(path=self._output_dir)
         os.remove(archive_path)
@@ -175,11 +250,20 @@ class WorkflowFetcherZip(WorkflowFetcherBase):
                     shutil.move(os.path.join(top_level_dir, entry), self._output_dir)
                 os.rmdir(top_level_dir)
 
+    def generate_workflow_name(self) -> str:
+        """Generate a workflow name from the given URL to the zip archive.
 
-def _get_github_fetcher(url: str, output_dir: str) -> WorkflowFetcherGit:
+        The name of the zip archive is used as the name of the workflow.
+
+        :returns: Generated workflow name.
+        """
+        return self._clean_workflow_name(self._parsed_url.basename_without_extension)
+
+
+def _get_github_fetcher(parsed_url: ParsedUrl, output_dir: str) -> WorkflowFetcherGit:
     """Parse a GitHub URL and return the correct fetcher.
 
-    :param url: URL to a GitHub repository.
+    :param parsed_url: Parsed URL to a GitHub repository.
     :param output_dir: Directory where all the data fetched will be saved.
     :returns: Workflow fetcher.
     """
@@ -191,7 +275,6 @@ def _get_github_fetcher(url: str, output_dir: str) -> WorkflowFetcherGit:
 
     # We are interested in five components: username, repository, tree/blob, git_ref, path
     url_path_components = ["username", "repository", "tree_or_blob", "git_ref", "path"]
-    parsed_url = urlparse(url)
     split_url_path = parsed_url.path.strip("/").split(
         "/", maxsplit=len(url_path_components) - 1
     )
@@ -220,28 +303,26 @@ def _get_github_fetcher(url: str, output_dir: str) -> WorkflowFetcherGit:
     if tree_or_blob == "tree" and path:
         raise ValueError("GitHub URL points to a directory")
 
-    repository_url = f"https://github.com/{username}/{repository}.git"
+    repository_url = ParsedUrl(f"https://github.com/{username}/{repository}.git")
     return WorkflowFetcherGit(repository_url, output_dir, git_ref, spec=path)
 
 
-def get_fetcher(url: str, output_dir: str) -> WorkflowFetcherBase:
+def get_fetcher(launcher_url: str, output_dir: str) -> WorkflowFetcherBase:
     """Select the correct workflow fetcher based on the given URL.
 
-    :param url: URL of the workflow specification.
+    :param launcher_url: URL of the workflow specification.
     :param output_dir: Directory where all the data fetched will be saved.
     :returns: Workflow fetcher.
     """
-    parsed_url = urlparse(url)
-    _, extension = os.path.splitext(parsed_url.path)
-    basename = os.path.basename(parsed_url.path)
+    parsed_url = ParsedUrl(launcher_url)
 
-    if extension == ".git":
-        return WorkflowFetcherGit(url, output_dir)
-    elif extension == ".zip":
-        return WorkflowFetcherZip(url, output_dir, archive_name=basename)
+    if parsed_url.extension == ".git":
+        return WorkflowFetcherGit(parsed_url, output_dir)
+    elif parsed_url.extension == ".zip":
+        return WorkflowFetcherZip(parsed_url, output_dir)
     elif parsed_url.netloc == "github.com":
-        return _get_github_fetcher(url, output_dir)
-    elif extension in WORKFLOW_SPEC_EXTENSIONS:
-        return WorkflowFetcherYaml(url, output_dir, spec_name=basename)
+        return _get_github_fetcher(parsed_url, output_dir)
+    elif parsed_url.extension in WORKFLOW_SPEC_EXTENSIONS:
+        return WorkflowFetcherYaml(parsed_url, output_dir)
     else:
-        raise ValueError("Cannot handle given url")
+        raise ValueError("Cannot handle given URL")
