@@ -238,3 +238,12 @@ WORKFLOW_SPEC_EXTENSIONS = [".yaml", ".yml"]
 
 REGEX_CHARS_TO_REPLACE = re.compile("[^a-zA-Z0-9_]+")
 """Regex matching groups of characters that need to be replaced in workflow names."""
+
+FETCHER_MAXIMUM_FILE_SIZE = 1024 ** 3  # 1 GB
+"""Maximum file size allowed when fetching workflow specifications."""
+
+FETCHER_ALLOWED_SCHEMES = ["https", "http"]
+"""Schemes allowed when fetching workflow specifications."""
+
+FETCHER_REQUEST_TIMEOUT = 60
+"""Timeout used when fetching workflow specifications."""

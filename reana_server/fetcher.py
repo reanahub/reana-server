@@ -13,16 +13,28 @@ import os
 import shutil
 from typing import List, Optional
 from urllib.parse import urlparse
-from urllib.request import urlretrieve
 import zipfile
 
 from git import Repo
+import requests
+from requests.exceptions import HTTPError, Timeout, RequestException
 
 from reana_server.config import (
+    FETCHER_ALLOWED_SCHEMES,
+    FETCHER_MAXIMUM_FILE_SIZE,
+    FETCHER_REQUEST_TIMEOUT,
     REGEX_CHARS_TO_REPLACE,
     WORKFLOW_SPEC_EXTENSIONS,
     WORKFLOW_SPEC_FILENAMES,
 )
+
+
+class REANAFetcherError(Exception):
+    """Workflow specification fetcher error."""
+
+    def __init__(self, message):
+        """Initialize REANAFetcherError exception."""
+        self.message = message
 
 
 class ParsedUrl:
@@ -42,6 +54,7 @@ class ParsedUrl:
         )
         self.hostname = self._parsed_url.hostname
         self.netloc = self._parsed_url.netloc
+        self.scheme = self._parsed_url.scheme
 
 
 class WorkflowFetcherBase(ABC):
@@ -82,6 +95,63 @@ class WorkflowFetcherBase(ABC):
         """
         return REGEX_CHARS_TO_REPLACE.sub("-", name).strip("-")
 
+    @staticmethod
+    def _download_file(url: str, output_path: str):
+        """Download the given URL.
+
+        This method also checks that the file to be downloaded does not exceed the
+        maximum file size allowed (``FETCHER_MAXIMUM_FILE_SIZE``).
+
+        :param url: URL of the file to be downloaded.
+        :param output_path: Path where the file will be downloaded to.
+        """
+
+        def write_to_file(response: requests.Response, output_path: str) -> int:
+            """Write the response content to the given file.
+
+            :param response: Response to be written to the output file.
+            :param output_path: Path to the output file.
+            :returns: Number of bytes read from the response content.
+            """
+            read_bytes = 0
+            with open(output_path, "wb") as output_file:
+                # Use the same chunk size of `urlretrieve`
+                for chunk in response.iter_content(chunk_size=1024 * 8):
+                    read_bytes += len(chunk)
+                    output_file.write(chunk)
+                    if read_bytes > FETCHER_MAXIMUM_FILE_SIZE:
+                        break
+            return read_bytes
+
+        try:
+            with requests.get(
+                url, stream=True, timeout=FETCHER_REQUEST_TIMEOUT
+            ) as response:
+                response.raise_for_status()
+
+                content_length = int(response.headers.get("Content-Length", 0))
+                if content_length > FETCHER_MAXIMUM_FILE_SIZE:
+                    raise REANAFetcherError("Maximum file size exceeded")
+
+                read_bytes = write_to_file(response, output_path)
+
+                if read_bytes > FETCHER_MAXIMUM_FILE_SIZE:
+                    os.remove(output_path)
+                    raise REANAFetcherError("Maximum file size exceeded")
+        except HTTPError as e:
+            error = f"Cannot fetch the workflow specification: {e.response.reason} ({response.status_code})"
+            if response.status_code == 404:
+                error = "Cannot find the given workflow specification"
+            raise REANAFetcherError(error)
+        except Timeout:
+            raise REANAFetcherError(
+                "Timed-out while fetching the workflow specification"
+            )
+        except RequestException:
+            raise REANAFetcherError(
+                "Something went wrong while fetching the workflow specification"
+            )
+
     def _discover_workflow_specs(self, dir: Optional[str] = None) -> List[str]:
         """Discover if there is a workflow specification in the given directory.
 
@@ -121,17 +191,17 @@ class WorkflowFetcherBase(ABC):
         if self._spec:
             spec_path = os.path.abspath(os.path.join(self._output_dir, self._spec))
             if not self._is_path_inside_output_dir(spec_path):
-                raise Exception("Invalid path to the workflow specification")
+                raise REANAFetcherError("Invalid path to the workflow specification")
             if not os.path.isfile(spec_path):
-                raise Exception("Cannot find provided workflow specification")
+                raise REANAFetcherError("Cannot find provided workflow specification")
             return spec_path
 
         specs = [os.path.abspath(path) for path in self._discover_workflow_specs()]
         unique_specs = list(set(specs))
         if not unique_specs:
-            raise Exception("Workflow specification was not found")
+            raise REANAFetcherError("Workflow specification was not found")
         if len(unique_specs) > 1:
-            raise Exception("Multiple workflow specifications found")
+            raise REANAFetcherError("Multiple workflow specifications found")
         return unique_specs[0]
 
 
@@ -195,7 +265,7 @@ class WorkflowFetcherYaml(WorkflowFetcherBase):
     def fetch(self) -> None:
         """Fetch workflow specification from a given URL."""
         workflow_spec_path = os.path.join(self._output_dir, self._spec)
-        urlretrieve(self._parsed_url.original_url, workflow_spec_path)
+        self._download_file(self._parsed_url.original_url, workflow_spec_path)
 
     def generate_workflow_name(self) -> str:
         """Generate a workflow name from the given URL to the YAML specification file.
@@ -231,7 +301,7 @@ class WorkflowFetcherZip(WorkflowFetcherBase):
     def fetch(self) -> None:
         """Fetch workflow specification from a zip archive."""
         archive_path = os.path.join(self._output_dir, self._archive_name)
-        urlretrieve(self._parsed_url.original_url, archive_path)
+        self._download_file(self._parsed_url.original_url, archive_path)
         with zipfile.ZipFile(archive_path, "r") as zip_file:
             zip_file.extractall(path=self._output_dir)
         os.remove(archive_path)
@@ -315,6 +385,9 @@ def get_fetcher(launcher_url: str, output_dir: str) -> WorkflowFetcherBase:
     :returns: Workflow fetcher.
     """
     parsed_url = ParsedUrl(launcher_url)
+
+    if parsed_url.scheme not in FETCHER_ALLOWED_SCHEMES:
+        raise ValueError("URL scheme not allowed")
 
     if parsed_url.extension == ".git":
         return WorkflowFetcherGit(parsed_url, output_dir)

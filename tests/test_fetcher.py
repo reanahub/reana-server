@@ -8,8 +8,9 @@
 """REANA-Server workflow fetcher tests."""
 
 import os
+from urllib.request import urlretrieve
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 import zipfile
 
 from git import Repo
@@ -18,6 +19,8 @@ from reana_server.fetcher import (
     _get_github_fetcher,
     get_fetcher,
     ParsedUrl,
+    REANAFetcherError,
+    WorkflowFetcherBase,
     WorkflowFetcherGit,
     WorkflowFetcherYaml,
     WorkflowFetcherZip,
@@ -44,6 +47,11 @@ YAML_URL = "https://raw.githubusercontent.com/reanahub/reana-demo-root6-roofit/m
         (YAML_URL, WorkflowFetcherYaml),
         pytest.param(
             "https://reana.io",
+            None,
+            marks=pytest.mark.xfail(raises=ValueError, strict=True),
+        ),
+        pytest.param(
+            "ftp://reana.io/reana.yaml",
             None,
             marks=pytest.mark.xfail(raises=ValueError, strict=True),
         ),
@@ -93,6 +101,7 @@ def test_fetcher_git(with_git_ref, tmp_path):
 @pytest.mark.parametrize(
     "spec_name", ["reana.yaml", "reana.yml", "reana-snakemake.yaml"]
 )
+@patch("reana_server.fetcher.FETCHER_ALLOWED_SCHEMES", ["file"])
 def test_fetcher_yaml(spec_name, tmp_path):
     """Test fetching the workflow specification file from a URL."""
 
@@ -105,15 +114,21 @@ def test_fetcher_yaml(spec_name, tmp_path):
     with open(spec_path, "w") as f:
         f.write("Content of reana.yaml")
 
-    fetcher = get_fetcher(f"file://{spec_path}", output_dir)
-    assert isinstance(fetcher, WorkflowFetcherYaml)
-    fetcher.fetch()
-    expected_path = os.path.join(output_dir, spec_name)
-    assert expected_path == fetcher.workflow_spec_path()
-    assert os.path.isfile(expected_path)
+    mock_download = Mock()
+    mock_download.side_effect = urlretrieve
+    with patch(
+        "reana_server.fetcher.WorkflowFetcherBase._download_file", mock_download
+    ):
+        fetcher = get_fetcher(f"file://{spec_path}", output_dir)
+        assert isinstance(fetcher, WorkflowFetcherYaml)
+        fetcher.fetch()
+        expected_path = os.path.join(output_dir, spec_name)
+        assert expected_path == fetcher.workflow_spec_path()
+        assert os.path.isfile(expected_path)
 
 
 @pytest.mark.parametrize("with_top_level_dir", [True, False])
+@patch("reana_server.fetcher.FETCHER_ALLOWED_SCHEMES", ["file"])
 def test_fetcher_zip(with_top_level_dir, tmp_path):
     """Test fetching the workflow specification from a zip archive."""
 
@@ -135,12 +150,17 @@ def test_fetcher_zip(with_top_level_dir, tmp_path):
         files = [("reana.yaml", "Content of reana.yaml")]
     create_zip_file(archive_path, files)
 
-    fetcher = get_fetcher(f"file://{archive_path}", output_dir)
-    assert isinstance(fetcher, WorkflowFetcherZip)
-    fetcher.fetch()
-    expected_path = os.path.join(output_dir, "reana.yaml")
-    assert expected_path == fetcher.workflow_spec_path()
-    assert os.path.isfile(expected_path)
+    mock_download = Mock()
+    mock_download.side_effect = urlretrieve
+    with patch(
+        "reana_server.fetcher.WorkflowFetcherBase._download_file", mock_download
+    ):
+        fetcher = get_fetcher(f"file://{archive_path}", output_dir)
+        assert isinstance(fetcher, WorkflowFetcherZip)
+        fetcher.fetch()
+        expected_path = os.path.join(output_dir, "reana.yaml")
+        assert expected_path == fetcher.workflow_spec_path()
+        assert os.path.isfile(expected_path)
 
 
 @pytest.mark.parametrize(
@@ -212,4 +232,40 @@ def test_invalid_github_fetcher(url, tmp_path):
     ],
 )
 def test_workflow_name_generation(url, expected_name, tmp_path):
+    """Test the generation of the workflow name from the given URL."""
     assert get_fetcher(url, tmp_path).generate_workflow_name() == expected_name
+
+
+@patch("reana_server.fetcher.FETCHER_MAXIMUM_FILE_SIZE", 100)
+def test_size_limit(tmp_path):
+    """Test the maximum file size of the file to be downloaded."""
+    mock_request = Mock()
+    mock_request.headers = {"Content-Length": 101}
+    mock_request_context_manager = MagicMock()
+    mock_request_context_manager.__enter__.return_value = mock_request
+    mock_requests = Mock()
+    mock_requests.get.return_value = mock_request_context_manager
+
+    with patch("reana_server.fetcher.requests", mock_requests):
+        with pytest.raises(REANAFetcherError, match="file size exceeded"):
+            WorkflowFetcherBase._download_file(YAML_URL, tmp_path)
+
+
+@patch("reana_server.fetcher.FETCHER_MAXIMUM_FILE_SIZE", 100)
+def test_size_limit_without_content_length(tmp_path):
+    """Test the maximum file size of the file to be downloaded when ``Content-Length``
+    is not provided.
+    """
+    mock_request = Mock()
+    mock_request.headers = {}
+    mock_request.iter_content.return_value = [b"a" * 101]
+    mock_request_context_manager = MagicMock()
+    mock_request_context_manager.__enter__.return_value = mock_request
+    mock_requests = Mock()
+    mock_requests.get.return_value = mock_request_context_manager
+
+    file_path = os.path.join(tmp_path, "file")
+    with patch("reana_server.fetcher.requests", mock_requests):
+        with pytest.raises(REANAFetcherError, match="file size exceeded"):
+            WorkflowFetcherBase._download_file(YAML_URL, file_path)
+    assert not os.path.exists(file_path)

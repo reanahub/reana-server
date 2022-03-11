@@ -14,8 +14,10 @@ from bravado.exception import HTTPError
 from flask import Blueprint, jsonify
 from jsonschema import ValidationError
 from marshmallow import Schema
+import marshmallow.exceptions
 from webargs import fields
 from webargs.flaskparser import use_kwargs
+import werkzeug.exceptions
 
 from reana_commons.errors import REANAValidationError
 from reana_commons.specification import load_reana_spec
@@ -23,8 +25,9 @@ from reana_commons.validation.utils import validate_workflow_name
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
 from reana_server.api_client import current_rwc_api_client
+from reana_server.config import FETCHER_ALLOWED_SCHEMES
 from reana_server.decorators import signin_required
-from reana_server.fetcher import get_fetcher
+from reana_server.fetcher import REANAFetcherError, get_fetcher
 from reana_server.utils import (
     get_fetched_workflows_dir,
     mv_workflow_files,
@@ -37,10 +40,31 @@ from reana_server.validation import validate_workflow
 blueprint = Blueprint("launch", __name__)
 
 
+@blueprint.errorhandler(werkzeug.exceptions.UnprocessableEntity)
+def handle_validation_error(error: werkzeug.exceptions.UnprocessableEntity):
+    """Error handler for ``UnprocessableEntity``.
+
+    This error handler is needed to display useful error messages, instead of the
+    generic default one, when arguments validation fails.
+    """
+    error_message = error.description or str(error)
+
+    exception = getattr(error, "exc", None)
+    if isinstance(exception, marshmallow.exceptions.ValidationError):
+        validation_messages = []
+        for field, messages in exception.normalized_messages().items():
+            validation_messages.append(
+                "Field '{}': {}".format(field, ", ".join(messages))
+            )
+        error_message = ". ".join(validation_messages)
+
+    return jsonify({"message": error_message}), 400
+
+
 @blueprint.route("/launch", methods=["POST"])
 @use_kwargs(
     {
-        "url": fields.Url(required=True),
+        "url": fields.Url(schemes=FETCHER_ALLOWED_SCHEMES, required=True),
         "name": fields.Str(),
         "parameters": fields.Str(),
     }
@@ -158,7 +182,7 @@ def launch(user, url, name="", parameters="{}"):
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
-    except (REANAValidationError, ValueError, ValidationError) as e:
+    except (REANAFetcherError, REANAValidationError, ValueError, ValidationError) as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
     except Exception as e:
