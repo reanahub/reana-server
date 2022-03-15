@@ -193,7 +193,9 @@ class WorkflowFetcherBase(ABC):
             if not self._is_path_inside_output_dir(spec_path):
                 raise REANAFetcherError("Invalid path to the workflow specification")
             if not os.path.isfile(spec_path):
-                raise REANAFetcherError("Cannot find provided workflow specification")
+                raise REANAFetcherError(
+                    "Cannot find the provided workflow specification"
+                )
             return spec_path
 
         specs = [os.path.abspath(path) for path in self._discover_workflow_specs()]
@@ -289,13 +291,16 @@ class WorkflowFetcherYaml(WorkflowFetcherBase):
 class WorkflowFetcherZip(WorkflowFetcherBase):
     """Fetch the specification of a workflow from a zip archive."""
 
-    def __init__(self, parsed_url: ParsedUrl, output_dir: str):
+    def __init__(
+        self, parsed_url: ParsedUrl, output_dir: str, spec: Optional[str] = None
+    ):
         """Initialize the workflow specification fetcher.
 
         :param parsed_url: Parsed URL of the workflow specification to fetch.
         :param output_dir: Directory where all the data will be saved to.
+        :param spec: Optional path to the workflow specification.
         """
-        super().__init__(parsed_url, output_dir)
+        super().__init__(parsed_url, output_dir, spec)
         self._archive_name = self._parsed_url.basename
 
     def fetch(self) -> None:
@@ -330,11 +335,14 @@ class WorkflowFetcherZip(WorkflowFetcherBase):
         return self._clean_workflow_name(self._parsed_url.basename_without_extension)
 
 
-def _get_github_fetcher(parsed_url: ParsedUrl, output_dir: str) -> WorkflowFetcherGit:
+def _get_github_fetcher(
+    parsed_url: ParsedUrl, output_dir: str, spec: Optional[str] = None
+) -> WorkflowFetcherGit:
     """Parse a GitHub URL and return the correct fetcher.
 
     :param parsed_url: Parsed URL to a GitHub repository.
     :param output_dir: Directory where all the data fetched will be saved.
+    :param spec: Optional path to the workflow specification.
     :returns: Workflow fetcher.
     """
     # There are four different GitHub URLs:
@@ -364,24 +372,26 @@ def _get_github_fetcher(parsed_url: ParsedUrl, output_dir: str) -> WorkflowFetch
         raise ValueError("Malformed GitHub URL")
     if tree_or_blob and not git_ref:
         raise ValueError("Branch or commit ID not provided in GitHub URL")
-    if tree_or_blob == "blob" and not path:
-        raise ValueError("Specification file not provided in GitHub URL")
     if tree_or_blob == "blob":
-        _, extension = os.path.splitext(path)
-        if extension not in WORKFLOW_SPEC_EXTENSIONS:
-            raise ValueError("GitHub URL points to an invalid specification file")
+        raise ValueError(
+            "GitHub URL points directly to a file. "
+            "Use the 'spec' argument to specify a particular specification file"
+        )
     if tree_or_blob == "tree" and path:
         raise ValueError("GitHub URL points to a directory")
 
     repository_url = ParsedUrl(f"https://github.com/{username}/{repository}.git")
-    return WorkflowFetcherGit(repository_url, output_dir, git_ref, spec=path)
+    return WorkflowFetcherGit(repository_url, output_dir, git_ref, spec)
 
 
-def get_fetcher(launcher_url: str, output_dir: str) -> WorkflowFetcherBase:
+def get_fetcher(
+    launcher_url: str, output_dir: str, spec: Optional[str] = None
+) -> WorkflowFetcherBase:
     """Select the correct workflow fetcher based on the given URL.
 
     :param launcher_url: URL of the workflow specification.
     :param output_dir: Directory where all the data fetched will be saved.
+    :param spec: Optional path to the workflow specification.
     :returns: Workflow fetcher.
     """
     parsed_url = ParsedUrl(launcher_url)
@@ -389,13 +399,25 @@ def get_fetcher(launcher_url: str, output_dir: str) -> WorkflowFetcherBase:
     if parsed_url.scheme not in FETCHER_ALLOWED_SCHEMES:
         raise ValueError("URL scheme not allowed")
 
+    if spec:
+        _, spec_ext = os.path.splitext(spec)
+        if spec_ext not in WORKFLOW_SPEC_EXTENSIONS:
+            raise ValueError(
+                "The provided specification doesn't have a valid file extension"
+            )
+
     if parsed_url.extension == ".git":
-        return WorkflowFetcherGit(parsed_url, output_dir)
+        return WorkflowFetcherGit(parsed_url, output_dir, spec=spec)
     elif parsed_url.extension == ".zip":
-        return WorkflowFetcherZip(parsed_url, output_dir)
+        return WorkflowFetcherZip(parsed_url, output_dir, spec)
     elif parsed_url.netloc == "github.com":
-        return _get_github_fetcher(parsed_url, output_dir)
+        return _get_github_fetcher(parsed_url, output_dir, spec)
     elif parsed_url.extension in WORKFLOW_SPEC_EXTENSIONS:
+        if spec:
+            raise ValueError(
+                "Cannot use the 'spec' argument when the URL points directly to a "
+                "specification file"
+            )
         return WorkflowFetcherYaml(parsed_url, output_dir)
     else:
         raise ValueError("Cannot handle given URL")

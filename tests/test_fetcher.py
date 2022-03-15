@@ -62,8 +62,21 @@ def test_fetcher_selection(url, expected_fetcher_class, tmp_path):
     assert isinstance(get_fetcher(url, tmp_path), expected_fetcher_class)
 
 
-@pytest.mark.parametrize("with_git_ref", [True, False])
-def test_fetcher_git(with_git_ref, tmp_path):
+@pytest.mark.parametrize(
+    "with_git_ref, spec",
+    [
+        (True, None),
+        (True, "reana-cwl.yaml"),
+        (False, None),
+        (False, "reana-cwl.yaml"),
+        pytest.param(
+            False,
+            "invalid.yaml",
+            marks=pytest.mark.xfail(raises=REANAFetcherError, strict=True),
+        ),
+    ],
+)
+def test_fetcher_git(with_git_ref, spec, tmp_path):
     """Test fetching the workflow specification from a git repository."""
 
     def create_git_repository(repo_path, files):
@@ -86,23 +99,37 @@ def test_fetcher_git(with_git_ref, tmp_path):
 
     files = [
         ("reana.yaml", "Content of reana.yaml"),
+        ("reana-cwl.yaml", "Content of reana-cwl.yaml"),
         ("README.md", "# Test Git Repository"),
     ]
     commits = create_git_repository(repo_dir, files)
 
-    git_ref = commits[0] if with_git_ref else None
-    fetcher = WorkflowFetcherGit(ParsedUrl(repo_dir), output_dir, git_ref)
+    git_ref = commits[1] if with_git_ref else None
+    fetcher = WorkflowFetcherGit(ParsedUrl(repo_dir), output_dir, git_ref, spec)
     fetcher.fetch()
-    expected_path = os.path.join(output_dir, "reana.yaml")
+    expected_path = os.path.join(output_dir, spec or "reana.yaml")
     assert expected_path == fetcher.workflow_spec_path()
     assert os.path.isfile(expected_path)
 
 
 @pytest.mark.parametrize(
-    "spec_name", ["reana.yaml", "reana.yml", "reana-snakemake.yaml"]
+    "spec_name, spec_argument",
+    [
+        ("reana.yaml", None),
+        ("reana.yml", None),
+        ("reana-snakemake.yaml", None),
+        pytest.param(
+            "reana.yaml",
+            "reana-snakemake.yaml",
+            marks=pytest.mark.xfail(raises=ValueError, strict=True),
+        ),
+        pytest.param(
+            "invalid.txt", None, marks=pytest.mark.xfail(raises=ValueError, strict=True)
+        ),
+    ],
 )
 @patch("reana_server.fetcher.FETCHER_ALLOWED_SCHEMES", ["file"])
-def test_fetcher_yaml(spec_name, tmp_path):
+def test_fetcher_yaml(spec_name, spec_argument, tmp_path):
     """Test fetching the workflow specification file from a URL."""
 
     input_dir = os.path.join(tmp_path, "input")
@@ -119,7 +146,7 @@ def test_fetcher_yaml(spec_name, tmp_path):
     with patch(
         "reana_server.fetcher.WorkflowFetcherBase._download_file", mock_download
     ):
-        fetcher = get_fetcher(f"file://{spec_path}", output_dir)
+        fetcher = get_fetcher(f"file://{spec_path}", output_dir, spec_argument)
         assert isinstance(fetcher, WorkflowFetcherYaml)
         fetcher.fetch()
         expected_path = os.path.join(output_dir, spec_name)
@@ -127,9 +154,25 @@ def test_fetcher_yaml(spec_name, tmp_path):
         assert os.path.isfile(expected_path)
 
 
-@pytest.mark.parametrize("with_top_level_dir", [True, False])
+@pytest.mark.parametrize(
+    "with_top_level_dir, spec",
+    [
+        (True, None),
+        (True, "reana-cwl.yaml"),
+        (False, None),
+        (False, "reana-cwl.yaml"),
+        pytest.param(
+            True, "invalid.txt", marks=pytest.mark.xfail(raises=ValueError, strict=True)
+        ),
+        pytest.param(
+            True,
+            "invalid.yaml",
+            marks=pytest.mark.xfail(raises=REANAFetcherError, strict=True),
+        ),
+    ],
+)
 @patch("reana_server.fetcher.FETCHER_ALLOWED_SCHEMES", ["file"])
-def test_fetcher_zip(with_top_level_dir, tmp_path):
+def test_fetcher_zip(with_top_level_dir, spec, tmp_path):
     """Test fetching the workflow specification from a zip archive."""
 
     def create_zip_file(archive_path, files):
@@ -145,9 +188,15 @@ def test_fetcher_zip(with_top_level_dir, tmp_path):
 
     archive_path = os.path.join(input_dir, "archive.zip")
     if with_top_level_dir:
-        files = [("dir/reana.yaml", "Content of reana.yaml")]
+        files = [
+            ("dir/reana.yaml", "Content of reana.yaml"),
+            ("dir/reana-cwl.yaml", "Content of reana-cwl.yaml"),
+        ]
     else:
-        files = [("reana.yaml", "Content of reana.yaml")]
+        files = [
+            ("reana.yaml", "Content of reana.yaml"),
+            ("reana-cwl.yaml", "Content of reana-cwl.yaml"),
+        ]
     create_zip_file(archive_path, files)
 
     mock_download = Mock()
@@ -155,10 +204,10 @@ def test_fetcher_zip(with_top_level_dir, tmp_path):
     with patch(
         "reana_server.fetcher.WorkflowFetcherBase._download_file", mock_download
     ):
-        fetcher = get_fetcher(f"file://{archive_path}", output_dir)
+        fetcher = get_fetcher(f"file://{archive_path}", output_dir, spec)
         assert isinstance(fetcher, WorkflowFetcherZip)
         fetcher.fetch()
-        expected_path = os.path.join(output_dir, "reana.yaml")
+        expected_path = os.path.join(output_dir, spec or "reana.yaml")
         assert expected_path == fetcher.workflow_spec_path()
         assert os.path.isfile(expected_path)
 
@@ -170,20 +219,6 @@ def test_fetcher_zip(with_top_level_dir, tmp_path):
         ("https://github.com/user/repo/", "user", "repo", None, None),
         ("https://github.com/user/repo/tree/branch", "user", "repo", "branch", None),
         ("https://github.com/user/repo/tree/branch/", "user", "repo", "branch", None),
-        (
-            "https://github.com/user/repo/blob/branch/path/to/reana.yaml",
-            "user",
-            "repo",
-            "branch",
-            "path/to/reana.yaml",
-        ),
-        (
-            "https://github.com/user/repo/blob/branch/path/to/reana.yml",
-            "user",
-            "repo",
-            "branch",
-            "path/to/reana.yml",
-        ),
     ],
 )
 def test_github_fetcher(url, username, repository, git_ref, spec, tmp_path):
@@ -193,11 +228,16 @@ def test_github_fetcher(url, username, repository, git_ref, spec, tmp_path):
         _get_github_fetcher(ParsedUrl(url), tmp_path)
         mock_git_fetcher.assert_called_once()
         expected_repo_url = f"https://github.com/{username}/{repository}.git"
-        call_parsed_url, call_tmp_path, call_git_ref = mock_git_fetcher.call_args.args
+        (
+            call_parsed_url,
+            call_tmp_path,
+            call_git_ref,
+            call_spec,
+        ) = mock_git_fetcher.call_args.args
         assert call_parsed_url.original_url == expected_repo_url
         assert call_tmp_path == tmp_path
         assert call_git_ref == git_ref
-        assert mock_git_fetcher.call_args.kwargs["spec"] == spec
+        assert call_spec == spec
 
 
 @pytest.mark.parametrize(
@@ -206,6 +246,7 @@ def test_github_fetcher(url, username, repository, git_ref, spec, tmp_path):
         "https://github.com/user/repo/invalid",
         "https://github.com/user/repo/tree/branch/path/to/dir",
         "https://github.com/user/repo/blob/branch/path/to/file.txt",
+        "https://github.com/user/repo/blob/branch/path/to/reana.yaml",
         "https://github.com/user",
         "https://github.com/",
     ],
