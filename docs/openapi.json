@@ -324,6 +324,10 @@
                   "description": "Workflow parameters.",
                   "type": "string"
                 },
+                "spec": {
+                  "description": "Path to the workflow specification file to be used.",
+                  "type": "string"
+                },
                 "url": {
                   "description": "Remote origin URL where the REANA specification file is hosted.",
                   "type": "string"

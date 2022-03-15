@@ -67,10 +67,11 @@ def handle_validation_error(error: werkzeug.exceptions.UnprocessableEntity):
         "url": fields.Url(schemes=FETCHER_ALLOWED_SCHEMES, required=True),
         "name": fields.Str(),
         "parameters": fields.Str(),
+        "spec": fields.Str(),
     }
 )
 @signin_required()
-def launch(user, url, name="", parameters="{}"):
+def launch(user, url, name="", parameters="{}", spec=None):
     r"""Endpoint to launch a REANA workflow from URL.
 
     ---
@@ -101,6 +102,9 @@ def launch(user, url, name="", parameters="{}"):
                 type: string
               parameters:
                 description: Workflow parameters.
+                type: string
+              spec:
+                description: Path to the workflow specification file to be used.
                 type: string
       responses:
         200:
@@ -144,7 +148,7 @@ def launch(user, url, name="", parameters="{}"):
         tmpdir = get_fetched_workflows_dir(user_id)
 
         # Fetch and load workflow spec
-        fetcher = get_fetcher(url, tmpdir)
+        fetcher = get_fetcher(url, tmpdir, spec)
         fetcher.fetch()
         spec_path = fetcher.workflow_spec_path()
         reana_yaml = load_reana_spec(spec_path)
