@@ -8,6 +8,7 @@ Version 0.9.0 (UNRELEASED)
 - Adds new ``/api/launch`` endpoint that allows running workflows from remote sources.
 - Adds the possibility to fetch the workflow specification from a remote URL.
 - Adds REANA specification validation utilities.
+- Changes API rate limiter error messages to be more verbose.
 
 Version 0.8.4 (2022-02-23)
 --------------------------

@@ -14,10 +14,8 @@ from bravado.exception import HTTPError
 from flask import Blueprint, jsonify
 from jsonschema import ValidationError
 from marshmallow import Schema
-import marshmallow.exceptions
 from webargs import fields
 from webargs.flaskparser import use_kwargs
-import werkzeug.exceptions
 
 from reana_commons.errors import REANAValidationError
 from reana_commons.specification import load_reana_spec
@@ -38,27 +36,6 @@ from reana_server.validation import validate_workflow
 
 
 blueprint = Blueprint("launch", __name__)
-
-
-@blueprint.errorhandler(werkzeug.exceptions.UnprocessableEntity)
-def handle_validation_error(error: werkzeug.exceptions.UnprocessableEntity):
-    """Error handler for ``UnprocessableEntity``.
-
-    This error handler is needed to display useful error messages, instead of the
-    generic default one, when arguments validation fails.
-    """
-    error_message = error.description or str(error)
-
-    exception = getattr(error, "exc", None)
-    if isinstance(exception, marshmallow.exceptions.ValidationError):
-        validation_messages = []
-        for field, messages in exception.normalized_messages().items():
-            validation_messages.append(
-                "Field '{}': {}".format(field, ", ".join(messages))
-            )
-        error_message = ". ".join(validation_messages)
-
-    return jsonify({"message": error_message}), 400
 
 
 @blueprint.route("/launch", methods=["POST"])
@@ -186,6 +163,12 @@ def launch(user, url, name="", parameters="{}", spec=None):
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
+    except json.JSONDecodeError:
+        logging.error(traceback.format_exc())
+        return (
+            jsonify({"message": "The workflow 'parameters' field is not valid JSON."}),
+            400,
+        )
     except (REANAFetcherError, REANAValidationError, ValueError, ValidationError) as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
