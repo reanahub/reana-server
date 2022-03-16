@@ -128,7 +128,7 @@ def launch(user, url, name="", parameters="{}", spec=None):
         fetcher = get_fetcher(url, tmpdir, spec)
         fetcher.fetch()
         spec_path = fetcher.workflow_spec_path()
-        reana_yaml = load_reana_spec(spec_path)
+        reana_yaml = load_reana_spec(spec_path, workspace_path=tmpdir)
 
         # Validate workflow spec
         input_parameters = json.loads(parameters)
