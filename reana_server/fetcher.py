@@ -230,7 +230,10 @@ class WorkflowFetcherGit(WorkflowFetcherBase):
     def fetch(self) -> None:
         """Fetch workflow specification from a Git repository."""
         repository = Repo.clone_from(
-            self._parsed_url.original_url, self._output_dir, depth=1
+            self._parsed_url.original_url,
+            self._output_dir,
+            depth=1,
+            no_single_branch=True,
         )
         if self._git_ref:
             repository.remote().fetch(self._git_ref, depth=1)

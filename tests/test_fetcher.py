@@ -65,12 +65,31 @@ def test_fetcher_selection(url, expected_fetcher_class, tmp_path):
 @pytest.mark.parametrize(
     "with_git_ref, spec",
     [
-        (True, None),
-        (True, "reana-cwl.yaml"),
-        (False, None),
-        (False, "reana-cwl.yaml"),
+        (None, None),
+        ("commit", None),
+        ("branch", None),
+        ("tag", None),
+        (None, "reana-cwl.yaml"),
+        ("commit", "reana-cwl.yaml"),
+        ("branch", "reana-cwl.yaml"),
+        ("tag", "reana-cwl.yaml"),
         pytest.param(
-            False,
+            "commit",
+            "reana-not-present.yaml",
+            marks=pytest.mark.xfail(raises=REANAFetcherError, strict=True),
+        ),
+        pytest.param(
+            "branch",
+            "reana-not-present.yaml",
+            marks=pytest.mark.xfail(raises=REANAFetcherError, strict=True),
+        ),
+        pytest.param(
+            "tag",
+            "reana-not-present.yaml",
+            marks=pytest.mark.xfail(raises=REANAFetcherError, strict=True),
+        ),
+        pytest.param(
+            None,
             "invalid.yaml",
             marks=pytest.mark.xfail(raises=REANAFetcherError, strict=True),
         ),
@@ -79,7 +98,7 @@ def test_fetcher_selection(url, expected_fetcher_class, tmp_path):
 def test_fetcher_git(with_git_ref, spec, tmp_path):
     """Test fetching the workflow specification from a git repository."""
 
-    def create_git_repository(repo_path, files):
+    def create_git_repository(repo_path, files, idx):
         """Create a git repository with one commit for each file."""
         repository = Repo.init(repo_path)
 
@@ -92,6 +111,15 @@ def test_fetcher_git(with_git_ref, spec, tmp_path):
             commit = repository.index.commit(f"Add {file}")
             commits.append(commit.hexsha)
 
+        # Checkout given commit
+        repository.git.checkout(commits[idx])
+        # Create branch
+        repository.create_head("new-branch")
+        # Create tag
+        repository.create_tag("new-tag")
+        # Go back to master branch
+        repository.git.checkout("master")
+
         return commits
 
     repo_dir = os.path.join(tmp_path, "repo")
@@ -101,11 +129,24 @@ def test_fetcher_git(with_git_ref, spec, tmp_path):
         ("reana.yaml", "Content of reana.yaml"),
         ("reana-cwl.yaml", "Content of reana-cwl.yaml"),
         ("README.md", "# Test Git Repository"),
+        ("reana-not-present.yaml", "Content of reana-not-present.yaml"),
     ]
-    commits = create_git_repository(repo_dir, files)
 
-    git_ref = commits[1] if with_git_ref else None
-    fetcher = WorkflowFetcherGit(ParsedUrl(repo_dir), output_dir, git_ref, spec)
+    commits = create_git_repository(repo_dir, files, idx=1)
+
+    if with_git_ref == "branch":
+        git_ref = "new-branch"
+    elif with_git_ref == "commit":
+        git_ref = commits[1]
+    elif with_git_ref == "tag":
+        git_ref = "new-tag"
+    else:
+        assert with_git_ref is None
+        git_ref = None
+
+    fetcher = WorkflowFetcherGit(
+        ParsedUrl(f"file://{repo_dir}"), output_dir, git_ref, spec
+    )
     fetcher.fetch()
     expected_path = os.path.join(output_dir, spec or "reana.yaml")
     assert expected_path == fetcher.workflow_spec_path()
