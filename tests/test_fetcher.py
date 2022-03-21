@@ -258,6 +258,8 @@ def test_fetcher_zip(with_top_level_dir, spec, tmp_path):
     [
         ("https://github.com/user/repo", "user", "repo", None, None),
         ("https://github.com/user/repo/", "user", "repo", None, None),
+        ("https://github.com/user/repo.git", "user", "repo", None, None),
+        ("https://github.com/user/repo.git/", "user", "repo", None, None),
         ("https://github.com/user/repo/tree/branch", "user", "repo", "branch", None),
         ("https://github.com/user/repo/tree/branch/", "user", "repo", "branch", None),
     ],
@@ -279,6 +281,32 @@ def test_github_fetcher(url, username, repository, git_ref, spec, tmp_path):
         assert call_tmp_path == tmp_path
         assert call_git_ref == git_ref
         assert call_spec == spec
+
+
+@pytest.mark.parametrize(
+    "url, workflow_name",
+    [
+        ("https://github.com/user/repo/archive/commit.zip", "repo-commit"),
+        ("https://github.com/user/repo/archive/refs/heads/branch.zip", "repo-branch"),
+        ("https://github.com/user/repo/archive/refs/tags/tag.zip", "repo-tag"),
+    ],
+)
+def test_github_fetcher_zip(url, workflow_name, tmp_path):
+    """Test creating a valid fetcher for GitHub URLs downloading zip snapshots."""
+    mock_zip_fetcher = Mock()
+    with patch("reana_server.fetcher.WorkflowFetcherZip", mock_zip_fetcher):
+        _get_github_fetcher(ParsedUrl(url), tmp_path)
+        mock_zip_fetcher.assert_called_once()
+        (
+            call_parsed_url,
+            call_tmp_path,
+            call_spec,
+            call_workflow_name,
+        ) = mock_zip_fetcher.call_args.args
+        assert call_parsed_url.original_url == url
+        assert call_tmp_path == tmp_path
+        assert call_spec is None
+        assert call_workflow_name == workflow_name
 
 
 @pytest.mark.parametrize(
@@ -307,7 +335,7 @@ def test_invalid_github_fetcher(url, tmp_path):
         (GITHUB_REPO_URL + "/", "reana-demo-root6-roofit"),
         (GITHUB_REPO_URL + "/tree/branch", "reana-demo-root6-roofit-branch"),
         (GITHUB_REPO_URL + "/tree/branch/", "reana-demo-root6-roofit-branch"),
-        (GITHUB_REPO_ZIP, "master"),
+        (GITHUB_REPO_ZIP, "reana-demo-root6-roofit-master"),
         (ZENODO_URL, "circular-health-data-processing-master"),
         (YAML_URL, "reanahub-reana-demo-root6-roofit-master"),
         ("https://example.org/reana-snakemake.yaml", "reana-snakemake"),

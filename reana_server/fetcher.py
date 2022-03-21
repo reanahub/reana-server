@@ -18,6 +18,8 @@ import zipfile
 from git import Repo
 import requests
 from requests.exceptions import HTTPError, Timeout, RequestException
+import werkzeug.exceptions
+from werkzeug.routing import Map, Rule
 
 from reana_server.config import (
     FETCHER_ALLOWED_SCHEMES,
@@ -295,16 +297,27 @@ class WorkflowFetcherZip(WorkflowFetcherBase):
     """Fetch the specification of a workflow from a zip archive."""
 
     def __init__(
-        self, parsed_url: ParsedUrl, output_dir: str, spec: Optional[str] = None
+        self,
+        parsed_url: ParsedUrl,
+        output_dir: str,
+        spec: Optional[str] = None,
+        workflow_name: Optional[str] = None,
     ):
         """Initialize the workflow specification fetcher.
 
         :param parsed_url: Parsed URL of the workflow specification to fetch.
         :param output_dir: Directory where all the data will be saved to.
         :param spec: Optional path to the workflow specification.
+        :param workflow_name: Workflow name that overrides the workflow name generation.
         """
         super().__init__(parsed_url, output_dir, spec)
         self._archive_name = self._parsed_url.basename
+        if workflow_name:
+            self._workflow_name = self._clean_workflow_name(workflow_name)
+        else:
+            self._workflow_name = self._clean_workflow_name(
+                self._parsed_url.basename_without_extension
+            )
 
     def fetch(self) -> None:
         """Fetch workflow specification from a zip archive."""
@@ -331,11 +344,12 @@ class WorkflowFetcherZip(WorkflowFetcherBase):
     def generate_workflow_name(self) -> str:
         """Generate a workflow name from the given URL to the zip archive.
 
-        The name of the zip archive is used as the name of the workflow.
+        The name of the zip archive is used as the name of the workflow, unless a custom
+        workflow name was specified when initializing the fetcher.
 
         :returns: Generated workflow name.
         """
-        return self._clean_workflow_name(self._parsed_url.basename_without_extension)
+        return self._workflow_name
 
 
 def _get_github_fetcher(
@@ -348,43 +362,41 @@ def _get_github_fetcher(
     :param spec: Optional path to the workflow specification.
     :returns: Workflow fetcher.
     """
-    # There are four different GitHub URLs:
+    # There are four different GitHub URLs we are interested in:
     # 1. URL to a repository: /<user>/<repo>
-    # 2. URL to a branch/commit: /<user>/<repo>/tree/<git_ref>
-    # 3. URL to a specific folder: /<user>/<repo>/tree/<git_ref>/<path_to_dir>
-    # 4. URL to a specific file: /<user>/<repo>/blob/<git_ref>/<path_to_file>
+    # 2. Git URL: /<user>/<repo>.git
+    # 2. URL to a branch/commit/tag: /<user>/<repo>/tree/<git_ref>
+    # 3. URL to a zip snapshot: /<user>/<repo>/archive/.../<git_ref>.zip
 
-    # We are interested in five components: username, repository, tree/blob, git_ref, path
-    url_path_components = ["username", "repository", "tree_or_blob", "git_ref", "path"]
-    split_url_path = parsed_url.path.strip("/").split(
-        "/", maxsplit=len(url_path_components) - 1
-    )
-    components = {k: v for k, v in zip(url_path_components, split_url_path)}
+    # We use the routing capabilities of werkzeug to match the GitHub URL
+    urls = Map(
+        [
+            Rule("/<username>/<repository>/"),
+            Rule("/<username>/<repository>.git/"),
+            Rule("/<username>/<repository>/tree/<git_ref>/"),
+            Rule("/<username>/<repository>/archive/<path:zip_path>"),
+        ],
+        strict_slashes=False,
+    ).bind("github.com")
 
-    username = components.get("username")
-    repository = components.get("repository")
-    tree_or_blob = components.get("tree_or_blob")
+    try:
+        _, components = urls.match(parsed_url.path)
+    except werkzeug.exceptions.HTTPException:
+        raise ValueError("The provided GitHub URL is not valid")
+
+    username = components["username"]
+    repository = components["repository"]
     git_ref = components.get("git_ref")
-    path = components.get("path")
+    zip_path = components.get("zip_path")
 
-    if not username:
-        raise ValueError("Username not provided in GitHub URL")
-    if not repository:
-        raise ValueError("Repository not provided in GitHub URL")
-    if tree_or_blob and tree_or_blob not in ["tree", "blob"]:
-        raise ValueError("Malformed GitHub URL")
-    if tree_or_blob and not git_ref:
-        raise ValueError("Branch or commit ID not provided in GitHub URL")
-    if tree_or_blob == "blob":
-        raise ValueError(
-            "GitHub URL points directly to a file. "
-            "Use the 'spec' argument to specify a particular specification file"
-        )
-    if tree_or_blob == "tree" and path:
-        raise ValueError("GitHub URL points to a directory")
-
-    repository_url = ParsedUrl(f"https://github.com/{username}/{repository}.git")
-    return WorkflowFetcherGit(repository_url, output_dir, git_ref, spec)
+    if zip_path:
+        # The name of the zip file is the git commit/branch/tag
+        git_ref = parsed_url.basename_without_extension
+        workflow_name = f"{repository}-{git_ref}"
+        return WorkflowFetcherZip(parsed_url, output_dir, spec, workflow_name)
+    else:
+        repository_url = ParsedUrl(f"https://github.com/{username}/{repository}.git")
+        return WorkflowFetcherGit(repository_url, output_dir, git_ref, spec)
 
 
 def get_fetcher(
@@ -409,12 +421,12 @@ def get_fetcher(
                 "The provided specification doesn't have a valid file extension"
             )
 
-    if parsed_url.extension == ".git":
+    if parsed_url.netloc == "github.com":
+        return _get_github_fetcher(parsed_url, output_dir, spec)
+    elif parsed_url.extension == ".git":
         return WorkflowFetcherGit(parsed_url, output_dir, spec=spec)
     elif parsed_url.extension == ".zip":
         return WorkflowFetcherZip(parsed_url, output_dir, spec)
-    elif parsed_url.netloc == "github.com":
-        return _get_github_fetcher(parsed_url, output_dir, spec)
     elif parsed_url.extension in WORKFLOW_SPEC_EXTENSIONS:
         if spec:
             raise ValueError(
