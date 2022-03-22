@@ -12,10 +12,11 @@ import csv
 import io
 import json
 import logging
+import os
 import secrets
 import sys
 import shutil
-import os
+from typing import Optional
 from uuid import UUID, uuid4
 
 import click
@@ -28,10 +29,21 @@ from marshmallow.validate import Email
 
 from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK, SHARED_VOLUME_PATH
 from reana_commons.email import send_email
+from reana_commons.errors import REANAQuotaExceededError
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.yadage import yadage_load_from_workspace
 from reana_db.database import Session
-from reana_db.models import RunStatus, User, UserTokenStatus, UserTokenType, Workflow
+from reana_db.models import (
+    ResourceType,
+    ResourceUnit,
+    RunStatus,
+    User,
+    UserResource,
+    UserTokenStatus,
+    UserTokenType,
+    Workflow,
+)
+from reana_db.utils import get_default_quota_resource
 from sqlalchemy.exc import (
     IntegrityError,
     InvalidRequestError,
@@ -81,6 +93,35 @@ def get_fetched_workflows_dir(user_id: str) -> str:
     )
     create_user_workspace(tmpdir)
     return tmpdir
+
+
+def prevent_disk_quota_excess(user, bytes_to_sum: int, action=Optional[str]):
+    """
+    Prevent potential disk quota excess.
+
+    E.g. when uploading big files or launching new workflows.
+
+    :param user: User whose quota needs to be checked.
+    :param bytes_to_sum: Bytes to be added to the user's quota.
+    :param action: Optional action description used for custom error messages.
+    """
+    disk_resource = get_default_quota_resource(ResourceType.disk.name)
+    user_resource = UserResource.query.filter_by(
+        user_id=user.id_, resource_id=disk_resource.id_
+    ).first()
+    if (
+        user_resource.quota_limit > 0
+        and user_resource.quota_used + bytes_to_sum > user_resource.quota_limit
+    ):
+        human_readable_limit = ResourceUnit.human_readable_unit(
+            ResourceUnit.bytes_, user_resource.quota_limit
+        )
+        if not action:
+            action = "This action"
+        raise REANAQuotaExceededError(
+            f"{action} would exceed the disk quota limit "
+            f"({human_readable_limit}). Aborting."
+        )
 
 
 def remove_fetched_workflows_dir(tmpdir: str) -> None:

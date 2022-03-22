@@ -20,15 +20,21 @@ from webargs.flaskparser import use_kwargs
 from reana_commons.errors import REANAValidationError
 from reana_commons.specification import load_reana_spec
 from reana_commons.validation.utils import validate_workflow_name
-from reana_db.utils import _get_workflow_with_uuid_or_name
+from reana_db.utils import (
+    _get_workflow_with_uuid_or_name,
+    get_disk_usage_or_zero,
+    store_workflow_disk_quota,
+    update_users_disk_quota,
+)
 
 from reana_server.api_client import current_rwc_api_client
 from reana_server.config import FETCHER_ALLOWED_SCHEMES
-from reana_server.decorators import signin_required
+from reana_server.decorators import check_quota, signin_required
 from reana_server.fetcher import REANAFetcherError, get_fetcher
 from reana_server.utils import (
     get_fetched_workflows_dir,
     mv_workflow_files,
+    prevent_disk_quota_excess,
     publish_workflow_submission,
     remove_fetched_workflows_dir,
 )
@@ -48,6 +54,7 @@ blueprint = Blueprint("launch", __name__)
     }
 )
 @signin_required()
+@check_quota
 def launch(user, url, name="", parameters="{}", spec=None):
     r"""Endpoint to launch a REANA workflow from URL.
 
@@ -124,18 +131,25 @@ def launch(user, url, name="", parameters="{}", spec=None):
         user_id = str(user.id_)
         tmpdir = get_fetched_workflows_dir(user_id)
 
-        # Fetch and load workflow spec
+        # Fetch the workflow spec
         fetcher = get_fetcher(url, tmpdir, spec)
         fetcher.fetch()
-        spec_path = fetcher.workflow_spec_path()
-        reana_yaml = load_reana_spec(spec_path, workspace_path=tmpdir)
 
-        # Validate workflow spec
-        input_parameters = json.loads(parameters)
-        validate_workflow(reana_yaml, input_parameters)
-
+        # Generate the workflow name
         workflow_name = name.replace(" ", "") or fetcher.generate_workflow_name()
         validate_workflow_name(workflow_name)
+
+        # Check the user's disk quota
+        disk_usage = get_disk_usage_or_zero(tmpdir)
+        prevent_disk_quota_excess(
+            user, disk_usage, action=f"Launching the workflow {workflow_name}"
+        )
+
+        # Load and validate the workflow spec
+        spec_path = fetcher.workflow_spec_path()
+        reana_yaml = load_reana_spec(spec_path, workspace_path=tmpdir)
+        input_parameters = json.loads(parameters)
+        validate_workflow(reana_yaml, input_parameters)
 
         # Create workflow
         workflow_dict = {
@@ -150,6 +164,10 @@ def launch(user, url, name="", parameters="{}", spec=None):
 
         workflow = _get_workflow_with_uuid_or_name(response["workflow_id"], user_id)
         mv_workflow_files(tmpdir, workflow.workspace_path)
+
+        # Update the workflows's and user's disk usage
+        store_workflow_disk_quota(workflow, bytes_to_sum=disk_usage)
+        update_users_disk_quota(user, bytes_to_sum=disk_usage)
 
         # Start the workflow
         parameters = {"input_parameters": input_parameters}

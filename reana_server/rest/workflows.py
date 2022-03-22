@@ -21,15 +21,11 @@ from reana_commons.validation.operational_options import validate_operational_op
 from reana_commons.validation.utils import validate_workflow_name
 from reana_db.models import (
     InteractiveSessionType,
-    ResourceType,
-    ResourceUnit,
     RunStatus,
-    UserResource,
 )
-from reana_db.utils import _get_workflow_with_uuid_or_name, get_default_quota_resource
+from reana_db.utils import _get_workflow_with_uuid_or_name
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
-from werkzeug.datastructures import Headers
 
 from reana_server.api_client import current_rwc_api_client
 from reana_server.decorators import check_quota, signin_required
@@ -38,6 +34,7 @@ from reana_server.utils import (
     RequestStreamWithLen,
     _load_yadage_spec,
     _get_reana_yaml_from_gitlab,
+    prevent_disk_quota_excess,
     publish_workflow_submission,
     clone_workflow,
     is_uuid_v4,
@@ -1178,28 +1175,6 @@ def upload_file(workflow_id_or_name, user):  # noqa
               }
     """
 
-    def _prevent_disk_quota_excess(user, file_bytes, filename):
-        """
-        Prevent potential disk quota excess.
-
-        E.g. when uploading big files.
-        """
-        disk_resource = get_default_quota_resource(ResourceType.disk.name)
-        user_resource = UserResource.query.filter_by(
-            user_id=user.id_, resource_id=disk_resource.id_
-        ).first()
-        if (
-            user_resource.quota_limit > 0
-            and user_resource.quota_used + file_bytes > user_resource.quota_limit
-        ):
-            human_readable_limit = ResourceUnit.human_readable_unit(
-                ResourceUnit.bytes_, user_resource.quota_limit
-            )
-            raise REANAQuotaExceededError(
-                f"Uploading file {filename} would exceed the disk quota limit "
-                f"({human_readable_limit}). Aborting."
-            )
-
     try:
         filename = request.args.get("file_name")
         if not filename:
@@ -1219,7 +1194,9 @@ def upload_file(workflow_id_or_name, user):  # noqa
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
-        _prevent_disk_quota_excess(user, request.content_length, filename)
+        prevent_disk_quota_excess(
+            user, request.content_length, action=f"Uploading file {filename}"
+        )
         api_url = current_rwc_api_client.swagger_spec.__dict__.get("api_url")
         endpoint = current_rwc_api_client.api.upload_file.operation.path_name.format(
             workflow_id_or_name=workflow_id_or_name
