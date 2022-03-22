@@ -50,12 +50,12 @@ blueprint = Blueprint("launch", __name__)
         "url": fields.Url(schemes=FETCHER_ALLOWED_SCHEMES, required=True),
         "name": fields.Str(),
         "parameters": fields.Str(),
-        "spec": fields.Str(),
+        "specification": fields.Str(),
     }
 )
 @signin_required()
 @check_quota
-def launch(user, url, name="", parameters="{}", spec=None):
+def launch(user, url, name="", parameters="{}", specification=None):
     r"""Endpoint to launch a REANA workflow from URL.
 
     ---
@@ -87,7 +87,7 @@ def launch(user, url, name="", parameters="{}", spec=None):
               parameters:
                 description: Workflow parameters.
                 type: string
-              spec:
+              specification:
                 description: Path to the workflow specification file to be used.
                 type: string
       responses:
@@ -132,7 +132,7 @@ def launch(user, url, name="", parameters="{}", spec=None):
         tmpdir = get_fetched_workflows_dir(user_id)
 
         # Fetch the workflow spec
-        fetcher = get_fetcher(url, tmpdir, spec)
+        fetcher = get_fetcher(url, tmpdir, specification)
         fetcher.fetch()
 
         # Generate the workflow name

@@ -430,8 +430,8 @@ def get_fetcher(
     elif parsed_url.extension in WORKFLOW_SPEC_EXTENSIONS:
         if spec:
             raise ValueError(
-                "Cannot use the 'spec' argument when the URL points directly to a "
-                "specification file"
+                "Cannot use the 'specification' argument when the URL points directly "
+                "to a specification file"
             )
         return WorkflowFetcherYaml(parsed_url, output_dir)
     else:

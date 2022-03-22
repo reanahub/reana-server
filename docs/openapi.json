@@ -324,7 +324,7 @@
                   "description": "Workflow parameters.",
                   "type": "string"
                 },
-                "spec": {
+                "specification": {
                   "description": "Path to the workflow specification file to be used.",
                   "type": "string"
                 },
