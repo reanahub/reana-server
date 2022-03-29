@@ -66,6 +66,31 @@ REANA_WORKFLOW_SCHEDULING_POLICIES = ["fifo", "balanced"]
 - ``balanced``: a weighted strategy taking into account existing multi-user workloads and the DAG complexity of incoming workflows.
 """
 
+REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_LEVEL = int(
+    os.getenv("REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_LEVEL", 9)
+)
+"""REANA workflow scheduling readiness check needed to assess whether the cluster is ready to start new workflows."""
+
+REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_LEVEL_VALUE_MAP = {
+    0: "no_checks",
+    1: "concurrent",
+    2: "memory",
+    9: "all_checks",
+}
+"""REANA workflow scheduling readiness check level value map:
+- 0 = no readiness check; schedule new workflow as soon as they arrive;
+- 1 = check for maximum number of concurrently running workflows; schedule new workflows if not exceeded;
+- 2 = check for available cluster memory size; schedule new workflow only if it fits;
+- 9 = perform all checks; satisfy all previous criteria.
+"""
+
+REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_VALUE = (
+    REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_LEVEL_VALUE_MAP.get(
+        REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_LEVEL, "all_checks"
+    )
+)
+"""REANA workflow scheduling readiness check value."""
+
 SUPPORTED_COMPUTE_BACKENDS = json.loads(os.getenv("REANA_COMPUTE_BACKENDS", "[]")) or []
 """List of supported compute backends."""
 

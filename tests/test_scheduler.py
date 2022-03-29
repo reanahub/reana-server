@@ -35,7 +35,7 @@ def test_scheduler_starts_workflows(
     mock_rwc_api_client.api.set_workflow_status.return_value = mock_result_obj
     with patch.multiple(
         "reana_server.scheduler",
-        reana_ready=Mock(return_value=True),
+        reana_ready=Mock(return_value=None),
         current_rwc_api_client=mock_rwc_api_client,
         REANA_SCHEDULER_REQUEUE_SLEEP=0,
     ):
@@ -53,7 +53,7 @@ def test_scheduler_requeues_when_not_ready(
     in_memory_wsp.publish_workflow_submission("1", "workflow.1", {})
     with patch.multiple(
         "reana_server.scheduler",
-        reana_ready=Mock(return_value=False),
+        reana_ready=Mock(return_value="error"),
         current_workflow_submission_publisher=in_memory_wsp,
         REANA_SCHEDULER_REQUEUE_SLEEP=0,
     ):
@@ -98,7 +98,7 @@ def test_scheduler_requeues_on_rwc_failure(
     mock_rwc_api_client.api.set_workflow_status.return_value = mock_result_obj
     with patch.multiple(
         "reana_server.scheduler",
-        reana_ready=Mock(return_value=True),
+        reana_ready=Mock(return_value=None),
         current_rwc_api_client=mock_rwc_api_client,
         current_workflow_submission_publisher=in_memory_wsp,
         REANA_SCHEDULER_REQUEUE_SLEEP=0,
@@ -135,7 +135,7 @@ def test_scheduler_fail_after_too_many_retries(
     in_memory_wsp.publish_workflow_submission("1", "workflow.1", {})
     with patch.multiple(
         "reana_server.scheduler",
-        reana_ready=Mock(return_value=False),
+        reana_ready=Mock(return_value="error"),
         current_workflow_submission_publisher=in_memory_wsp,
         REANA_SCHEDULER_REQUEUE_SLEEP=0,
         REANA_SCHEDULER_REQUEUE_COUNT=1,

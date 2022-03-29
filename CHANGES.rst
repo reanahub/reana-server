@@ -9,6 +9,7 @@ Version 0.9.0 (UNRELEASED)
 - Adds the possibility to fetch the workflow specification from a remote URL.
 - Adds REANA specification validation utilities.
 - Changes API rate limiter error messages to be more verbose.
+- Changes workflow scheduler to allow defining the checks needed to assess whether the cluster can start new workflows.
 
 Version 0.8.4 (2022-02-23)
 --------------------------

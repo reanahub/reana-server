@@ -12,17 +12,15 @@ import json
 import logging
 from functools import partial
 from time import sleep
-from typing import Dict, Tuple, Optional
+from typing import Dict, Optional
 
 from bravado.exception import HTTPBadGateway, HTTPNotFound, HTTPConflict
-from kubernetes.client.rest import ApiException
 from sqlalchemy import func, or_
 from sqlalchemy.exc import SQLAlchemyError
 
 from reana_commons.config import REANA_MAX_CONCURRENT_BATCH_WORKFLOWS
 from reana_commons.consumer import BaseConsumer
 from reana_commons.publisher import WorkflowStatusPublisher
-from reana_commons.k8s.api_client import current_k8s_corev1_api_client
 from reana_db.database import Session
 from reana_db.models import Workflow, RunStatus
 
@@ -33,56 +31,39 @@ from reana_server.api_client import (
 from reana_server.config import (
     REANA_SCHEDULER_REQUEUE_SLEEP,
     REANA_SCHEDULER_REQUEUE_COUNT,
+    REANA_WORKFLOW_SCHEDULING_POLICY,
+    REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_VALUE,
 )
 from reana_server.status import NodesStatus
 
 
 def check_memory_availability(
-    workflow_min_job_memory: float,
-) -> Tuple[bool, Optional[str]]:
+    workflow_min_job_memory: Optional[float],
+) -> Optional[str]:
     """Check if at least one workflow job could be started in Kubernetes."""
-    message = None
+    error = None
+    # Do not calculate memory availability on fifo strategy
+    if not workflow_min_job_memory:
+        return error
     nodes = NodesStatus().get_available_memory()
     if not nodes:
-        return True, message
+        logging.info(
+            "Information about nodes memory is not available. Skipping memory check.."
+        )
+        return error
     max_node_available_memory = max(nodes)
     available = max_node_available_memory >= workflow_min_job_memory
     if not available:
-        message = (
+        error = (
             f"workflow requires {workflow_min_job_memory} memory whilst "
             f"only {max_node_available_memory} is available."
         )
-    return available, message
+    return error
 
 
-def check_predefined_conditions() -> Tuple[bool, Optional[str]]:
-    """Check Kubernetes predefined conditions for the nodes."""
-    try:
-        message = None
-        node_info = json.loads(
-            current_k8s_corev1_api_client.list_node(
-                _preload_content=False
-            ).data.decode()
-        )
-        for node in node_info["items"]:
-            # check based on the predefined conditions about the
-            # node status: MemoryPressure, OutOfDisk, KubeletReady
-            #              DiskPressure, PIDPressure,
-            for condition in node.get("status", {}).get("conditions", {}):
-                if not condition.get("status"):
-                    message = f"predefined condition failed: {condition}"
-                    return False, message
-    except ApiException as e:
-        logging.error("Something went wrong while getting node information.")
-        logging.error(e)
-        return False, message
-    return True, message
-
-
-def doesnt_exceed_max_reana_workflow_count() -> Tuple[bool, Optional[str]]:
+def check_concurrent_workflows_limit() -> Optional[str]:
     """Check upper limit on running REANA batch workflows."""
-    doesnt_exceed = True
-    message = None
+    error = None
     try:
         running_workflows = (
             Session.query(func.count())
@@ -95,34 +76,35 @@ def doesnt_exceed_max_reana_workflow_count() -> Tuple[bool, Optional[str]]:
             .scalar()
         )
         if running_workflows >= REANA_MAX_CONCURRENT_BATCH_WORKFLOWS:
-            message = (
+            error = (
                 f"there are already {running_workflows} running workflows "
                 f"whilst the allowed maximum is {REANA_MAX_CONCURRENT_BATCH_WORKFLOWS}."
             )
-            doesnt_exceed = False
     except SQLAlchemyError as e:
-        logging.error(
-            "Something went wrong while querying for number of running workflows."
-        )
+        error = "Something went wrong while querying for number of running workflows."
+        logging.error(error)
         logging.error(e)
-        doesnt_exceed = False
     Session.commit()
-    return doesnt_exceed, message
+    return error
 
 
-def reana_ready(workflow_min_job_memory: float) -> Tuple[bool, Optional[str]]:
+def reana_ready(workflow_min_job_memory: Optional[float]) -> Optional[str]:
     """Check if REANA can start new workflows."""
-    conditions = [check_predefined_conditions, doesnt_exceed_max_reana_workflow_count]
+    check_memory = partial(check_memory_availability, workflow_min_job_memory)
 
-    # Do not calculate memory availability on fifo strategy
-    if workflow_min_job_memory:
-        conditions.append(partial(check_memory_availability, workflow_min_job_memory))
+    conditions_map = {
+        "no_checks": [],
+        "concurrent": [check_concurrent_workflows_limit],
+        "memory": [check_memory],
+        "all_checks": [check_concurrent_workflows_limit, check_memory],
+    }
+    conditions = conditions_map.get(REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_VALUE)
 
     for check_condition in conditions:
-        result, message = check_condition()
-        if not result:
-            return result, message
-    return True, None
+        error = check_condition()
+        if error:
+            return error
+    return None
 
 
 class WorkflowExecutionScheduler(BaseConsumer):
@@ -138,9 +120,15 @@ class WorkflowExecutionScheduler(BaseConsumer):
         super(WorkflowExecutionScheduler, self).__init__(
             queue="workflow-submission", **kwargs
         )
-
         self.workflow_status_publisher = WorkflowStatusPublisher(
             connection=self.connection
+        )
+        logging.info(
+            "WorkflowExecutionScheduler initialized with the following settings: \n"
+            f"- REANA_SCHEDULER_REQUEUE_SLEEP: {REANA_SCHEDULER_REQUEUE_SLEEP}\n"
+            f"- REANA_SCHEDULER_REQUEUE_COUNT: {REANA_SCHEDULER_REQUEUE_COUNT}\n"
+            f"- REANA_WORKFLOW_SCHEDULING_POLICY: {REANA_WORKFLOW_SCHEDULING_POLICY}\n"
+            f"- REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_VALUE: {REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_VALUE}"
         )
 
     def get_consumers(self, Consumer, channel):
@@ -191,8 +179,8 @@ class WorkflowExecutionScheduler(BaseConsumer):
         workflow_submission.pop("priority", None)
         workflow_submission.pop("retry_count", None)
 
-        ready, reason = reana_ready(workflow_min_job_memory)
-        if ready:
+        error = reana_ready(workflow_min_job_memory)
+        if not error:
             logging.info(f"Starting queued workflow: {workflow_id}")
             workflow_submission["status"] = "start"
 
@@ -246,7 +234,7 @@ class WorkflowExecutionScheduler(BaseConsumer):
         else:
             logging.info(
                 f'REANA not ready to run workflow {workflow_submission["workflow_id_or_name"]}. '
-                f"Reason: {reason}"
+                f"Reason: {error}"
             )
             sleep(REANA_SCHEDULER_REQUEUE_SLEEP)
             message.reject()
