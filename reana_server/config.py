@@ -213,7 +213,9 @@ BREADCRUMBS_ROOT = "breadcrumbs"
 
 CERN_REMOTE_APP = copy.deepcopy(cern.REMOTE_APP)
 
-OAUTHCLIENT_REMOTE_APPS = dict(cern=CERN_REMOTE_APP,)
+OAUTHCLIENT_REMOTE_APPS = dict(
+    cern=CERN_REMOTE_APP,
+)
 
 REANA_CERN_ALLOW_SOCIAL_LOGIN = os.getenv("REANA_CERN_ALLOW_SOCIAL_LOGIN", False)
 
@@ -264,7 +266,7 @@ WORKFLOW_SPEC_EXTENSIONS = [".yaml", ".yml"]
 REGEX_CHARS_TO_REPLACE = re.compile("[^a-zA-Z0-9_]+")
 """Regex matching groups of characters that need to be replaced in workflow names."""
 
-FETCHER_MAXIMUM_FILE_SIZE = 1024 ** 3  # 1 GB
+FETCHER_MAXIMUM_FILE_SIZE = 1024**3  # 1 GB
 """Maximum file size allowed when fetching workflow specifications."""
 
 FETCHER_ALLOWED_SCHEMES = ["https", "http"]

@@ -19,11 +19,15 @@ readme = open("README.rst").read()
 history = open("CHANGES.rst").read()
 
 tests_require = [
-    "pytest-reana>=0.9.0a1,<0.10.0",
+    "pytest-reana>=0.9.0a3,<0.10.0",
 ]
 
 extras_require = {
-    "debug": ["wdb", "ipdb", "Flask-DebugToolbar",],
+    "debug": [
+        "wdb",
+        "ipdb",
+        "Flask-DebugToolbar",
+    ],
     "docs": [
         "Sphinx>=1.5.1",
         "sphinx-rtd-theme>=0.1.9",
@@ -105,7 +109,9 @@ setup(
         ],
         "invenio_base.apps": ["reana = reana_server.ext:REANA"],
         "invenio_base.api_apps": ["reana = reana_server.ext:REANA"],
-        "invenio_config.module": ["reana_server = reana_server.config",],
+        "invenio_config.module": [
+            "reana_server = reana_server.config",
+        ],
         "invenio_base.api_blueprints": [
             "reana_server_ping = reana_server.rest.ping:blueprint",
             "reana_server_workflows = reana_server.rest.workflows:blueprint",

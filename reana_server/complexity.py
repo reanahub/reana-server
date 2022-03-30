@@ -300,7 +300,10 @@ class CWLComplexityEstimator(ComplexityEstimatorBase):
             scatter_params = None
             if scatter:
                 scatter_params = (
-                    next(filter(lambda p: p["id"] == scatter, step.get("in", [])), {},)
+                    next(
+                        filter(lambda p: p["id"] == scatter, step.get("in", [])),
+                        {},
+                    )
                     .get("source")
                     .split("/")
                     .pop()

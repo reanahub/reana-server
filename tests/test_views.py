@@ -32,7 +32,8 @@ def test_get_workflows(app, default_user, _get_user_mock):
             make_mock_api_client("reana-workflow-controller")(),
         ):
             res = client.get(
-                url_for("workflows.get_workflows"), query_string={"type": "batch"},
+                url_for("workflows.get_workflows"),
+                query_string={"type": "batch"},
             )
             assert res.status_code == 401
 
@@ -64,7 +65,9 @@ def test_create_workflow(app, default_user, _get_user_mock):
 
             res = client.post(
                 url_for("workflows.create_workflow"),
-                query_string={"access_token": "wrongtoken",},
+                query_string={
+                    "access_token": "wrongtoken",
+                },
             )
             assert res.status_code == 403
 
@@ -364,7 +367,9 @@ def test_download_file(app, default_user, _get_user_mock):
                     workflow_id_or_name="1",
                     file_name="test_download",
                 ),
-                query_string={"file_name": "test_upload.txt",},
+                query_string={
+                    "file_name": "test_upload.txt",
+                },
             )
             assert res.status_code == 401
 
@@ -431,7 +436,9 @@ def test_delete_file(app, default_user, _get_user_mock):
                     workflow_id_or_name="1",
                     file_name="test_delete.txt",
                 ),
-                query_string={"access_token": "wrongtoken",},
+                query_string={
+                    "access_token": "wrongtoken",
+                },
             )
             assert res.status_code == 403
 

@@ -67,7 +67,12 @@ def gitlab_connect(**kwargs):
     # Get redirect target in safe manner.
     next_param = get_safe_redirect_target()
     # Create a JSON Web Token
-    state_token = serializer.dumps({"next": next_param, "sid": _create_identifier(),})
+    state_token = serializer.dumps(
+        {
+            "next": next_param,
+            "sid": _create_identifier(),
+        }
+    )
 
     params = {
         "client_id": REANA_GITLAB_OAUTH_APP_ID,

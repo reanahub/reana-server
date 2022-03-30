@@ -144,7 +144,9 @@ class WorkflowExecutionScheduler(BaseConsumer):
 
     def _fail_workflow(self, workflow_id: str, logs: str = "") -> None:
         self.workflow_status_publisher.publish_workflow_status(
-            workflow_id, status=RunStatus.failed.value, logs=logs,
+            workflow_id,
+            status=RunStatus.failed.value,
+            logs=logs,
         )
 
     def _retry_submission(self, workflow_id: str, workflow_submission: Dict) -> None:

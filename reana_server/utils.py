@@ -201,7 +201,9 @@ def _load_yadage_spec(workflow, operational_options):
     operational_options.update({"accept_metadir": True})
     toplevel = operational_options.get("toplevel", "")
     workflow.reana_specification = yadage_load_from_workspace(
-        workflow.workspace_path, workflow.reana_specification, toplevel,
+        workflow.workspace_path,
+        workflow.reana_specification,
+        toplevel,
     )
     Session.commit()
 

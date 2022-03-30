@@ -408,8 +408,10 @@ class NodesStatus(REANAStatus):
                     "capacity": node.status.capacity["memory"]
                 }
 
-            node_metrics = current_k8s_custom_objects_api_client.list_cluster_custom_object(
-                "metrics.k8s.io", "v1beta1", "nodes"
+            node_metrics = (
+                current_k8s_custom_objects_api_client.list_cluster_custom_object(
+                    "metrics.k8s.io", "v1beta1", "nodes"
+                )
             )
             for node_metric in node_metrics.get("items", []):
                 node_name = node_metric["metadata"]["name"]
@@ -421,7 +423,8 @@ class NodesStatus(REANAStatus):
                 node_usage_bytes = kubernetes_memory_to_bytes(node_usage)
                 node_capacity_bytes = kubernetes_memory_to_bytes(node_capacity)
                 node_usage_percentage = ClusterHealth.get_percentage(
-                    node_usage_bytes, node_capacity_bytes,
+                    node_usage_bytes,
+                    node_capacity_bytes,
                 )
                 result[node_name]["percentage"] = f"{node_usage_percentage}%"
                 result[node_name]["available"] = node_capacity_bytes - node_usage_bytes
@@ -498,7 +501,8 @@ class PodsStatus(REANAStatus):
     def get_pods_by_status(self, status, namespace):
         """Get pod name list by status."""
         pods = current_k8s_corev1_api_client.list_namespaced_pod(
-            namespace, field_selector=f"status.phase={status}",
+            namespace,
+            field_selector=f"status.phase={status}",
         )
         return [pod.metadata.name for pod in pods.items]
 
@@ -552,7 +556,8 @@ class JobsStatus(REANAStatus):
     def get_k8s_jobs_by_status(self, status):
         """Get from k8s API jobs in ``status`` status."""
         pods = current_k8s_corev1_api_client.list_namespaced_pod(
-            REANA_RUNTIME_KUBERNETES_NAMESPACE, field_selector=f"status.phase={status}",
+            REANA_RUNTIME_KUBERNETES_NAMESPACE,
+            field_selector=f"status.phase={status}",
         )
 
         job_pods = [

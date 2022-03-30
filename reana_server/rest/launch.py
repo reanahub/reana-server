@@ -159,7 +159,8 @@ def launch(user, url, name="", parameters="{}", specification=None):
             "launcher_url": url,
         }
         response, http_response = current_rwc_api_client.api.create_workflow(
-            workflow=workflow_dict, user=user_id,
+            workflow=workflow_dict,
+            user=user_id,
         ).result()
 
         workflow = _get_workflow_with_uuid_or_name(response["workflow_id"], user_id)

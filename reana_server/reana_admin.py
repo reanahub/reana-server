@@ -584,7 +584,9 @@ def set_quota_limit(ctx, emails, resource_type, resource_name, limit):
                 error_msg += f"Available resources are: {', '.join(resources)}."
             if error_msg:
                 click.secho(
-                    error_msg, fg="red", err=True,
+                    error_msg,
+                    fg="red",
+                    err=True,
                 )
                 sys.exit(1)
 

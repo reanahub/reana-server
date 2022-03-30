@@ -19,7 +19,9 @@ from reana_server.scheduler import WorkflowExecutionScheduler
 
 
 def test_scheduler_starts_workflows(
-    in_memory_queue_connection, default_in_memory_producer, consume_queue,
+    in_memory_queue_connection,
+    default_in_memory_producer,
+    consume_queue,
 ):
     """Test message is consumed from the queue."""
     workflow_name = "workflow.1"
@@ -44,7 +46,9 @@ def test_scheduler_starts_workflows(
 
 
 def test_scheduler_requeues_when_not_ready(
-    in_memory_queue_connection, default_in_memory_producer, consume_queue,
+    in_memory_queue_connection,
+    default_in_memory_producer,
+    consume_queue,
 ):
     """Test that the scheduler requeues workflows if conditions not met."""
     scheduler = WorkflowExecutionScheduler(connection=in_memory_queue_connection)
@@ -126,7 +130,9 @@ def test_scheduler_requeues_on_rwc_failure(
 
 
 def test_scheduler_fail_after_too_many_retries(
-    in_memory_queue_connection, default_in_memory_producer, consume_queue,
+    in_memory_queue_connection,
+    default_in_memory_producer,
+    consume_queue,
 ):
     """Test scheduler requeues requests if RWC fails to start workflows."""
     scheduler = WorkflowExecutionScheduler(connection=in_memory_queue_connection)

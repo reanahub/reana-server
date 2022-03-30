@@ -1526,7 +1526,9 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.get_files(
-            user=str(user.id_), workflow_id_or_name=workflow_id_or_name, **kwargs,
+            user=str(user.id_),
+            workflow_id_or_name=workflow_id_or_name,
+            **kwargs,
         ).result()
 
         return jsonify(http_response.json()), http_response.status_code
