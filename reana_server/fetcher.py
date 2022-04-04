@@ -231,15 +231,24 @@ class WorkflowFetcherGit(WorkflowFetcherBase):
 
     def fetch(self) -> None:
         """Fetch workflow specification from a Git repository."""
-        repository = Repo.clone_from(
-            self._parsed_url.original_url,
-            self._output_dir,
-            depth=1,
-            no_single_branch=True,
-        )
+        try:
+            repository = Repo.clone_from(
+                self._parsed_url.original_url,
+                self._output_dir,
+                depth=1,
+                no_single_branch=True,
+                env={"GIT_TERMINAL_PROMPT": "0"},
+            )
+        except Exception:
+            raise REANAFetcherError("Cannot clone the given Git repository")
+
         if self._git_ref:
-            repository.remote().fetch(self._git_ref, depth=1)
-            repository.git.checkout(self._git_ref)
+            try:
+                repository.remote().fetch(self._git_ref, depth=1)
+                repository.git.checkout(self._git_ref)
+            except Exception:
+                raise REANAFetcherError("Cannot checkout the given Git reference")
+
         shutil.rmtree(os.path.join(self._output_dir, ".git"))
 
     def generate_workflow_name(self) -> str:
@@ -323,8 +332,12 @@ class WorkflowFetcherZip(WorkflowFetcherBase):
         """Fetch workflow specification from a zip archive."""
         archive_path = os.path.join(self._output_dir, self._archive_name)
         self._download_file(self._parsed_url.original_url, archive_path)
-        with zipfile.ZipFile(archive_path, "r") as zip_file:
-            zip_file.extractall(path=self._output_dir)
+        try:
+            with zipfile.ZipFile(archive_path, "r") as zip_file:
+                zip_file.extractall(path=self._output_dir)
+        except zipfile.BadZipfile:
+            raise REANAFetcherError("The provided zip file is not valid")
+
         os.remove(archive_path)
 
         if not self._discover_workflow_specs():

@@ -191,9 +191,12 @@ def launch(user, url, name="", parameters="{}", specification=None):
     except (REANAFetcherError, REANAValidationError, ValueError, ValidationError) as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
-    except Exception as e:
+    except Exception:
         logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 500
+        return (
+            jsonify({"message": "Something went wrong while fetching the workflow."}),
+            500,
+        )
     finally:
         remove_fetched_workflows_dir(tmpdir)
 
