@@ -47,6 +47,7 @@ setup_requires = [
 
 install_requires = [
     "marshmallow>2.13.0,<=2.20.1",
+    "jinja2<3.1.0",
     "pyOpenSSL==17.5.0",
     "reana-commons[kubernetes,yadage]>=0.8.4,<0.9.0",
     "reana-db>=0.8.1,<0.9.0",
@@ -58,6 +59,7 @@ install_requires = [
     "uwsgi-tools>=1.1.1",
     "uwsgitop>=0.10",
     "webcolors==1.7",
+    "Werkzeug>=2.0.0,<2.1.0",
     "wtforms<3.0.0",
     # Invenio dependencies
     "invenio-app>=1.2.6,<1.3.0",
