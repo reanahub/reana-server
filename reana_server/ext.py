@@ -12,7 +12,6 @@ import logging
 
 from flask import jsonify
 from flask_limiter.errors import RateLimitExceeded
-from flask_menu import Menu
 from marshmallow.exceptions import ValidationError
 from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 from werkzeug.exceptions import UnprocessableEntity
@@ -69,7 +68,6 @@ class REANA(object):
         """Flask application initialization."""
         self.init_config(app)
         self.init_error_handlers(app)
-        Menu(app=app)
 
         @app.teardown_appcontext
         def shutdown_reana_db_session(response_or_exc):

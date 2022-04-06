@@ -51,7 +51,6 @@ setup_requires = [
 
 install_requires = [
     "gitpython>=3.1",
-    "jinja2<3.1.0",
     "marshmallow>2.13.0,<=2.20.1",
     "pyOpenSSL==17.5.0",
     "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.0a6,<0.10.0",
@@ -67,18 +66,18 @@ install_requires = [
     "werkzeug<2.1",
     "wtforms<3.0.0",
     # Invenio dependencies
-    "invenio-app>=1.2.6,<1.3.0",
-    "invenio-base>=1.2.3,<1.3.0",
-    "invenio-cache>=1.0.0,<1.1.0",
+    "invenio-app>=1.3.0,<1.4.0",
+    "invenio-base>=1.2.0,<1.3.0",
+    "invenio-cache>=1.1.0,<1.2.0",
     "invenio-config>=1.0.3,<1.1.0",
     # From base bundle
-    "invenio-logging>=1.2.0,<1.3.0",
+    "invenio-logging>=1.3.0,<1.4.0",
     "invenio-mail>=1.0.2,<1.1.0",
     # From auth bundle
-    "invenio-accounts>=1.4.2,<1.4.3",
-    "invenio-oauth2server>=1.0.5,<1.1.1",
-    "invenio-oauthclient>=1.1.3,<1.2.0",
-    "invenio-userprofiles>=1.0.1,<1.1.0",
+    "invenio-accounts>=1.4.2,<1.5.0",
+    "invenio-oauth2server>=1.3.0,<1.4.0",
+    "invenio-oauthclient>=1.5.0,<1.6.0",
+    "invenio-userprofiles>=1.2.0,<1.3.0",
     # Invenio database
     "invenio-db[postgresql]>=1.0.5,<1.1.0",
     "SQLAlchemy-Utils[encrypted]>=0.33.0,<0.36.0",

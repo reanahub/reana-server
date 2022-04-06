@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -31,6 +31,8 @@ def base_app(tmp_shared_volume_path):
         "SHARED_VOLUME_PATH": tmp_shared_volume_path,
         "SQLALCHEMY_DATABASE_URI": os.getenv("REANA_SQLALCHEMY_DATABASE_URI"),
         "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+        "APP_THEME": None,
+        "THEME_ICONS": None,
     }
     app_ = create_app(config_mapping=config_mapping)
     return app_

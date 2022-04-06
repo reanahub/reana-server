@@ -9,6 +9,7 @@
   "paths": {
     "/account/settings/linkedaccounts/": {},
     "/account/settings/linkedaccounts/static/{filename}": {},
+    "/account/settings/login": {},
     "/account/settings/security/": {},
     "/account/settings/sessions/revoke/": {},
     "/account/settings/static/{filename}": {},
@@ -2854,6 +2855,7 @@
     "/logout/": {},
     "/oauth/authorized/{remote_app}/": {},
     "/oauth/disconnect/{remote_app}/": {},
+    "/oauth/login": {},
     "/oauth/login/{remote_app}/": {},
     "/oauth/signup/{remote_app}/": {},
     "/oauth/static/{filename}": {},
