@@ -16,7 +16,7 @@ import os
 import secrets
 import sys
 import shutil
-from typing import Optional
+from typing import Optional, Dict
 from uuid import UUID, uuid4
 
 import click
@@ -196,7 +196,7 @@ def _calculate_complexity(workflow):
     return complexity
 
 
-def _load_yadage_spec(workflow, operational_options):
+def _load_and_save_yadage_spec(workflow: Workflow, operational_options: Dict):
     """Load and save in DB the Yadage workflow specification."""
     operational_options.update({"accept_metadir": True})
     toplevel = operational_options.get("toplevel", "")

@@ -7,6 +7,7 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 
 """Reana-Server workflow-functionality Flask-Blueprint."""
+import os
 import json
 import logging
 import traceback
@@ -19,6 +20,8 @@ from reana_commons.config import REANA_WORKFLOW_ENGINES
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.validation.operational_options import validate_operational_options
 from reana_commons.validation.utils import validate_workflow_name
+from reana_commons.specification import load_reana_spec
+from reana_db.database import Session
 from reana_db.models import (
     InteractiveSessionType,
     RunStatus,
@@ -32,7 +35,7 @@ from reana_server.decorators import check_quota, signin_required
 from reana_server.validation import validate_workspace_path
 from reana_server.utils import (
     RequestStreamWithLen,
-    _load_yadage_spec,
+    _load_and_save_yadage_spec,
     _get_reana_yaml_from_gitlab,
     prevent_disk_quota_excess,
     publish_workflow_submission,
@@ -417,8 +420,19 @@ def create_workflow(user):  # noqa
             workflow = _get_workflow_with_uuid_or_name(
                 response["workflow_id"], str(user.id_)
             )
+
+            # This is necessary for GitLab integration
             if workflow.type_ == "yadage":
-                _load_yadage_spec(workflow, workflow_dict["operational_options"])
+                _load_and_save_yadage_spec(
+                    workflow, workflow_dict["operational_options"]
+                )
+            elif workflow.type_ in ["cwl", "snakemake"]:
+                reana_yaml_path = os.path.join(workflow.workspace_path, "reana.yaml")
+                workflow.reana_specification = load_reana_spec(
+                    reana_yaml_path, workflow.workspace_path
+                )
+                Session.commit()
+
             parameters = request.json
             publish_workflow_submission(workflow, user.id_, parameters)
         return jsonify(response), http_response.status_code
@@ -925,7 +939,7 @@ def start_workflow(workflow_id_or_name, user):  # noqa
                 "again.".format(workflow.get_full_workflow_name(), workflow.status.name)
             )
         if "yadage" in (workflow.type_, restart_type):
-            _load_yadage_spec(workflow, operational_options)
+            _load_and_save_yadage_spec(workflow, operational_options)
         publish_workflow_submission(workflow, user.id_, parameters)
         response = {
             "message": "Workflow submitted.",
