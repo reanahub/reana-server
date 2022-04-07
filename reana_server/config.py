@@ -16,7 +16,7 @@ import re
 from distutils.util import strtobool
 from limits.util import parse
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
-from invenio_oauthclient.contrib import cern
+from invenio_oauthclient.contrib import cern_openid
 from reana_commons.config import REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES
 from reana_commons.job_utils import kubernetes_memory_to_bytes
 
@@ -211,20 +211,30 @@ RATELIMIT_PER_ENDPOINT = {
 # =========================================
 BREADCRUMBS_ROOT = "breadcrumbs"
 
-CERN_REMOTE_APP = copy.deepcopy(cern.REMOTE_APP)
+# OAuth configuration
+# ===================
+OAUTH_REDIRECT_URL = "/signin_callback"
 
-OAUTHCLIENT_REMOTE_APPS = dict(
-    cern=CERN_REMOTE_APP,
+OAUTH_REMOTE_REST_APP = copy.deepcopy(cern_openid.REMOTE_REST_APP)
+
+OAUTH_REMOTE_REST_APP.update(
+    {
+        "authorized_redirect_url": OAUTH_REDIRECT_URL,
+        "error_redirect_url": OAUTH_REDIRECT_URL,
+    }
 )
 
-REANA_CERN_ALLOW_SOCIAL_LOGIN = os.getenv("REANA_CERN_ALLOW_SOCIAL_LOGIN", False)
+OAUTHCLIENT_REST_DEFAULT_ERROR_REDIRECT_URL = OAUTH_REDIRECT_URL
 
-if REANA_CERN_ALLOW_SOCIAL_LOGIN:
-    OAUTHCLIENT_CERN_ALLOWED_IDENTITY_CLASSES = (
-        cern.OAUTHCLIENT_CERN_ALLOWED_IDENTITY_CLASSES + ["Unverified External"]
-    )
+OAUTHCLIENT_REMOTE_APPS = dict(
+    cern_openid=OAUTH_REMOTE_REST_APP,
+)
 
-CERN_APP_CREDENTIALS = dict(
+OAUTHCLIENT_REST_REMOTE_APPS = dict(
+    cern_openid=OAUTH_REMOTE_REST_APP,
+)
+
+CERN_APP_OPENID_CREDENTIALS = dict(
     consumer_key=REANA_SSO_CERN_CONSUMER_KEY,
     consumer_secret=REANA_SSO_CERN_CONSUMER_SECRET,
 )

@@ -11,6 +11,7 @@ Version 0.9.0 (UNRELEASED)
 - Changes API rate limiter error messages to be more verbose.
 - Changes workflow scheduler to allow defining the checks needed to assess whether the cluster can start new workflows.
 - Changes the Invenio dependencies to the latest versions.
+- Changes OAuth configuration to enable the new CERN SSO.
 
 Version 0.8.4 (2022-02-23)
 --------------------------
