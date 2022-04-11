@@ -274,3 +274,6 @@ FETCHER_ALLOWED_SCHEMES = ["https", "http"]
 
 FETCHER_REQUEST_TIMEOUT = 60
 """Timeout used when fetching workflow specifications."""
+
+FETCHER_ALLOWED_GITLAB_HOSTNAMES = ["gitlab.com", "gitlab.cern.ch"]
+"""GitLab instances allowed when fetching workflow specifications."""

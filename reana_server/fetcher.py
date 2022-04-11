@@ -11,7 +11,7 @@
 from abc import ABC, abstractmethod
 import os
 import shutil
-from typing import List, Optional
+from typing import Any, List, Mapping, Optional, Sequence
 from urllib.parse import urlparse
 import zipfile
 
@@ -19,9 +19,10 @@ from git import Repo
 import requests
 from requests.exceptions import HTTPError, Timeout, RequestException
 import werkzeug.exceptions
-from werkzeug.routing import Map, Rule
+import werkzeug.routing
 
 from reana_server.config import (
+    FETCHER_ALLOWED_GITLAB_HOSTNAMES,
     FETCHER_ALLOWED_SCHEMES,
     FETCHER_MAXIMUM_FILE_SIZE,
     FETCHER_REQUEST_TIMEOUT,
@@ -240,14 +241,19 @@ class WorkflowFetcherGit(WorkflowFetcherBase):
                 env={"GIT_TERMINAL_PROMPT": "0"},
             )
         except Exception:
-            raise REANAFetcherError("Cannot clone the given Git repository")
+            raise REANAFetcherError(
+                "Cannot clone the given Git repository. Please check that the provided "
+                "URL is correct and that the repository is publicly accessible."
+            )
 
         if self._git_ref:
             try:
                 repository.remote().fetch(self._git_ref, depth=1)
                 repository.git.checkout(self._git_ref)
             except Exception:
-                raise REANAFetcherError("Cannot checkout the given Git reference")
+                raise REANAFetcherError(
+                    f'Cannot checkout the given Git reference "{self._git_ref}"'
+                )
 
         shutil.rmtree(os.path.join(self._output_dir, ".git"))
 
@@ -365,9 +371,28 @@ class WorkflowFetcherZip(WorkflowFetcherBase):
         return self._workflow_name
 
 
+def _match_url(parsed_url: ParsedUrl, rules: Sequence[str]) -> Mapping[str, Any]:
+    """Match the URL's path using the provided rules.
+
+    :param parsed_url: Parsed URL whose path needs to be matched.
+    :param rules: URL rules used to parse the path of the given URL.
+    :returns: The parsed path components.
+    """
+    # We use the routing capabilities of werkzeug to match the URL path
+    urls = werkzeug.routing.Map(
+        [werkzeug.routing.Rule(rule) for rule in rules],
+        strict_slashes=False,
+    ).bind(parsed_url.hostname)
+    try:
+        _, components = urls.match(parsed_url.path)
+    except werkzeug.exceptions.HTTPException:
+        raise ValueError(f"The provided {parsed_url.hostname} URL is not valid")
+    return components
+
+
 def _get_github_fetcher(
     parsed_url: ParsedUrl, output_dir: str, spec: Optional[str] = None
-) -> WorkflowFetcherGit:
+) -> WorkflowFetcherBase:
     """Parse a GitHub URL and return the correct fetcher.
 
     :param parsed_url: Parsed URL to a GitHub repository.
@@ -378,24 +403,17 @@ def _get_github_fetcher(
     # There are four different GitHub URLs we are interested in:
     # 1. URL to a repository: /<user>/<repo>
     # 2. Git URL: /<user>/<repo>.git
-    # 2. URL to a branch/commit/tag: /<user>/<repo>/tree/<git_ref>
-    # 3. URL to a zip snapshot: /<user>/<repo>/archive/.../<git_ref>.zip
-
-    # We use the routing capabilities of werkzeug to match the GitHub URL
-    urls = Map(
+    # 3. URL to a branch/commit/tag: /<user>/<repo>/tree/<git_ref>
+    # 4. URL to a zip snapshot: /<user>/<repo>/archive/.../<git_ref>.zip
+    components = _match_url(
+        parsed_url,
         [
-            Rule("/<username>/<repository>/"),
-            Rule("/<username>/<repository>.git/"),
-            Rule("/<username>/<repository>/tree/<git_ref>/"),
-            Rule("/<username>/<repository>/archive/<path:zip_path>"),
+            "/<username>/<repository>/",
+            "/<username>/<repository>.git/",
+            "/<username>/<repository>/tree/<path:git_ref>",
+            "/<username>/<repository>/archive/<path:zip_path>",
         ],
-        strict_slashes=False,
-    ).bind("github.com")
-
-    try:
-        _, components = urls.match(parsed_url.path)
-    except werkzeug.exceptions.HTTPException:
-        raise ValueError("The provided GitHub URL is not valid")
+    )
 
     username = components["username"]
     repository = components["repository"]
@@ -409,6 +427,49 @@ def _get_github_fetcher(
         return WorkflowFetcherZip(parsed_url, output_dir, spec, workflow_name)
     else:
         repository_url = ParsedUrl(f"https://github.com/{username}/{repository}.git")
+        return WorkflowFetcherGit(repository_url, output_dir, git_ref, spec)
+
+
+def _get_gitlab_fetcher(
+    parsed_url: ParsedUrl, output_dir: str, spec: Optional[str] = None
+) -> WorkflowFetcherBase:
+    """Parse a GitLab URL and return the correct fetcher.
+
+    :param parsed_url: Parsed URL to a GitLab repository.
+    :param output_dir: Directory where all the data fetched will be saved.
+    :param spec: Optional path to the workflow specification.
+    :returns: Workflow fetcher.
+    """
+    # There are four different GitLab URLs we are interested in:
+    # 1. URL to a repository: /<user>/<repo>
+    # 2. Git URL: /<user>/<repo>.git
+    # 3. URL to a branch/commit/tag: /<user>/<repo>/-/tree/<git_ref>
+    # 4. URL to a zip snapshot: /<user>/<repo>/-/archive/.../<repo>-<git_ref>.zip
+    # Note that GitLab supports recursive subgroups, so <user> can contain slashes
+    components = _match_url(
+        parsed_url,
+        [
+            "/<path:username>/<repository>/",
+            "/<path:username>/<repository>.git/",
+            "/<path:username>/<repository>/-/tree/<path:git_ref>",
+            "/<path:username>/<repository>/-/archive/<path:zip_path>",
+        ],
+    )
+
+    username = components["username"]
+    repository = components["repository"]
+    git_ref = components.get("git_ref")
+    zip_path = components.get("zip_path")
+
+    if zip_path:
+        # The name of the zip file is composed of the repository name and
+        # the git commit/branch/tag
+        workflow_name = parsed_url.basename_without_extension
+        return WorkflowFetcherZip(parsed_url, output_dir, spec, workflow_name)
+    else:
+        repository_url = ParsedUrl(
+            f"https://{parsed_url.hostname}/{username}/{repository}.git"
+        )
         return WorkflowFetcherGit(repository_url, output_dir, git_ref, spec)
 
 
@@ -436,6 +497,8 @@ def get_fetcher(
 
     if parsed_url.netloc == "github.com":
         return _get_github_fetcher(parsed_url, output_dir, spec)
+    elif parsed_url.netloc in FETCHER_ALLOWED_GITLAB_HOSTNAMES:
+        return _get_gitlab_fetcher(parsed_url, output_dir, spec)
     elif parsed_url.extension == ".git":
         return WorkflowFetcherGit(parsed_url, output_dir, spec=spec)
     elif parsed_url.extension == ".zip":

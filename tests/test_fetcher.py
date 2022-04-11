@@ -17,6 +17,7 @@ from git import Repo
 
 from reana_server.fetcher import (
     _get_github_fetcher,
+    _get_gitlab_fetcher,
     get_fetcher,
     ParsedUrl,
     REANAFetcherError,
@@ -31,6 +32,10 @@ GITHUB_REPO_URL = "https://github.com/reanahub/reana-demo-root6-roofit"
 GITHUB_REPO_ZIP = (
     "https://github.com/reanahub/reana-demo-root6-roofit/archive/refs/heads/master.zip"
 )
+GITLAB_REPO_URL = "https://gitlab.com/group/user/repo"
+GITLAB_REPO_ZIP = (
+    "https://gitlab.cern.ch/group/user/repo/-/archive/master/repo-master.zip"
+)
 ZENODO_URL = "https://zenodo.org/record/5752285/files/circular-health-data-processing-master.zip?download=1"
 YAML_URL = "https://raw.githubusercontent.com/reanahub/reana-demo-root6-roofit/master/reana.yaml"
 
@@ -43,6 +48,9 @@ YAML_URL = "https://raw.githubusercontent.com/reanahub/reana-demo-root6-roofit/m
         (GITHUB_REPO_URL, WorkflowFetcherGit),
         (GITHUB_REPO_URL + "/", WorkflowFetcherGit),
         (GITHUB_REPO_ZIP, WorkflowFetcherZip),
+        (GITLAB_REPO_URL, WorkflowFetcherGit),
+        (GITLAB_REPO_URL + "/", WorkflowFetcherGit),
+        (GITLAB_REPO_ZIP, WorkflowFetcherZip),
         (ZENODO_URL, WorkflowFetcherZip),
         (YAML_URL, WorkflowFetcherYaml),
         pytest.param(
@@ -254,17 +262,29 @@ def test_fetcher_zip(with_top_level_dir, spec, tmp_path):
 
 
 @pytest.mark.parametrize(
-    "url, username, repository, git_ref, spec",
+    "url, username, repository, git_ref",
     [
-        ("https://github.com/user/repo", "user", "repo", None, None),
-        ("https://github.com/user/repo/", "user", "repo", None, None),
-        ("https://github.com/user/repo.git", "user", "repo", None, None),
-        ("https://github.com/user/repo.git/", "user", "repo", None, None),
-        ("https://github.com/user/repo/tree/branch", "user", "repo", "branch", None),
-        ("https://github.com/user/repo/tree/branch/", "user", "repo", "branch", None),
+        ("https://github.com/user/repo", "user", "repo", None),
+        ("https://github.com/user/repo/", "user", "repo", None),
+        ("https://github.com/user/repo.git", "user", "repo", None),
+        ("https://github.com/user/repo.git/", "user", "repo", None),
+        ("https://github.com/user/repo/tree/branch", "user", "repo", "branch"),
+        ("https://github.com/user/repo/tree/branch/", "user", "repo", "branch"),
+        (
+            "https://github.com/user/repo/tree/tag/with/slashes",
+            "user",
+            "repo",
+            "tag/with/slashes",
+        ),
+        (
+            "https://github.com/user/repo/tree/tag/with/slashes/",
+            "user",
+            "repo",
+            "tag/with/slashes",
+        ),
     ],
 )
-def test_github_fetcher(url, username, repository, git_ref, spec, tmp_path):
+def test_github_fetcher(url, username, repository, git_ref, tmp_path):
     """Test creating a valid fetcher for GitHub URLs."""
     mock_git_fetcher = Mock()
     with patch("reana_server.fetcher.WorkflowFetcherGit", mock_git_fetcher):
@@ -280,7 +300,7 @@ def test_github_fetcher(url, username, repository, git_ref, spec, tmp_path):
         assert call_parsed_url.original_url == expected_repo_url
         assert call_tmp_path == tmp_path
         assert call_git_ref == git_ref
-        assert call_spec == spec
+        assert call_spec is None
 
 
 @pytest.mark.parametrize(
@@ -313,7 +333,6 @@ def test_github_fetcher_zip(url, workflow_name, tmp_path):
     "url",
     [
         "https://github.com/user/repo/invalid",
-        "https://github.com/user/repo/tree/branch/path/to/dir",
         "https://github.com/user/repo/blob/branch/path/to/file.txt",
         "https://github.com/user/repo/blob/branch/path/to/reana.yaml",
         "https://github.com/user",
@@ -327,6 +346,55 @@ def test_invalid_github_fetcher(url, tmp_path):
 
 
 @pytest.mark.parametrize(
+    "url, username, repository, git_ref",
+    [
+        ("https://gitlab.com/user/repo", "user", "repo", None),
+        ("https://gitlab.cern.ch/user/repo", "user", "repo", None),
+        ("https://gitlab.com/group/user/repo", "group/user", "repo", None),
+        ("https://gitlab.com/user/repo.git/", "user", "repo", None),
+        ("https://gitlab.com/group/user/repo.git/", "group/user", "repo", None),
+        ("https://gitlab.com/user/repo/-/tree/branch", "user", "repo", "branch"),
+        (
+            "https://gitlab.com/group/user/repo/-/tree/branch",
+            "group/user",
+            "repo",
+            "branch",
+        ),
+        (
+            "https://gitlab.com/group/user/repo/-/tree/tag/with/slashes",
+            "group/user",
+            "repo",
+            "tag/with/slashes",
+        ),
+        (
+            "https://gitlab.com/group/user/repo/-/tree/tag/with/slashes/",
+            "group/user",
+            "repo",
+            "tag/with/slashes",
+        ),
+    ],
+)
+def test_gitlab_fetcher(url, username, repository, git_ref, tmp_path):
+    """Test creating a valid fetcher for GitLab URLs."""
+    mock_git_fetcher = Mock()
+    with patch("reana_server.fetcher.WorkflowFetcherGit", mock_git_fetcher):
+        parsed_url = ParsedUrl(url)
+        _get_gitlab_fetcher(ParsedUrl(url), tmp_path)
+        mock_git_fetcher.assert_called_once()
+        expected_repo_url = f"https://{parsed_url.hostname}/{username}/{repository}.git"
+        (
+            call_parsed_url,
+            call_tmp_path,
+            call_git_ref,
+            call_spec,
+        ) = mock_git_fetcher.call_args.args
+        assert call_parsed_url.original_url == expected_repo_url
+        assert call_tmp_path == tmp_path
+        assert call_git_ref == git_ref
+        assert call_spec is None
+
+
+@pytest.mark.parametrize(
     "url, expected_name",
     [
         (GIT_URL, "reana-demo-root6-roofit"),
@@ -334,8 +402,14 @@ def test_invalid_github_fetcher(url, tmp_path):
         (GITHUB_REPO_URL, "reana-demo-root6-roofit"),
         (GITHUB_REPO_URL + "/", "reana-demo-root6-roofit"),
         (GITHUB_REPO_URL + "/tree/branch", "reana-demo-root6-roofit-branch"),
-        (GITHUB_REPO_URL + "/tree/branch/", "reana-demo-root6-roofit-branch"),
+        (
+            GITHUB_REPO_URL + "/tree/tag/with/slashes/",
+            "reana-demo-root6-roofit-tag-with-slashes",
+        ),
         (GITHUB_REPO_ZIP, "reana-demo-root6-roofit-master"),
+        (GITLAB_REPO_URL, "repo"),
+        (GITLAB_REPO_URL + "/-/tree/tag/with/slashes/", "repo-tag-with-slashes"),
+        (GITLAB_REPO_ZIP, "repo-master"),
         (ZENODO_URL, "circular-health-data-processing-master"),
         (YAML_URL, "reanahub-reana-demo-root6-roofit-master"),
         ("https://example.org/reana-snakemake.yaml", "reana-snakemake"),
