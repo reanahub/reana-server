@@ -8,6 +8,8 @@
 
 import json
 import logging
+import os
+import subprocess
 import traceback
 
 from bravado.exception import HTTPError
@@ -133,6 +135,33 @@ def launch(user, url, name="", parameters="{}", specification=None):
 
         # Fetch the workflow spec
         fetcher = get_fetcher(url, tmpdir, specification)
+
+        def _run_debug_subprocess(cmd):
+            result = subprocess.run(
+                cmd, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, text=True
+            )
+            joined_cmd = " ".join(cmd)
+            logging.info(f"'{joined_cmd}' ({result.returncode}):\n{result.stdout}")
+
+        output_dir_exists = os.path.isdir(tmpdir)
+        logging.info(f"Output directory exists? {output_dir_exists}")
+        _run_debug_subprocess(["ls", "-ld", tmpdir])
+        _run_debug_subprocess(["ls", "-l", tmpdir])
+
+        pwd_env = os.environ.get("PWD")
+        logging.info(f"$PWD: {pwd_env}")
+        try:
+            getcwd = os.getcwd()
+            logging.info(f"os.getcwd(): {getcwd}")
+        except Exception as e:
+            logging.error(e, exc_info=True)
+        _run_debug_subprocess(["pwd"])
+        _run_debug_subprocess(["ls", "-ld", pwd_env])
+        pid = os.getpid()
+        _run_debug_subprocess(["readlink", "-v", f"/proc/{pid}/cwd"])
+        _run_debug_subprocess(["readlink", "-vm", f"/proc/{pid}/cwd"])
+        _run_debug_subprocess(["ls", "-l", f"/proc/{pid}/cwd"])
+
         fetcher.fetch()
 
         # Generate the workflow name
