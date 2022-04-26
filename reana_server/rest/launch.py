@@ -8,6 +8,9 @@
 
 import json
 import logging
+import os
+import shutil
+import threading
 import traceback
 
 from bravado.exception import HTTPError
@@ -36,12 +39,14 @@ from reana_server.utils import (
     mv_workflow_files,
     prevent_disk_quota_excess,
     publish_workflow_submission,
-    remove_fetched_workflows_dir,
 )
 from reana_server.validation import validate_workflow
 
 
 blueprint = Blueprint("launch", __name__)
+
+load_reana_spec_lock = threading.Lock()
+"""Lock used to make sure only one specification is loaded at a time."""
 
 
 @blueprint.route("/launch", methods=["POST"])
@@ -147,7 +152,10 @@ def launch(user, url, name="", parameters="{}", specification=None):
 
         # Load and validate the workflow spec
         spec_path = fetcher.workflow_spec_path()
-        reana_yaml = load_reana_spec(spec_path, workspace_path=tmpdir)
+        # FIXME: locking will not be needed when the loading and validation of
+        # specifications will be done inside an external sandbox
+        with load_reana_spec_lock:
+            reana_yaml = load_reana_spec(spec_path, workspace_path=tmpdir)
         input_parameters = json.loads(parameters)
         validate_workflow(reana_yaml, input_parameters)
 
@@ -198,7 +206,18 @@ def launch(user, url, name="", parameters="{}", specification=None):
             500,
         )
     finally:
-        remove_fetched_workflows_dir(tmpdir)
+        # FIXME: `load_reana_spec` is not thread-safe and it changes the cwd, so for the
+        # time being we can only delete the files inside the directory where the
+        # workflow is fetched.  Deleting the directory would result in a
+        # `FileNotFoundError` when calling `os.getcwd()`, due to the cwd not existing
+        # anymore.
+        #
+        # remove_fetched_workflows_dir(tmpdir)
+        for entry in os.scandir(tmpdir):
+            if entry.is_file() or entry.is_symlink():
+                os.remove(entry)
+            else:
+                shutil.rmtree(entry)
 
 
 class LaunchSchema(Schema):
