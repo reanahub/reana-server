@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -16,7 +16,9 @@ import uuid
 from click.testing import CliRunner
 from reana_db.models import AuditLogAction, User, UserTokenStatus
 
+from reana_server.api_client import WorkflowSubmissionPublisher
 from reana_server.reana_admin import reana_admin
+from reana_server.reana_admin.consumer import MessageConsumer
 
 
 def test_export_users(default_user):
@@ -254,3 +256,54 @@ def test_revoke_token(default_user, session):
         ],
     )
     assert "does not have an active access token" in result.output
+
+
+class TestMessageConsumer:
+    def test_do_not_remove_message(
+        self,
+        in_memory_queue_connection,
+        default_in_memory_producer,
+        consume_queue,
+    ):
+        """Test if MessageConsumer ignores and re-queues not matching message."""
+        workflow_name = "workflow.1"
+        queue_name = "workflow-submission"
+        consumer = MessageConsumer(
+            connection=in_memory_queue_connection,
+            queue_name=queue_name,
+            key="workflow_id_or_name",
+            values_to_delete=["some_other_name"],
+        )
+        in_memory_wsp = WorkflowSubmissionPublisher(
+            connection=in_memory_queue_connection
+        )
+
+        in_memory_wsp.publish_workflow_submission("1", workflow_name, {})
+        consume_queue(consumer, limit=1)
+        assert not in_memory_queue_connection.channel().queues[queue_name].empty()
+        in_memory_queue_connection.channel().queues.clear()
+
+    def test_removes_message(
+        self,
+        in_memory_queue_connection,
+        default_in_memory_producer,
+        consume_queue,
+    ):
+        """Test if MessageConsumer correctly removes specified message."""
+        workflow_name = "workflow.1"
+        consumer = MessageConsumer(
+            connection=in_memory_queue_connection,
+            queue_name="workflow-submission",
+            key="workflow_id_or_name",
+            values_to_delete=[workflow_name],
+        )
+        in_memory_wsp = WorkflowSubmissionPublisher(
+            connection=in_memory_queue_connection
+        )
+
+        in_memory_wsp.publish_workflow_submission("1", workflow_name, {})
+        consume_queue(consumer, limit=1)
+        assert (
+            in_memory_queue_connection.channel().queues["workflow-submission"].empty()
+        )
+        in_memory_queue_connection.channel().queues.clear()

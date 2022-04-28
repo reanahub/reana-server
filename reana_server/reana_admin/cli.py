@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021 CERN.
+# Copyright (C) 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -13,6 +13,7 @@ import logging
 import secrets
 import sys
 import traceback
+from typing import List, Optional
 
 import click
 import tablib
@@ -639,3 +640,79 @@ def set_default_quota_limit(ctx):
             resource_type=resource.type_.name,
             limit=DEFAULT_QUOTA_LIMITS.get(resource.type_.name),
         )
+
+
+@reana_admin.command("queue-consume")
+@click.option(
+    "--queue-name",
+    "-q",
+    required=True,
+    type=str,
+    help="Name of the queue that will be consumed, e.g workflow-submission",
+)
+@click.option(
+    "--key",
+    "-k",
+    type=str,
+    help="Key of the property that will be used to filter the messages in the queue, e.g workflow_name_or_id",
+)
+@click.option(
+    "--values-to-delete",
+    "-v",
+    multiple=True,
+    help="List of property values used to filter messages that will be removed from the queue, e.g UUID of a workflow",
+)
+@click.option(
+    "-i",
+    "--interactive",
+    is_flag=True,
+    default=False,
+    help="Manually decide which messages to remove from the queue.",
+)
+def queue_consume(
+    queue_name: str,
+    key: Optional[str],
+    values_to_delete: List[str],
+    interactive: bool,
+):
+    """Start consuming specified queue and remove selected messages.
+
+    By default, you will need to specify either "-k" or "-i" options otherwise the command will return an error.
+
+    If -k option is specified, messages that have property values specified in -v will be deleted.
+
+    If -i option is specified, for every message, user will be asked what to do.
+
+    If -k and -i are specified together, for every message that matches property values in -v, user will be asked whether to delete it or not.
+    """
+    from reana_server.reana_admin.consumer import MessageConsumer
+
+    if key is None and not interactive:
+        click.secho(
+            "Please provide -k (with -v) or -i options. These options can be used together or separately.",
+            fg="red",
+        )
+        sys.exit(1)
+
+    if key and not values_to_delete:
+        click.secho(
+            f"Please provide a list of property values (using the '-v' option) to filter the messages that need to be removed from the {queue_name} queue.",
+            fg="red",
+        )
+        sys.exit(1)
+
+    try:
+        consumer = MessageConsumer(
+            queue_name=queue_name,
+            key=key,
+            values_to_delete=list(values_to_delete),
+            is_interactive=interactive,
+        )
+    except Exception as error:
+        click.secho(
+            "Error is raised during MessageConsumer initialization. Please, check if arguments are correct.",
+            fg="red",
+        )
+        logging.exception(error)
+    else:
+        consumer.run()
