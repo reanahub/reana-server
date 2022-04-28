@@ -287,3 +287,11 @@ FETCHER_REQUEST_TIMEOUT = 60
 
 FETCHER_ALLOWED_GITLAB_HOSTNAMES = ["gitlab.com", "gitlab.cern.ch"]
 """GitLab instances allowed when fetching workflow specifications."""
+
+LAUNCHER_ALLOWED_SNAKEMAKE_URLS = [
+    "https://github.com/reanahub/reana-demo-cms-h4l",
+    "https://github.com/reanahub/reana-demo-helloworld",
+    "https://github.com/reanahub/reana-demo-root6-roofit",
+    "https://github.com/reanahub/reana-demo-worldpopulation",
+]
+"""Allowed URLs when launching a Snakemake workflow."""

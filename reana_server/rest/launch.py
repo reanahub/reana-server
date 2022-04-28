@@ -19,6 +19,7 @@ from jsonschema import ValidationError
 from marshmallow import Schema
 from webargs import fields
 from webargs.flaskparser import use_kwargs
+import yaml
 
 from reana_commons.errors import REANAValidationError
 from reana_commons.specification import load_reana_spec
@@ -31,7 +32,7 @@ from reana_db.utils import (
 )
 
 from reana_server.api_client import current_rwc_api_client
-from reana_server.config import FETCHER_ALLOWED_SCHEMES
+from reana_server.config import FETCHER_ALLOWED_SCHEMES, LAUNCHER_ALLOWED_SNAKEMAKE_URLS
 from reana_server.decorators import check_quota, signin_required
 from reana_server.fetcher import REANAFetcherError, get_fetcher
 from reana_server.utils import (
@@ -152,6 +153,22 @@ def launch(user, url, name="", parameters="{}", specification=None):
 
         # Load and validate the workflow spec
         spec_path = fetcher.workflow_spec_path()
+
+        # When launching a snakemake workflow, check if the url is allowed
+        # FIXME: This will not be needed when using a sandbox
+        with open(spec_path) as spec_fd:
+            reana_yaml = yaml.safe_load(spec_fd.read())
+            workflow_type = reana_yaml["workflow"]["type"]
+            if (
+                workflow_type == "snakemake"
+                and url not in LAUNCHER_ALLOWED_SNAKEMAKE_URLS
+            ):
+                raise ValidationError(
+                    "Unfortunately, it is not possible to launch generic Snakemake "
+                    "workflows at the moment. Please contact the REANA admins for "
+                    "more information."
+                )
+
         # FIXME: locking will not be needed when the loading and validation of
         # specifications will be done inside an external sandbox
         with load_reana_spec_lock:
