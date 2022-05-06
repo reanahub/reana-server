@@ -14,7 +14,7 @@ from functools import partial
 from time import sleep
 from typing import Dict, Optional
 
-from bravado.exception import HTTPBadGateway, HTTPNotFound, HTTPConflict
+from bravado.exception import HTTPBadGateway, HTTPNotFound, HTTPConflict, HTTPBadRequest
 from sqlalchemy import func, or_
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -222,6 +222,17 @@ class WorkflowExecutionScheduler(BaseConsumer):
                     f"Workflow failed to start because of duplicated message from RabbitMQ.\n {e}",
                     exc_info=True,
                 )
+            except HTTPBadRequest as e:
+                retry = False
+                try:
+                    error_message = e.response.json()["message"]
+                except Exception:
+                    error_message = str(e)
+                logging.error(
+                    f"Workflow failed to start because of a bad request.\n{error_message}",
+                    exc_info=True,
+                )
+                self._fail_workflow(workflow_id, logs=error_message)
             except Exception as e:
                 logging.error(
                     f"Something went wrong while calling RWC:\n {e}", exc_info=True
