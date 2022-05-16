@@ -716,3 +716,25 @@ def queue_consume(
         logging.exception(error)
     else:
         consumer.run()
+
+
+@reana_admin.command("check-workflows")
+@click.option(
+    "--date-start",
+    type=click.DateTime(formats=["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"]),
+    default=datetime.datetime.now() - datetime.timedelta(hours=24),
+    help="Default value is 24 hours ago.",
+)
+@click.option(
+    "--date-end",
+    type=click.DateTime(formats=["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"]),
+    default=None,
+    help="Default value is now.",
+)
+def check_workflows(
+    date_start: Optional[datetime.datetime], date_end: Optional[datetime.datetime]
+) -> None:
+    """Check consistency of selected workflow run statuses between database, message queue and Kubernetes."""
+    from .check_workflows import check_workflows
+
+    check_workflows(date_start, date_end)

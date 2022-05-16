@@ -114,3 +114,57 @@ class MessageConsumer(BaseConsumer):
             click.secho("Message is ignored and re-queued.")
         elif decision == UserDecision.STOP_CONSUMER:
             self.should_stop = True
+
+
+class CollectingConsumer(BaseConsumer):
+    """Consumer responsible for collecting messages."""
+
+    def __init__(
+        self,
+        queue_name: str,
+        key: Optional[str],
+        values_to_collect: List[str],
+        **kwargs,
+    ):
+        """Initialise the class."""
+        super(CollectingConsumer, self).__init__(queue=queue_name, **kwargs)
+        self.key = key
+        self.values_to_collect = values_to_collect
+        self.messages = dict()
+
+    def get_consumers(self, Consumer, channel):
+        """Implement providing kombu.Consumers with queues/callbacks."""
+        return [
+            Consumer(
+                queues=self.queue,
+                callbacks=[self.on_message],
+                accept=[self.message_default_format],
+                prefetch_count=1,
+            )
+        ]
+
+    def on_consume_ready(self, connection, channel, consumers, **kwargs):
+        """Run the method when consumer is ready, but before starting consuming."""
+        bound_queue = self.queue(channel)
+        _, msg_count, _ = bound_queue.queue_declare(passive=True)
+
+        if msg_count == 0:
+            self.should_stop = True
+
+    def on_iteration(self):
+        """Run the method before each message."""
+        bound_queue = self.queue(self.connection.channel())
+        _, msg_count, _ = bound_queue.queue_declare(passive=True)
+
+        if msg_count == 0:
+            self.should_stop = True
+
+    def on_message(self, body, message):
+        """Collect messages."""
+        msg_body = json.loads(body)
+
+        value = msg_body.get(self.key, "")
+        if value in self.values_to_collect:
+            self.messages[value] = msg_body
+
+        message.reject(requeue=True)
