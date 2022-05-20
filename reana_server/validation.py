@@ -8,7 +8,9 @@
 
 """REANA Server validation utilities."""
 
-from typing import Dict
+import itertools
+import pathlib
+from typing import Dict, List, Sequence
 
 from reana_commons.config import WORKSPACE_PATHS
 from reana_commons.errors import REANAValidationError
@@ -18,6 +20,7 @@ from reana_commons.validation.parameters import build_parameters_validator
 from reana_commons.validation.utils import validate_reana_yaml, validate_workspace
 
 from reana_server.config import SUPPORTED_COMPUTE_BACKENDS
+from reana_server.utils import is_relative_to
 
 
 def validate_parameters(reana_yaml: Dict) -> None:
@@ -75,6 +78,35 @@ def validate_input_parameters(
     return input_parameters
 
 
+def validate_inputs(reana_yaml: Dict) -> None:
+    """Check whether the paths of the input files/directories are valid or not.
+
+    :param reana_yaml: REANA specification.
+    """
+    inputs = reana_yaml.get("inputs", {})
+    files = inputs.get("files", [])
+    directories = inputs.get("directories", [])
+    paths = [pathlib.Path(path) for path in files + directories]
+
+    unique_paths = set()
+    for path in paths:
+        if path.is_absolute():
+            raise REANAValidationError(f"Input path cannot be absolute: {path}")
+        if not path.parts:
+            raise REANAValidationError("Input path cannot be empty")
+        if ".." in path.parts:
+            raise REANAValidationError(f"Input path cannot contain '..': {path}")
+        if path in unique_paths:
+            raise REANAValidationError(f"Input path declared multiple times: {path}")
+        unique_paths.add(path)
+
+    for x, y in itertools.permutations(paths, r=2):
+        if is_relative_to(x, y):
+            raise REANAValidationError(
+                f"Invalid input paths: '{y}' is a prefix of '{x}'"
+            )
+
+
 def validate_workflow(reana_yaml: Dict, input_parameters: Dict) -> None:
     """Validate REANA workflow specification by calling all the validation utilities.
 
@@ -92,3 +124,4 @@ def validate_workflow(reana_yaml: Dict, input_parameters: Dict) -> None:
     validate_input_parameters(input_parameters, original_parameters)
     validate_compute_backends(reana_yaml)
     validate_workspace_path(reana_yaml)
+    validate_inputs(reana_yaml)

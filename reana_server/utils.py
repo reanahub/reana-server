@@ -10,13 +10,15 @@
 import base64
 import csv
 import io
+import itertools
 import json
 import logging
 import os
+import pathlib
 import secrets
 import sys
 import shutil
-from typing import Optional, Dict
+from typing import Dict, List, Optional, Sequence, Union
 from uuid import UUID, uuid4
 
 import click
@@ -29,7 +31,7 @@ from marshmallow.validate import Email
 
 from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK, SHARED_VOLUME_PATH
 from reana_commons.email import send_email
-from reana_commons.errors import REANAQuotaExceededError
+from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.yadage import yadage_load_from_workspace
 from reana_db.database import Session
@@ -134,6 +136,68 @@ def mv_workflow_files(source: str, target: str) -> None:
     """Move files from one directory to another."""
     for entry in os.listdir(source):
         shutil.move(os.path.join(source, entry), target)
+
+
+# FIXME: use `is_relative_to` from the standard library when moving to Python 3.9
+def is_relative_to(path: pathlib.Path, base: pathlib.Path) -> bool:
+    """Check whether `path` is contained inside `base`."""
+    try:
+        path.relative_to(base)
+        return True
+    except ValueError:
+        return False
+
+
+def filter_input_files(workspace: Union[str, pathlib.Path], reana_spec: Dict) -> None:
+    """Delete the files and directories not specified as inputs in the specification.
+
+    :param workspace: Path to the directory containing the files to be filtered.
+    :param reana_spec: REANA specification used to decide which files to keep.
+    """
+    inputs = reana_spec.get("inputs", {})
+    files = inputs.get("files", [])
+    directories = inputs.get("directories", [])
+
+    if isinstance(workspace, str):
+        workspace = pathlib.Path(workspace)
+
+    for file in files:
+        file_path = workspace / file
+        if not file_path.exists():
+            raise REANAValidationError(f"Input file not found: {file}")
+
+    for directory in directories:
+        directory_path = workspace / directory
+        if not directory_path.exists():
+            raise REANAValidationError(f"Input directory not found: {directory}")
+
+    paths = [pathlib.Path(path) for path in files + directories]
+    filtered = workspace / f"filtered-{uuid4()}"
+    filtered.mkdir()
+
+    # Move input files to the temporary `filtered` directory
+    for path in paths:
+        full_source_path = workspace / path
+        full_target_path = filtered / path
+        # Create target directory if it does not exist
+        full_target_path.parent.mkdir(parents=True, exist_ok=True)
+        full_source_path.replace(full_target_path)
+
+    # Delete remaining files in the workspace
+    for path in workspace.iterdir():
+        if path == filtered:
+            continue
+        if path.is_file() or path.is_symlink():
+            path.unlink()
+        else:
+            shutil.rmtree(path)
+
+    # Move the contents of the temporary `filtered` directory to the workspace
+    for path in filtered.iterdir():
+        path.replace(workspace / path.name)
+
+    # Remove temporary `filtered` directory
+    filtered.rmdir()
 
 
 def get_user_from_token(access_token):

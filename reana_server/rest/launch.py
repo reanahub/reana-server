@@ -40,6 +40,7 @@ from reana_server.utils import (
     mv_workflow_files,
     prevent_disk_quota_excess,
     publish_workflow_submission,
+    filter_input_files,
 )
 from reana_server.validation import validate_workflow
 
@@ -145,12 +146,6 @@ def launch(user, url, name="", parameters="{}", specification=None):
         workflow_name = name.replace(" ", "") or fetcher.generate_workflow_name()
         validate_workflow_name(workflow_name)
 
-        # Check the user's disk quota
-        disk_usage = get_disk_usage_or_zero(tmpdir)
-        prevent_disk_quota_excess(
-            user, disk_usage, action=f"Launching the workflow {workflow_name}"
-        )
-
         # Load and validate the workflow spec
         spec_path = fetcher.workflow_spec_path()
 
@@ -175,6 +170,15 @@ def launch(user, url, name="", parameters="{}", specification=None):
             reana_yaml = load_reana_spec(spec_path, workspace_path=tmpdir)
         input_parameters = json.loads(parameters)
         validate_workflow(reana_yaml, input_parameters)
+
+        # Keep only files and directories listed as workflow's inputs
+        filter_input_files(tmpdir, reana_yaml)
+
+        # Check the user's disk quota
+        disk_usage = get_disk_usage_or_zero(tmpdir)
+        prevent_disk_quota_excess(
+            user, disk_usage, action=f"Launching the workflow {workflow_name}"
+        )
 
         # Create workflow
         workflow_dict = {
