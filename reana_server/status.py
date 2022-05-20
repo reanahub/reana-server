@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021 CERN.
+# Copyright (C) 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -29,6 +29,7 @@ from reana_commons.k8s.api_client import (
     current_k8s_corev1_api_client,
     current_k8s_custom_objects_api_client,
 )
+from reana_commons.utils import get_usage_percentage
 from reana_db.database import Session
 from reana_db.models import (
     InteractiveSession,
@@ -44,7 +45,6 @@ from reana_db.models import (
 from sqlalchemy import desc
 
 from reana_server.config import REANA_KUBERNETES_JOBS_MEMORY_LIMIT_IN_BYTES
-from reana_server.utils import get_usage_percentage
 
 
 class REANAStatus:

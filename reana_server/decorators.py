@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020 CERN.
+# Copyright (C) 2020, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -17,6 +17,7 @@ import click
 from flask import jsonify, request
 from flask_login import current_user
 from reana_commons.errors import REANAQuotaExceededError
+from reana_commons.utils import get_quota_resource_usage
 
 from reana_server.utils import _get_user_from_invenio_user, get_user_from_token
 
@@ -72,7 +73,19 @@ def check_quota(func):
         try:
             user = kwargs["user"]
             if user.has_exceeded_quota():
-                raise REANAQuotaExceededError()
+                quota = user.get_quota_usage()
+                message = "User quota exceeded.\n"
+                for resource_type, resource in quota.items():
+                    limit = resource.get("limit", {}).get("raw", 0)
+                    usage = resource.get("usage", {}).get("raw", 0)
+                    if 0 < limit <= usage:
+                        resource_usage, _ = get_quota_resource_usage(
+                            resource, "human_readable"
+                        )
+                        message += (
+                            f"Resource: {resource_type}, usage: {resource_usage}\n"
+                        )
+                raise REANAQuotaExceededError(message)
         except REANAQuotaExceededError as e:
             return jsonify({"message": e.message}), 403
         except Exception as e:

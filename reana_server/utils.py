@@ -214,13 +214,6 @@ def get_user_from_token(access_token):
     return user
 
 
-def get_usage_percentage(usage, limit):
-    """Usage percentage."""
-    if limit == 0:
-        return ""
-    return "{:.1%}".format(usage / limit)
-
-
 def publish_workflow_submission(workflow, user_id, parameters):
     """Publish workflow submission."""
     from reana_server.status import NodesStatus
