@@ -146,7 +146,7 @@ pyasn1==0.4.8             # via pyasn1-modules, rsa
 pycparser==2.21           # via cffi
 pydot==1.4.2              # via cwltool
 pygments==2.12.0          # via ipython
-pyjwt==2.3.0              # via invenio-accounts, invenio-oauth2server
+pyjwt==2.4.0              # via invenio-accounts, invenio-oauth2server
 pynpm==0.1.2              # via flask-webpackext, pywebpack
 pyopenssl==17.5.0         # via reana-server (setup.py), requests
 pyparsing==3.0.8          # via packaging, pydot, rdflib
