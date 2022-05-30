@@ -22,18 +22,17 @@ from reana_commons.validation.operational_options import validate_operational_op
 from reana_commons.validation.utils import validate_workflow_name
 from reana_commons.specification import load_reana_spec
 from reana_db.database import Session
-from reana_db.models import (
-    InteractiveSessionType,
-    RunStatus,
-)
+from reana_db.models import InteractiveSessionType, RunStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
 
 from reana_server.api_client import current_rwc_api_client
+from reana_server.config import REANA_HOSTNAME
 from reana_server.decorators import check_quota, signin_required
 from reana_server.validation import validate_workspace_path
 from reana_server.utils import (
+    _fail_gitlab_commit_build_status,
     RequestStreamWithLen,
     _load_and_save_yadage_spec,
     _get_reana_yaml_from_gitlab,
@@ -274,7 +273,6 @@ def get_workflows(user, **kwargs):  # noqa
 
 @blueprint.route("/workflows", methods=["POST"])
 @signin_required(include_gitlab_login=True)
-@check_quota
 def create_workflow(user):  # noqa
     r"""Create a workflow.
 
@@ -365,57 +363,70 @@ def create_workflow(user):  # noqa
             Request failed. Not implemented.
     """
     try:
-        if request.json:
-            if "object_kind" in request.json:
-                (
-                    reana_spec_file,
-                    git_url,
-                    workflow_name,
-                    git_branch,
-                    git_commit_sha,
-                ) = _get_reana_yaml_from_gitlab(request.json, user.id_)
-                git_data = {
-                    "git_url": git_url,
-                    "git_branch": git_branch,
-                    "git_commit_sha": git_commit_sha,
-                }
-            else:
-                # validate against schema
-                git_data = {}
-                reana_spec_file = request.json
-                workflow_name = ""
-            workflow_engine = reana_spec_file["workflow"]["type"]
-        elif request.args.get("spec"):
+        if request.args.get("spec"):
             return jsonify("Not implemented"), 501
-        else:
+
+        json_body_is_not_present = not request.json
+        if json_body_is_not_present:
             raise Exception(
-                "Either remote repository or a reana spec need to \
-            be provided"
+                "Either remote repository or REANA specification needs to be provided"
             )
 
-        if workflow_engine not in REANA_WORKFLOW_ENGINES:
-            raise Exception("Unknown workflow type.")
+        request_from_gitlab = "object_kind" in request.json
+        if request_from_gitlab:
+            (
+                reana_spec_file,
+                git_url,
+                workflow_name,
+                git_branch,
+                git_commit_sha,
+            ) = _get_reana_yaml_from_gitlab(request.json, user.id_)
+            git_data = {
+                "git_url": git_url,
+                "git_branch": git_branch,
+                "git_commit_sha": git_commit_sha,
+            }
+        else:
+            git_data = {}
+            reana_spec_file = request.json
+            workflow_name = request.args.get("workflow_name", "")
 
-        workflow_name = request.args.get("workflow_name", workflow_name)
+        if user.has_exceeded_quota() and request_from_gitlab:
+            message = f"User quota exceeded. Please check {REANA_HOSTNAME}"
+            _fail_gitlab_commit_build_status(user, git_url, git_commit_sha, message)
+            return jsonify({"message": "Gitlab webhook was processed"}), 200
+        elif user.has_exceeded_quota():
+            raise REANAQuotaExceededError()
+
         validate_workflow_name(workflow_name)
         if is_uuid_v4(workflow_name):
             return jsonify({"message": "Workflow name cannot be a valid UUIDv4."}), 400
+
+        workflow_engine = reana_spec_file["workflow"]["type"]
+        if workflow_engine not in REANA_WORKFLOW_ENGINES:
+            raise Exception("Unknown workflow type.")
+
+        operational_options = validate_operational_options(
+            workflow_engine, reana_spec_file.get("inputs", {}).get("options", {})
+        )
+
+        workspace_root_path = reana_spec_file.get("workspace", {}).get("root_path")
+        validate_workspace_path(reana_spec_file)
+
         workflow_dict = {
             "reana_specification": reana_spec_file,
             "workflow_name": workflow_name,
+            "operational_options": operational_options,
         }
-        workflow_dict["operational_options"] = validate_operational_options(
-            workflow_engine, reana_spec_file.get("inputs", {}).get("options", {})
-        )
-        workspace_root_path = reana_spec_file.get("workspace", {}).get("root_path")
-        validate_workspace_path(reana_spec_file)
         if git_data:
             workflow_dict["git_data"] = git_data
+
         response, http_response = current_rwc_api_client.api.create_workflow(
             workflow=workflow_dict,
             user=str(user.id_),
             workspace_root_path=workspace_root_path,
         ).result()
+
         if git_data:
             workflow = _get_workflow_with_uuid_or_name(
                 response["workflow_id"], str(user.id_)
@@ -439,6 +450,8 @@ def create_workflow(user):  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
+    except REANAQuotaExceededError as e:
+        return jsonify({"message": e.message}), 403
     except (KeyError, REANAValidationError) as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400

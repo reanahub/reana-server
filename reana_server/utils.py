@@ -10,7 +10,6 @@
 import base64
 import csv
 import io
-import itertools
 import json
 import logging
 import os
@@ -18,7 +17,7 @@ import pathlib
 import secrets
 import sys
 import shutil
-from typing import Dict, List, Optional, Sequence, Union
+from typing import Dict, Optional, Union
 from uuid import UUID, uuid4
 
 import click
@@ -28,6 +27,7 @@ from flask import url_for
 from jinja2 import Environment, PackageLoader, select_autoescape
 from marshmallow.exceptions import ValidationError
 from marshmallow.validate import Email
+from urllib import parse as urlparse
 
 from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK, SHARED_VOLUME_PATH
 from reana_commons.email import send_email
@@ -430,6 +430,28 @@ def _get_reana_yaml_from_gitlab(webhook_data, user_id):
         branch,
         commit_sha,
     )
+
+
+def _fail_gitlab_commit_build_status(
+    user: User, git_repo: str, git_ref: str, description: str
+):
+    """Send request to Gitlab to fail commit build status.
+
+    HTTP errors will be ignored.
+    """
+    state = "failed"
+    system_name = "reana"
+    git_repo = urlparse.quote_plus(git_repo)
+    description = urlparse.quote_plus(description)
+
+    secret_store = REANAUserSecretsStore(user.id_)
+    gitlab_access_token = secret_store.get_secret_value("gitlab_access_token")
+    commit_status_url = (
+        f"{REANA_GITLAB_URL}/api/v4/projects/{git_repo}/statuses/"
+        f"{git_ref}?access_token={gitlab_access_token}&state={state}"
+        f"&description={description}&name={system_name}"
+    )
+    requests.post(commit_status_url)
 
 
 def _format_gitlab_secrets(gitlab_response):
