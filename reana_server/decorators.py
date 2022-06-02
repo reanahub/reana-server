@@ -17,9 +17,12 @@ import click
 from flask import jsonify, request
 from flask_login import current_user
 from reana_commons.errors import REANAQuotaExceededError
-from reana_commons.utils import get_quota_resource_usage
 
-from reana_server.utils import _get_user_from_invenio_user, get_user_from_token
+from reana_server.utils import (
+    _get_user_from_invenio_user,
+    get_user_from_token,
+    get_quota_excess_message,
+)
 
 
 def admin_access_token_option(func):
@@ -73,18 +76,7 @@ def check_quota(func):
         try:
             user = kwargs["user"]
             if user.has_exceeded_quota():
-                quota = user.get_quota_usage()
-                message = "User quota exceeded.\n"
-                for resource_type, resource in quota.items():
-                    limit = resource.get("limit", {}).get("raw", 0)
-                    usage = resource.get("usage", {}).get("raw", 0)
-                    if 0 < limit <= usage:
-                        resource_usage, _ = get_quota_resource_usage(
-                            resource, "human_readable"
-                        )
-                        message += (
-                            f"Resource: {resource_type}, usage: {resource_usage}\n"
-                        )
+                message = get_quota_excess_message(user)
                 raise REANAQuotaExceededError(message)
         except REANAQuotaExceededError as e:
             return jsonify({"message": e.message}), 403

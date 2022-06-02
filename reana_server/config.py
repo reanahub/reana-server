@@ -94,6 +94,8 @@ REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_VALUE = (
 SUPPORTED_COMPUTE_BACKENDS = json.loads(os.getenv("REANA_COMPUTE_BACKENDS", "[]")) or []
 """List of supported compute backends."""
 
+REANA_QUOTAS_DOCS_URL = "https://docs.reana.io/advanced-usage/user-quotas"
+
 
 # Invenio configuration
 # =====================

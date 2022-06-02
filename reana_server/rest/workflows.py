@@ -39,6 +39,7 @@ from reana_server.utils import (
     prevent_disk_quota_excess,
     publish_workflow_submission,
     clone_workflow,
+    get_quota_excess_message,
     is_uuid_v4,
 )
 
@@ -396,7 +397,8 @@ def create_workflow(user):  # noqa
             _fail_gitlab_commit_build_status(user, git_url, git_commit_sha, message)
             return jsonify({"message": "Gitlab webhook was processed"}), 200
         elif user.has_exceeded_quota():
-            raise REANAQuotaExceededError()
+            message = get_quota_excess_message(user)
+            raise REANAQuotaExceededError(message)
 
         validate_workflow_name(workflow_name)
         if is_uuid_v4(workflow_name):

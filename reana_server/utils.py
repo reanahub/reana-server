@@ -33,6 +33,7 @@ from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK, SHARED_VOLUM
 from reana_commons.email import send_email
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.utils import get_quota_resource_usage
 from reana_commons.yadage import yadage_load_from_workspace
 from reana_db.database import Session
 from reana_db.models import (
@@ -67,6 +68,7 @@ from reana_server.config import (
     REANA_USER_EMAIL_CONFIRMATION,
     REANA_WORKFLOW_SCHEDULING_POLICY,
     REANA_WORKFLOW_SCHEDULING_POLICIES,
+    REANA_QUOTAS_DOCS_URL,
 )
 
 
@@ -97,6 +99,24 @@ def get_fetched_workflows_dir(user_id: str) -> str:
     return tmpdir
 
 
+def get_quota_excess_message(user) -> str:
+    """Return detailed quota excess message.
+
+    :param user: User whose quota needs to be checked.
+    """
+    quota = user.get_quota_usage()
+    message = "User quota exceeded.\n"
+    for resource_type, resource in quota.items():
+        limit = resource.get("limit", {}).get("raw", 0)
+        usage = resource.get("usage", {}).get("raw", 0)
+        if 0 < limit <= usage:
+            resource_usage, _ = get_quota_resource_usage(resource, "human_readable")
+            message += f"Resource: {resource_type}, usage: {resource_usage}\n"
+
+    message += f"Please see: {REANA_QUOTAS_DOCS_URL}"
+    return message
+
+
 def prevent_disk_quota_excess(user, bytes_to_sum: int, action=Optional[str]):
     """
     Prevent potential disk quota excess.
@@ -122,7 +142,7 @@ def prevent_disk_quota_excess(user, bytes_to_sum: int, action=Optional[str]):
             action = "This action"
         raise REANAQuotaExceededError(
             f"{action} would exceed the disk quota limit "
-            f"({human_readable_limit}). Aborting."
+            f"({human_readable_limit}). Aborting. Please see: {REANA_QUOTAS_DOCS_URL}"
         )
 
 

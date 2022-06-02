@@ -21,7 +21,7 @@ from webargs import fields
 from webargs.flaskparser import use_kwargs
 import yaml
 
-from reana_commons.errors import REANAValidationError
+from reana_commons.errors import REANAValidationError, REANAQuotaExceededError
 from reana_commons.specification import load_reana_spec
 from reana_commons.validation.utils import validate_workflow_name
 from reana_db.utils import (
@@ -217,7 +217,15 @@ def launch(user, url, name="", parameters="{}", specification=None):
             jsonify({"message": "The workflow 'parameters' field is not valid JSON."}),
             400,
         )
-    except (REANAFetcherError, REANAValidationError, ValueError, ValidationError) as e:
+    except REANAQuotaExceededError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except (
+        REANAFetcherError,
+        REANAValidationError,
+        ValueError,
+        ValidationError,
+    ) as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
     except Exception:
