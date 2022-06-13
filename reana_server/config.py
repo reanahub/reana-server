@@ -264,7 +264,7 @@ ADMIN_EMAIL = os.getenv("REANA_EMAIL_SENDER", "CHANGE_ME")
 REANA_SCHEDULER_REQUEUE_SLEEP = float(os.getenv("REANA_SCHEDULER_REQUEUE_SLEEP", "15"))
 """How many seconds to wait between consuming workflows."""
 
-REANA_SCHEDULER_REQUEUE_COUNT = int(os.getenv("REANA_SCHEDULER_REQUEUE_COUNT", "200"))
+REANA_SCHEDULER_REQUEUE_COUNT = float(os.getenv("REANA_SCHEDULER_REQUEUE_COUNT", "200"))
 """How many times to requeue workflow, in case of error or busy cluster, before failing it."""
 
 # Workflow fetcher
