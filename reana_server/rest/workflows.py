@@ -1267,7 +1267,11 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
         inside the workspace to return its content.
       operationId: download_file
       produces:
-        - multipart/form-data
+        - application/octet-stream
+        - application/json
+        - application/zip
+        - image/*
+        - text/html
       parameters:
         - name: workflow_id_or_name
           in: path

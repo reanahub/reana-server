@@ -2627,7 +2627,11 @@
           }
         ],
         "produces": [
-          "multipart/form-data"
+          "application/octet-stream",
+          "application/json",
+          "application/zip",
+          "image/*",
+          "text/html"
         ],
         "responses": {
           "200": {
