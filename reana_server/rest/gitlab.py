@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -248,11 +248,17 @@ def gitlab_webhook(user):  # noqa
       produces:
        - application/json
       parameters:
-      - name: project_id
-        in: path
-        description: The GitLab project id.
-        required: true
-        type: integer
+        - name: data
+          in: body
+          description: Data required to set a new webhook from GitLab.
+          schema:
+            required:
+              - project_id
+            type: object
+            properties:
+              project_id:
+                description: The GitLab project id.
+                type: string
       responses:
         201:
           description: >-
@@ -276,16 +282,21 @@ def gitlab_webhook(user):  # noqa
       produces:
       - application/json
       parameters:
-      - name: project_id
-        in: path
-        description: The GitLab project id.
-        required: true
-        type: integer
-      - name: hook_id
-        in: path
-        description: The GitLab webhook id of the project.
-        required: true
-        type: integer
+        - name: data
+          in: body
+          description: Data required to delete an existing webhook from GitLab.
+          schema:
+            type: object
+            required:
+              - project_id
+              - hook_id
+            properties:
+              project_id:
+                description: The GitLab project id.
+                type: string
+              hook_id:
+                description: The GitLab webhook id of the project.
+                type: integer
       responses:
         204:
           description: >-

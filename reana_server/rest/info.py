@@ -50,8 +50,29 @@ def info(user, **kwargs):  # noqa
             properties:
               workspaces_available:
                 type: object
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: array
+                    items:
+                      type: string
               default_workspace:
                 type: object
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+              compute_backends:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: array
+                    items:
+                      type: string
           examples:
             application/json:
               {

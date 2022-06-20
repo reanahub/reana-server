@@ -158,10 +158,62 @@ def get_workflows(user, **kwargs):  # noqa
                           type: string
                     user:
                       type: string
+                    launcher_url:
+                      type: string
+                      x-nullable: true
                     created:
                       type: string
                     progress:
                       type: object
+                      properties:
+                        current_command:
+                          type: string
+                          x-nullable: true
+                        current_step_name:
+                          type: string
+                          x-nullable: true
+                        failed:
+                          properties:
+                            job_ids:
+                              items:
+                                type: string
+                              type: array
+                            total:
+                              type: number
+                          type: object
+                        finished:
+                          properties:
+                            job_ids:
+                              items:
+                                type: string
+                              type: array
+                            total:
+                              type: number
+                          type: object
+                        run_finished_at:
+                          type: string
+                          x-nullable: true
+                        run_started_at:
+                          type: string
+                          x-nullable: true
+                        running:
+                          properties:
+                            job_ids:
+                              items:
+                                type: string
+                              type: array
+                            total:
+                              type: number
+                          type: object
+                        total:
+                          properties:
+                            job_ids:
+                              items:
+                                type: string
+                              type: array
+                            total:
+                              type: number
+                          type: object
           examples:
             application/json:
               [

@@ -169,18 +169,26 @@
         "operationId": "delete_gitlab_webhook",
         "parameters": [
           {
-            "description": "The GitLab project id.",
-            "in": "path",
-            "name": "project_id",
-            "required": true,
-            "type": "integer"
-          },
-          {
-            "description": "The GitLab webhook id of the project.",
-            "in": "path",
-            "name": "hook_id",
-            "required": true,
-            "type": "integer"
+            "description": "Data required to delete an existing webhook from GitLab.",
+            "in": "body",
+            "name": "data",
+            "schema": {
+              "properties": {
+                "hook_id": {
+                  "description": "The GitLab webhook id of the project.",
+                  "type": "integer"
+                },
+                "project_id": {
+                  "description": "The GitLab project id.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "project_id",
+                "hook_id"
+              ],
+              "type": "object"
+            }
           }
         ],
         "produces": [
@@ -212,11 +220,21 @@
         "operationId": "create_gitlab_webhook",
         "parameters": [
           {
-            "description": "The GitLab project id.",
-            "in": "path",
-            "name": "project_id",
-            "required": true,
-            "type": "integer"
+            "description": "Data required to set a new webhook from GitLab.",
+            "in": "body",
+            "name": "data",
+            "schema": {
+              "properties": {
+                "project_id": {
+                  "description": "The GitLab project id.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "project_id"
+              ],
+              "type": "object"
+            }
           }
         ],
         "produces": [
@@ -286,10 +304,43 @@
             },
             "schema": {
               "properties": {
+                "compute_backends": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
                 "default_workspace": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
                   "type": "object"
                 },
                 "workspaces_available": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
                   "type": "object"
                 }
               },
@@ -1047,10 +1098,88 @@
                       "id": {
                         "type": "string"
                       },
+                      "launcher_url": {
+                        "type": "string",
+                        "x-nullable": true
+                      },
                       "name": {
                         "type": "string"
                       },
                       "progress": {
+                        "properties": {
+                          "current_command": {
+                            "type": "string",
+                            "x-nullable": true
+                          },
+                          "current_step_name": {
+                            "type": "string",
+                            "x-nullable": true
+                          },
+                          "failed": {
+                            "properties": {
+                              "job_ids": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "total": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "finished": {
+                            "properties": {
+                              "job_ids": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "total": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "run_finished_at": {
+                            "type": "string",
+                            "x-nullable": true
+                          },
+                          "run_started_at": {
+                            "type": "string",
+                            "x-nullable": true
+                          },
+                          "running": {
+                            "properties": {
+                              "job_ids": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "total": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          },
+                          "total": {
+                            "properties": {
+                              "job_ids": {
+                                "items": {
+                                  "type": "string"
+                                },
+                                "type": "array"
+                              },
+                              "total": {
+                                "type": "number"
+                              }
+                            },
+                            "type": "object"
+                          }
+                        },
                         "type": "object"
                       },
                       "size": {
