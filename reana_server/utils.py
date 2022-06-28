@@ -17,7 +17,7 @@ import pathlib
 import secrets
 import sys
 import shutil
-from typing import Dict, Optional, Union
+from typing import Dict, List, Optional, Union
 from uuid import UUID, uuid4
 
 import click
@@ -69,6 +69,8 @@ from reana_server.config import (
     REANA_WORKFLOW_SCHEDULING_POLICY,
     REANA_WORKFLOW_SCHEDULING_POLICIES,
     REANA_QUOTAS_DOCS_URL,
+    WORKSPACE_RETENTION_PERIOD,
+    DEFAULT_WORKSPACE_RETENTION_RULE,
 )
 
 
@@ -556,8 +558,40 @@ class RequestStreamWithLen(object):
         return self.limitedstream.limit
 
 
+def get_workspace_retention_rules(
+    retention_days: Optional[Dict[str, int]]
+) -> List[Dict[str, any]]:
+    """Validate and return a list of retention rules."""
+    retention_rules = []
+    if retention_days:
+        for rule, days in retention_days.items():
+            if days >= WORKSPACE_RETENTION_PERIOD:
+                raise ValueError(
+                    "Maximum workflow retention period was reached. "
+                    f"Please use less than {WORKSPACE_RETENTION_PERIOD} days."
+                )
+            # TODO: add validation for rules
+            retention_rules.append({"workspace_files": rule, "retention_days": days})
+
+    # Insert a default rule in case it's not present
+    if not any(
+        rule["workspace_files"] == DEFAULT_WORKSPACE_RETENTION_RULE
+        for rule in retention_rules
+    ):
+        retention_rules.append(
+            {
+                "workspace_files": DEFAULT_WORKSPACE_RETENTION_RULE,
+                "retention_days": WORKSPACE_RETENTION_PERIOD,
+            }
+        )
+    return retention_rules
+
+
 def clone_workflow(workflow, reana_spec, restart_type):
     """Create a copy of workflow in DB for restarting."""
+    reana_specification = reana_spec or workflow.reana_specification
+    retention_days = reana_specification.get("workspace", {}).get("retention_days")
+    retention_rules = get_workspace_retention_rules(retention_days)
     try:
         cloned_workflow = Workflow(
             id_=str(uuid4()),
@@ -572,6 +606,8 @@ def clone_workflow(workflow, reana_spec, restart_type):
         )
         Session.add(cloned_workflow)
         Session.object_session(cloned_workflow).commit()
+        workflow.inactivate_workspace_retention_rules()
+        cloned_workflow.set_workspace_retention_rules(retention_rules)
         return cloned_workflow
     except SQLAlchemyError as e:
         message = "Database connection failed, please retry."

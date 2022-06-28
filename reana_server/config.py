@@ -297,3 +297,12 @@ LAUNCHER_ALLOWED_SNAKEMAKE_URLS = [
     "https://github.com/reanahub/reana-demo-worldpopulation",
 ]
 """Allowed URLs when launching a Snakemake workflow."""
+
+# Workspace retention rules
+# ==================
+
+WORKSPACE_RETENTION_PERIOD = int(os.getenv("WORKSPACE_RETENTION_PERIOD", "365"))
+"""Maximum allowed period for workspace retention rules."""
+
+DEFAULT_WORKSPACE_RETENTION_RULE = "**/*"
+"""Workspace retention rule which will be applied to all the workflows by default."""

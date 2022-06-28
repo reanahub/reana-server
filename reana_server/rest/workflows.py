@@ -40,6 +40,7 @@ from reana_server.utils import (
     publish_workflow_submission,
     clone_workflow,
     get_quota_excess_message,
+    get_workspace_retention_rules,
     is_uuid_v4,
 )
 
@@ -467,10 +468,14 @@ def create_workflow(user):  # noqa
         workspace_root_path = reana_spec_file.get("workspace", {}).get("root_path")
         validate_workspace_path(reana_spec_file)
 
+        retention_days = reana_spec_file.get("workspace", {}).get("retention_days")
+        retention_rules = get_workspace_retention_rules(retention_days)
+
         workflow_dict = {
             "reana_specification": reana_spec_file,
             "workflow_name": workflow_name,
             "operational_options": operational_options,
+            "retention_rules": retention_rules,
         }
         if git_data:
             workflow_dict["git_data"] = git_data

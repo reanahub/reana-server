@@ -41,6 +41,7 @@ from reana_server.utils import (
     prevent_disk_quota_excess,
     publish_workflow_submission,
     filter_input_files,
+    get_workspace_retention_rules,
 )
 from reana_server.validation import validate_workflow
 
@@ -180,12 +181,17 @@ def launch(user, url, name="", parameters="{}", specification=None):
             user, disk_usage, action=f"Launching the workflow {workflow_name}"
         )
 
+        # Get workspace retention rules
+        retention_days = reana_yaml.get("workspace", {}).get("retention_days")
+        retention_rules = get_workspace_retention_rules(retention_days)
+
         # Create workflow
         workflow_dict = {
             "reana_specification": reana_yaml,
             "workflow_name": workflow_name,
             "operational_options": {},
             "launcher_url": url,
+            "retention_rules": retention_rules,
         }
         response, http_response = current_rwc_api_client.api.create_workflow(
             workflow=workflow_dict,
