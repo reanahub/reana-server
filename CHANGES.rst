@@ -10,6 +10,7 @@ Version 0.9.0 (UNRELEASED)
 - Adds the possibility to fetch the workflow specification from a remote URL.
 - Adds REANA specification validation utilities.
 - Changes workflow create endpoint to populate workspace retention rules for the workflow.
+- Changes workflow list endpoint to return workspace retention rules for the workflow.
 - Changes API rate limiter error messages to be more verbose.
 - Changes workflow scheduler to allow defining the checks needed to assess whether the cluster can start new workflows.
 - Changes the Invenio dependencies to the latest versions.

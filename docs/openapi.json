@@ -1026,6 +1026,12 @@
             "type": "boolean"
           },
           {
+            "description": "Include workspace retention rules of the workflows.",
+            "in": "query",
+            "name": "include_retention_rules",
+            "type": "boolean"
+          },
+          {
             "description": "Optional analysis UUID or name to filter.",
             "in": "query",
             "name": "workflow_id_or_name",
