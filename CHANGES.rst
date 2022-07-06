@@ -13,6 +13,7 @@ Version 0.9.0 (UNRELEASED)
 - Changes the Invenio dependencies to the latest versions.
 - Changes OAuth configuration to enable the new CERN SSO.
 - Changes GitLab integration to also retrieve user's projects that are in groups and subgroups.
+- Fixes CERN OIDC authentication to possibly allow eduGAIN and social login users.
 
 Version 0.8.4 (2022-02-23)
 --------------------------
