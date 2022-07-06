@@ -369,6 +369,7 @@ def _import_users(admin_access_token, users_csv_file):
 
 
 def _create_and_associate_oauth_user(sender, account_info, **kwargs):
+    logging.info(f"account_info: {account_info}")
     user_email = account_info["user"]["email"]
     user_fullname = account_info["user"]["profile"]["full_name"]
     username = account_info["user"]["profile"]["username"]

@@ -24,6 +24,7 @@ Version 0.9.0 (UNRELEASED)
 - Changes GitLab integration to also retrieve user's projects that are in groups and subgroups.
 - Fixes issue when irregular number formats are passed to ``REANA_SCHEDULER_REQUEUE_COUNT``.
 - Fixes GitLab integration error reporting in case user exceeds CPU or Disk quota usage limits.
+- Fixes CERN OIDC authentication to possibly allow eduGAIN and social login users.
 
 Version 0.8.4 (2022-02-23)
 --------------------------
