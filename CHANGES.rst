@@ -12,6 +12,7 @@ Version 0.9.0 (UNRELEASED)
 - Changes workflow scheduler to allow defining the checks needed to assess whether the cluster can start new workflows.
 - Changes the Invenio dependencies to the latest versions.
 - Changes OAuth configuration to enable the new CERN SSO.
+- Changes GitLab integration to also retrieve user's projects that are in groups and subgroups.
 
 Version 0.8.4 (2022-02-23)
 --------------------------

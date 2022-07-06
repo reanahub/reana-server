@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -210,9 +210,16 @@ def gitlab_projects(user):  # noqa
     try:
         secrets_store = REANAUserSecretsStore(str(user.id_))
         gitlab_token = secrets_store.get_secret_value("gitlab_access_token")
-        gitlab_user = secrets_store.get_secret_value("gitlab_user")
-        gitlab_url = REANA_GITLAB_URL + "/api/v4/users/{0}/projects?access_token={1}"
-        response = requests.get(gitlab_url.format(gitlab_user, gitlab_token))
+        gitlab_url = (
+            f"{REANA_GITLAB_URL}/api/v4/projects/"
+            # show projects in which user is at least a `Maintainer`
+            "?min_access_level=40"
+            # return only basic information about the projects
+            "&simple=true"
+            "&per_page=100"
+            f"&access_token={gitlab_token}"
+        )
+        response = requests.get(gitlab_url)
         projects = dict()
         if response.status_code == 200:
             for gitlab_project in response.json():
