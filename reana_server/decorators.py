@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020 CERN.
+# Copyright (C) 2020, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -18,7 +18,11 @@ from flask import jsonify, request
 from flask_login import current_user
 from reana_commons.errors import REANAQuotaExceededError
 
-from reana_server.utils import _get_user_from_invenio_user, get_user_from_token
+from reana_server.utils import (
+    _get_user_from_invenio_user,
+    get_user_from_token,
+    user_has_active_token,
+)
 
 
 def admin_access_token_option(func):
@@ -37,7 +41,7 @@ def admin_access_token_option(func):
     return wrapper
 
 
-def signin_required(include_gitlab_login=False):
+def signin_required(include_gitlab_login=False, token_required=True):
     """Check if the user is signed in or the access token is valid and return the user."""
 
     def decorator(func):
@@ -53,6 +57,8 @@ def signin_required(include_gitlab_login=False):
                     user = get_user_from_token(request.args.get("access_token"))
                 if not user:
                     return jsonify(message="User not signed in"), 401
+                if token_required and not user_has_active_token(user):
+                    return jsonify(message="User has no active tokens"), 401
             except ValueError as e:
                 logging.error(traceback.format_exc())
                 return jsonify({"message": str(e)}), 403

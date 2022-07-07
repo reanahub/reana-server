@@ -39,6 +39,7 @@ from reana_db.models import (
     RunStatus,
     User,
     UserResource,
+    UserToken,
     UserTokenStatus,
     UserTokenType,
     Workflow,
@@ -539,3 +540,9 @@ class JinjaEnv:
         """Render template replacing kwargs appropriately."""
         template = JinjaEnv._get().get_template(template_path)
         return template.render(**kwargs)
+
+
+def user_has_active_token(user):
+    """Check whether the user has at least one active token."""
+    token = user.tokens.filter(UserToken.status == UserTokenStatus.active).first()
+    return token is not None

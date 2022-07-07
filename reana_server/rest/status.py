@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2021 CERN.
+# Copyright (C) 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -20,7 +20,7 @@ blueprint = Blueprint("status", __name__)
 
 
 @blueprint.route("/status")
-@signin_required()
+@signin_required(token_required=False)
 def status(**kwargs):  # noqa
     r"""Endpoint to retrieve Cluster health status.
     ---
