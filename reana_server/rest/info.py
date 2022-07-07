@@ -30,7 +30,7 @@ blueprint = Blueprint("info", __name__)
 
 
 @blueprint.route("/info", methods=["GET"])
-@signin_required()
+@signin_required(token_required=False)
 def info(user, **kwargs):  # noqa
     r"""Get information about the cluster capabilities.
 

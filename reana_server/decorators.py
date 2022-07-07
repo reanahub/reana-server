@@ -41,7 +41,7 @@ def admin_access_token_option(func):
     return wrapper
 
 
-def signin_required(include_gitlab_login=False):
+def signin_required(include_gitlab_login=False, token_required=True):
     """Check if the user is signed in or the access token is valid and return the user."""
 
     def decorator(func):
@@ -57,6 +57,8 @@ def signin_required(include_gitlab_login=False):
                     user = get_user_from_token(request.args.get("access_token"))
                 if not user:
                     return jsonify(message="User not signed in"), 401
+                if token_required and not user.active_token:
+                    return jsonify(message="User has no active tokens"), 401
             except ValueError as e:
                 logging.error(traceback.format_exc())
                 return jsonify({"message": str(e)}), 403
