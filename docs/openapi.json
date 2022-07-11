@@ -1639,6 +1639,14 @@
             "name": "parameters",
             "required": false,
             "schema": {
+              "properties": {
+                "search": {
+                  "type": "string"
+                },
+                "summarize": {
+                  "type": "boolean"
+                }
+              },
               "type": "object"
             }
           }

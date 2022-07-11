@@ -2238,6 +2238,11 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
           required: false
           schema:
             type: object
+            properties:
+              summarize:
+                type: boolean
+              search:
+                type: string
       responses:
         200:
           description: >-
