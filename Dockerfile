@@ -33,7 +33,7 @@ RUN if test -e modules/reana-commons; then pip install -e modules/reana-commons[
 RUN if test -e modules/reana-db; then pip install -e modules/reana-db --upgrade; fi
 
 # A quick fix to allow eduGAIN and social login users that wouldn't otherwise match Invenio username rules
-RUN sed -i 's|^username_regex = re.compile\(.*\)$|username_regex = re.compile("^[\\w\\.]+@?[\\w\\.]+$")|g' /usr/local/lib/python3.8/site-packages/invenio_userprofiles/validators.py
+RUN sed -i 's|^username_regex = re.compile\(.*\)$|username_regex = re.compile("^\\S+$")|g' /usr/local/lib/python3.8/site-packages/invenio_userprofiles/validators.py
 
 # Check if there are broken requirements
 RUN pip check
