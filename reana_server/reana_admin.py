@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021 CERN.
+# Copyright (C) 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -48,6 +48,7 @@ from reana_server.utils import (
     _validate_password,
     create_user_workspace,
     JinjaEnv,
+    get_ascii_str,
 )
 
 
@@ -251,12 +252,14 @@ def token_grant(admin_access_token, id_, email):
         admin.log_action(AuditLogAction.grant_token, {"reana_admin": log_msg})
         # send notification to user by email
         email_subject = "REANA access token granted"
-        email_body = JinjaEnv.render_template(
-            "emails/token_granted.txt",
-            user_full_name=user.full_name,
-            reana_hostname=REANA_HOSTNAME,
-            ui_config=REANAConfig.load("ui"),
-            sender_email=ADMIN_EMAIL,
+        email_body = get_ascii_str(
+            JinjaEnv.render_template(
+                "emails/token_granted.txt",
+                user_full_name=user.full_name,
+                reana_hostname=REANA_HOSTNAME,
+                ui_config=REANAConfig.load("ui"),
+                sender_email=ADMIN_EMAIL,
+            )
         )
         send_email(user.email, email_subject, email_body)
 
@@ -310,12 +313,14 @@ def token_revoke(admin_access_token, id_, email):
         admin.log_action(AuditLogAction.revoke_token, {"reana_admin": log_msg})
         # send notification to user by email
         email_subject = "REANA access token revoked"
-        email_body = JinjaEnv.render_template(
-            "emails/token_revoked.txt",
-            user_full_name=user.full_name,
-            reana_hostname=REANA_HOSTNAME,
-            ui_config=REANAConfig.load("ui"),
-            sender_email=ADMIN_EMAIL,
+        email_body = get_ascii_str(
+            JinjaEnv.render_template(
+                "emails/token_revoked.txt",
+                user_full_name=user.full_name,
+                reana_hostname=REANA_HOSTNAME,
+                ui_config=REANAConfig.load("ui"),
+                sender_email=ADMIN_EMAIL,
+            )
         )
         send_email(user.email, email_subject, email_body)
 
@@ -401,7 +406,7 @@ def status_report(types, email, admin_access_token):
             statuses = statuses_obj.get_status()
             status_report_output += _format_statuses(type_, statuses) + "\n"
 
-        status_report_body = (
+        status_report_body = get_ascii_str(
             f"Status report for {hostname}\n---\n{status_report_output}"
         )
 

@@ -17,6 +17,7 @@ import secrets
 import sys
 import shutil
 from typing import Optional, Dict
+import unicodedata
 from uuid import UUID, uuid4
 
 import click
@@ -298,13 +299,15 @@ def _create_and_associate_oauth_user(sender, account_info, **kwargs):
 
 def _send_confirmation_email(confirm_token, user):
     """Compose and send sign-up confirmation email."""
-    email_body = JinjaEnv.render_template(
-        "emails/email_confirmation.txt",
-        user_full_name=user.full_name,
-        reana_hostname=REANA_HOSTNAME,
-        ui_config=REANAConfig.load("ui"),
-        sender_email=ADMIN_EMAIL,
-        confirm_token=confirm_token,
+    email_body = get_ascii_str(
+        JinjaEnv.render_template(
+            "emails/email_confirmation.txt",
+            user_full_name=user.full_name,
+            reana_hostname=REANA_HOSTNAME,
+            ui_config=REANAConfig.load("ui"),
+            sender_email=ADMIN_EMAIL,
+            confirm_token=confirm_token,
+        )
     )
     send_email(user.email, "Confirm your REANA email address", email_body)
 
@@ -546,3 +549,12 @@ def user_has_active_token(user):
     """Check whether the user has at least one active token."""
     token = user.tokens.filter(UserToken.status == UserTokenStatus.active).first()
     return token is not None
+
+
+def get_ascii_str(unicode_str: str) -> str:
+    """Remove non-ascii characters from strings."""
+    return (
+        unicodedata.normalize("NFKD", unicode_str)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )

@@ -20,7 +20,7 @@ from reana_commons.errors import REANAEmailNotificationError
 from reana_server import __version__
 from reana_server.config import ADMIN_EMAIL, REANA_HOSTNAME
 from reana_server.decorators import signin_required
-from reana_server.utils import JinjaEnv
+from reana_server.utils import JinjaEnv, get_ascii_str
 
 
 blueprint = Blueprint("users", __name__)
@@ -294,11 +294,13 @@ def request_token(user):
             "access_token_status",
         ]
         user_data = "\n".join([f"{f}: {getattr(user, f, None)}" for f in fields])
-        email_body = JinjaEnv.render_template(
-            "emails/token_request.txt",
-            user_data=user_data,
-            user_email=user.email,
-            reana_hostname=REANA_HOSTNAME,
+        email_body = get_ascii_str(
+            JinjaEnv.render_template(
+                "emails/token_request.txt",
+                user_data=user_data,
+                user_email=user.email,
+                reana_hostname=REANA_HOSTNAME,
+            )
         )
         try:
             send_email(ADMIN_EMAIL, email_subject, email_body)
