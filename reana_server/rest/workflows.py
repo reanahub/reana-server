@@ -159,7 +159,7 @@ def get_workflows(user, **kwargs):  # noqa
                       type: object
                       properties:
                         raw:
-                          type: number
+                          type: integer
                         human_readable:
                           type: string
                     user:
@@ -168,6 +168,12 @@ def get_workflows(user, **kwargs):  # noqa
                       type: string
                       x-nullable: true
                     created:
+                      type: string
+                    session_status:
+                      type: string
+                    session_type:
+                      type: string
+                    session_uri:
                       type: string
                     progress:
                       type: object
@@ -185,7 +191,7 @@ def get_workflows(user, **kwargs):  # noqa
                                 type: string
                               type: array
                             total:
-                              type: number
+                              type: integer
                           type: object
                         finished:
                           properties:
@@ -194,7 +200,7 @@ def get_workflows(user, **kwargs):  # noqa
                                 type: string
                               type: array
                             total:
-                              type: number
+                              type: integer
                           type: object
                         run_finished_at:
                           type: string
@@ -209,7 +215,7 @@ def get_workflows(user, **kwargs):  # noqa
                                 type: string
                               type: array
                             total:
-                              type: number
+                              type: integer
                           type: object
                         total:
                           properties:
@@ -218,7 +224,7 @@ def get_workflows(user, **kwargs):  # noqa
                                 type: string
                               type: array
                             total:
-                              type: number
+                              type: integer
                           type: object
           examples:
             application/json:
@@ -1582,7 +1588,7 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
                       type: object
                       properties:
                         raw:
-                          type: number
+                          type: integer
                         human_readable:
                           type: string
         400:
@@ -2268,7 +2274,7 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
                       type: object
                       properties:
                         raw:
-                          type: number
+                          type: integer
                         human_readable:
                           type: string
           examples:

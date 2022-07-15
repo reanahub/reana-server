@@ -1130,7 +1130,7 @@
                                 "type": "array"
                               },
                               "total": {
-                                "type": "number"
+                                "type": "integer"
                               }
                             },
                             "type": "object"
@@ -1144,7 +1144,7 @@
                                 "type": "array"
                               },
                               "total": {
-                                "type": "number"
+                                "type": "integer"
                               }
                             },
                             "type": "object"
@@ -1166,7 +1166,7 @@
                                 "type": "array"
                               },
                               "total": {
-                                "type": "number"
+                                "type": "integer"
                               }
                             },
                             "type": "object"
@@ -1180,7 +1180,7 @@
                                 "type": "array"
                               },
                               "total": {
-                                "type": "number"
+                                "type": "integer"
                               }
                             },
                             "type": "object"
@@ -1188,13 +1188,22 @@
                         },
                         "type": "object"
                       },
+                      "session_status": {
+                        "type": "string"
+                      },
+                      "session_type": {
+                        "type": "string"
+                      },
+                      "session_uri": {
+                        "type": "string"
+                      },
                       "size": {
                         "properties": {
                           "human_readable": {
                             "type": "string"
                           },
                           "raw": {
-                            "type": "number"
+                            "type": "integer"
                           }
                         },
                         "type": "object"
@@ -1693,7 +1702,7 @@
                             "type": "string"
                           },
                           "raw": {
-                            "type": "number"
+                            "type": "integer"
                           }
                         },
                         "type": "object"
@@ -2541,7 +2550,7 @@
                             "type": "string"
                           },
                           "raw": {
-                            "type": "number"
+                            "type": "integer"
                           }
                         },
                         "type": "object"
