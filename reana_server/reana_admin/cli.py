@@ -33,10 +33,14 @@ from reana_db.models import (
     User,
     UserResource,
     UserTokenStatus,
+    WorkspaceRetentionRule,
+    WorkspaceRetentionRuleStatus,
 )
+from reana_db.utils import update_workspace_retention_rules
 
 from reana_server.config import ADMIN_EMAIL, ADMIN_USER_ID, REANA_HOSTNAME
 from reana_server.decorators import admin_access_token_option
+from reana_server.reana_admin.retention_rule_deleter import RetentionRuleDeleter
 from reana_server.status import STATUS_OBJECT_TYPES
 
 from reana_server.utils import (
@@ -738,3 +742,18 @@ def check_workflows(
     from .check_workflows import check_workflows
 
     check_workflows(date_start, date_end)
+
+
+@reana_admin.command()
+def retention_rules_apply() -> None:
+    """Apply pending retentions rules."""
+    current_time = datetime.datetime.now()
+    pending_rules = WorkspaceRetentionRule.query.filter(
+        WorkspaceRetentionRule.status == WorkspaceRetentionRuleStatus.active,
+        WorkspaceRetentionRule.apply_on < current_time,
+    ).all()
+    if not pending_rules:
+        click.echo("No rules to be applied!")
+    for rule in pending_rules:
+        RetentionRuleDeleter(rule).apply_rule()
+        update_workspace_retention_rules([rule], WorkspaceRetentionRuleStatus.applied)

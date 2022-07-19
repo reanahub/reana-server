@@ -10,14 +10,18 @@
 
 import csv
 import io
+import pathlib
 import secrets
+from unittest.mock import Mock
 import uuid
 
 from click.testing import CliRunner
+import pytest
 from reana_db.models import AuditLogAction, User, UserTokenStatus
 
 from reana_server.api_client import WorkflowSubmissionPublisher
 from reana_server.reana_admin import reana_admin
+from reana_server.reana_admin.cli import RetentionRuleDeleter
 from reana_server.reana_admin.consumer import MessageConsumer
 
 
@@ -307,3 +311,99 @@ class TestMessageConsumer:
             in_memory_queue_connection.channel().queues["workflow-submission"].empty()
         )
         in_memory_queue_connection.channel().queues.clear()
+
+
+@pytest.mark.parametrize(
+    "file_or_dir, expected_result",
+    [
+        ("in.txt", True),
+        ("in", True),
+        ("in/xyz.txt", True),
+        ("in/subdir/xyz.txt", True),
+        ("out.txt", True),
+        ("out", True),
+        ("out/xyz.txt", True),
+        ("out/subdir/xyz.txt", True),
+        ("xyz/in.txt", False),
+        ("xyz/out.txt", False),
+        ("abc.xyz", False),
+    ],
+)
+def test_is_input_or_output(file_or_dir, expected_result):
+    """Test if inputs/outputs are correctly recognized."""
+    workspace = pathlib.Path("/workspace")
+
+    rule = Mock()
+    rule.id_ = "1234"
+    rule.workflow.id_ = "5678"
+    rule.workflow.reana_specification = {
+        "inputs": {
+            "files": ["in.txt"],
+            "directories": ["in"],
+        },
+        "outputs": {
+            "files": ["out.txt"],
+            "directories": ["out"],
+        },
+    }
+    rule.workflow.workspace_path = str(workspace)
+    rule.workspace_files = "**/*"
+
+    assert (
+        RetentionRuleDeleter(rule).is_input_output(workspace / file_or_dir)
+        == expected_result
+    )
+
+
+def test_retention_rules_apply(workflow_with_retention_rules):
+    """Test the deletion of files when applying retention rules."""
+    workflow = workflow_with_retention_rules
+    workspace = pathlib.Path(workflow.workspace_path)
+
+    to_be_kept = [
+        "input.txt",
+        "inputs/input.txt",
+        "output.txt",
+        "outputs/output.txt",
+        "to_be_deleted/input.txt",
+        "to_be_deleted/outputs/output.txt",
+        "not_deleted.xyz",
+    ]
+    to_be_deleted = [
+        "to_be_deleted/deleted.xyz",
+        "deleted.txt",
+    ]
+
+    for file in to_be_kept + to_be_deleted:
+        f = workspace / file
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.touch()
+        assert f.exists()
+
+    runner = CliRunner()
+    result = runner.invoke(reana_admin, ["retention-rules-apply"])
+    assert result.exit_code == 0
+
+    for file in to_be_kept:
+        assert workspace.joinpath(file).exists()
+    for file in to_be_deleted:
+        assert not workspace.joinpath(file).exists()
+
+
+def test_retention_rule_deleter_file_outside_workspace(tmp_path):
+    """Test that file outside the workspace are not deleted."""
+    file = tmp_path.joinpath("do_not_delete.txt")
+    file.write_text("Must be preserved")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    rule = Mock()
+    rule.id_ = "1234"
+    rule.workflow.id_ = "5678"
+    rule.workflow.reana_specification = {}
+    rule.workflow.workspace_path = str(workspace)
+    rule.workspace_files = "../**/*.txt"
+
+    RetentionRuleDeleter(rule).apply_rule()
+
+    assert file.exists()
