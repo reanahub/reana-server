@@ -722,6 +722,21 @@ def queue_consume(
         consumer.run()
 
 
+@reana_admin.command()
+def retention_rules_apply() -> None:
+    """Apply pending retentions rules."""
+    current_time = datetime.datetime.now()
+    pending_rules = WorkspaceRetentionRule.query.filter(
+        WorkspaceRetentionRule.status == WorkspaceRetentionRuleStatus.active,
+        WorkspaceRetentionRule.apply_on < current_time,
+    ).all()
+    if not pending_rules:
+        click.echo("No rules to be applied!")
+    for rule in pending_rules:
+        RetentionRuleDeleter(rule).apply_rule()
+        update_workspace_retention_rules([rule], WorkspaceRetentionRuleStatus.applied)
+
+
 @reana_admin.command("check-workflows")
 @click.option(
     "--date-start",
@@ -736,24 +751,79 @@ def queue_consume(
     help="Default value is now.",
 )
 def check_workflows(
-    date_start: Optional[datetime.datetime], date_end: Optional[datetime.datetime]
+    date_start: datetime.datetime, date_end: Optional[datetime.datetime]
 ) -> None:
     """Check consistency of selected workflow run statuses between database, message queue and Kubernetes."""
-    from .check_workflows import check_workflows
+    from .check_workflows import (
+        check_workflows,
+        check_interactive_sessions,
+        display_results,
+        InfoCollectionError,
+    )
 
-    check_workflows(date_start, date_end)
+    click.secho("\nChecking if workflows are in-sync...", fg="yellow")
+    workflows_in_sync = True
+    try:
+        in_sync_workflows, out_of_sync_workflows, total_workflows = check_workflows(
+            date_start, date_end
+        )
+    except InfoCollectionError as error:
+        workflows_in_sync = False
+        logging.exception(error)
+    else:
+        if in_sync_workflows:
+            click.secho(
+                f"\nIn-sync workflows ({len(in_sync_workflows)} out of {total_workflows})\n",
+                fg="green",
+            )
+            display_results(in_sync_workflows)
 
+        if out_of_sync_workflows:
+            workflows_in_sync = False
+            click.secho(
+                f"\nOut-of-sync workflows ({len(out_of_sync_workflows)} out of {total_workflows})\n",
+                fg="red",
+            )
+            display_results(out_of_sync_workflows)
 
-@reana_admin.command()
-def retention_rules_apply() -> None:
-    """Apply pending retentions rules."""
-    current_time = datetime.datetime.now()
-    pending_rules = WorkspaceRetentionRule.query.filter(
-        WorkspaceRetentionRule.status == WorkspaceRetentionRuleStatus.active,
-        WorkspaceRetentionRule.apply_on < current_time,
-    ).all()
-    if not pending_rules:
-        click.echo("No rules to be applied!")
-    for rule in pending_rules:
-        RetentionRuleDeleter(rule).apply_rule()
-        update_workspace_retention_rules([rule], WorkspaceRetentionRuleStatus.applied)
+    click.secho("\nChecking if sessions are in-sync...", fg="yellow")
+    sessions_in_sync = True
+    try:
+        (
+            in_sync_sessions,
+            out_of_sync_sessions,
+            pods_without_session,
+            total_sessions,
+        ) = check_interactive_sessions()
+    except InfoCollectionError as error:
+        sessions_in_sync = False
+        logging.exception(error)
+    else:
+        if in_sync_sessions:
+            click.secho(
+                f"\nIn-sync sessions ({len(in_sync_sessions)} out of {total_sessions})\n",
+                fg="green",
+            )
+            display_results(in_sync_sessions)
+
+        if out_of_sync_sessions:
+            sessions_in_sync = False
+            click.secho(
+                f"\nOut-of-sync sessions ({len(out_of_sync_sessions)} out of {total_sessions})\n",
+                fg="red",
+            )
+            display_results(out_of_sync_sessions)
+
+        if pods_without_session:
+            sessions_in_sync = False
+            click.secho(
+                f"\nSession pods without session in the database ({len(pods_without_session)} found)\n",
+                fg="red",
+            )
+            display_results(pods_without_session)
+
+    if workflows_in_sync and sessions_in_sync:
+        click.secho("\nOK")
+    else:
+        click.secho("\nFAILED")
+        sys.exit(1)

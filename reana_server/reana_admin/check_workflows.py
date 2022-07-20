@@ -10,9 +10,8 @@
 
 
 import datetime
-import logging
-import sys
 from typing import Optional, List, Dict, Tuple
+from dataclasses import dataclass
 from functools import partial
 
 import click
@@ -20,6 +19,7 @@ from reana_commons.k8s.api_client import current_k8s_corev1_api_client
 from reana_commons.config import REANA_RUNTIME_KUBERNETES_NAMESPACE
 from reana_db.database import Session
 from reana_db.models import (
+    InteractiveSession,
     Workflow,
     RunStatus,
 )
@@ -30,38 +30,55 @@ from sqlalchemy.orm import Query
 from reana_server.reana_admin.consumer import CollectingConsumer
 
 
-class WorkflowCheckFailed(Exception):
-    """Error when workflow doesn't pass some check."""
+class CheckFailed(Exception):
+    """Error when a check for workflow or session fails."""
 
 
-WorkflowCheckResult = Tuple[Workflow, List[WorkflowCheckFailed]]
+class InfoCollectionError(Exception):
+    """Error when check functions fails to query workflows/sessions, collect pods or queue messages."""
 
 
-def _display(validation_results: List[WorkflowCheckResult]):
-    for workflow_result in validation_results:
-        workflow = workflow_result[0]
+@dataclass
+class CheckSource:
+    """Contains metadata about workflow or session."""
+
+    id: str
+    name: str
+    user: Optional[str]
+    status: Optional[RunStatus]
+
+
+@dataclass
+class CheckResult:
+    """Contains information about source and its errors (if any)."""
+
+    source: CheckSource
+    errors: List[CheckFailed]
+
+
+def display_results(validation_results: List[CheckResult]):
+    """Display results from a list of CheckResults."""
+    for result in validation_results:
+        source = result.source
         click.secho(
-            f"- id: {str(workflow.id_)}, name: {workflow.name}, user: {workflow.owner.email}, status: {workflow.status}"
+            f"- id: {source.id}, name: {source.name}, user: {source.user}, status: {source.status}"
         )
 
-        failed_checks = workflow_result[1]
+        failed_checks = result.errors
         for check_error in failed_checks:
             click.secho(f"   - ERROR: {check_error}\n", fg="red")
 
 
 def _get_all_pods() -> List[V1Pod]:
-    try:
-        response = current_k8s_corev1_api_client.list_namespaced_pod(
-            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE
-        )
-        return response.items
-    except ApiException as error:
-        click.secho(
-            "Couldn't fetch list of pods due to an error.",
-            fg="red",
-        )
-        logging.exception(error)
-        return []
+    """Collect information about Pods.
+
+    :raises kubernetes.client.rest.ApiException: in case of a k8s server error.
+    """
+    click.secho("Collecting information about Pods...")
+    response = current_k8s_corev1_api_client.list_namespaced_pod(
+        namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE
+    )
+    return response.items
 
 
 def _collect_messages_from_scheduler_queue(filtered_workflows: Query) -> Dict:
@@ -75,35 +92,35 @@ def _collect_messages_from_scheduler_queue(filtered_workflows: Query) -> Dict:
 
 
 def _message_is_in_scheduler_queue(workflow, pods, scheduler_messages):
-    if workflow.id_ not in scheduler_messages:
-        raise WorkflowCheckFailed("Message is not found in workflow-submission queue.")
+    if str(workflow.id_) not in scheduler_messages:
+        raise CheckFailed("Message is not found in workflow-submission queue.")
 
 
 def _pods_dont_exist(workflow, pods, scheduler_messages):
     if len(pods) > 0:
-        raise WorkflowCheckFailed("Some pods still exist for the workflow.")
+        raise CheckFailed("Some pods still exist.")
 
 
 def _pods_exist(workflow, pods, scheduler_messages):
     if len(pods) == 0:
-        raise WorkflowCheckFailed("No pods found for the workflow.")
+        raise CheckFailed("No pods found.")
 
 
-def _all_batch_pods_have_phase(workflow, pods, scheduler_messages, phase):
-    if any(
-        [pod.status.phase != phase for pod in pods if "batch-pod" in pod.metadata.name]
-    ):
-        raise WorkflowCheckFailed(f"Some pods are not in {phase}.")
+def _only_one_pod_exists(workflow, pods, scheduler_messages):
+    if len(pods) != 1:
+        raise CheckFailed(f"Only one pod should exist. Found {len(pods)}.")
+
+
+def _all_pods_have_phase(workflow, pods, scheduler_messages, phase):
+    if any([pod.status.phase != phase for pod in pods]):
+        raise CheckFailed(f"Some pods are not in {phase}.")
 
 
 def _no_batch_pods_are_in_notready_state(workflow, pods, scheduler_messages):
     for pod in pods:
-        if "batch-pod" in pod.metadata.name:
-            for container in pod.status.container_statuses:
-                if container.state.terminated:
-                    raise WorkflowCheckFailed(
-                        f"{pod.metadata.name} pod is in NotReady state."
-                    )
+        for container in pod.status.container_statuses:
+            if container.state.terminated:
+                raise CheckFailed(f"{pod.metadata.name} pod is in NotReady state.")
 
 
 validation_map = {
@@ -112,11 +129,11 @@ validation_map = {
     ],
     RunStatus.pending: [
         _pods_exist,
-        partial(_all_batch_pods_have_phase, phase="Pending"),
+        partial(_all_pods_have_phase, phase="Pending"),
     ],
     RunStatus.running: [
         _pods_exist,
-        partial(_all_batch_pods_have_phase, phase="Running"),
+        partial(_all_pods_have_phase, phase="Running"),
         _no_batch_pods_are_in_notready_state,
     ],
     RunStatus.finished: [
@@ -130,7 +147,7 @@ validation_map = {
 
 def check_workflows(
     date_start: datetime.datetime, date_end: Optional[datetime.datetime]
-) -> None:
+) -> Tuple[List[CheckResult], List[CheckResult], int]:
     """Check if selected workflows are in sync with database according to predefined rules."""
     # filter workflows that need to be checked
     statuses_to_check = validation_map.keys()
@@ -146,73 +163,141 @@ def check_workflows(
 
     time_range_message = f"{date_start} - {date_end if date_end else 'now'}"
 
-    if filtered_workflows.count() == 0:
+    total_workflows = filtered_workflows.count()
+
+    if total_workflows == 0:
         click.secho(
-            f"No workflows found matching time range {time_range_message}.\nPlease, adjust your filter conditions.",
+            f"No workflows found matching time range {time_range_message}.",
             fg="red",
         )
-        sys.exit(1)
+        return [], [], total_workflows
     click.secho(
-        f"Found {filtered_workflows.count()} workflow(s) matching time range {time_range_message}.\n",
+        f"Found {total_workflows} workflow(s) matching time range {time_range_message}.",
     )
 
     try:
         click.secho("Collecting MQ messages...")
         scheduler_messages = _collect_messages_from_scheduler_queue(filtered_workflows)
     except Exception as error:
-        click.secho(
-            "Error is raised when collecting scheduler messages.",
-            fg="red",
-        )
-        logging.exception(error)
-        sys.exit(1)
+        raise InfoCollectionError(f"Couldn't collect scheduler messages: {error}")
 
-    click.secho("Collecting information about Pods...")
-    pods = _get_all_pods()
-    if not pods:
-        click.secho(
-            "List of active pods is empty. It is required to validate workflows. Exiting..",
-            fg="red",
-        )
-        sys.exit(1)
+    try:
+        pods = _get_all_pods()
+    except ApiException as error:
+        raise InfoCollectionError(f"Couldn't fetch list of pods: {error}")
 
-    in_sync_workflows: List[WorkflowCheckResult] = []
-    out_of_sync_workflows: List[WorkflowCheckResult] = []
+    in_sync_workflows: List[CheckResult] = []
+    out_of_sync_workflows: List[CheckResult] = []
     for workflow in filtered_workflows:
-        filtered_pods = [pod for pod in pods if str(workflow.id_) in pod.metadata.name]
+        part_of_pod_id = f"run-batch-{workflow.id_}"
+        filtered_pods = [pod for pod in pods if part_of_pod_id in pod.metadata.name]
 
         checks = validation_map[workflow.status]
-        failed_checks: List[WorkflowCheckFailed] = []
+        failed_checks: List[CheckFailed] = []
 
         workflow_is_in_sync = True
         for check in checks:
             try:
                 check(workflow, filtered_pods, scheduler_messages)
-            except WorkflowCheckFailed as error:
+            except CheckFailed as error:
                 failed_checks.append(error)
                 workflow_is_in_sync = False
 
+        check_source = CheckSource(
+            id=str(workflow.id_),
+            name=workflow.get_full_workflow_name(),
+            user=workflow.owner.email,
+            status=workflow.status,
+        )
+
         if workflow_is_in_sync:
-            in_sync_workflows.append((workflow, failed_checks))
+            in_sync_workflows.append(CheckResult(check_source, failed_checks))
         else:
-            out_of_sync_workflows.append((workflow, failed_checks))
+            out_of_sync_workflows.append(CheckResult(check_source, failed_checks))
 
-    if in_sync_workflows:
-        click.secho(
-            f"\nIn-sync workflows ({len(in_sync_workflows)} out of {filtered_workflows.count()})\n",
-            fg="green",
+    return in_sync_workflows, out_of_sync_workflows, total_workflows
+
+
+interactive_sessions_validation_map = {
+    RunStatus.created: [
+        _only_one_pod_exists,
+        partial(_all_pods_have_phase, phase="Running"),
+    ]
+}
+
+
+def check_interactive_sessions() -> Tuple[
+    List[CheckResult], List[CheckResult], List[CheckResult], int
+]:
+    """Check if selected sessions are in sync with database according to predefined rules.
+
+    Because interactive sessions are deleted from database when they are closed,
+    the function queries all of them at once.
+    The number of interactive sessions is usually low (<100) so applying time range doesn't make sense.
+    In addition, session pods can still exist even if session is not present in the database.
+    So, it is easier to query all sessions to determine if some pods are hanging.
+    """
+    statuses_to_check = interactive_sessions_validation_map.keys()
+    filtered_sessions = Session.query(InteractiveSession).filter(
+        InteractiveSession.status.in_(statuses_to_check)
+    )
+
+    total_sessions = filtered_sessions.count()
+
+    click.secho(
+        f"Found {total_sessions} interactive session(s) in the database.",
+    )
+
+    try:
+        pods = _get_all_pods()
+    except ApiException as error:
+        raise InfoCollectionError(f"Couldn't fetch list of pods: {error}")
+
+    in_sync_sessions: List[CheckResult] = []
+    out_of_sync_sessions: List[CheckResult] = []
+    pods_without_session: List[CheckResult] = []
+
+    # check if some session pods don't have corresponding session entry in the database
+    session_pods = [pod for pod in pods if "run-session" in pod.metadata.name]
+    for pod in session_pods:
+        pod_doesnt_have_session = not any(
+            [session.name in pod.metadata.name for session in filtered_sessions]
         )
-        _display(in_sync_workflows)
+        if pod_doesnt_have_session:
+            check_source = CheckSource(
+                id=pod.metadata.name, name="Session pod", user=None, status=None
+            )
+            failed_checks = [CheckFailed("Pod doesn't have a session in the database.")]
+            pods_without_session.append(CheckResult(check_source, failed_checks))
 
-    if out_of_sync_workflows:
-        click.secho(
-            f"\nOut-of-sync workflows ({len(out_of_sync_workflows)} out of {filtered_workflows.count()})\n",
-            fg="red",
+    # check if sessions in the database pass checks
+    for session in filtered_sessions:
+        filtered_pods = [
+            pod for pod in session_pods if str(session.name) in pod.metadata.name
+        ]
+
+        checks = interactive_sessions_validation_map[session.status]
+        failed_checks: List[CheckFailed] = []
+        session_is_in_sync = True
+
+        for check in checks:
+            try:
+                check(session, filtered_pods, [])
+            except CheckFailed as error:
+                failed_checks.append(error)
+                session_is_in_sync = False
+                break
+
+        check_source = CheckSource(
+            id=str(session.id_),
+            name=session.name,
+            user=str(session.workflow[0].owner.email),
+            status=session.status,
         )
-        _display(out_of_sync_workflows)
 
-    if out_of_sync_workflows:
-        click.secho("\nFAILED")
-        sys.exit(1)
-    else:
-        click.secho("\nOK")
+        if session_is_in_sync:
+            in_sync_sessions.append(CheckResult(check_source, failed_checks))
+        else:
+            out_of_sync_sessions.append(CheckResult(check_source, failed_checks))
+
+    return in_sync_sessions, out_of_sync_sessions, pods_without_session, total_sessions

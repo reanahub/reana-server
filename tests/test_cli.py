@@ -8,16 +8,17 @@
 
 """Test command line application."""
 
+import datetime
 import csv
 import io
 import pathlib
 import secrets
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 import uuid
 
 from click.testing import CliRunner
 import pytest
-from reana_db.models import AuditLogAction, User, UserTokenStatus
+from reana_db.models import AuditLogAction, User, UserTokenStatus, RunStatus
 
 from reana_server.api_client import WorkflowSubmissionPublisher
 from reana_server.reana_admin import reana_admin
@@ -407,3 +408,292 @@ def test_retention_rule_deleter_file_outside_workspace(tmp_path):
     RetentionRuleDeleter(rule).apply_rule()
 
     assert file.exists()
+
+
+class TestCheckWorkflows:
+    @patch(
+        "reana_server.reana_admin.check_workflows._collect_messages_from_scheduler_queue",
+        Mock(return_value={}),
+    )
+    def test_check_correct_queued_workflow(self, session, sample_serial_workflow_in_db):
+        sample_serial_workflow_in_db.created = (
+            datetime.datetime.now() - datetime.timedelta(hours=12)
+        )
+        sample_serial_workflow_in_db.status = RunStatus.queued
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+
+        mock_messages = {
+            str(sample_serial_workflow_in_db.id_): {"some_key": "some_value"},
+        }
+
+        with patch(
+            "reana_server.reana_admin.check_workflows._get_all_pods",
+            Mock(return_value=[]),
+        ):
+            with patch(
+                "reana_server.reana_admin.check_workflows._collect_messages_from_scheduler_queue",
+                Mock(return_value=mock_messages),
+            ):
+                from reana_server.reana_admin.check_workflows import check_workflows
+
+                in_sync, out_of_sync, total_workflows = check_workflows(
+                    datetime.datetime.now() - datetime.timedelta(hours=24), None
+                )
+                assert total_workflows == 1
+                assert len(out_of_sync) == 0
+                assert len(in_sync) == 1
+
+    @patch(
+        "reana_server.reana_admin.check_workflows._collect_messages_from_scheduler_queue",
+        Mock(return_value={}),
+    )
+    def test_check_correct_pending_workflow(
+        self, session, sample_serial_workflow_in_db
+    ):
+        sample_serial_workflow_in_db.created = (
+            datetime.datetime.now() - datetime.timedelta(hours=12)
+        )
+        sample_serial_workflow_in_db.status = RunStatus.pending
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+
+        mock_pod = Mock()
+        mock_pod.metadata.name = f"run-batch-{sample_serial_workflow_in_db.id_}"
+        mock_pod.status.phase = "Pending"
+
+        with patch(
+            "reana_server.reana_admin.check_workflows._get_all_pods",
+            Mock(return_value=[mock_pod]),
+        ):
+            from reana_server.reana_admin.check_workflows import check_workflows
+
+            in_sync, out_of_sync, total_workflows = check_workflows(
+                datetime.datetime.now() - datetime.timedelta(hours=24), None
+            )
+            assert total_workflows == 1
+            assert len(out_of_sync) == 0
+            assert len(in_sync) == 1
+
+    @patch(
+        "reana_server.reana_admin.check_workflows._collect_messages_from_scheduler_queue",
+        Mock(return_value={}),
+    )
+    def test_check_correct_running_workflow(
+        self, session, sample_serial_workflow_in_db
+    ):
+        sample_serial_workflow_in_db.created = (
+            datetime.datetime.now() - datetime.timedelta(hours=12)
+        )
+        sample_serial_workflow_in_db.status = RunStatus.running
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+
+        mock_pod = Mock()
+        mock_pod.metadata.name = f"run-batch-{sample_serial_workflow_in_db.id_}"
+        mock_pod.status.phase = "Running"
+        mock_container = Mock()
+        mock_container.state.terminated = {}
+        mock_pod.status.container_statuses = [mock_container]
+
+        with patch(
+            "reana_server.reana_admin.check_workflows._get_all_pods",
+            Mock(return_value=[mock_pod]),
+        ):
+            from reana_server.reana_admin.check_workflows import check_workflows
+
+            in_sync, out_of_sync, total_workflows = check_workflows(
+                datetime.datetime.now() - datetime.timedelta(hours=24), None
+            )
+            assert total_workflows == 1
+            assert len(out_of_sync) == 0
+            assert len(in_sync) == 1
+
+    @patch(
+        "reana_server.reana_admin.check_workflows._collect_messages_from_scheduler_queue",
+        Mock(return_value={}),
+    )
+    def test_check_correct_finished_workflow(
+        self, session, sample_serial_workflow_in_db
+    ):
+        sample_serial_workflow_in_db.created = (
+            datetime.datetime.now() - datetime.timedelta(hours=12)
+        )
+        sample_serial_workflow_in_db.status = RunStatus.finished
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+
+        with patch(
+            "reana_server.reana_admin.check_workflows._get_all_pods",
+            Mock(return_value=[]),
+        ):
+            from reana_server.reana_admin.check_workflows import check_workflows
+
+            in_sync, out_of_sync, total_workflows = check_workflows(
+                datetime.datetime.now() - datetime.timedelta(hours=24), None
+            )
+            assert total_workflows == 1
+            assert len(out_of_sync) == 0
+            assert len(in_sync) == 1
+
+    def test_check_correct_created_session(self, session, sample_serial_workflow_in_db):
+        from reana_db.models import InteractiveSession
+
+        interactive_session = InteractiveSession(
+            name=f"run-session-{sample_serial_workflow_in_db.id_}",
+            path="some-path",
+            owner_id=sample_serial_workflow_in_db.owner_id,
+            status=RunStatus.created,
+        )
+        sample_serial_workflow_in_db.sessions.append(interactive_session)
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+
+        mock_session_pod = Mock()
+        mock_session_pod.metadata.name = (
+            f"run-session-{sample_serial_workflow_in_db.id_}-a"
+        )
+        mock_session_pod.status.phase = "Running"
+
+        mock_batch_pod = Mock()
+        mock_batch_pod.metadata.name = f"run-batch-{sample_serial_workflow_in_db.id_}-b"
+
+        with patch(
+            "reana_server.reana_admin.check_workflows._get_all_pods",
+            Mock(return_value=[mock_batch_pod, mock_session_pod]),
+        ):
+            from reana_server.reana_admin.check_workflows import (
+                check_interactive_sessions,
+            )
+
+            (
+                in_sync,
+                out_of_sync,
+                pods_without_session,
+                total_sessions,
+            ) = check_interactive_sessions()
+            assert total_sessions == 1
+            assert len(pods_without_session) == 0
+            assert len(out_of_sync) == 0
+            assert len(in_sync) == 1
+
+    def test_check_session_has_more_than_one_pod(
+        self, session, sample_serial_workflow_in_db
+    ):
+        from reana_db.models import InteractiveSession
+
+        interactive_session = InteractiveSession(
+            name=f"run-session-{sample_serial_workflow_in_db.id_}",
+            path="some-path",
+            owner_id=sample_serial_workflow_in_db.owner_id,
+            status=RunStatus.created,
+        )
+        sample_serial_workflow_in_db.sessions.append(interactive_session)
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+
+        mock_session_pod = Mock()
+        mock_session_pod.metadata.name = (
+            f"run-session-{sample_serial_workflow_in_db.id_}-a"
+        )
+        mock_session_pod.status.phase = "Running"
+
+        mock_session_pod_2 = Mock()
+        mock_session_pod_2.metadata.name = (
+            f"run-session-{sample_serial_workflow_in_db.id_}-b"
+        )
+        mock_session_pod_2.status.phase = "Running"
+
+        with patch(
+            "reana_server.reana_admin.check_workflows._get_all_pods",
+            Mock(return_value=[mock_session_pod_2, mock_session_pod]),
+        ):
+            from reana_server.reana_admin.check_workflows import (
+                check_interactive_sessions,
+            )
+
+            (
+                in_sync,
+                out_of_sync,
+                pods_without_session,
+                total_sessions,
+            ) = check_interactive_sessions()
+            assert total_sessions == 1
+            assert len(pods_without_session) == 0
+            assert len(in_sync) == 0
+            assert len(out_of_sync) == 1
+
+            assert "Only one pod should exist." in str(out_of_sync[0].errors[0])
+
+    def test_check_session_is_missing_pod(self, session, sample_serial_workflow_in_db):
+        from reana_db.models import InteractiveSession
+
+        interactive_session = InteractiveSession(
+            name=f"run-session-{sample_serial_workflow_in_db.id_}",
+            path="some-path",
+            owner_id=sample_serial_workflow_in_db.owner_id,
+            status=RunStatus.created,
+        )
+        sample_serial_workflow_in_db.sessions.append(interactive_session)
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+
+        with patch(
+            "reana_server.reana_admin.check_workflows._get_all_pods",
+            Mock(return_value=[]),
+        ):
+            from reana_server.reana_admin.check_workflows import (
+                check_interactive_sessions,
+            )
+
+            (
+                in_sync,
+                out_of_sync,
+                pods_without_session,
+                total_sessions,
+            ) = check_interactive_sessions()
+            assert total_sessions == 1
+            assert len(pods_without_session) == 0
+            assert len(in_sync) == 0
+            assert len(out_of_sync) == 1
+
+    def test_check_pod_is_missing_session(self, session, sample_serial_workflow_in_db):
+        from reana_db.models import InteractiveSession
+
+        interactive_session = InteractiveSession(
+            name=f"run-session-{sample_serial_workflow_in_db.id_}",
+            path="some-path",
+            owner_id=sample_serial_workflow_in_db.owner_id,
+            status=RunStatus.created,
+        )
+        sample_serial_workflow_in_db.sessions.append(interactive_session)
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+
+        mock_session_pod = Mock()
+        mock_session_pod.metadata.name = (
+            f"run-session-{sample_serial_workflow_in_db.id_}-a"
+        )
+        mock_session_pod.status.phase = "Running"
+
+        session.delete(interactive_session)
+        session.commit()
+
+        with patch(
+            "reana_server.reana_admin.check_workflows._get_all_pods",
+            Mock(return_value=[mock_session_pod]),
+        ):
+            from reana_server.reana_admin.check_workflows import (
+                check_interactive_sessions,
+            )
+
+            (
+                in_sync,
+                out_of_sync,
+                pods_without_session,
+                total_sessions,
+            ) = check_interactive_sessions()
+            assert total_sessions == 0
+            assert len(in_sync) == 0
+            assert len(out_of_sync) == 0
+            assert len(pods_without_session) == 1
