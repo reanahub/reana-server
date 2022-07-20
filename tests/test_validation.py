@@ -7,10 +7,11 @@
 """REANA-Server tests for validation module."""
 
 import pytest
+from contextlib import nullcontext as does_not_raise
 
 from reana_commons.errors import REANAValidationError
 
-from reana_server.validation import validate_inputs
+from reana_server.validation import validate_inputs, validate_retention_rule
 
 
 @pytest.mark.parametrize(
@@ -26,3 +27,22 @@ from reana_server.validation import validate_inputs
 def test_validate_inputs(paths, error):
     with pytest.raises(REANAValidationError, match=error):
         validate_inputs({"inputs": {"directories": paths}})
+
+
+@pytest.mark.parametrize(
+    "rule, days, error",
+    [
+        ("**/*", 10, does_not_raise()),
+        (
+            "data/results/*",
+            30000,
+            pytest.raises(REANAValidationError, match="Maximum workflow retention"),
+        ),
+        ("/etc/*", 10, pytest.raises(REANAValidationError, match="absolute")),
+        ("./", 10, pytest.raises(REANAValidationError, match="empty")),
+        ("../**/*", 10, pytest.raises(REANAValidationError, match="'..'")),
+    ],
+)
+def test_validate_retention_rule(rule, days, error):
+    with error:
+        validate_retention_rule(rule, days)

@@ -10,7 +10,7 @@
 
 import itertools
 import pathlib
-from typing import Dict, List, Sequence
+from typing import Dict
 
 from reana_commons.config import WORKSPACE_PATHS
 from reana_commons.errors import REANAValidationError
@@ -19,8 +19,8 @@ from reana_commons.validation.operational_options import validate_operational_op
 from reana_commons.validation.parameters import build_parameters_validator
 from reana_commons.validation.utils import validate_reana_yaml, validate_workspace
 
-from reana_server.config import SUPPORTED_COMPUTE_BACKENDS
-from reana_server.utils import is_relative_to
+from reana_server.config import SUPPORTED_COMPUTE_BACKENDS, WORKSPACE_RETENTION_PERIOD
+from reana_server import utils
 
 
 def validate_parameters(reana_yaml: Dict) -> None:
@@ -101,7 +101,7 @@ def validate_inputs(reana_yaml: Dict) -> None:
         unique_paths.add(path)
 
     for x, y in itertools.permutations(paths, r=2):
-        if is_relative_to(x, y):
+        if utils.is_relative_to(x, y):
             raise REANAValidationError(
                 f"Invalid input paths: '{y}' is a prefix of '{x}'"
             )
@@ -125,3 +125,29 @@ def validate_workflow(reana_yaml: Dict, input_parameters: Dict) -> None:
     validate_compute_backends(reana_yaml)
     validate_workspace_path(reana_yaml)
     validate_inputs(reana_yaml)
+
+
+def validate_retention_rule(rule: str, days: int) -> None:
+    """Validate retention rule.
+
+    :param rule: retention rule
+    :type rule: str
+
+    :param days: after how many days rules need to be applied
+    :type days: int
+
+    :raises reana_commons.errors.REANAValidationError: if rule is not valid
+    """
+    rule_path = pathlib.Path(rule)
+    if rule_path.is_absolute():
+        raise REANAValidationError(f"Retention rule {rule} cannot be an absolute path")
+    if not rule_path.parts:
+        raise REANAValidationError(f"Retention rule {rule} cannot be empty")
+    if ".." in rule_path.parts:
+        raise REANAValidationError(f"Retention rule {rule} cannot contain '..'")
+
+    if days >= WORKSPACE_RETENTION_PERIOD:
+        raise REANAValidationError(
+            "Maximum workflow retention period was reached. "
+            f"Please use less than {WORKSPACE_RETENTION_PERIOD} days."
+        )

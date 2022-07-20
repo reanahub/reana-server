@@ -4,6 +4,7 @@ Changes
 Version 0.9.0 (UNRELEASED)
 --------------------------
 
+- Adds workspace retention rules validation to ``get_workspace_retention_rules`` function.
 - Adds ``queue-consume`` command that can be used by REANA administrators to remove specific messages from the queue.
 - Adds configuration environment variable to set an API rate limit for slow endpoints (``REANA_RATELIMIT_SLOW``).
 - Adds new ``/api/launch`` endpoint that allows running workflows from remote sources.

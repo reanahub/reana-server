@@ -72,6 +72,7 @@ from reana_server.config import (
     WORKSPACE_RETENTION_PERIOD,
     DEFAULT_WORKSPACE_RETENTION_RULE,
 )
+from reana_server.validation import validate_retention_rule
 
 
 def is_uuid_v4(uuid_or_name):
@@ -561,16 +562,14 @@ class RequestStreamWithLen(object):
 def get_workspace_retention_rules(
     retention_days: Optional[Dict[str, int]]
 ) -> List[Dict[str, any]]:
-    """Validate and return a list of retention rules."""
+    """Validate and return a list of retention rules.
+
+    :raises reana_commons.errors.REANAValidationError: in case one of the rules is not valid
+    """
     retention_rules = []
     if retention_days:
         for rule, days in retention_days.items():
-            if days >= WORKSPACE_RETENTION_PERIOD:
-                raise ValueError(
-                    "Maximum workflow retention period was reached. "
-                    f"Please use less than {WORKSPACE_RETENTION_PERIOD} days."
-                )
-            # TODO: add validation for rules
+            validate_retention_rule(rule, days)
             retention_rules.append({"workspace_files": rule, "retention_days": days})
 
     # Insert a default rule in case it's not present
