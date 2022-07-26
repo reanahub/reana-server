@@ -7,6 +7,7 @@
 """REANA-Server tests for validation module."""
 
 import pytest
+from unittest.mock import patch
 from contextlib import nullcontext as does_not_raise
 
 from reana_commons.errors import REANAValidationError
@@ -43,6 +44,7 @@ def test_validate_inputs(paths, error):
         ("../**/*", 10, pytest.raises(REANAValidationError, match="'..'")),
     ],
 )
+@patch("reana_server.validation.WORKSPACE_RETENTION_PERIOD", 365)
 def test_validate_retention_rule(rule, days, error):
     with error:
         validate_retention_rule(rule, days)

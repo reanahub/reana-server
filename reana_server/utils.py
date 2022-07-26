@@ -572,10 +572,15 @@ def get_workspace_retention_rules(
             validate_retention_rule(rule, days)
             retention_rules.append({"workspace_files": rule, "retention_days": days})
 
-    # Insert a default rule in case it's not present
-    if not any(
+    default_retention_rules_are_not_disabled = WORKSPACE_RETENTION_PERIOD is not None
+    default_retention_rule_is_not_present = not any(
         rule["workspace_files"] == DEFAULT_WORKSPACE_RETENTION_RULE
         for rule in retention_rules
+    )
+
+    if (
+        default_retention_rule_is_not_present
+        and default_retention_rules_are_not_disabled
     ):
         retention_rules.append(
             {

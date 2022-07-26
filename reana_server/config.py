@@ -12,6 +12,7 @@ import copy
 import json
 import os
 import re
+from typing import Optional
 
 from distutils.util import strtobool
 from limits.util import parse
@@ -300,9 +301,14 @@ LAUNCHER_ALLOWED_SNAKEMAKE_URLS = [
 
 # Workspace retention rules
 # ==================
-
-WORKSPACE_RETENTION_PERIOD = int(os.getenv("WORKSPACE_RETENTION_PERIOD", "365"))
-"""Maximum allowed period for workspace retention rules."""
+_workspace_retention_period_env = os.getenv("WORKSPACE_RETENTION_PERIOD", "forever")
+if _workspace_retention_period_env == "forever":
+    WORKSPACE_RETENTION_PERIOD: Optional[int] = None
+else:
+    WORKSPACE_RETENTION_PERIOD: Optional[int] = int(_workspace_retention_period_env)
+"""Maximum allowed period for workspace retention rules.
+The value "forever" means "do not apply any rules to files by default", and it is represented by None.
+"""
 
 DEFAULT_WORKSPACE_RETENTION_RULE = "**/*"
 """Workspace retention rule which will be applied to all the workflows by default."""

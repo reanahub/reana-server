@@ -146,7 +146,8 @@ def validate_retention_rule(rule: str, days: int) -> None:
     if ".." in rule_path.parts:
         raise REANAValidationError(f"Retention rule {rule} cannot contain '..'")
 
-    if days >= WORKSPACE_RETENTION_PERIOD:
+    default_retention_rules_are_not_disabled = WORKSPACE_RETENTION_PERIOD is not None
+    if default_retention_rules_are_not_disabled and days >= WORKSPACE_RETENTION_PERIOD:
         raise REANAValidationError(
             "Maximum workflow retention period was reached. "
             f"Please use less than {WORKSPACE_RETENTION_PERIOD} days."
