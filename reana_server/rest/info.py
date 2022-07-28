@@ -96,6 +96,16 @@ def info(user, **kwargs):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     """
     try:
         info = dict(

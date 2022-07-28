@@ -277,9 +277,24 @@ def get_workflows(user, **kwargs):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Your request contains not valid JSON."
+              }
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -290,6 +305,11 @@ def get_workflows(user, **kwargs):  # noqa
         404:
           description: >-
             Request failed. User does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -299,6 +319,11 @@ def get_workflows(user, **kwargs):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -401,9 +426,24 @@ def create_workflow(user):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow name cannot be a valid UUIDv4."
+              }
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -414,6 +454,11 @@ def create_workflow(user):  # noqa
         404:
           description: >-
             Request failed. User does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -423,6 +468,16 @@ def create_workflow(user):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
         501:
           description: >-
             Request failed. Not implemented.
@@ -592,6 +647,11 @@ def get_workflow_specification(workflow_id_or_name, user):  # noqa
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -602,6 +662,11 @@ def get_workflow_specification(workflow_id_or_name, user):  # noqa
         404:
           description: >-
             Request failed. User does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -611,6 +676,16 @@ def get_workflow_specification(workflow_id_or_name, user):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     """
     try:
         if not workflow_id_or_name:
@@ -715,6 +790,11 @@ def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
         400:
           description: >-
             Request failed. The incoming data specification seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -723,6 +803,11 @@ def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -733,6 +818,11 @@ def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
         404:
           description: >-
             Request failed. User does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -742,6 +832,16 @@ def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     """
     try:
         steps = request.json or None
@@ -836,6 +936,11 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -844,6 +949,11 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -854,6 +964,11 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
         404:
           description: >-
             Request failed. Either User or Analysis does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -863,6 +978,16 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     """
     try:
         if not workflow_id_or_name:
@@ -948,6 +1073,11 @@ def start_workflow(workflow_id_or_name, user):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -956,6 +1086,11 @@ def start_workflow(workflow_id_or_name, user):  # noqa
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -966,6 +1101,11 @@ def start_workflow(workflow_id_or_name, user):  # noqa
         404:
           description: >-
             Request failed. Either User or Workflow does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -976,6 +1116,11 @@ def start_workflow(workflow_id_or_name, user):  # noqa
           description: >-
             Request failed. The workflow could not be started due to a
             conflict.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -986,9 +1131,24 @@ def start_workflow(workflow_id_or_name, user):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
         501:
           description: >-
             Request failed. The specified status change is not implemented.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1115,6 +1275,11 @@ def set_workflow_status(workflow_id_or_name, user):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1123,6 +1288,11 @@ def set_workflow_status(workflow_id_or_name, user):  # noqa
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1133,6 +1303,11 @@ def set_workflow_status(workflow_id_or_name, user):  # noqa
         404:
           description: >-
             Request failed. Either User or Workflow does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1143,6 +1318,11 @@ def set_workflow_status(workflow_id_or_name, user):  # noqa
           description: >-
             Request failed. The workflow could not be started due to a
             conflict.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1153,9 +1333,24 @@ def set_workflow_status(workflow_id_or_name, user):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
         501:
           description: >-
             Request failed. The specified status change is not implemented.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1243,9 +1438,24 @@ def upload_file(workflow_id_or_name, user):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "No file_name provided"
+              }
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1256,6 +1466,11 @@ def upload_file(workflow_id_or_name, user):  # noqa
         404:
           description: >-
             Request failed. User does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1265,6 +1480,11 @@ def upload_file(workflow_id_or_name, user):  # noqa
         500:
           description: >-
             Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1368,6 +1588,11 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1378,6 +1603,11 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
         404:
           description: >-
             Request failed. `file_name` does not exist .
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1386,6 +1616,11 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
         500:
           description: >-
             Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1467,6 +1702,11 @@ def delete_file(workflow_id_or_name, file_name, user):  # noqa
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1477,6 +1717,11 @@ def delete_file(workflow_id_or_name, file_name, user):  # noqa
         404:
           description: >-
             Request failed. `file_name` does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1485,6 +1730,11 @@ def delete_file(workflow_id_or_name, file_name, user):  # noqa
         500:
           description: >-
             Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1597,6 +1847,11 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1607,6 +1862,11 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
         404:
           description: >-
             Request failed. Analysis does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1616,6 +1876,11 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
         500:
           description: >-
             Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1699,6 +1964,11 @@ def get_workflow_parameters(workflow_id_or_name, user):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1707,6 +1977,11 @@ def get_workflow_parameters(workflow_id_or_name, user):  # noqa
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1717,6 +1992,11 @@ def get_workflow_parameters(workflow_id_or_name, user):  # noqa
         404:
           description: >-
             Request failed. Either User or Analysis does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1726,6 +2006,16 @@ def get_workflow_parameters(workflow_id_or_name, user):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     """
     try:
         if not workflow_id_or_name:
@@ -1816,6 +2106,11 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b, user):  # no
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1824,6 +2119,11 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b, user):  # no
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1834,6 +2134,11 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b, user):  # no
         404:
           description: >-
             Request failed. Either user or workflow does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1843,6 +2148,16 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b, user):  # no
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     """
     try:
         brief = json.loads(request.args.get("brief", "false").lower())
@@ -1940,6 +2255,11 @@ def open_interactive_session(
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1948,6 +2268,11 @@ def open_interactive_session(
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1958,6 +2283,11 @@ def open_interactive_session(
         404:
           description: >-
             Request failed. Either user or workflow does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -1967,6 +2297,16 @@ def open_interactive_session(
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     """
     try:
         if interactive_session_type not in InteractiveSessionType.__members__:
@@ -2051,6 +2391,11 @@ def close_interactive_session(workflow_id_or_name, user):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -2059,6 +2404,11 @@ def close_interactive_session(workflow_id_or_name, user):  # noqa
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -2069,6 +2419,11 @@ def close_interactive_session(workflow_id_or_name, user):  # noqa
         404:
           description: >-
             Request failed. Either user or workflow does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -2077,6 +2432,16 @@ def close_interactive_session(workflow_id_or_name, user):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     """
     try:
         if not workflow_id_or_name:
@@ -2160,6 +2525,11 @@ def move_files(workflow_id_or_name, user):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -2168,6 +2538,11 @@ def move_files(workflow_id_or_name, user):  # noqa
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -2178,6 +2553,11 @@ def move_files(workflow_id_or_name, user):  # noqa
         404:
           description: >-
             Request failed. Either User or Workflow does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -2187,6 +2567,16 @@ def move_files(workflow_id_or_name, user):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     """
     try:
         if not workflow_id_or_name:
@@ -2298,6 +2688,11 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
         400:
           description: >-
             Request failed. The incoming data specification seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -2306,6 +2701,11 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -2316,6 +2716,11 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
         404:
           description: >-
             Request failed. User does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -2325,6 +2730,16 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     """
     try:
         parameters = request.json or {}

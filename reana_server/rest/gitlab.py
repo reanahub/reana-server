@@ -130,6 +130,11 @@ def gitlab_oauth(user):  # noqa
         403:
           description: >-
             Request failed. User token not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -138,6 +143,16 @@ def gitlab_oauth(user):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     """
     try:
         if "code" in request.args:
@@ -198,6 +213,11 @@ def gitlab_projects(user):  # noqa
         403:
           description: >-
             Request failed. User token not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -206,6 +226,16 @@ def gitlab_projects(user):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     """
     try:
         secrets_store = REANAUserSecretsStore(str(user.id_))
@@ -266,6 +296,11 @@ def gitlab_webhook(user):  # noqa
         403:
           description: >-
             Request failed. User token not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -274,6 +309,16 @@ def gitlab_webhook(user):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     delete:
       summary: Delete an existing webhook from GitLab
       operationId: delete_gitlab_webhook
@@ -307,6 +352,11 @@ def gitlab_webhook(user):  # noqa
         403:
           description: >-
             Request failed. User token not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -315,6 +365,16 @@ def gitlab_webhook(user):  # noqa
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
     """
 
     try:

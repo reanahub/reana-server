@@ -88,6 +88,11 @@ def add_secrets(user):  # noqa
         403:
           description: >-
             Request failed. Token is not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -96,6 +101,11 @@ def add_secrets(user):  # noqa
         409:
           description: >-
             Request failed. Secrets could not be added due to a conflict.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -105,6 +115,11 @@ def add_secrets(user):  # noqa
         500:
           description: >-
             Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -179,6 +194,11 @@ def get_secrets(user):  # noqa
         403:
           description: >-
             Request failed. Token is not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -187,6 +207,11 @@ def get_secrets(user):  # noqa
         500:
           description: >-
             Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -253,6 +278,11 @@ def delete_secrets(user):  # noqa
         403:
           description: >-
             Request failed. Token is not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -276,6 +306,11 @@ def delete_secrets(user):  # noqa
         500:
           description: >-
             Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {

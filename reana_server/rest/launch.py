@@ -121,6 +121,11 @@ def launch(user, url, name="", parameters="{}", specification=None):
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -129,6 +134,11 @@ def launch(user, url, name="", parameters="{}", specification=None):
         500:
           description: >-
             Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {

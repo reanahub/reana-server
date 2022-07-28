@@ -59,6 +59,11 @@ def get_config():
         500:
           description: >-
             Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {

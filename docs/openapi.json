@@ -56,6 +56,14 @@
               "application/json": {
                 "message": "Internal server error."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },
@@ -116,10 +124,31 @@
               "application/json": {
                 "message": "Token is not valid."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Get access token from GitLab"
@@ -154,10 +183,31 @@
               "application/json": {
                 "message": "Token is not valid."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Get user project from GitLab"
@@ -204,13 +254,34 @@
               "application/json": {
                 "message": "Token is not valid."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
             "description": "No webhook found with provided id."
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Delete an existing webhook from GitLab"
@@ -250,10 +321,31 @@
               "application/json": {
                 "message": "Token is not valid."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Set a webhook on a user project from GitLab"
@@ -348,7 +440,20 @@
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Get information about the cluster capabilities."
@@ -426,6 +531,14 @@
               "application/json": {
                 "message": "Malformed request."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
@@ -434,6 +547,14 @@
               "application/json": {
                 "message": "Internal server error."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },
@@ -529,6 +650,14 @@
               "application/json": {
                 "message": "Token is not valid"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
@@ -537,6 +666,14 @@
               "application/json": {
                 "message": "Error while querying."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },
@@ -597,6 +734,14 @@
               "application/json": {
                 "message": "Token is not valid"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -622,6 +767,14 @@
               "application/json": {
                 "message": "Internal server error."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },
@@ -703,6 +856,14 @@
               "application/json": {
                 "message": "Token is not valid"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "409": {
@@ -711,6 +872,14 @@
               "application/json": {
                 "message": "The submitted secrets api_key, password, username already exist."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
@@ -719,6 +888,14 @@
               "application/json": {
                 "message": "Internal server error."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },
@@ -864,6 +1041,22 @@
               },
               "type": "object"
             }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Retrieve cluster health status"
@@ -917,12 +1110,12 @@
             "description": "Error message indicating that the uses is not authenticated.",
             "examples": {
               "application/json": {
-                "error": "User not logged in"
+                "message": "User not logged in"
               }
             },
             "schema": {
               "properties": {
-                "error": {
+                "message": {
                   "type": "string"
                 }
               },
@@ -935,6 +1128,14 @@
               "application/json": {
                 "message": "Token is not valid."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
@@ -943,6 +1144,14 @@
               "application/json": {
                 "message": "Internal server error."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },
@@ -1227,7 +1436,20 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming payload seems malformed."
+            "description": "Request failed. The incoming payload seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Your request contains not valid JSON."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
@@ -1235,6 +1457,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -1243,6 +1473,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 does not exist."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
@@ -1251,6 +1489,14 @@
               "application/json": {
                 "message": "Something went wrong."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },
@@ -1323,7 +1569,20 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming payload seems malformed"
+            "description": "Request failed. The incoming payload seems malformed",
+            "examples": {
+              "application/json": {
+                "message": "Workflow name cannot be a valid UUIDv4."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
@@ -1331,6 +1590,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -1339,10 +1606,31 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 does not exist."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           },
           "501": {
             "description": "Request failed. Not implemented."
@@ -1422,6 +1710,14 @@
               "application/json": {
                 "message": "Malformed request."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "403": {
@@ -1430,6 +1726,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -1438,10 +1742,31 @@
               "application/json": {
                 "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Move files within workspace."
@@ -1524,6 +1849,14 @@
               "application/json": {
                 "message": "Malformed request."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "403": {
@@ -1532,6 +1865,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -1540,10 +1881,31 @@
               "application/json": {
                 "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Get diff between two workflows."
@@ -1598,6 +1960,14 @@
               "application/json": {
                 "message": "Malformed request."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "403": {
@@ -1606,6 +1976,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -1614,10 +1992,31 @@
               "application/json": {
                 "message": "Either user or workflow does not exist."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Close an interactive workflow session."
@@ -1731,6 +2130,14 @@
               "application/json": {
                 "message": "Malformed request."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "403": {
@@ -1739,6 +2146,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -1747,10 +2162,31 @@
               "application/json": {
                 "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does not exist"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Get disk usage of a workflow."
@@ -1842,6 +2278,14 @@
               "application/json": {
                 "message": "Malformed request."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "403": {
@@ -1850,6 +2294,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -1858,10 +2310,31 @@
               "application/json": {
                 "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does not exist"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Get workflow logs of a workflow."
@@ -1938,6 +2411,14 @@
               "application/json": {
                 "message": "Malformed request."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "403": {
@@ -1946,6 +2427,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -1954,10 +2443,31 @@
               "application/json": {
                 "message": "Interactive session type jupiter not found, try with one of: [jupyter]."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Start an interactive session inside the workflow workspace."
@@ -2026,6 +2536,14 @@
               "application/json": {
                 "message": "Malformed request."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "403": {
@@ -2034,6 +2552,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -2042,10 +2568,31 @@
               "application/json": {
                 "message": "Analysis 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Get parameters of a workflow."
@@ -2112,6 +2659,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -2120,10 +2675,31 @@
               "application/json": {
                 "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does not exist"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Get the specification used for this workflow run."
@@ -2203,6 +2779,14 @@
               "application/json": {
                 "message": "Malformed request."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "403": {
@@ -2211,6 +2795,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -2219,6 +2811,14 @@
               "application/json": {
                 "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "409": {
@@ -2227,10 +2827,31 @@
               "application/json": {
                 "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 could not be started because it is already running."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           },
           "501": {
             "description": "Request failed. The specified status change is not implemented.",
@@ -2238,6 +2859,14 @@
               "application/json": {
                 "message": "Status resume is not supported yet."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },
@@ -2334,6 +2963,14 @@
               "application/json": {
                 "message": "Malformed request."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "403": {
@@ -2342,6 +2979,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -2350,10 +2995,31 @@
               "application/json": {
                 "message": "Analysis 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           }
         },
         "summary": "Get status of a workflow."
@@ -2438,6 +3104,14 @@
               "application/json": {
                 "message": "Malformed request."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "403": {
@@ -2446,6 +3120,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -2454,6 +3136,14 @@
               "application/json": {
                 "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "409": {
@@ -2462,10 +3152,31 @@
               "application/json": {
                 "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1 could not be started because it is already running."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
-            "description": "Request failed. Internal controller error."
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           },
           "501": {
             "description": "Request failed. The specified status change is not implemented.",
@@ -2473,6 +3184,14 @@
               "application/json": {
                 "message": "Status resume is not supported yet."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },
@@ -2576,6 +3295,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -2584,6 +3311,14 @@
               "application/json": {
                 "message": "Analysis 256b25f4-4cfb-4684-b7a8-73872ef455a1 does not exist."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
@@ -2592,6 +3327,14 @@
               "application/json": {
                 "message": "Internal server error."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },
@@ -2658,7 +3401,20 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming payload seems malformed"
+            "description": "Request failed. The incoming payload seems malformed",
+            "examples": {
+              "application/json": {
+                "message": "No file_name provided"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
@@ -2666,6 +3422,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -2674,6 +3438,14 @@
               "application/json": {
                 "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does not exist"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
@@ -2682,6 +3454,14 @@
               "application/json": {
                 "message": "Internal server error."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },
@@ -2731,6 +3511,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -2739,6 +3527,14 @@
               "application/json": {
                 "message": "input.csv does not exist"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
@@ -2747,6 +3543,14 @@
               "application/json": {
                 "message": "Internal server error."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },
@@ -2801,6 +3605,14 @@
               "application/json": {
                 "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "404": {
@@ -2809,6 +3621,14 @@
               "application/json": {
                 "message": "input.csv does not exist"
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
@@ -2817,6 +3637,14 @@
               "application/json": {
                 "message": "Internal server error."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },
@@ -2974,12 +3802,12 @@
             "description": "Error message indicating that the uses is not authenticated.",
             "examples": {
               "application/json": {
-                "error": "User not logged in"
+                "message": "User not logged in"
               }
             },
             "schema": {
               "properties": {
-                "error": {
+                "message": {
                   "type": "string"
                 }
               },
@@ -2992,6 +3820,14 @@
               "application/json": {
                 "message": "Token is not valid."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           },
           "500": {
@@ -3000,6 +3836,14 @@
               "application/json": {
                 "message": "Internal server error."
               }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
             }
           }
         },

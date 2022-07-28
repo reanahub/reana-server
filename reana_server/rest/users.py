@@ -151,16 +151,21 @@ def get_you(user):
           schema:
             type: object
             properties:
-              error:
+              message:
                 type: string
           examples:
             application/json:
               {
-                "error": "User not logged in"
+                "message": "User not logged in"
               }
         403:
           description: >-
             Request failed. User token not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -169,6 +174,11 @@ def get_you(user):
         500:
           description: >-
             Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -257,16 +267,21 @@ def request_token(user):
           schema:
             type: object
             properties:
-              error:
+              message:
                 type: string
           examples:
             application/json:
               {
-                "error": "User not logged in"
+                "message": "User not logged in"
               }
         403:
           description: >-
             Request failed. User token not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -275,6 +290,11 @@ def request_token(user):
         500:
           description: >-
             Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
