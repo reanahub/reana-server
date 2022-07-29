@@ -8,6 +8,7 @@
 
 """Test server views."""
 
+import copy
 import json
 from io import BytesIO
 from uuid import uuid4
@@ -16,7 +17,7 @@ import pytest
 from flask import url_for
 from mock import Mock, patch
 from pytest_reana.test_utils import make_mock_api_client
-from reana_db.models import User, InteractiveSessionType
+from reana_db.models import User, InteractiveSessionType, RunStatus
 
 from reana_server.utils import (
     _create_and_associate_local_user,
@@ -53,7 +54,9 @@ def test_get_workflows(app, default_user, _get_user_mock):
             assert res.status_code == 200
 
 
-def test_create_workflow(app, default_user, _get_user_mock):
+def test_create_workflow(
+    app, session, default_user, _get_user_mock, sample_serial_workflow_in_db
+):
     """Test create_workflow view."""
     with app.test_client() as client:
         with patch(
@@ -89,20 +92,22 @@ def test_create_workflow(app, default_user, _get_user_mock):
             assert res.status_code == 500
 
             # unknown workflow engine
-            workflow_data = {
-                "workflow": {"specification": {}, "type": "unknown"},
-                "workflow_name": "test",
-            }
+            workflow_specification = copy.deepcopy(
+                sample_serial_workflow_in_db.reana_specification
+            )
+            workflow_specification["workflow"]["type"] = "unknown"
             res = client.post(
                 url_for("workflows.create_workflow"),
                 headers={"Content-Type": "application/json"},
-                query_string={"access_token": default_user.access_token},
-                data=json.dumps(workflow_data),
+                query_string={
+                    "access_token": default_user.access_token,
+                    "workflow_name": "test",
+                },
+                data=json.dumps(workflow_specification),
             )
             assert res.status_code == 500
 
             # name cannot be valid uuid4
-            workflow_data["workflow"]["type"] = "serial"
             res = client.post(
                 url_for("workflows.create_workflow"),
                 headers={"Content-Type": "application/json"},
@@ -110,32 +115,80 @@ def test_create_workflow(app, default_user, _get_user_mock):
                     "access_token": default_user.access_token,
                     "workflow_name": str(uuid4()),
                 },
-                data=json.dumps(workflow_data),
+                data=json.dumps(sample_serial_workflow_in_db.reana_specification),
             )
             assert res.status_code == 400
 
             # wrong specification json
-            workflow_data = {"nonsense": {"specification": {}, "type": "unknown"}}
-            res = client.post(
-                url_for("workflows.create_workflow"),
-                headers={"Content-Type": "application/json"},
-                query_string={"access_token": default_user.access_token},
-                data=json.dumps(workflow_data),
-            )
-            assert res.status_code == 400
-
-            # correct case
-            workflow_data = {
-                "workflow": {"specification": {}, "type": "serial"},
-                "workflow_name": "test",
+            workflow_specification = {
+                "nonsense": {"specification": {}, "type": "unknown"}
             }
             res = client.post(
                 url_for("workflows.create_workflow"),
                 headers={"Content-Type": "application/json"},
-                query_string={"access_token": default_user.access_token},
-                data=json.dumps(workflow_data),
+                query_string={
+                    "access_token": default_user.access_token,
+                    "workflow_name": "test",
+                },
+                data=json.dumps(workflow_specification),
+            )
+            assert res.status_code == 400
+
+            # not valid specification
+            workflow_specification = {
+                "workflow": {"specification": {}, "type": "serial"},
+            }
+            res = client.post(
+                url_for("workflows.create_workflow"),
+                headers={"Content-Type": "application/json"},
+                query_string={
+                    "access_token": default_user.access_token,
+                    "workflow_name": "test",
+                },
+                data=json.dumps(workflow_specification),
+            )
+            assert res.status_code == 400
+
+            # correct case
+            workflow_specification = sample_serial_workflow_in_db.reana_specification
+            res = client.post(
+                url_for("workflows.create_workflow"),
+                headers={"Content-Type": "application/json"},
+                query_string={
+                    "access_token": default_user.access_token,
+                    "workflow_name": "test",
+                },
+                data=json.dumps(workflow_specification),
             )
             assert res.status_code == 200
+
+
+def test_restart_workflow_validates_specification(
+    app, session, default_user, sample_serial_workflow_in_db
+):
+    with app.test_client() as client:
+        sample_serial_workflow_in_db.status = RunStatus.finished
+        sample_serial_workflow_in_db.name = "test"
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+
+        workflow_specification = copy.deepcopy(
+            sample_serial_workflow_in_db.reana_specification
+        )
+        workflow_specification["workflow"]["type"] = "unknown"
+        body = {
+            "reana_specification": workflow_specification,
+            "restart": "can be anything here doesnt matter",
+        }
+        res = client.post(
+            url_for("workflows.start_workflow", workflow_id_or_name="test"),
+            headers={"Content-Type": "application/json"},
+            query_string={
+                "access_token": default_user.access_token,
+            },
+            data=json.dumps(body),
+        )
+        assert res.status_code == 400
 
 
 def test_get_workflow_specification(

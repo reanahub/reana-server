@@ -4,6 +4,7 @@ Changes
 Version 0.9.0 (UNRELEASED)
 --------------------------
 
+- Adds validation of REANA specification to ``create_workflow`` and ``start_workflow`` endpoints.
 - Adds interactive sessions out-of-sync check to ``reana-admin check-workflows`` command.
 - Adds workspace retention rules validation to ``get_workspace_retention_rules`` function.
 - Adds ``queue-consume`` command that can be used by REANA administrators to remove specific messages from the queue.

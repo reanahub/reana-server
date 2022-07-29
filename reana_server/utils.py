@@ -72,7 +72,7 @@ from reana_server.config import (
     WORKSPACE_RETENTION_PERIOD,
     DEFAULT_WORKSPACE_RETENTION_RULE,
 )
-from reana_server.validation import validate_retention_rule
+from reana_server.validation import validate_retention_rule, validate_workflow
 
 
 def is_uuid_v4(uuid_or_name):
@@ -594,6 +594,8 @@ def get_workspace_retention_rules(
 def clone_workflow(workflow, reana_spec, restart_type):
     """Create a copy of workflow in DB for restarting."""
     reana_specification = reana_spec or workflow.reana_specification
+    validate_workflow(reana_specification, input_parameters={})
+
     retention_days = reana_specification.get("workspace", {}).get("retention_days")
     retention_rules = get_workspace_retention_rules(retention_days)
     try:

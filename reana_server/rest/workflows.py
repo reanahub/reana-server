@@ -16,6 +16,8 @@ import requests
 from bravado.exception import HTTPError
 from flask import Blueprint, Response
 from flask import jsonify, request, stream_with_context
+from jsonschema.exceptions import ValidationError
+
 from reana_commons.config import REANA_WORKFLOW_ENGINES
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.validation.operational_options import validate_operational_options
@@ -30,7 +32,7 @@ from webargs.flaskparser import use_kwargs
 from reana_server.api_client import current_rwc_api_client
 from reana_server.config import REANA_HOSTNAME
 from reana_server.decorators import check_quota, signin_required
-from reana_server.validation import validate_workspace_path
+from reana_server.validation import validate_workspace_path, validate_workflow
 from reana_server.utils import (
     _fail_gitlab_commit_build_status,
     RequestStreamWithLen,
@@ -523,6 +525,9 @@ def create_workflow(user):  # noqa
         if is_uuid_v4(workflow_name):
             return jsonify({"message": "Workflow name cannot be a valid UUIDv4."}), 400
 
+        validate_workflow(reana_spec_file, input_parameters={})
+        workspace_root_path = reana_spec_file.get("workspace", {}).get("root_path")
+
         workflow_engine = reana_spec_file["workflow"]["type"]
         if workflow_engine not in REANA_WORKFLOW_ENGINES:
             raise Exception("Unknown workflow type.")
@@ -530,9 +535,6 @@ def create_workflow(user):  # noqa
         operational_options = validate_operational_options(
             workflow_engine, reana_spec_file.get("inputs", {}).get("options", {})
         )
-
-        workspace_root_path = reana_spec_file.get("workspace", {}).get("root_path")
-        validate_workspace_path(reana_spec_file)
 
         retention_days = reana_spec_file.get("workspace", {}).get("retention_days")
         retention_rules = get_workspace_retention_rules(retention_days)
@@ -1196,7 +1198,7 @@ def start_workflow(workflow_id_or_name, user):  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
-    except REANAValidationError as e:
+    except (REANAValidationError, ValidationError) as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
     except ValueError as e:
