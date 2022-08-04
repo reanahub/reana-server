@@ -2945,6 +2945,76 @@
                   "type": "string"
                 },
                 "progress": {
+                  "properties": {
+                    "current_command": {
+                      "type": "string"
+                    },
+                    "current_step_name": {
+                      "type": "string"
+                    },
+                    "failed": {
+                      "properties": {
+                        "job_ids": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "finished": {
+                      "properties": {
+                        "job_ids": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "run_finished_at": {
+                      "type": "string"
+                    },
+                    "run_started_at": {
+                      "type": "string"
+                    },
+                    "running": {
+                      "properties": {
+                        "job_ids": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "total": {
+                      "properties": {
+                        "job_ids": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
                   "type": "object"
                 },
                 "status": {
@@ -3287,7 +3357,20 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming payload seems malformed."
+            "description": "Request failed. The incoming payload seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Field 'size': Must be at least 1."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",

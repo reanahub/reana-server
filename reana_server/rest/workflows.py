@@ -914,6 +914,51 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
                 type: string
               progress:
                 type: object
+                properties:
+                  run_started_at:
+                    type: string
+                  run_finished_at:
+                    type: string
+                  total:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      job_ids:
+                        type: array
+                        items:
+                          type: string
+                  running:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      job_ids:
+                        type: array
+                        items:
+                          type: string
+                  finished:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      job_ids:
+                        type: array
+                        items:
+                          type: string
+                  failed:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      job_ids:
+                        type: array
+                        items:
+                          type: string
+                  current_command:
+                    type: string
+                  current_step_name:
+                    type: string
               logs:
                 type: string
           examples:
@@ -1846,6 +1891,16 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Field 'size': Must be at least 1."
+              }
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
