@@ -120,7 +120,7 @@ def get_quota_excess_message(user) -> str:
     return message
 
 
-def prevent_disk_quota_excess(user, bytes_to_sum: int, action=Optional[str]):
+def prevent_disk_quota_excess(user, bytes_to_sum: Optional[int], action=Optional[str]):
     """
     Prevent potential disk quota excess.
 
@@ -134,10 +134,11 @@ def prevent_disk_quota_excess(user, bytes_to_sum: int, action=Optional[str]):
     user_resource = UserResource.query.filter_by(
         user_id=user.id_, resource_id=disk_resource.id_
     ).first()
-    if (
-        user_resource.quota_limit > 0
-        and user_resource.quota_used + bytes_to_sum > user_resource.quota_limit
-    ):
+
+    if bytes_to_sum is None:
+        bytes_to_sum = 0
+
+    if 0 < user_resource.quota_limit < user_resource.quota_used + bytes_to_sum:
         human_readable_limit = ResourceUnit.human_readable_unit(
             ResourceUnit.bytes_, user_resource.quota_limit
         )
