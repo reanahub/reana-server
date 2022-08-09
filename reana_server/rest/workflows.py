@@ -917,8 +917,10 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
                 properties:
                   run_started_at:
                     type: string
+                    x-nullable: true
                   run_finished_at:
                     type: string
+                    x-nullable: true
                   total:
                     type: object
                     properties:
@@ -957,8 +959,10 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
                           type: string
                   current_command:
                     type: string
+                    x-nullable: true
                   current_step_name:
                     type: string
+                    x-nullable: true
               logs:
                 type: string
           examples:

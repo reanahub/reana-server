@@ -2947,10 +2947,12 @@
                 "progress": {
                   "properties": {
                     "current_command": {
-                      "type": "string"
+                      "type": "string",
+                      "x-nullable": true
                     },
                     "current_step_name": {
-                      "type": "string"
+                      "type": "string",
+                      "x-nullable": true
                     },
                     "failed": {
                       "properties": {
@@ -2981,10 +2983,12 @@
                       "type": "object"
                     },
                     "run_finished_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-nullable": true
                     },
                     "run_started_at": {
-                      "type": "string"
+                      "type": "string",
+                      "x-nullable": true
                     },
                     "running": {
                       "properties": {
