@@ -10,6 +10,7 @@
 
 import copy
 import json
+import logging
 from io import BytesIO
 from uuid import uuid4
 
@@ -134,7 +135,7 @@ def test_create_workflow(
             )
             assert res.status_code == 400
 
-            # not valid specification
+            # not valid specification. but there is no validation
             workflow_specification = {
                 "workflow": {"specification": {}, "type": "serial"},
             }
@@ -147,7 +148,7 @@ def test_create_workflow(
                 },
                 data=json.dumps(workflow_specification),
             )
-            assert res.status_code == 400
+            assert res.status_code == 200
 
             # correct case
             workflow_specification = sample_serial_workflow_in_db.reana_specification
@@ -161,6 +162,33 @@ def test_create_workflow(
                 data=json.dumps(workflow_specification),
             )
             assert res.status_code == 200
+
+
+def test_start_workflow_validates_specification(
+    app, session, default_user, sample_serial_workflow_in_db
+):
+    with app.test_client() as client:
+        sample_serial_workflow_in_db.status = RunStatus.created
+        sample_serial_workflow_in_db.name = "test"
+        workflow_specification = copy.deepcopy(
+            sample_serial_workflow_in_db.reana_specification
+        )
+        workflow_specification["workflow"]["type"] = "unknown"
+        sample_serial_workflow_in_db.reana_specification = workflow_specification
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+        res = client.post(
+            url_for(
+                "workflows.start_workflow",
+                workflow_id_or_name=str(sample_serial_workflow_in_db.id_),
+            ),
+            headers={"Content-Type": "application/json"},
+            query_string={
+                "access_token": default_user.access_token,
+            },
+            data=json.dumps({}),
+        )
+        assert res.status_code == 400
 
 
 def test_restart_workflow_validates_specification(

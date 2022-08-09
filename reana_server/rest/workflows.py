@@ -525,9 +525,6 @@ def create_workflow(user):  # noqa
         if is_uuid_v4(workflow_name):
             return jsonify({"message": "Workflow name cannot be a valid UUIDv4."}), 400
 
-        validate_workflow(reana_spec_file, input_parameters={})
-        workspace_root_path = reana_spec_file.get("workspace", {}).get("root_path")
-
         workflow_engine = reana_spec_file["workflow"]["type"]
         if workflow_engine not in REANA_WORKFLOW_ENGINES:
             raise Exception("Unknown workflow type.")
@@ -535,6 +532,9 @@ def create_workflow(user):  # noqa
         operational_options = validate_operational_options(
             workflow_engine, reana_spec_file.get("inputs", {}).get("options", {})
         )
+
+        workspace_root_path = reana_spec_file.get("workspace", {}).get("root_path")
+        validate_workspace_path(reana_spec_file)
 
         retention_days = reana_spec_file.get("workspace", {}).get("retention_days")
         retention_rules = get_workspace_retention_rules(retention_days)
@@ -1230,6 +1230,12 @@ def start_workflow(workflow_id_or_name, user):  # noqa
             )
         if "yadage" in (workflow.type_, restart_type):
             _load_and_save_yadage_spec(workflow, operational_options)
+
+        input_parameters = parameters.get("input_parameters", {})
+        validate_workflow(
+            workflow.reana_specification, input_parameters=input_parameters
+        )
+
         publish_workflow_submission(workflow, user.id_, parameters)
         response = {
             "message": "Workflow submitted.",
