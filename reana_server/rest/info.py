@@ -16,7 +16,14 @@ from marshmallow import Schema, fields
 
 from reana_commons.config import DEFAULT_WORKSPACE_PATH, WORKSPACE_PATHS
 
-from reana_server.config import SUPPORTED_COMPUTE_BACKENDS
+from reana_server.config import (
+    SUPPORTED_COMPUTE_BACKENDS,
+    WORKSPACE_RETENTION_PERIOD,
+    REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
+    REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
+    REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT,
+    REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
+)
 from reana_server.decorators import signin_required
 
 blueprint = Blueprint("info", __name__)
@@ -45,34 +52,7 @@ def info(user, **kwargs):  # noqa
         200:
           description: >-
             Request succeeded. The response contains general info about the cluster.
-          schema:
-            type: object
-            properties:
-              workspaces_available:
-                type: object
-                properties:
-                  title:
-                    type: string
-                  value:
-                    type: array
-                    items:
-                      type: string
-              default_workspace:
-                type: object
-                properties:
-                  title:
-                    type: string
-                  value:
-                    type: string
-              compute_backends:
-                type: object
-                properties:
-                  title:
-                    type: string
-                  value:
-                    type: array
-                    items:
-                      type: string
+          schema: InfoSchema
           examples:
             application/json:
               {
@@ -91,7 +71,27 @@ def info(user, **kwargs):  # noqa
                         "htcondorcern",
                         "slurmcern"
                     ]
-              }
+                },
+                "kubernetes_memory_limit": {
+                    "title": "Default memory limit for Kubernetes jobs",
+                    "value": "3Gi"
+                },
+                "kubernetes_max_memory_limit": {
+                    "title": "Maximum allowed memory limit for Kubernetes jobs",
+                    "value": "10Gi"
+                },
+                "maximum_workspace_retention_period": {
+                    "title": "Maximum retention period in days for workspace files",
+                    "value": "3650"
+                },
+                "default_kubernetes_jobs_timeout": {
+                    "title": "Default timeout for Kubernetes jobs",
+                    "value": "604800"
+                },
+                "maximum_kubernetes_jobs_timeout": {
+                    "title": "Maximum timeout for Kubernetes jobs",
+                    "value": "1209600"
+                },
               }
         500:
           description: >-
@@ -108,7 +108,7 @@ def info(user, **kwargs):  # noqa
               }
     """
     try:
-        info = dict(
+        cluster_information = dict(
             workspaces_available=dict(
                 title="List of available workspaces",
                 value=list(WORKSPACE_PATHS.values()),
@@ -120,19 +120,63 @@ def info(user, **kwargs):  # noqa
                 title="List of supported compute backends",
                 value=SUPPORTED_COMPUTE_BACKENDS,
             ),
+            default_kubernetes_memory_limit=dict(
+                title="Default memory limit for Kubernetes jobs",
+                value=REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
+            ),
+            kubernetes_max_memory_limit=dict(
+                title="Maximum allowed memory limit for Kubernetes jobs",
+                value=REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
+            ),
+            maximum_workspace_retention_period=dict(
+                title="Maximum retention period in days for workspace files",
+                value=WORKSPACE_RETENTION_PERIOD,
+            ),
+            default_kubernetes_jobs_timeout=dict(
+                title="Default timeout for Kubernetes jobs",
+                value=REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT,
+            ),
+            maximum_kubernetes_jobs_timeout=dict(
+                title="Maximum timeout for Kubernetes jobs",
+                value=REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
+            ),
         )
-        return InfoSchema().dump(info)
+        return InfoSchema().dump(cluster_information)
 
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
 
 
+class ListStringInfoValue(Schema):
+    """Schema for a value represented by a list of strings."""
+
+    title = fields.String()
+    value = fields.List(fields.String())
+
+
+class StringInfoValue(Schema):
+    """Schema for a value represented by a string."""
+
+    title = fields.String()
+    value = fields.String(allow_none=False)
+
+
+class StringNullableInfoValue(Schema):
+    """Schema for a value represented by a nullable string."""
+
+    title = fields.String()
+    value = fields.String(allow_none=True)
+
+
 class InfoSchema(Schema):
     """Marshmallow schema for ``info`` endpoint."""
 
-    workspaces_available = fields.Dict(
-        keys=fields.Str(), values=fields.List(fields.Str())
-    )
-    default_workspace = fields.Dict(keys=fields.Str(), values=fields.Str())
-    compute_backends = fields.Dict(keys=fields.Str(), values=fields.List(fields.Str()))
+    workspaces_available = fields.Nested(ListStringInfoValue)
+    default_workspace = fields.Nested(StringInfoValue)
+    compute_backends = fields.Nested(ListStringInfoValue)
+    default_kubernetes_memory_limit = fields.Nested(StringInfoValue)
+    kubernetes_max_memory_limit = fields.Nested(StringNullableInfoValue)
+    maximum_workspace_retention_period = fields.Nested(StringNullableInfoValue)
+    default_kubernetes_jobs_timeout = fields.Nested(StringInfoValue)
+    maximum_kubernetes_jobs_timeout = fields.Nested(StringInfoValue)

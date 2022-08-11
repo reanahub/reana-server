@@ -380,9 +380,29 @@
                     "slurmcern"
                   ]
                 },
+                "default_kubernetes_jobs_timeout": {
+                  "title": "Default timeout for Kubernetes jobs",
+                  "value": "604800"
+                },
                 "default_workspace": {
                   "title": "Default workspace",
                   "value": "/usr/share"
+                },
+                "kubernetes_max_memory_limit": {
+                  "title": "Maximum allowed memory limit for Kubernetes jobs",
+                  "value": "10Gi"
+                },
+                "kubernetes_memory_limit": {
+                  "title": "Default memory limit for Kubernetes jobs",
+                  "value": "3Gi"
+                },
+                "maximum_kubernetes_jobs_timeout": {
+                  "title": "Maximum timeout for Kubernetes jobs",
+                  "value": "1209600"
+                },
+                "maximum_workspace_retention_period": {
+                  "title": "Maximum retention period in days for workspace files",
+                  "value": "3650"
                 },
                 "workspaces_available": {
                   "title": "List of available workspaces",
@@ -410,6 +430,28 @@
                   },
                   "type": "object"
                 },
+                "default_kubernetes_jobs_timeout": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "default_kubernetes_memory_limit": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
                 "default_workspace": {
                   "properties": {
                     "title": {
@@ -417,6 +459,41 @@
                     },
                     "value": {
                       "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "kubernetes_max_memory_limit": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string",
+                      "x-nullable": true
+                    }
+                  },
+                  "type": "object"
+                },
+                "maximum_kubernetes_jobs_timeout": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "maximum_workspace_retention_period": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string",
+                      "x-nullable": true
                     }
                   },
                   "type": "object"

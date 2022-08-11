@@ -4,6 +4,7 @@ Changes
 Version 0.9.0 (UNRELEASED)
 --------------------------
 
+- Adds kubernetes maximum memory limit, kubernetes default memory limit and the maximum workspace retention period to ``info`` endpoint.
 - Adds validation of REANA specification to ``start_workflow`` endpoint.
 - Adds interactive sessions out-of-sync check to ``reana-admin check-workflows`` command.
 - Adds workspace retention rules validation to ``get_workspace_retention_rules`` function.

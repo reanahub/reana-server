@@ -312,3 +312,21 @@ The value "forever" means "do not apply any rules to files by default", and it i
 
 DEFAULT_WORKSPACE_RETENTION_RULE = "**/*"
 """Workspace retention rule which will be applied to all the workflows by default."""
+
+# Kubernetes jobs timeout
+# ==================
+REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT")
+"""Default timeout for user's jobs in seconds. Exceeding this time will terminate the job.
+
+Please see the following URL for more details
+https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-and-cleanup.
+"""
+
+REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT = os.getenv(
+    "REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT"
+)
+"""Maximum custom timeout in seconds that users can assign to their jobs.
+
+Please see the following URL for more details
+https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-and-cleanup.
+"""
