@@ -1302,6 +1302,14 @@ def set_workflow_status(workflow_id_or_name, user):  # noqa
           required: false
           schema:
             type: object
+            properties:
+              CACHE:
+                type: string
+              all_runs:
+                type: boolean
+              workspace:
+                type: boolean
+
       responses:
         200:
           description: >-

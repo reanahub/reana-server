@@ -3209,6 +3209,17 @@
             "name": "parameters",
             "required": false,
             "schema": {
+              "properties": {
+                "CACHE": {
+                  "type": "string"
+                },
+                "all_runs": {
+                  "type": "boolean"
+                },
+                "workspace": {
+                  "type": "boolean"
+                }
+              },
               "type": "object"
             }
           }
