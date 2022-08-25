@@ -2598,6 +2598,7 @@
                   "type": "string"
                 },
                 "parameters": {
+                  "minProperties": 0,
                   "type": "object"
                 },
                 "type": {
@@ -2810,6 +2811,20 @@
             "name": "parameters",
             "required": false,
             "schema": {
+              "properties": {
+                "input_parameters": {
+                  "type": "object"
+                },
+                "operational_options": {
+                  "type": "object"
+                },
+                "reana_specification": {
+                  "type": "object"
+                },
+                "restart": {
+                  "type": "boolean"
+                }
+              },
               "type": "object"
             }
           }

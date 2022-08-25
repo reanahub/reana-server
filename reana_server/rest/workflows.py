@@ -1094,6 +1094,15 @@ def start_workflow(workflow_id_or_name, user):  # noqa
           required: false
           schema:
             type: object
+            properties:
+              operational_options:
+                type: object
+              reana_specification:
+                type: object
+              input_parameters:
+                type: object
+              restart:
+                type: boolean
       responses:
         200:
           description: >-
@@ -2025,6 +2034,7 @@ def get_workflow_parameters(workflow_id_or_name, user):  # noqa
                 type: string
               parameters:
                 type: object
+                minProperties: 0
           examples:
             application/json:
               {
