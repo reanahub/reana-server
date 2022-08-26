@@ -1770,9 +1770,24 @@ def delete_file(workflow_id_or_name, file_name, user):  # noqa
       responses:
         200:
           description: >-
-            Requests succeeded. The file has been downloaded.
+            Request succeeded. Details about deleted files and failed deletions are returned.
           schema:
-            type: file
+            type: object
+            properties:
+              deleted:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    size:
+                      type: integer
+              failed:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    error:
+                      type: string
         403:
           description: >-
             Request failed. User is not allowed to access workflow.

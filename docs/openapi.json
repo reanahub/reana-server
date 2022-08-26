@@ -3690,9 +3690,33 @@
         ],
         "responses": {
           "200": {
-            "description": "Requests succeeded. The file has been downloaded.",
+            "description": "Request succeeded. Details about deleted files and failed deletions are returned.",
             "schema": {
-              "type": "file"
+              "properties": {
+                "deleted": {
+                  "additionalProperties": {
+                    "properties": {
+                      "size": {
+                        "type": "integer"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "object"
+                },
+                "failed": {
+                  "additionalProperties": {
+                    "properties": {
+                      "error": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
             }
           },
           "403": {
