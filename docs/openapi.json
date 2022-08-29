@@ -1829,6 +1829,22 @@
               "type": "object"
             }
           },
+          "409": {
+            "description": "Request failed. The files could not be moved due to a conflict.",
+            "examples": {
+              "application/json": {
+                "message": "Path folder/ does not exist"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
           "500": {
             "description": "Request failed. Internal controller error.",
             "examples": {

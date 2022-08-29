@@ -2664,6 +2664,19 @@ def move_files(workflow_id_or_name, user):  # noqa
                 "message": "Workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1
                             does not exist"
               }
+        409:
+          description: >-
+            Request failed. The files could not be moved due to a conflict.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Path folder/ does not exist"
+              }
         500:
           description: >-
             Request failed. Internal controller error.
