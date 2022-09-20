@@ -52,17 +52,13 @@ setup_requires = [
 install_requires = [
     "gitpython>=3.1",
     "marshmallow>2.13.0,<=2.20.1",
-    "pyOpenSSL==17.5.0",
     "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.0a12,<0.10.0",
     "reana-db>=0.9.0a7,<0.10.0",
     "requests==2.25.0",
-    "rfc3987==1.3.7",
-    "strict-rfc3339==0.7",
     "tablib>=0.12.1",
     "uWSGI>=2.0.17",
     "uwsgi-tools>=1.1.1",
     "uwsgitop>=0.10",
-    "webcolors==1.7",
     "werkzeug<2.1",
     "wtforms<3.0.0",
     # Invenio dependencies
