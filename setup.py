@@ -50,6 +50,7 @@ setup_requires = [
 ]
 
 install_requires = [
+    "Flask~=2.1.2",
     "gitpython>=3.1",
     "marshmallow>2.13.0,<=2.20.1",
     "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.0a12,<0.10.0",
