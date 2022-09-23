@@ -2720,30 +2720,118 @@
             "description": "Request succeeded. Workflow specification is returned.",
             "examples": {
               "application/json": {
-                "inputs": {
-                  "parameters": {
-                    "helloworld": "code/helloworld.py",
-                    "inputfile": "data/names.txt",
-                    "outputfile": "results/greetings.txt",
-                    "sleeptime": 0
-                  }
-                },
-                "workflow": {
-                  "specification": {
-                    "steps": [
-                      {
-                        "commands": [
-                          "echo 'Hello World!'"
-                        ],
-                        "environment": "busybox"
-                      }
+                "parameters": {},
+                "specification": {
+                  "inputs": {
+                    "files": [
+                      "code/helloworld.py",
+                      "data/names.txt"
+                    ],
+                    "parameters": {
+                      "helloworld": "code/helloworld.py",
+                      "inputfile": "data/names.txt",
+                      "outputfile": "results/greetings.txt",
+                      "sleeptime": 0
+                    }
+                  },
+                  "outputs": {
+                    "files": [
+                      "results/greetings.txt"
                     ]
                   },
-                  "type": "serial"
+                  "version": "0.3.0",
+                  "workflow": {
+                    "specification": {
+                      "steps": [
+                        {
+                          "commands": [
+                            "python \"${helloworld}\" --inputfile \"${inputfile}\" --outputfile \"${outputfile}\" --sleeptime ${sleeptime}"
+                          ],
+                          "environment": "python:2.7-slim"
+                        }
+                      ]
+                    },
+                    "type": "serial"
+                  }
                 }
               }
             },
             "schema": {
+              "properties": {
+                "parameters": {
+                  "type": "object"
+                },
+                "specification": {
+                  "properties": {
+                    "inputs": {
+                      "properties": {
+                        "directories": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "files": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "options": {
+                          "type": "object"
+                        },
+                        "parameters": {
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "outputs": {
+                      "properties": {
+                        "directories": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "files": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "workflow": {
+                      "properties": {
+                        "file": {
+                          "type": "string"
+                        },
+                        "specification": {
+                          "properties": {
+                            "steps": {
+                              "items": {
+                                "type": "object"
+                              },
+                              "type": "array"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "type": {
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
               "type": "object"
             }
           },

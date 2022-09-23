@@ -621,29 +621,90 @@ def get_workflow_specification(workflow_id_or_name, user):  # noqa
             Request succeeded. Workflow specification is returned.
           schema:
             type: object
+            properties:
+              parameters:
+                type: object
+              specification:
+                type: object
+                properties:
+                  inputs:
+                    type: object
+                    properties:
+                      files:
+                        type: array
+                        items:
+                          type: string
+                      directories:
+                        type: array
+                        items:
+                          type: string
+                      parameters:
+                        type: object
+                      options:
+                        type: object
+                  outputs:
+                    type: object
+                    properties:
+                      files:
+                        type: array
+                        items:
+                          type: string
+                      directories:
+                        type: array
+                        items:
+                          type: string
+                  version:
+                    type: string
+                  workflow:
+                    type: object
+                    properties:
+                      specification:
+                        type: object
+                        properties:
+                          steps:
+                            type: array
+                            items:
+                              type: object
+                      type:
+                        type: string
+                      file:
+                        type: string
           examples:
             application/json:
               {
-                "inputs": {
-                  "parameters": {
-                    "helloworld": "code/helloworld.py",
-                    "inputfile": "data/names.txt",
-                    "outputfile": "results/greetings.txt",
-                    "sleeptime": 0
-                  }
-                },
-                "workflow": {
-                  "specification": {
-                    "steps": [
-                      {
-                        "commands": [
-                          "echo 'Hello World!'"
-                        ],
-                        "environment": "busybox"
-                      }
+                "parameters": {},
+                "specification": {
+                  "inputs": {
+                    "files": [
+                      "code/helloworld.py",
+                      "data/names.txt"
+                    ],
+                    "parameters": {
+                      "helloworld": "code/helloworld.py",
+                      "inputfile": "data/names.txt",
+                      "outputfile": "results/greetings.txt",
+                      "sleeptime": 0
+                    }
+                  },
+                  "outputs": {
+                    "files": [
+                      "results/greetings.txt"
                     ]
                   },
-                  "type": "serial"
+                  "version": "0.3.0",
+                  "workflow": {
+                    "specification": {
+                      "steps": [
+                        {
+                          "commands": [
+                            "python \"${helloworld}\" --inputfile \"${inputfile}\" --outputfile \"${outputfile}\" --sleeptime ${sleeptime}"
+                          ],
+                          "environment": "python:2.7-slim"
+                        }
+                      ]
+                    },
+                    "type": "serial"
+                  }
                 }
               }
         403:
