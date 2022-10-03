@@ -3910,6 +3910,14 @@
         "responses": {
           "200": {
             "description": "Requests succeeded. The file has been downloaded.",
+            "headers": {
+              "Content-Disposition": {
+                "type": "string"
+              },
+              "Content-Type": {
+                "type": "string"
+              }
+            },
             "schema": {
               "type": "file"
             }

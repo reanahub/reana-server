@@ -1717,6 +1717,11 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
             Requests succeeded. The file has been downloaded.
           schema:
             type: file
+          headers:
+            Content-Disposition:
+              type: string
+            Content-Type:
+              type: string
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
