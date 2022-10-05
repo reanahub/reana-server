@@ -726,10 +726,21 @@ def queue_consume(
 def retention_rules_apply() -> None:
     """Apply pending retentions rules."""
     current_time = datetime.datetime.now()
-    pending_rules = WorkspaceRetentionRule.query.filter(
-        WorkspaceRetentionRule.status == WorkspaceRetentionRuleStatus.active,
-        WorkspaceRetentionRule.apply_on < current_time,
+
+    click.echo("Setting the status of all the rules that will be applied to `pending`")
+    update_workspace_retention_rules(
+        WorkspaceRetentionRule.query.filter(
+            WorkspaceRetentionRule.status == WorkspaceRetentionRuleStatus.active,
+            WorkspaceRetentionRule.apply_on < current_time,
+        ),
+        WorkspaceRetentionRuleStatus.pending,
+    )
+
+    click.echo("Fetching all the pending rules")
+    pending_rules = WorkspaceRetentionRule.query.filter_by(
+        status=WorkspaceRetentionRuleStatus.pending
     ).all()
+
     if not pending_rules:
         click.echo("No rules to be applied!")
     for rule in pending_rules:

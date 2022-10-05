@@ -54,7 +54,7 @@ install_requires = [
     "gitpython>=3.1",
     "marshmallow>2.13.0,<=2.20.1",
     "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.0a12,<0.10.0",
-    "reana-db>=0.9.0a7,<0.10.0",
+    "reana-db>=0.9.0a8,<0.10.0",
     "requests==2.25.0",
     "tablib>=0.12.1",
     "uWSGI>=2.0.17",
