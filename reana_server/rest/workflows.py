@@ -1289,6 +1289,11 @@ def start_workflow(workflow_id_or_name, user):  # noqa
         if "restart" in parameters:
             if workflow.status not in [RunStatus.finished, RunStatus.failed]:
                 raise ValueError("Only finished or failed workflows can be restarted.")
+            if workflow.workspace_has_pending_retention_rules():
+                raise ValueError(
+                    "The workflow cannot be restarted because some retention rules are "
+                    "currently being applied to the workspace. Please retry later."
+                )
             restart_type = (
                 parameters.get("reana_specification", {})
                 .get("workflow", {})

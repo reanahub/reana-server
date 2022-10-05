@@ -16,6 +16,7 @@ Version 0.9.0 (UNRELEASED)
 - Adds `retention-rules-apply` command that can be used to apply pending retention rules.
 - Changes workflow create endpoint to populate workspace retention rules for the workflow.
 - Changes workflow list endpoint to return workspace retention rules for the workflow.
+- Changes workflow start endpoint to disallow restarting a workflow when retention rules are pending.
 - Changes API rate limiter error messages to be more verbose.
 - Changes workflow scheduler to allow defining the checks needed to assess whether the cluster can start new workflows.
 - Changes the Invenio dependencies to the latest versions.
