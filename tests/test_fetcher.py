@@ -108,7 +108,7 @@ def test_fetcher_git(with_git_ref, spec, tmp_path):
 
     def create_git_repository(repo_path, files, idx):
         """Create a git repository with one commit for each file."""
-        repository = Repo.init(repo_path)
+        repository = Repo.init(repo_path, initial_branch="main")
 
         commits = []
         for file, content in files:
@@ -125,8 +125,8 @@ def test_fetcher_git(with_git_ref, spec, tmp_path):
         repository.create_head("new-branch")
         # Create tag
         repository.create_tag("new-tag")
-        # Go back to master branch
-        repository.git.checkout("master")
+        # Go back to main branch
+        repository.git.checkout("main")
 
         return commits
 
