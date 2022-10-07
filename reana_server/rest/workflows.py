@@ -660,6 +660,7 @@ def get_workflow_specification(workflow_id_or_name, user):  # noqa
                     properties:
                       specification:
                         type: object
+                        x-nullable: true
                         properties:
                           steps:
                             type: array
