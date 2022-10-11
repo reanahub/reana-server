@@ -19,7 +19,7 @@ readme = open("README.rst").read()
 history = open("CHANGES.rst").read()
 
 tests_require = [
-    "pytest-reana>=0.9.0a5,<0.10.0",
+    "pytest-reana>=0.9.0a6,<0.10.0",
 ]
 
 extras_require = {
@@ -50,10 +50,10 @@ setup_requires = [
 ]
 
 install_requires = [
-    "Flask~=2.1.2",
+    "Flask>=2.1.1,<2.2.0",
     "gitpython>=3.1",
     "marshmallow>2.13.0,<=2.20.1",
-    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.0a12,<0.10.0",
+    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.0a13,<0.10.0",
     "reana-db>=0.9.0a8,<0.10.0",
     "requests==2.25.0",
     "tablib>=0.12.1",
@@ -62,6 +62,13 @@ install_requires = [
     "uwsgitop>=0.10",
     "werkzeug<2.1",
     "wtforms<3.0.0",
+    # Yadage dependencies
+    # Pinning adage/packtivity/yadage/yadage-schemas to make sure we use compatible versions.
+    # See https://github.com/reanahub/reana-workflow-engine-yadage/pull/236#discussion_r992475484
+    "adage==0.10.1",
+    "packtivity==0.14.24",
+    "yadage==0.20.1",
+    "yadage-schemas==0.10.6",
     # Invenio dependencies
     "invenio-app>=1.3.0,<1.4.0",
     "invenio-base>=1.2.0,<1.3.0",
