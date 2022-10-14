@@ -18,7 +18,7 @@ import uuid
 
 from click.testing import CliRunner
 import pytest
-from reana_db.models import AuditLogAction, User, UserTokenStatus, RunStatus
+from reana_db.models import AuditLogAction, User, UserTokenStatus, RunStatus, Workflow
 
 from reana_server.api_client import WorkflowSubmissionPublisher
 from reana_server.reana_admin import reana_admin
@@ -356,40 +356,94 @@ def test_is_input_or_output(file_or_dir, expected_result):
     )
 
 
-def test_retention_rules_apply(workflow_with_retention_rules):
+@pytest.mark.parametrize(
+    "time_delta, to_be_kept, to_be_deleted",
+    [
+        (
+            None,
+            [
+                "input.txt",
+                "inputs/input.txt",
+                "output.txt",
+                "outputs/output.txt",
+                "to_be_deleted/input.txt",
+                "to_be_deleted/outputs/output.txt",
+                "not_deleted.xyz",
+            ],
+            [
+                "to_be_deleted/deleted.xyz",
+                "deleted.txt",
+            ],
+        ),
+        (
+            datetime.timedelta(days=-2),
+            ["input.txt", "to_be_deleted/xyz.txt"],
+            [],
+        ),
+        (
+            datetime.timedelta(days=+2),
+            ["input.txt", "to_be_deleted/outputs/123.txt"],
+            ["to_be_deleted/xyz.txt", "xyz.zip", "xyz.txt"],
+        ),
+    ],
+)
+def test_retention_rules_apply(
+    workflow_with_retention_rules, session, time_delta, to_be_kept, to_be_deleted
+):
     """Test the deletion of files when applying retention rules."""
+
+    def invoke(flags):
+        runner = CliRunner()
+        result = runner.invoke(reana_admin, flags)
+        assert result.exit_code == 0
+
+    def init_workspace(workspace, files):
+        for file in files:
+            f = workspace / file
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.touch()
+            assert f.exists()
+
     workflow = workflow_with_retention_rules
     workspace = pathlib.Path(workflow.workspace_path)
 
-    to_be_kept = [
-        "input.txt",
-        "inputs/input.txt",
-        "output.txt",
-        "outputs/output.txt",
-        "to_be_deleted/input.txt",
-        "to_be_deleted/outputs/output.txt",
-        "not_deleted.xyz",
-    ]
-    to_be_deleted = [
-        "to_be_deleted/deleted.xyz",
-        "deleted.txt",
-    ]
+    other_user = User(email="xyz@cern.ch")
+    session.add(other_user)
+    other_workflow = Workflow(
+        id_=uuid.uuid4(),
+        name="other_workflow",
+        owner_id=other_user.id_,
+        reana_specification={},
+        type_="serial",
+    )
+    session.add(other_workflow)
+    session.commit()
 
-    for file in to_be_kept + to_be_deleted:
-        f = workspace / file
-        f.parent.mkdir(parents=True, exist_ok=True)
-        f.touch()
-        assert f.exists()
+    command = ["retention-rules-apply"]
+    if time_delta is not None:
+        forced_date = datetime.datetime.now() + time_delta
+        command += ["--force-date", forced_date.strftime("%Y-%m-%dT%H:%M:%S")]
 
-    runner = CliRunner()
+    init_workspace(workspace, to_be_kept + to_be_deleted)
 
-    result = runner.invoke(reana_admin, ["retention-rules-apply", "--dry-run"])
-    assert result.exit_code == 0
+    # these invocations should not delete any file
+    for other_flags in [
+        ["--dry-run"],
+        ["--dry-run", "--email", workflow.owner.email],
+        ["--dry-run", "--id", workflow.owner.id_],
+        ["--dry-run", "--workflow", workflow.id_],
+        ["--email", other_user.email],
+        ["--id", other_user.id_],
+        ["--workflow", other_workflow.id_],
+    ]:
+        with patch("click.confirm"):
+            invoke(command + other_flags)
     for file in to_be_deleted:
         assert workspace.joinpath(file).exists()
 
-    result = runner.invoke(reana_admin, ["retention-rules-apply"])
-    assert result.exit_code == 0
+    with patch("click.confirm"):
+        init_workspace(workspace, to_be_kept + to_be_deleted)
+        invoke(command)
 
     for file in to_be_kept:
         assert workspace.joinpath(file).exists()

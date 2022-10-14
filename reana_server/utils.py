@@ -624,14 +624,16 @@ def clone_workflow(workflow, reana_spec, restart_type):
         )
 
 
-def _get_user_by_criteria(id_, email):
+def _get_user_by_criteria(id_: Optional[str], email: Optional[str]) -> Optional[User]:
     """Get user filtering first by id, then by email."""
     criteria = dict()
+    if id_:
+        criteria["id_"] = id_
+    elif email:
+        criteria["email"] = email
+    if not criteria:
+        return None
     try:
-        if id_:
-            criteria["id_"] = id_
-        elif email:
-            criteria["email"] = email
         return User.query.filter_by(**criteria).one_or_none()
     except StatementError as e:
         print(e)

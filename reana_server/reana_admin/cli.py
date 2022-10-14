@@ -33,6 +33,7 @@ from reana_db.models import (
     User,
     UserResource,
     UserTokenStatus,
+    Workflow,
     WorkspaceRetentionRule,
     WorkspaceRetentionRuleStatus,
 )
@@ -40,6 +41,7 @@ from reana_db.utils import update_workspace_retention_rules
 
 from reana_server.config import ADMIN_EMAIL, ADMIN_USER_ID, REANA_HOSTNAME
 from reana_server.decorators import admin_access_token_option
+from reana_server.reana_admin.options import add_user_options, add_workflow_option
 from reana_server.reana_admin.retention_rule_deleter import RetentionRuleDeleter
 from reana_server.status import STATUS_OBJECT_TYPES
 
@@ -729,12 +731,61 @@ def queue_consume(
     default=False,
     help="Show the pending retention rules without applying them. [default=False]",
 )
-def retention_rules_apply(dry_run: bool) -> None:
+@click.option(
+    "--force-date",
+    type=click.DateTime(formats=["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"]),
+    help="Force desired date and time when deciding which rules to apply.",
+)
+@click.option(
+    "--yes-i-am-sure",
+    is_flag=True,
+    help="Do not ask for confirmation when doing potentially dangerous operations.",
+)
+@add_user_options
+@add_workflow_option
+def retention_rules_apply(
+    dry_run: bool,
+    force_date: Optional[datetime.datetime],
+    yes_i_am_sure: bool,
+    user: Optional[User],
+    workflow: Optional[Workflow],
+) -> None:
     """Apply pending retentions rules."""
+    if user and workflow and user.id_ != workflow.owner_id:
+        click.secho("The specified user is not the owner of the workflow.", fg="red")
+        sys.exit(1)
+
     current_time = datetime.datetime.now()
+    if force_date:
+        # Warn the admin that using `force-date` can be dangerous
+        if not yes_i_am_sure and not dry_run:
+            if workflow:
+                subject = f"workflow {workflow.id_}"
+            elif user:
+                subject = f"user {user.email} and **ALL** their workflows"
+            else:
+                subject = "**ALL THE WORKFLOWS**"
+            click.confirm(
+                click.style(
+                    f"Deleting non-retained workspace files for {subject} "
+                    f"as if it were {force_date}.\n"
+                    "Are you sure you want to continue?",
+                    fg="red",
+                    bold=True,
+                ),
+                abort=True,
+            )
+        current_time = force_date
+        click.echo(f"The current time is forced to be {current_time}")
+
+    candidate_rules = WorkspaceRetentionRule.query
+    if workflow:
+        candidate_rules = workflow.retention_rules
+    elif user:
+        candidate_rules = WorkspaceRetentionRule.query.join(user.workflows.subquery())
 
     click.echo("Setting the status of all the rules that will be applied to `pending`")
-    active_rules = WorkspaceRetentionRule.query.filter(
+    active_rules = candidate_rules.filter(
         WorkspaceRetentionRule.status == WorkspaceRetentionRuleStatus.active,
         WorkspaceRetentionRule.apply_on < current_time,
     )
@@ -744,8 +795,8 @@ def retention_rules_apply(dry_run: bool) -> None:
         )
 
     click.echo("Fetching all the pending rules")
-    pending_rules = WorkspaceRetentionRule.query.filter_by(
-        status=WorkspaceRetentionRuleStatus.pending
+    pending_rules = candidate_rules.filter(
+        WorkspaceRetentionRule.status == WorkspaceRetentionRuleStatus.pending
     )
     if not dry_run:
         pending_rules = pending_rules.all()

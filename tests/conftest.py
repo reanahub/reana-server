@@ -60,10 +60,10 @@ def workflow_with_retention_rules(sample_serial_workflow_in_db, session):
     workflow.reana_specification = dict(workflow.reana_specification)
     workflow.reana_specification["inputs"] = {
         "files": ["input.txt", "to_be_deleted/input.txt"],
-        "directories": ["inputs"],
+        "directories": ["inputs", "to_be_deleted/inputs"],
     }
     workflow.reana_specification["outputs"] = {
-        "files": ["output.txt"],
+        "files": ["output.txt", "to_be_deleted/output.txt"],
         "directories": ["outputs", "to_be_deleted/outputs"],
     }
     current_time = datetime.now()
@@ -72,7 +72,7 @@ def workflow_with_retention_rules(sample_serial_workflow_in_db, session):
             workflow_id=workflow.id_,
             workspace_files="inputs",
             retention_days=1,
-            status=WorkspaceRetentionRuleStatus.active,
+            status=WorkspaceRetentionRuleStatus.pending,
             apply_on=current_time - timedelta(days=1),
         ),
         WorkspaceRetentionRule(
