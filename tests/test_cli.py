@@ -382,6 +382,12 @@ def test_retention_rules_apply(workflow_with_retention_rules):
         assert f.exists()
 
     runner = CliRunner()
+
+    result = runner.invoke(reana_admin, ["retention-rules-apply", "--dry-run"])
+    assert result.exit_code == 0
+    for file in to_be_deleted:
+        assert workspace.joinpath(file).exists()
+
     result = runner.invoke(reana_admin, ["retention-rules-apply"])
     assert result.exit_code == 0
 

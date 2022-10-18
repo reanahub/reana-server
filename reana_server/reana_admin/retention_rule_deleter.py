@@ -73,13 +73,15 @@ class RetentionRuleDeleter:
                 file_or_dir.rmdir()
                 click.echo(f"Deleted dir: {file_or_dir}")
 
-    def apply_rule(self):
+    def apply_rule(self, dry_run: bool = False):
         """Delete the files/directories matching the given retention rule, keeping inputs/outputs."""
         click.secho(
             f"Applying rule {self.rule_id} to workflow {self.workflow_id}: "
             f"'{self.workspace_files}' will be deleted from '{self.workspace}'",
             fg="green",
         )
+        if dry_run:
+            return
         for file_or_dir in self.workspace.glob(self.workspace_files):
             if not file_or_dir.exists():
                 click.echo(" Already deleted: {file_or_dir}")

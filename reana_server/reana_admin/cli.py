@@ -723,29 +723,43 @@ def queue_consume(
 
 
 @reana_admin.command()
-def retention_rules_apply() -> None:
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Show the pending retention rules without applying them. [default=False]",
+)
+def retention_rules_apply(dry_run: bool) -> None:
     """Apply pending retentions rules."""
     current_time = datetime.datetime.now()
 
     click.echo("Setting the status of all the rules that will be applied to `pending`")
-    update_workspace_retention_rules(
-        WorkspaceRetentionRule.query.filter(
-            WorkspaceRetentionRule.status == WorkspaceRetentionRuleStatus.active,
-            WorkspaceRetentionRule.apply_on < current_time,
-        ),
-        WorkspaceRetentionRuleStatus.pending,
+    active_rules = WorkspaceRetentionRule.query.filter(
+        WorkspaceRetentionRule.status == WorkspaceRetentionRuleStatus.active,
+        WorkspaceRetentionRule.apply_on < current_time,
     )
+    if not dry_run:
+        update_workspace_retention_rules(
+            active_rules, WorkspaceRetentionRuleStatus.pending
+        )
 
     click.echo("Fetching all the pending rules")
     pending_rules = WorkspaceRetentionRule.query.filter_by(
         status=WorkspaceRetentionRuleStatus.pending
-    ).all()
+    )
+    if not dry_run:
+        pending_rules = pending_rules.all()
+    else:
+        pending_rules = pending_rules.union(active_rules).all()
 
     if not pending_rules:
         click.echo("No rules to be applied!")
     for rule in pending_rules:
-        RetentionRuleDeleter(rule).apply_rule()
-        update_workspace_retention_rules([rule], WorkspaceRetentionRuleStatus.applied)
+        RetentionRuleDeleter(rule).apply_rule(dry_run)
+        if not dry_run:
+            update_workspace_retention_rules(
+                [rule], WorkspaceRetentionRuleStatus.applied
+            )
 
 
 @reana_admin.command("check-workflows")
