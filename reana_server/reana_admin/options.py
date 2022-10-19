@@ -38,21 +38,26 @@ def add_user_options(func):
     return wrapper
 
 
-def add_workflow_option(func):
+def add_workflow_option(**attrs):
     """Add options to get a workflow by its UUID."""
 
-    @click.option("-w", "--workflow", "workflow_uuid", help="The id of the workflow.")
-    @functools.wraps(func)
-    def wrapper(*args, workflow_uuid, **kwargs):
-        workflow = None
-        if workflow_uuid is not None:
-            if not is_uuid_v4(workflow_uuid):
-                click.secho("Invalid workflow UUID.", fg="red")
-                sys.exit(1)
-            workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
-            if not workflow:
-                click.secho("Workflow not found.", fg="red")
-                sys.exit(1)
-        func(*args, workflow=workflow, **kwargs)
+    def decorator(func):
+        @click.option(
+            "-w", "--workflow", "workflow_uuid", help="The id of the workflow.", **attrs
+        )
+        @functools.wraps(func)
+        def wrapper(*args, workflow_uuid, **kwargs):
+            workflow = None
+            if workflow_uuid is not None:
+                if not is_uuid_v4(workflow_uuid):
+                    click.secho("Invalid workflow UUID.", fg="red")
+                    sys.exit(1)
+                workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+                if not workflow:
+                    click.secho("Workflow not found.", fg="red")
+                    sys.exit(1)
+            func(*args, workflow=workflow, **kwargs)
 
-    return wrapper
+        return wrapper
+
+    return decorator

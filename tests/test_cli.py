@@ -473,6 +473,28 @@ def test_retention_rules_apply_error(
         assert rule.status == WorkspaceRetentionRuleStatus.active
 
 
+def test_retention_rules_extend(workflow_with_retention_rules):
+    """Test extending of retention rules."""
+    workflow = workflow_with_retention_rules
+    runner = CliRunner()
+    extend_days = 5
+
+    result = runner.invoke(
+        reana_admin, ["retention-rules-extend", "-w non-valid-id", "-d", extend_days]
+    )
+    assert result.output == "Invalid workflow UUID.\n"
+    assert result.exit_code == 1
+
+    result = runner.invoke(
+        reana_admin, ["retention-rules-extend", "-w", workflow.id_, "-d", extend_days]
+    )
+    assert "Extending rule" in result.output
+    assert result.exit_code == 0
+
+    for rule in workflow.retention_rules:
+        assert rule.retention_days > extend_days
+
+
 def test_retention_rule_deleter_file_outside_workspace(tmp_path):
     """Test that file outside the workspace are not deleted."""
     file = tmp_path.joinpath("do_not_delete.txt")

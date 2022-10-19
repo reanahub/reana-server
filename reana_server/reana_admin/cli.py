@@ -742,7 +742,7 @@ def queue_consume(
     help="Do not ask for confirmation when doing potentially dangerous operations.",
 )
 @add_user_options
-@add_workflow_option
+@add_workflow_option()
 def retention_rules_apply(
     dry_run: bool,
     force_date: Optional[datetime.datetime],
@@ -820,6 +820,39 @@ def retention_rules_apply(
         if not dry_run:
             click.echo(f"Setting the status of rule {rule.id_} to `{next_status.name}`")
             update_workspace_retention_rules([rule], next_status)
+
+
+@reana_admin.command()
+@add_workflow_option(required=True)
+@click.option(
+    "--days",
+    "-d",
+    help="Number of days to extend the rules.",
+    required=True,
+    type=click.IntRange(min=0),
+)
+def retention_rules_extend(workflow: Optional[Workflow], days: int) -> None:
+    """Extend active retentions rules."""
+    click.echo("Fetching all the active rules")
+    active_rules = WorkspaceRetentionRule.query.filter(
+        WorkspaceRetentionRule.status == WorkspaceRetentionRuleStatus.active,
+        WorkspaceRetentionRule.workflow_id == workflow.id_,
+    ).all()
+
+    if not active_rules:
+        click.echo("There are no rules to be extended for this workflow!")
+
+    for rule in active_rules:
+        apply_on = rule.apply_on + datetime.timedelta(days=days)
+        click.secho(
+            f"Extending rule {rule.id_}: "
+            f"previous execution time '{rule.apply_on}' is extended to '{apply_on}'",
+            fg="green",
+        )
+        rule.retention_days += days
+        rule.apply_on = apply_on
+        Session.add(rule)
+    Session.commit()
 
 
 @reana_admin.command("check-workflows")

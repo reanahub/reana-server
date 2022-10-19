@@ -14,6 +14,7 @@ Version 0.9.0 (UNRELEASED)
 - Adds the possibility to fetch the workflow specification from a remote URL.
 - Adds REANA specification validation utilities.
 - Adds `retention-rules-apply` command that can be used to apply pending retention rules.
+- Adds `retention-rules-extend` command that can be used to extend the duration of active retentions rules.
 - Changes workflow create endpoint to populate workspace retention rules for the workflow.
 - Changes workflow list endpoint to return workspace retention rules for the workflow.
 - Changes workflow start endpoint to disallow restarting a workflow when retention rules are pending.
