@@ -67,35 +67,27 @@ def workflow_with_retention_rules(sample_serial_workflow_in_db, session):
         "directories": ["outputs", "to_be_deleted/outputs"],
     }
     current_time = datetime.now()
+
+    def create_retention_rule(
+        pattern, days, status=WorkspaceRetentionRuleStatus.active
+    ):
+        return WorkspaceRetentionRule(
+            workflow_id=workflow.id_,
+            workspace_files=pattern,
+            retention_days=123,
+            status=status,
+            apply_on=current_time + timedelta(days=days),
+        )
+
     workflow.retention_rules = [
-        WorkspaceRetentionRule(
-            workflow_id=workflow.id_,
-            workspace_files="inputs",
-            retention_days=1,
-            status=WorkspaceRetentionRuleStatus.pending,
-            apply_on=current_time - timedelta(days=1),
+        create_retention_rule("inputs", days=-1),
+        create_retention_rule(
+            "*.txt", days=-1, status=WorkspaceRetentionRuleStatus.pending
         ),
-        WorkspaceRetentionRule(
-            workflow_id=workflow.id_,
-            workspace_files="**/*.txt",
-            retention_days=1,
-            status=WorkspaceRetentionRuleStatus.active,
-            apply_on=current_time - timedelta(days=1),
-        ),
-        WorkspaceRetentionRule(
-            workflow_id=workflow.id_,
-            workspace_files="to_be_deleted",
-            retention_days=1,
-            status=WorkspaceRetentionRuleStatus.active,
-            apply_on=current_time - timedelta(days=1),
-        ),
-        WorkspaceRetentionRule(
-            workflow_id=workflow.id_,
-            workspace_files="**/*",
-            retention_days=3,
-            status=WorkspaceRetentionRuleStatus.active,
-            apply_on=current_time + timedelta(days=1),
-        ),
+        create_retention_rule("*/*.txt", days=-1),
+        create_retention_rule("*/*/*.txt", days=-1),
+        create_retention_rule("to_be_deleted", days=-1),
+        create_retention_rule("*", days=+1),
     ]
     session.add_all(workflow.retention_rules)
     session.add(workflow)

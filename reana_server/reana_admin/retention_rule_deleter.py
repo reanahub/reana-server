@@ -8,10 +8,12 @@
 """REANA utilities to apply retention rules."""
 
 
+import errno
 from pathlib import Path
-from typing import Dict, Union
+from typing import Union
 
 import click
+from reana_commons import workspace
 from reana_db.models import WorkspaceRetentionRule
 
 from reana_server.utils import is_relative_to
@@ -25,53 +27,57 @@ class RetentionRuleDeleter:
 
         :param rule: Retention rule to be applied.
         """
-        self.rule_id = rule.id_
+        self.rule_id = str(rule.id_)
         self.specification = rule.workflow.reana_specification
-        self.workflow_id = rule.workflow.id_
-        self.workspace = Path(rule.workflow.workspace_path)
-        self.workspace_files = rule.workspace_files
+        self.workflow_id = str(rule.workflow.id_)
+        self.workspace = str(rule.workflow.workspace_path)
+        self.workspace_files = str(rule.workspace_files)
 
-    def is_input_output(self, file_or_dir: Path) -> bool:
+    def is_input_output(self, file_or_dir: Union[str, Path]) -> bool:
         """Check whether the file/directory is an input/output or not.
 
-        :param file_or_dir: Path to the file/directory.
+        :param file_or_dir: Relative path to the file/directory.
         """
+        file_or_dir = Path(file_or_dir)
         for key in ("inputs", "outputs"):
             files = self.specification.get(key, {}).get("files", [])
             directories = self.specification.get(key, {}).get("directories", [])
             for file in files:
-                if file_or_dir == self.workspace / file:
+                if file_or_dir == Path(file):
                     return True
             for directory in directories:
-                if is_relative_to(file_or_dir, self.workspace / directory):
+                if is_relative_to(file_or_dir, Path(directory)):
                     return True
         return False
 
-    def is_inside_workspace(self, file_or_dir: Path) -> bool:
-        """Check if given file/directory is inside the workspace.
-
-        :param file_or_dir: Path to the file/directory.
-        """
-        return is_relative_to(file_or_dir.resolve(), self.workspace.resolve())
-
-    def delete_keeping_inputs_outputs(self, file_or_dir: Path):
+    def delete_keeping_inputs_outputs(self, file_or_dir: str):
         """Delete the given file/directory, keeping the inputs/outputs.
 
-        :param file_or_dir: Path to the file/directory.
+        :param file_or_dir: Relative path to the file/directory.
         """
-        if not self.is_inside_workspace(file_or_dir):
-            click.echo(f"Path outside workspace: {file_or_dir}")
-        elif self.is_input_output(file_or_dir):
+        if self.is_input_output(file_or_dir):
             click.echo(f"Preserved in/out: {file_or_dir}")
-        elif file_or_dir.is_file() or file_or_dir.is_symlink():
-            file_or_dir.unlink()
-            click.echo(f"Deleted file: {file_or_dir}")
+            return
+
+        try:
+            if workspace.is_directory(self.workspace, file_or_dir):
+                for path in workspace.iterdir(self.workspace, file_or_dir):
+                    self.delete_keeping_inputs_outputs(path)
+        except (NotADirectoryError, FileNotFoundError):
+            # path refers to a file or it has already been deleted
+            pass
+
+        try:
+            workspace.delete(self.workspace, file_or_dir)
+        except FileNotFoundError:
+            # path has already been deleted
+            pass
+        except OSError as e:
+            # do not raise when path refers to a non-empty directory
+            if e.errno != errno.ENOTEMPTY:
+                raise
         else:
-            for child in file_or_dir.iterdir():
-                self.delete_keeping_inputs_outputs(child)
-            if not any(file_or_dir.iterdir()):
-                file_or_dir.rmdir()
-                click.echo(f"Deleted dir: {file_or_dir}")
+            click.echo(f"Deleted: {file_or_dir}")
 
     def apply_rule(self, dry_run: bool = False):
         """Delete the files/directories matching the given retention rule, keeping inputs/outputs."""
@@ -82,8 +88,5 @@ class RetentionRuleDeleter:
         )
         if dry_run:
             return
-        for file_or_dir in self.workspace.glob(self.workspace_files):
-            if not file_or_dir.exists():
-                click.echo(" Already deleted: {file_or_dir}")
-                continue
+        for file_or_dir in workspace.glob(self.workspace, self.workspace_files):
             self.delete_keeping_inputs_outputs(file_or_dir)

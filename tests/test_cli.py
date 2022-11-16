@@ -18,7 +18,14 @@ import uuid
 
 from click.testing import CliRunner
 import pytest
-from reana_db.models import AuditLogAction, User, UserTokenStatus, RunStatus, Workflow
+from reana_db.models import (
+    AuditLogAction,
+    User,
+    UserTokenStatus,
+    RunStatus,
+    Workflow,
+    WorkspaceRetentionRuleStatus,
+)
 
 from reana_server.api_client import WorkflowSubmissionPublisher
 from reana_server.reana_admin import reana_admin
@@ -350,10 +357,7 @@ def test_is_input_or_output(file_or_dir, expected_result):
     rule.workflow.workspace_path = str(workspace)
     rule.workspace_files = "**/*"
 
-    assert (
-        RetentionRuleDeleter(rule).is_input_output(workspace / file_or_dir)
-        == expected_result
-    )
+    assert RetentionRuleDeleter(rule).is_input_output(file_or_dir) == expected_result
 
 
 @pytest.mark.parametrize(
@@ -449,6 +453,24 @@ def test_retention_rules_apply(
         assert workspace.joinpath(file).exists()
     for file in to_be_deleted:
         assert not workspace.joinpath(file).exists()
+
+
+@patch("reana_server.reana_admin.cli.RetentionRuleDeleter.apply_rule")
+def test_retention_rules_apply_error(
+    apply_rule_mock: Mock, workflow_with_retention_rules
+):
+    """Test that rules are reset to `active` if there are errors."""
+    workflow = workflow_with_retention_rules
+    apply_rule_mock.side_effect = Exception()
+
+    runner = CliRunner()
+    result = runner.invoke(reana_admin, "retention-rules-apply")
+
+    assert result.exit_code == 0
+    assert "Error while applying rule" in result.output
+    apply_rule_mock.assert_called()
+    for rule in workflow.retention_rules:
+        assert rule.status == WorkspaceRetentionRuleStatus.active
 
 
 def test_retention_rule_deleter_file_outside_workspace(tmp_path):

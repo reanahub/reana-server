@@ -805,12 +805,21 @@ def retention_rules_apply(
 
     if not pending_rules:
         click.echo("No rules to be applied!")
+
     for rule in pending_rules:
-        RetentionRuleDeleter(rule).apply_rule(dry_run)
+        # if there are errors, the status of the rule will be reset to `active`
+        # so that the rule will be applied again at the next execution of the cronjob
+        next_status = WorkspaceRetentionRuleStatus.active
+        try:
+            RetentionRuleDeleter(rule).apply_rule(dry_run)
+            next_status = WorkspaceRetentionRuleStatus.applied
+        except Exception as e:
+            click.secho(f"Error while applying rule {rule.id_}: {e}", fg="red")
+            logging.debug(e, exc_info=True)
+
         if not dry_run:
-            update_workspace_retention_rules(
-                [rule], WorkspaceRetentionRuleStatus.applied
-            )
+            click.echo(f"Setting the status of rule {rule.id_} to `{next_status.name}`")
+            update_workspace_retention_rules([rule], next_status)
 
 
 @reana_admin.command("check-workflows")
