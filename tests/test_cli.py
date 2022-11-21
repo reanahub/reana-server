@@ -492,7 +492,8 @@ def test_retention_rules_extend(workflow_with_retention_rules):
     assert result.exit_code == 0
 
     for rule in workflow.retention_rules:
-        assert rule.retention_days > extend_days
+        if rule.status == WorkspaceRetentionRuleStatus.active:
+            assert rule.retention_days > extend_days
 
 
 def test_retention_rule_deleter_file_outside_workspace(tmp_path):

@@ -74,20 +74,21 @@ def workflow_with_retention_rules(sample_serial_workflow_in_db, session):
         return WorkspaceRetentionRule(
             workflow_id=workflow.id_,
             workspace_files=pattern,
-            retention_days=123,
+            retention_days=2 + days,
             status=status,
             apply_on=current_time + timedelta(days=days),
         )
 
     workflow.retention_rules = [
-        create_retention_rule("inputs", days=-1),
         create_retention_rule(
-            "*.txt", days=-1, status=WorkspaceRetentionRuleStatus.pending
+            "this_matches_nothing",
+            days=-2,
+            status=WorkspaceRetentionRuleStatus.pending,
         ),
-        create_retention_rule("*/*.txt", days=-1),
-        create_retention_rule("*/*/*.txt", days=-1),
+        create_retention_rule("inputs", days=-1),
+        create_retention_rule("**/*.txt", days=-1),
         create_retention_rule("to_be_deleted", days=-1),
-        create_retention_rule("*", days=+1),
+        create_retention_rule("**/*", days=+1),
     ]
     session.add_all(workflow.retention_rules)
     session.add(workflow)

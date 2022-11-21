@@ -53,7 +53,7 @@ install_requires = [
     "Flask>=2.1.1,<2.2.0",
     "gitpython>=3.1",
     "marshmallow>2.13.0,<=2.20.1",
-    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.0a14,<0.10.0",
+    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.0a15,<0.10.0",
     "reana-db>=0.9.0a9,<0.10.0",
     "requests==2.25.0",
     "tablib>=0.12.1",
