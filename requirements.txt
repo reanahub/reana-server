@@ -105,7 +105,7 @@ jsonpath-rw==1.4.0        # via packtivity, yadage
 jsonpointer==2.3          # via jsonschema, packtivity, yadage
 jsonref==0.3.0            # via bravado-core, packtivity, yadage, yadage-schemas
 jsonschema[format]==3.2.0  # via bravado-core, nbformat, packtivity, reana-commons, snakemake, swagger-spec-validator, yadage, yadage-schemas
-jupyter-core==4.11.1      # via nbformat
+jupyter-core==4.11.2      # via nbformat
 kombu==5.2.4              # via celery, reana-commons
 kubernetes==22.6.0        # via reana-commons
 limits==1.6               # via flask-limiter, invenio-app
