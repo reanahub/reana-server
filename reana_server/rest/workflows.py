@@ -61,7 +61,6 @@ blueprint = Blueprint("workflows", __name__)
         "size": fields.Int(validate=validate.Range(min=1)),
         "include_progress": fields.Bool(location="query"),
         "include_workspace_size": fields.Bool(location="query"),
-        "include_retention_rules": fields.Bool(location="query"),
         "workflow_id_or_name": fields.Str(),
     }
 )
@@ -127,10 +126,6 @@ def get_workflows(user, **kwargs):  # noqa
         - name: include_workspace_size
           in: query
           description: Include size information of the workspace.
-          type: boolean
-        - name: include_retention_rules
-          in: query
-          description: Include workspace retention rules of the workflows.
           type: boolean
         - name: workflow_id_or_name
           in: query
@@ -2953,4 +2948,140 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
         return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route("/workflows/<workflow_id_or_name>/retention_rules")
+@signin_required()
+def get_workflow_retention_rules(workflow_id_or_name, user):
+    r"""Get the retention rules of a workflow.
+
+    ---
+    get:
+      summary: Get the retention rules of a workflow.
+      description: >-
+        This resource returns all the retention rules of a given workflow.
+      operationId: get_workflow_retention_rules
+      produces:
+       - application/json
+      parameters:
+        - name: access_token
+          in: query
+          description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. The response contains the list of all the retention rules.
+          schema:
+            type: object
+            properties:
+              workflow_id:
+                type: string
+              workflow_name:
+                type: string
+              retention_rules:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    workspace_files:
+                      type: string
+                    retention_days:
+                      type: integer
+                    apply_on:
+                      type: string
+                      x-nullable: true
+                    status:
+                      type: string
+          examples:
+            application/json:
+              {
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest.1",
+                "retention_rules": [
+                    {
+                      "id": "851da5cf-0b26-40c5-97a1-9acdbb35aac7",
+                      "workspace_files": "**/*.tmp",
+                      "retention_days": 1,
+                      "apply_on": "2022-11-24T23:59:59",
+                      "status": "active"
+                    }
+                ]
+              }
+        401:
+          description: >-
+            Request failed. User not signed in.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "User not signed in."
+              }
+        403:
+          description: >-
+            Request failed. Credentials are invalid or revoked.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Token not valid."
+              }
+        404:
+          description: >-
+            Request failed. Workflow does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow mytest.1 does not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Something went wrong."
+              }
+    """
+    try:
+        (
+            response,
+            http_response,
+        ) = current_rwc_api_client.api.get_workflow_retention_rules(
+            user=str(user.id_),
+            workflow_id_or_name=workflow_id_or_name,
+        ).result()
+        return jsonify(response), http_response.status_code
+    except HTTPError as e:
+        logging.exception(str(e))
+        return jsonify(e.response.json()), e.response.status_code
+    except Exception as e:
+        logging.exception(str(e))
         return jsonify({"message": str(e)}), 500

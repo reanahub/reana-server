@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -708,3 +708,34 @@ def test_create_and_associate_local_user(app, session):
     assert user.email == mock_user.email
     assert user.full_name == mock_user.email
     assert user.username == mock_user.email
+
+
+def test_get_workflow_retention_rules(app, default_user):
+    """Test get_workflow_retention_rules."""
+    endpoint_url = url_for(
+        "workflows.get_workflow_retention_rules", workflow_id_or_name="workflow"
+    )
+    with app.test_client() as client:
+        # Token not provided
+        res = client.get(endpoint_url)
+        assert res.status_code == 401
+
+        # Token not valid
+        res = client.get(endpoint_url, query_string={"access_token": "invalid_token"})
+        assert res.status_code == 403
+
+        # Test that status code is propagated from r-w-controller
+        status_code = 404
+        mock_response = {"message": "error"}
+        mock_http_response = Mock(status_code=status_code)
+        with patch(
+            "reana_server.rest.workflows.current_rwc_api_client",
+            make_mock_api_client("reana-workflow-controller")(
+                mock_response, mock_http_response
+            ),
+        ):
+            res = client.get(
+                endpoint_url, query_string={"access_token": default_user.access_token}
+            )
+            assert res.status_code == status_code
+            assert "message" in res.json
