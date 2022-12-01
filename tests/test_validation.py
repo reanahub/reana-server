@@ -21,7 +21,7 @@ from reana_server.validation import validate_inputs, validate_retention_rule
         (["/absolute/path"], "absolute"),
         (["invalid/../path"], r"\.\."),
         ([""], "empty"),
-        (["dir", "dir/xyz"], "prefix"),
+        (["dir", "dir/xyz"], "Duplicate"),
         (["dir", "dir/"], "multiple"),
     ],
 )

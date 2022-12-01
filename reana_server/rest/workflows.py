@@ -32,7 +32,11 @@ from webargs.flaskparser import use_kwargs
 from reana_server.api_client import current_rwc_api_client
 from reana_server.config import REANA_HOSTNAME
 from reana_server.decorators import check_quota, signin_required
-from reana_server.validation import validate_workspace_path, validate_workflow
+from reana_server.validation import (
+    validate_inputs,
+    validate_workspace_path,
+    validate_workflow,
+)
 from reana_server.utils import (
     _fail_gitlab_commit_build_status,
     RequestStreamWithLen,
@@ -530,6 +534,8 @@ def create_workflow(user):  # noqa
 
         workspace_root_path = reana_spec_file.get("workspace", {}).get("root_path")
         validate_workspace_path(reana_spec_file)
+
+        validate_inputs(reana_spec_file)
 
         retention_days = reana_spec_file.get("workspace", {}).get("retention_days")
         retention_rules = get_workspace_retention_rules(retention_days)

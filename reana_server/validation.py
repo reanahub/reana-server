@@ -103,7 +103,7 @@ def validate_inputs(reana_yaml: Dict) -> None:
     for x, y in itertools.permutations(paths, r=2):
         if utils.is_relative_to(x, y):
             raise REANAValidationError(
-                f"Invalid input paths: '{y}' is a prefix of '{x}'"
+                f"Duplicate input paths '{y}' and '{x}' found. Please deduplicate inputs first."
             )
 
 
