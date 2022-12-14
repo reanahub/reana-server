@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -32,7 +32,7 @@ extras_require = {
         "Sphinx>=1.5.1",
         "sphinx-rtd-theme>=0.1.9",
         "sphinxcontrib-httpdomain>=1.5.0",
-        "sphinxcontrib-openapi>=0.3.0,<0.4.0",
+        "sphinxcontrib-openapi>=0.8.0",
         "sphinxcontrib-redoc>=1.5.1",
         "sphinx-click>=1.0.4",
     ],
@@ -53,8 +53,8 @@ install_requires = [
     "Flask>=2.1.1,<2.2.0",
     "gitpython>=3.1",
     "marshmallow>2.13.0,<=2.20.1",
-    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.0a16,<0.10.0",
-    "reana-db>=0.9.0a9,<0.10.0",
+    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.1,<0.10.0",
+    "reana-db>=0.9.1,<0.10.0",
     "requests==2.25.0",
     "tablib>=0.12.1",
     "uWSGI>=2.0.17",
