@@ -1,23 +1,22 @@
 Changes
 =======
 
-Version 0.9.0 (UNRELEASED)
+Version 0.9.0 (2023-01-19)
 --------------------------
 
-- Adds kubernetes maximum memory limit, kubernetes default memory limit and the maximum workspace retention period to ``info`` endpoint.
-- Adds validation of REANA specification to ``start_workflow`` endpoint.
-- Adds interactive sessions out-of-sync check to ``reana-admin check-workflows`` command.
-- Adds workspace retention rules validation to ``get_workspace_retention_rules`` function.
+- Adds new ``/api/launch`` endpoint that allows running workflows from remote sources.
+- Adds new ``get_workflow_retention_rules`` endpoint that allows to retrieve the workspace file retention rules of a workflow.
 - Adds ``queue-consume`` command that can be used by REANA administrators to remove specific messages from the queue.
 - Adds configuration environment variable to set an API rate limit for slow endpoints (``REANA_RATELIMIT_SLOW``).
-- Adds new ``/api/launch`` endpoint that allows running workflows from remote sources.
-- Adds the possibility to fetch the workflow specification from a remote URL.
 - Adds REANA specification validation utilities.
-- Adds `retention-rules-apply` command that can be used to apply pending retention rules.
-- Adds `retention-rules-extend` command that can be used to extend the duration of active retentions rules.
-- Changes workflow create endpoint to populate workspace retention rules for the workflow.
-- Changes workflow list endpoint to return workspace retention rules for the workflow.
-- Changes workflow start endpoint to disallow restarting a workflow when retention rules are pending.
+- Adds ``retention-rules-apply`` command that can be used by REANA administrators to apply pending retention rules.
+- Adds ``retention-rules-extend`` command that can be used by REANA administrators to extend the duration of active retentions rules.
+- Adds ``check-workflows`` command that can be used by REANA administrators to check for out-of-sync workflows and interactive sessions.
+- Changes OpenAPI specification to include missing response schema elements and some other small enhancements.
+- Changes ``/api/info`` endpoint to also include the kubernetes maximum memory limit, the kubernetes default memory limit and the maximum workspace retention period.
+- Changes ``start_workflow`` endpoint to validate the REANA specification of the workflow.
+- Changes ``create_workflow`` endpoint to populate workspace retention rules for the workflow.
+- Changes ``start_workflow`` endpoint to disallow restarting a workflow when retention rules are pending.
 - Changes API rate limiter error messages to be more verbose.
 - Changes workflow scheduler to allow defining the checks needed to assess whether the cluster can start new workflows.
 - Changes the Invenio dependencies to the latest versions.
