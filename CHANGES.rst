@@ -24,7 +24,8 @@ Version 0.9.0 (UNRELEASED)
 - Changes OAuth configuration to enable the new CERN SSO.
 - Changes to PostgreSQL 12.13.
 - Changes GitLab integration to also retrieve user's projects that are in groups and subgroups.
-- Fixes issue when irregular number formats are passed to ``REANA_SCHEDULER_REQUEUE_COUNT``.
+- Changes the base image of the component to Ubuntu 20.04 LTS and reduces final Docker image size by removing build-time dependencies.
+- Fixes issue when irregular number formats are passed to ``REANA_SCHEDULER_REQUEUE_COUNT`` configuration environment variable.
 - Fixes GitLab integration error reporting in case user exceeds CPU or Disk quota usage limits.
 - Fixes CERN OIDC authentication to possibly allow eduGAIN and social login users.
 
