@@ -22,7 +22,7 @@ Version 0.9.0 (UNRELEASED)
 - Changes workflow scheduler to allow defining the checks needed to assess whether the cluster can start new workflows.
 - Changes the Invenio dependencies to the latest versions.
 - Changes OAuth configuration to enable the new CERN SSO.
-- Changes to PostgreSQL 12.10.
+- Changes to PostgreSQL 12.13.
 - Changes GitLab integration to also retrieve user's projects that are in groups and subgroups.
 - Fixes issue when irregular number formats are passed to ``REANA_SCHEDULER_REQUEUE_COUNT``.
 - Fixes GitLab integration error reporting in case user exceeds CPU or Disk quota usage limits.
