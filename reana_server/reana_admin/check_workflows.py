@@ -226,9 +226,9 @@ interactive_sessions_validation_map = {
 }
 
 
-def check_interactive_sessions() -> Tuple[
-    List[CheckResult], List[CheckResult], List[CheckResult], int
-]:
+def check_interactive_sessions() -> (
+    Tuple[List[CheckResult], List[CheckResult], List[CheckResult], int]
+):
     """Check if selected sessions are in sync with database according to predefined rules.
 
     Because interactive sessions are deleted from database when they are closed,

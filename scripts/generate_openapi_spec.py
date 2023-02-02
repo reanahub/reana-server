@@ -82,7 +82,6 @@ def build_openapi_spec(publish):
         lazy=False,
         atomic=False,
     ) as output_file:
-
         output_file.write(spec_json + "\n")
 
         click.echo(
@@ -95,7 +94,6 @@ def build_openapi_spec(publish):
     # Check that generated spec passes validation. Done after writing to file
     # in order to give user easy way to access the possible erroneous spec.
     with open(os.path.join(os.getcwd(), __output_path__)) as output_file:
-
         validate_json(json.load(output_file), "schemas/v2.0/schema.json")
 
         click.echo(
