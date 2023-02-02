@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021, 2022 CERN.
+# Copyright (C) 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -153,43 +153,17 @@ class StorageStatus(REANAStatus):
         """
         super().__init__(from_=from_, until=until, user=user)
 
-    def _get_path(self):
-        """Retrieve the path to calculate status from."""
-        path = None
-        if self.user:
-            path = self.user.workspace_path
-        else:
-            path = SHARED_VOLUME_PATH + "/users"
-
-        return path
-
-    def users_directory_size(self):
-        """Get disk usage for users directory."""
-        depth = 0
-        cmd = ["du", "-h", f"--max-depth={depth}", self._get_path()]
-        output = self.execute_cmd(cmd)
-        size = output.split()[0]
-        return size
-
     def shared_volume_health(self):
         """REANA shared volume health."""
-        cmd = ["df", "-h", SHARED_VOLUME_PATH]
+        cmd = ["df", "-h", "--output=used,size,pcent", SHARED_VOLUME_PATH]
         output = self.execute_cmd(cmd).splitlines()
-        headers = output[0].split()
-        values = output[1].split()
-        used_index = headers.index("Used")
-        available_index = headers.index("Avail")
-        use_percentage_index = headers.index("Use%")
+        used_size, total_size, used_percentage = output[1].split()
 
-        return (
-            f"{values[used_index]}/{values[available_index]} "
-            f"({values[use_percentage_index]})"
-        )
+        return f"{used_size}/{total_size} ({used_percentage})"
 
     def get_status(self):
         """Get status summary for REANA storage."""
         return {
-            "user_directory_size": self.users_directory_size(),
             "shared_volume_health": self.shared_volume_health(),
         }
 
