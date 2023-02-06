@@ -13,13 +13,15 @@ import csv
 import io
 import pathlib
 import secrets
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 import uuid
 
 from click.testing import CliRunner
 import pytest
+from pytest_reana.test_utils import make_mock_api_client
 from reana_db.models import (
     AuditLogAction,
+    InteractiveSession,
     User,
     UserTokenStatus,
     RunStatus,
@@ -515,6 +517,53 @@ def test_retention_rule_deleter_file_outside_workspace(tmp_path):
     assert file.exists()
 
 
+@pytest.mark.parametrize(
+    "days, output", [(0, "has been closed"), (5, "Leaving opened")]
+)
+@patch("reana_server.reana_admin.cli.requests.get")
+def test_interactive_session_cleanup(
+    mock_requests, sample_serial_workflow_in_db, days, output
+):
+    """Test closure of long running interactive sessions."""
+    runner = CliRunner()
+
+    mock_session_pod = MagicMock()
+    mock_session_pod.metadata.name = f"run-session-{sample_serial_workflow_in_db.id_}-a"
+    mock_session_pod.spec.containers[0].args = ["--NotebookApp.token='token'"]
+    mock_session_pod.metadata.labels = {
+        "app": mock_session_pod.metadata.name,
+        "reana_workflow_mode": "session",
+        "reana-run-session-workflow-uuid": str(sample_serial_workflow_in_db.id_),
+        "reana-run-session-owner-uuid": str(sample_serial_workflow_in_db.owner_id),
+    }
+    mock_pod_list = Mock()
+    mock_pod_list.items = [mock_session_pod]
+    mock_k8s_api_client = Mock()
+    mock_k8s_api_client.list_namespaced_pod.return_value = mock_pod_list
+
+    mock_requests.return_value = Mock(
+        status_code=200,
+        json=lambda: {
+            "last_activity": datetime.date.today().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        },
+    )
+
+    with patch(
+        "reana_server.reana_admin.cli.current_k8s_corev1_api_client",
+        mock_k8s_api_client,
+    ):
+        with patch(
+            "reana_server.reana_admin.cli.current_rwc_api_client",
+            make_mock_api_client("reana-workflow-controller")(
+                mock_http_response=Mock()
+            ),
+        ):
+            result = runner.invoke(
+                reana_admin, ["interactive-session-cleanup", "-d", days]
+            )
+            assert output in result.output
+
+
 class TestCheckWorkflows:
     @patch(
         "reana_server.reana_admin.check_workflows._collect_messages_from_scheduler_queue",
@@ -642,8 +691,6 @@ class TestCheckWorkflows:
             assert len(in_sync) == 1
 
     def test_check_correct_created_session(self, session, sample_serial_workflow_in_db):
-        from reana_db.models import InteractiveSession
-
         interactive_session = InteractiveSession(
             name=f"run-session-{sample_serial_workflow_in_db.id_}",
             path="some-path",
@@ -685,8 +732,6 @@ class TestCheckWorkflows:
     def test_check_session_has_more_than_one_pod(
         self, session, sample_serial_workflow_in_db
     ):
-        from reana_db.models import InteractiveSession
-
         interactive_session = InteractiveSession(
             name=f"run-session-{sample_serial_workflow_in_db.id_}",
             path="some-path",
@@ -731,8 +776,6 @@ class TestCheckWorkflows:
             assert "Only one pod should exist." in str(out_of_sync[0].errors[0])
 
     def test_check_session_is_missing_pod(self, session, sample_serial_workflow_in_db):
-        from reana_db.models import InteractiveSession
-
         interactive_session = InteractiveSession(
             name=f"run-session-{sample_serial_workflow_in_db.id_}",
             path="some-path",
@@ -763,8 +806,6 @@ class TestCheckWorkflows:
             assert len(out_of_sync) == 1
 
     def test_check_pod_is_missing_session(self, session, sample_serial_workflow_in_db):
-        from reana_db.models import InteractiveSession
-
         interactive_session = InteractiveSession(
             name=f"run-session-{sample_serial_workflow_in_db.id_}",
             path="some-path",

@@ -17,12 +17,19 @@ from typing import List, Optional
 
 import click
 import tablib
+import requests
 from flask.cli import with_appcontext
 from invenio_accounts.utils import register_user
-from reana_commons.config import REANAConfig, REANA_RESOURCE_HEALTH_COLORS
+from kubernetes.client.rest import ApiException
+from reana_commons.config import (
+    REANAConfig,
+    REANA_RESOURCE_HEALTH_COLORS,
+    REANA_RUNTIME_KUBERNETES_NAMESPACE,
+)
 from reana_commons.email import send_email
 from reana_commons.errors import REANAEmailNotificationError
 from reana_commons.utils import click_table_printer
+from reana_commons.k8s.api_client import current_k8s_corev1_api_client
 from reana_db.config import DEFAULT_QUOTA_LIMITS
 from reana_db.database import Session
 from reana_db.models import (
@@ -44,7 +51,7 @@ from reana_server.decorators import admin_access_token_option
 from reana_server.reana_admin.options import add_user_options, add_workflow_option
 from reana_server.reana_admin.retention_rule_deleter import RetentionRuleDeleter
 from reana_server.status import STATUS_OBJECT_TYPES
-
+from reana_server.api_client import current_rwc_api_client
 from reana_server.utils import (
     _create_user,
     _export_users,
@@ -945,3 +952,99 @@ def check_workflows(
     else:
         click.secho("\nFAILED")
         sys.exit(1)
+
+
+@reana_admin.command()
+@click.option(
+    "--days",
+    "-d",
+    help="Close interactive sessions that are inactive for more than the specified number of days.",
+    required=True,
+    type=click.IntRange(min=0),
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Show which interactive sessions would be closed, without closing them. [default=False]",
+)
+def interactive_session_cleanup(days: int, dry_run: bool) -> None:
+    """Close inactive interactive sessions."""
+    click.echo(
+        f"Starting to close interactive sessions running longer than {days} days.."
+    )
+    click.echo("Fetching interactive session pods..")
+    try:
+        pods = current_k8s_corev1_api_client.list_namespaced_pod(
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
+            label_selector="reana_workflow_mode=session",
+        ).items
+    except ApiException as e:
+        click.secho(f"Couldn't fetch a list of pods: {e}", fg="red", err=True)
+        sys.exit(1)
+
+    if not pods:
+        click.echo("There are no interactive sessions to process!")
+
+    for pod in pods:
+        try:
+            pod_name = pod.metadata.name
+            workflow_id = pod.metadata.labels["reana-run-session-workflow-uuid"]
+            user_id = pod.metadata.labels["reana-run-session-owner-uuid"]
+            container_args = pod.spec.containers[0].args
+            # find `--NotebookApp.token` session container argument and parse the user token value from it
+            token = next(filter(lambda a: "token" in a, container_args)).split("'")[1]
+        except Exception as e:
+            click.secho(
+                f"Couldn't parse user details from '{pod_name}' session metadata: {e}",
+                fg="red",
+                err=True,
+            )
+            logging.debug(e, exc_info=True)
+            continue
+
+        try:
+            session_status = requests.get(
+                f"http://reana-run-session-{workflow_id}.{REANA_RUNTIME_KUBERNETES_NAMESPACE}.svc.cluster.local:8081/{workflow_id}/api/status",
+                headers={"Authorization": f"token {token}"},
+            ).json()
+        except Exception as e:
+            click.secho(
+                f"Couldn't fetch interactive session '{pod_name}' status: {e}",
+                fg="red",
+                err=True,
+            )
+            logging.debug(e, exc_info=True)
+            continue
+
+        last_activity = datetime.datetime.strptime(
+            session_status["last_activity"], "%Y-%m-%dT%H:%M:%S.%f%z"
+        ).replace(tzinfo=None)
+        duration = datetime.datetime.utcnow() - last_activity
+        if duration.days >= days:
+            if dry_run:
+                click.echo(
+                    f"Interactive session '{pod_name}' would be closed, it was updated {duration.days} days ago."
+                )
+                continue
+            try:
+                (
+                    response,
+                    _,
+                ) = current_rwc_api_client.api.close_interactive_session(
+                    user=user_id, workflow_id_or_name=workflow_id
+                ).result()
+                click.secho(
+                    f"Interactive session '{pod_name}' has been closed.", fg="green"
+                )
+            except Exception as e:
+                click.secho(
+                    f"Couldn't close interactive session '{pod_name}': {e}",
+                    fg="red",
+                    err=True,
+                )
+                logging.debug(e, exc_info=True)
+        else:
+            click.echo(
+                f"Interactive session '{pod_name}' was updated {duration.days} days ago. Leaving opened."
+            )
