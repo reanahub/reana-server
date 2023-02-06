@@ -75,48 +75,28 @@
         "description": "Authorize REANA on GitLab.",
         "operationId": "gitlab_oauth",
         "produces": [
-          "application/json"
+          "application/json",
+          "text/html"
         ],
         "responses": {
           "200": {
             "description": "Ping succeeded.",
             "examples": {
               "application/json": {
-                "message": "OK",
-                "status": 200
+                "message": "OK"
               }
             },
             "schema": {
               "properties": {
                 "message": {
-                  "type": "string"
-                },
-                "status": {
                   "type": "string"
                 }
               },
               "type": "object"
             }
           },
-          "201": {
-            "description": "Authorization succeeded. GitLab secret created.",
-            "examples": {
-              "application/json": {
-                "message": "GitLab secret created",
-                "status": 201
-              }
-            },
-            "schema": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                },
-                "status": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
+          "302": {
+            "description": "Authorization succeeded. GitLab secret created."
           },
           "403": {
             "description": "Request failed. User token not valid.",

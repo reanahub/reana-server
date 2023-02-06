@@ -5,6 +5,7 @@ Version 0.9.1 (UNRELEASED)
 --------------------------
 
 - Changes the system status report to simplify and clarify the disk usage summary.
+- Fixes GitLab integration to automatically redirect the user to the correct URL when the access request is accepted.
 
 Version 0.9.0 (2023-01-19)
 --------------------------

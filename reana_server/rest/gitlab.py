@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -98,6 +98,7 @@ def gitlab_oauth(user):  # noqa
         Authorize REANA on GitLab.
       produces:
        - application/json
+       - text/html
       responses:
         200:
           description: >-
@@ -107,26 +108,14 @@ def gitlab_oauth(user):  # noqa
             properties:
               message:
                 type: string
-              status:
-                type: string
           examples:
             application/json:
-              message: OK
-              status: 200
-        201:
+              {
+                "message": "OK"
+              }
+        302:
           description: >-
             Authorization succeeded. GitLab secret created.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-              status:
-                type: string
-          examples:
-            application/json:
-              message: GitLab secret created
-              status: 201
         403:
           description: >-
             Request failed. User token not valid.
@@ -181,7 +170,7 @@ def gitlab_oauth(user):  # noqa
             secrets_store.add_secrets(
                 _format_gitlab_secrets(gitlab_response), overwrite=True
             )
-            return redirect(next_url), 201
+            return redirect(next_url), 302
         else:
             return jsonify({"message": "OK"}), 200
     except ValueError:
