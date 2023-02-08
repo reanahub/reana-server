@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -18,6 +18,7 @@ from distutils.util import strtobool
 from limits.util import parse
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
 from invenio_oauthclient.contrib import cern_openid
+from invenio_oauthclient.contrib.keycloak import KeycloakSettingsHelper
 from reana_commons.config import REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES
 from reana_commons.job_utils import kubernetes_memory_to_bytes
 
@@ -36,6 +37,12 @@ REANA_HOSTNAME = os.getenv("REANA_HOSTNAME")
 REANA_SSO_CERN_CONSUMER_KEY = os.getenv("CERN_CONSUMER_KEY", "CHANGE_ME")
 
 REANA_SSO_CERN_CONSUMER_SECRET = os.getenv("CERN_CONSUMER_SECRET", "CHANGE_ME")
+
+# Load Login Providers Configuration and Secrets as JSON from environment variables
+REANA_SSO_LOGIN_PROVIDERS = json.loads(os.getenv("LOGIN_PROVIDERS_CONFIGS", "[]"))
+REANA_SSO_LOGIN_PROVIDERS_SECRETS = json.loads(
+    os.getenv("LOGIN_PROVIDERS_SECRETS", "{}")
+)
 
 REANA_KUBERNETES_JOBS_MEMORY_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_LIMIT")
 """Maximum memory limit for user job containers for workflow complexity estimation."""
@@ -214,12 +221,61 @@ RATELIMIT_PER_ENDPOINT = {
 # =========================================
 BREADCRUMBS_ROOT = "breadcrumbs"
 
-# OAuth configuration
-# ===================
+# Combined OAuth configuration for CERN and generic Keycloak
+# ==========================================================
+
 OAUTH_REDIRECT_URL = "/signin_callback"
 
-OAUTH_REMOTE_REST_APP = copy.deepcopy(cern_openid.REMOTE_REST_APP)
+OAUTHCLIENT_REST_DEFAULT_ERROR_REDIRECT_URL = OAUTH_REDIRECT_URL
 
+OAUTHCLIENT_REMOTE_APPS = dict()
+OAUTHCLIENT_REST_REMOTE_APPS = dict()
+
+# Keycloak is only configured if login providers are defined
+if REANA_SSO_LOGIN_PROVIDERS:
+    # Variables for the first login provider in the JSON
+    PROVIDER_NAME = REANA_SSO_LOGIN_PROVIDERS[0]["name"]
+    PROVIDER_CONFIG = REANA_SSO_LOGIN_PROVIDERS[0]["config"]
+    PROVIDER_SECRETS = REANA_SSO_LOGIN_PROVIDERS_SECRETS[PROVIDER_NAME]
+
+    helper = KeycloakSettingsHelper(
+        title=PROVIDER_CONFIG["title"],
+        description="",  # This is not used and thus left empty
+        base_url=PROVIDER_CONFIG["base_url"],
+        realm="",  # The realm_url is set manually below
+    )
+
+    KEYCLOAK_APP = copy.deepcopy(helper.remote_app)
+    KEYCLOAK_APP["params"]["authorize_url"] = PROVIDER_CONFIG["auth_url"]
+    KEYCLOAK_APP["params"]["access_token_url"] = PROVIDER_CONFIG["token_url"]
+    KEYCLOAK_APP["params"]["request_token_params"] = {"scope": "openid profile email"}
+    KEYCLOAK_APP["authorized_redirect_url"] = OAUTH_REDIRECT_URL
+    KEYCLOAK_APP["error_redirect_url"] = OAUTH_REDIRECT_URL
+
+    KEYCLOAK_REST_APP = copy.deepcopy(helper.remote_rest_app)
+    KEYCLOAK_REST_APP["params"]["authorize_url"] = PROVIDER_CONFIG["auth_url"]
+    KEYCLOAK_REST_APP["params"]["request_token_params"] = {
+        "scope": "openid profile email"
+    }
+    KEYCLOAK_REST_APP["params"]["access_token_url"] = PROVIDER_CONFIG["token_url"]
+    KEYCLOAK_REST_APP["authorized_redirect_url"] = OAUTH_REDIRECT_URL
+    KEYCLOAK_REST_APP["error_redirect_url"] = OAUTH_REDIRECT_URL
+
+    OAUTHCLIENT_KEYCLOAK_REALM_URL = PROVIDER_CONFIG["realm_url"]
+    OAUTHCLIENT_KEYCLOAK_USER_INFO_URL = PROVIDER_CONFIG["userinfo_url"]
+    OAUTHCLIENT_KEYCLOAK_VERIFY_EXP = True
+    OAUTHCLIENT_KEYCLOAK_VERIFY_AUD = True
+    OAUTHCLIENT_KEYCLOAK_AUD = PROVIDER_SECRETS["consumer_key"]
+
+    KEYCLOAK_APP_CREDENTIALS = dict(
+        consumer_key=PROVIDER_SECRETS["consumer_key"],
+        consumer_secret=PROVIDER_SECRETS["consumer_secret"],
+    )
+
+    OAUTHCLIENT_REMOTE_APPS["keycloak"] = KEYCLOAK_APP
+    OAUTHCLIENT_REST_REMOTE_APPS["keycloak"] = KEYCLOAK_REST_APP
+
+OAUTH_REMOTE_REST_APP = copy.deepcopy(cern_openid.REMOTE_REST_APP)
 OAUTH_REMOTE_REST_APP.update(
     {
         "authorized_redirect_url": OAUTH_REDIRECT_URL,
@@ -227,20 +283,13 @@ OAUTH_REMOTE_REST_APP.update(
     }
 )
 
-OAUTHCLIENT_REST_DEFAULT_ERROR_REDIRECT_URL = OAUTH_REDIRECT_URL
-
-OAUTHCLIENT_REMOTE_APPS = dict(
-    cern_openid=OAUTH_REMOTE_REST_APP,
-)
-
-OAUTHCLIENT_REST_REMOTE_APPS = dict(
-    cern_openid=OAUTH_REMOTE_REST_APP,
-)
-
 CERN_APP_OPENID_CREDENTIALS = dict(
     consumer_key=REANA_SSO_CERN_CONSUMER_KEY,
     consumer_secret=REANA_SSO_CERN_CONSUMER_SECRET,
 )
+
+OAUTHCLIENT_REMOTE_APPS["cern_openid"] = OAUTH_REMOTE_REST_APP
+OAUTHCLIENT_REST_REMOTE_APPS["cern_openid"] = OAUTH_REMOTE_REST_APP
 
 DEBUG = True
 

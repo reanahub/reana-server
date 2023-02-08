@@ -7,6 +7,7 @@ Version 0.9.1 (UNRELEASED)
 - Adds ``interactive-session-cleanup`` command that can be used by REANA administrators to close interactive sessions that are inactive for more than the specified number of days.
 - Changes the system status report to simplify and clarify the disk usage summary.
 - Fixes GitLab integration to automatically redirect the user to the correct URL when the access request is accepted.
+- Adds logic to support SSO with third-party Keycloak authentication services to ``config.py``.
 
 Version 0.9.0 (2023-01-19)
 --------------------------
