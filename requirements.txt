@@ -94,7 +94,7 @@ invenio-oauthclient==1.5.4  # via reana-server (setup.py)
 invenio-rest==1.2.8       # via invenio-accounts
 invenio-theme==1.4.7      # via invenio-accounts, invenio-oauth2server, invenio-oauthclient, invenio-userprofiles
 invenio-userprofiles==1.2.4  # via reana-server (setup.py)
-ipython==8.8.0            # via flask-shell-ipython
+ipython==8.10.0            # via flask-shell-ipython
 isodate==0.6.1            # via rdflib
 itsdangerous==2.0.1       # via flask, flask-kvsession-invenio, flask-security, flask-wtf, invenio-base, invenio-rest
 jedi==0.18.2              # via ipython
