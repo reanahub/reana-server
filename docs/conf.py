@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -72,7 +72,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "reana"
-copyright = "2017-2020 info@reana.io"
+copyright = "2017-2023 info@reana.io"
 author = "info@reana.io"
 
 # The version info for the project you're documenting, acts as replacement for
