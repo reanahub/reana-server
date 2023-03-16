@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -739,3 +739,48 @@ def test_get_workflow_retention_rules(app, default_user):
             )
             assert res.status_code == status_code
             assert "message" in res.json
+
+
+def test_prune_workspace(app, default_user, sample_serial_workflow_in_db):
+    """Test prune_workspace."""
+    endpoint_url = url_for(
+        "workflows.prune_workspace",
+        workflow_id_or_name=sample_serial_workflow_in_db.id_,
+    )
+    with app.test_client() as client:
+        # Test token not provided
+        res = client.post(endpoint_url)
+        assert res.status_code == 401
+
+        # Test invalid token
+        res = client.post(endpoint_url, query_string={"access_token": "invalid_token"})
+        assert res.status_code == 403
+
+        # Test invalid workflow name
+        res = client.post(
+            url_for(
+                "workflows.prune_workspace",
+                workflow_id_or_name="invalid_wf",
+            ),
+            query_string={"access_token": default_user.access_token},
+        )
+        assert res.status_code == 403
+
+        # Test normal behaviour
+        status_code = 200
+        res = client.post(
+            endpoint_url, query_string={"access_token": default_user.access_token}
+        )
+        assert res.status_code == status_code
+        assert "The workspace has been correctly pruned." in res.json["message"]
+
+        res = client.post(
+            endpoint_url,
+            query_string={
+                "access_token": default_user.access_token,
+                "include_inputs": True,
+                "include_outputs": True,
+            },
+        )
+        assert res.status_code == status_code
+        assert "The workspace has been correctly pruned." in res.json["message"]

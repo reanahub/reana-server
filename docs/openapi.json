@@ -2666,6 +2666,136 @@
         "summary": "Get parameters of a workflow."
       }
     },
+    "/api/workflows/{workflow_id_or_name}/prune": {
+      "post": {
+        "description": "This resource deletes the workspace's files that are neither in the input nor in the output of the workflow definition. This resource is expecting a workflow UUID and some parameters.",
+        "operationId": "prune_workspace",
+        "parameters": [
+          {
+            "description": "The API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Required. Analysis UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Optional. Delete also the input files of the workflow.",
+            "in": "query",
+            "name": "include_inputs",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "Optional. Delete also the output files of the workflow.",
+            "in": "query",
+            "name": "include_outputs",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The workspace has been pruned.",
+            "examples": {
+              "application/json": {
+                "message": "The workspace has been correctly pruned.",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest.1"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "workflow_id": {
+                  "type": "string"
+                },
+                "workflow_name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Malformed request."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to access workflow.",
+            "examples": {
+              "application/json": {
+                "message": "User 00000000-0000-0000-0000-000000000000 is not allowed to access workflow 256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Request failed. User does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does not exist"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Prune the workspace's files."
+      }
+    },
     "/api/workflows/{workflow_id_or_name}/retention_rules": {
       "get": {
         "description": "This resource returns all the retention rules of a given workflow.",

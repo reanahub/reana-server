@@ -4,6 +4,7 @@ Changes
 Version 0.9.1 (UNRELEASED)
 --------------------------
 
+- Adds new ``prune_workspace`` endpoint to allow users to delete all the files of a workflow, specifying whether to also delete the inputs and/or the outputs.
 - Adds ``interactive-session-cleanup`` command that can be used by REANA administrators to close interactive sessions that are inactive for more than the specified number of days.
 - Changes the system status report to simplify and clarify the disk usage summary.
 - Fixes GitLab integration to automatically redirect the user to the correct URL when the access request is accepted.

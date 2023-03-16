@@ -18,6 +18,7 @@ from flask import Blueprint, Response
 from flask import jsonify, request, stream_with_context
 from jsonschema.exceptions import ValidationError
 
+from reana_commons import workspace
 from reana_commons.config import REANA_WORKFLOW_ENGINES
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.validation.operational_options import validate_operational_options
@@ -32,6 +33,7 @@ from webargs.flaskparser import use_kwargs
 from reana_server.api_client import current_rwc_api_client
 from reana_server.config import REANA_HOSTNAME
 from reana_server.decorators import check_quota, signin_required
+from reana_server.deleter import Deleter, InOrOut
 from reana_server.validation import (
     validate_inputs,
     validate_workspace_path,
@@ -3088,6 +3090,159 @@ def get_workflow_retention_rules(workflow_id_or_name, user):
     except HTTPError as e:
         logging.exception(str(e))
         return jsonify(e.response.json()), e.response.status_code
+    except Exception as e:
+        logging.exception(str(e))
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route("/workflows/<workflow_id_or_name>/prune", methods=["POST"])
+@use_kwargs(
+    {
+        "include_inputs": fields.Boolean(),
+        "include_outputs": fields.Boolean(),
+    }
+)
+@signin_required()
+def prune_workspace(
+    workflow_id_or_name, user, include_inputs=False, include_outputs=False
+):
+    r"""Prune workspace files.
+
+    ---
+    post:
+      summary: Prune the workspace's files.
+      description: >-
+        This resource deletes the workspace's files that are neither
+        in the input nor in the output of the workflow definition.
+        This resource is expecting a workflow UUID and some parameters.
+      operationId: prune_workspace
+      produces:
+        - application/json
+      parameters:
+        - name: access_token
+          in: query
+          description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Analysis UUID or name.
+          required: true
+          type: string
+        - name: include_inputs
+          in: query
+          description: >-
+            Optional. Delete also the input files of the workflow.
+          required: false
+          type: boolean
+        - name: include_outputs
+          in: query
+          description: >-
+            Optional. Delete also the output files of the workflow.
+          required: false
+          type: boolean
+      responses:
+        200:
+          description: >-
+            Request succeeded. The workspace has been pruned.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+              workflow_name:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "The workspace has been correctly pruned.",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest.1"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Malformed request."
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to access workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "User 00000000-0000-0000-0000-000000000000
+                            is not allowed to access workflow
+                            256b25f4-4cfb-4684-b7a8-73872ef455a1"
+              }
+        404:
+          description: >-
+            Request failed. User does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist"
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error."
+              }
+    """
+    try:
+        which_to_keep = InOrOut.INPUTS_OUTPUTS
+        if include_inputs:
+            which_to_keep = InOrOut.OUTPUTS
+        if include_outputs:
+            which_to_keep = InOrOut.INPUTS
+            if include_inputs:
+                which_to_keep = InOrOut.NONE
+
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
+        deleter = Deleter(workflow)
+        for file_or_dir in workspace.iterdir(deleter.workspace, ""):
+            deleter.delete_files(which_to_keep, file_or_dir)
+        response = {
+            "message": "The workspace has been correctly pruned.",
+            "workflow_id": workflow.id_,
+            "workflow_name": workflow.name,
+        }
+        return jsonify(response), 200
+    except HTTPError as e:
+        logging.exception(str(e))
+        return jsonify(e.response.json()), e.response.status_code
+    except ValueError as e:
+        # In case of invalid workflow name / UUID
+        logging.exception(str(e))
+        return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.exception(str(e))
         return jsonify({"message": str(e)}), 500
