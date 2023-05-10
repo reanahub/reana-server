@@ -299,6 +299,7 @@ OAUTH_REMOTE_REST_APP.update(
 )
 OAUTH_REMOTE_REST_APP["params"].update(
     dict(
+        request_token_params={"scope": "openid"},
         base_url=REANA_SSO_CERN_BASE_URL,
         access_token_url=REANA_SSO_CERN_TOKEN_URL,
         authorize_url=REANA_SSO_CERN_AUTH_URL,
