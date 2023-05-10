@@ -35,8 +35,22 @@ SHARED_VOLUME_PATH = os.getenv("SHARED_VOLUME_PATH", "/var/reana")
 REANA_HOSTNAME = os.getenv("REANA_HOSTNAME")
 
 REANA_SSO_CERN_CONSUMER_KEY = os.getenv("CERN_CONSUMER_KEY", "CHANGE_ME")
-
 REANA_SSO_CERN_CONSUMER_SECRET = os.getenv("CERN_CONSUMER_SECRET", "CHANGE_ME")
+REANA_SSO_CERN_BASE_URL = os.getenv(
+    "CERN_BASE_URL", "https://auth.cern.ch/auth/realms/cern"
+)
+REANA_SSO_CERN_TOKEN_URL = os.getenv(
+    "CERN_TOKEN_URL",
+    "https://auth.cern.ch/auth/realms/cern/protocol/openid-connect/token",
+)
+REANA_SSO_CERN_AUTH_URL = os.getenv(
+    "CERN_AUTH_URL",
+    "https://auth.cern.ch/auth/realms/cern/protocol/openid-connect/auth",
+)
+REANA_SSO_CERN_USERINFO_URL = os.getenv(
+    "CERN_USERINFO_URL",
+    "https://auth.cern.ch/auth/realms/cern/protocol/openid-connect/userinfo",
+)
 
 # Load Login Providers Configuration and Secrets as JSON from environment variables
 REANA_SSO_LOGIN_PROVIDERS = json.loads(os.getenv("LOGIN_PROVIDERS_CONFIGS", "[]"))
@@ -275,6 +289,7 @@ if REANA_SSO_LOGIN_PROVIDERS:
     OAUTHCLIENT_REMOTE_APPS["keycloak"] = KEYCLOAK_APP
     OAUTHCLIENT_REST_REMOTE_APPS["keycloak"] = KEYCLOAK_REST_APP
 
+# CERN SSO configuration
 OAUTH_REMOTE_REST_APP = copy.deepcopy(cern_openid.REMOTE_REST_APP)
 OAUTH_REMOTE_REST_APP.update(
     {
@@ -282,6 +297,14 @@ OAUTH_REMOTE_REST_APP.update(
         "error_redirect_url": OAUTH_REDIRECT_URL,
     }
 )
+OAUTH_REMOTE_REST_APP["params"].update(
+    dict(
+        base_url=REANA_SSO_CERN_BASE_URL,
+        access_token_url=REANA_SSO_CERN_TOKEN_URL,
+        authorize_url=REANA_SSO_CERN_AUTH_URL,
+    )
+)
+OAUTHCLIENT_CERN_OPENID_USERINFO_URL = REANA_SSO_CERN_USERINFO_URL
 
 CERN_APP_OPENID_CREDENTIALS = dict(
     consumer_key=REANA_SSO_CERN_CONSUMER_KEY,
