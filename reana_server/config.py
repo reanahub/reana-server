@@ -325,7 +325,8 @@ SECURITY_SEND_REGISTER_EMAIL = False
 # ================================
 REANA_GITLAB_OAUTH_APP_ID = os.getenv("REANA_GITLAB_OAUTH_APP_ID", "CHANGE_ME")
 REANA_GITLAB_OAUTH_APP_SECRET = os.getenv("REANA_GITLAB_OAUTH_APP_SECRET", "CHANGE_ME")
-REANA_GITLAB_URL = "https://{}".format(os.getenv("REANA_GITLAB_HOST", "CHANGE_ME"))
+REANA_GITLAB_HOST = os.getenv("REANA_GITLAB_HOST", None)
+REANA_GITLAB_URL = "https://{}".format((REANA_GITLAB_HOST or "CHANGE ME"))
 
 
 # Email configuration
@@ -361,7 +362,9 @@ FETCHER_ALLOWED_SCHEMES = ["https", "http"]
 FETCHER_REQUEST_TIMEOUT = 60
 """Timeout used when fetching workflow specifications."""
 
-FETCHER_ALLOWED_GITLAB_HOSTNAMES = ["gitlab.com", "gitlab.cern.ch"]
+FETCHER_ALLOWED_GITLAB_HOSTNAMES = {"gitlab.com", "gitlab.cern.ch"}
+if REANA_GITLAB_HOST:
+    FETCHER_ALLOWED_GITLAB_HOSTNAMES.add(REANA_GITLAB_HOST)
 """GitLab instances allowed when fetching workflow specifications."""
 
 LAUNCHER_ALLOWED_SNAKEMAKE_URLS = [
