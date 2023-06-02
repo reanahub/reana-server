@@ -288,11 +288,16 @@ def _load_and_save_yadage_spec(workflow: Workflow, operational_options: Dict):
     Session.commit()
 
 
-def _get_users(_id, email, user_access_token, admin_access_token):
-    """Return all users matching search criteria."""
+def _validate_admin_access_token(admin_access_token: str):
+    """Validate admin access token."""
     admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
     if admin_access_token != admin.access_token:
         raise ValueError("Admin access token invalid.")
+
+
+def _get_users(_id, email, user_access_token, admin_access_token):
+    """Return all users matching search criteria."""
+    _validate_admin_access_token(admin_access_token)
     search_criteria = dict()
     if _id:
         search_criteria["id_"] = _id
@@ -309,9 +314,7 @@ def _get_users(_id, email, user_access_token, admin_access_token):
 def _create_user(email, user_access_token, admin_access_token):
     """Create user with provided credentials."""
     try:
-        admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
-        if admin_access_token != admin.access_token:
-            raise ValueError("Admin access token invalid.")
+        _validate_admin_access_token(admin_access_token)
         if not user_access_token:
             user_access_token = secrets.token_urlsafe(16)
         user_parameters = dict(access_token=user_access_token)
@@ -331,9 +334,7 @@ def _export_users(admin_access_token):
     :param admin_access_token: Admin access token.
     :type admin_access_token: str
     """
-    admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
-    if admin_access_token != admin.access_token:
-        raise ValueError("Admin access token invalid.")
+    _validate_admin_access_token(admin_access_token)
     csv_file_obj = io.StringIO()
     csv_writer = csv.writer(csv_file_obj, dialect="unix")
     for user in User.query.all():
@@ -351,9 +352,7 @@ def _import_users(admin_access_token, users_csv_file):
     :param users_csv_file: CSV file object containing a list of users.
     :type users_csv_file: _io.TextIOWrapper
     """
-    admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
-    if admin_access_token != admin.access_token:
-        raise ValueError("Admin access token invalid.")
+    _validate_admin_access_token(admin_access_token)
     csv_reader = csv.reader(users_csv_file)
     for row in csv_reader:
         user = User(

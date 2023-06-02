@@ -12,6 +12,7 @@ import functools
 import logging
 import os
 import traceback
+import sys
 
 import click
 from flask import jsonify, request
@@ -20,6 +21,7 @@ from reana_commons.errors import REANAQuotaExceededError
 
 from reana_server.utils import (
     _get_user_from_invenio_user,
+    _validate_admin_access_token,
     get_user_from_token,
     get_quota_excess_message,
 )
@@ -36,6 +38,14 @@ def admin_access_token_option(func):
     )
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
+        try:
+            _validate_admin_access_token(kwargs.get("admin_access_token"))
+        except ValueError as e:
+            click.echo(
+                click.style(str(e), fg="red"),
+                err=True,
+            )
+            sys.exit(1)
         return func(*args, **kwargs)
 
     return wrapper

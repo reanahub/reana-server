@@ -394,7 +394,12 @@ def test_is_input_or_output(file_or_dir, expected_result):
     ],
 )
 def test_retention_rules_apply(
-    workflow_with_retention_rules, session, time_delta, to_be_kept, to_be_deleted
+    default_user,
+    workflow_with_retention_rules,
+    session,
+    time_delta,
+    to_be_kept,
+    to_be_deleted,
 ):
     """Test the deletion of files when applying retention rules."""
 
@@ -425,7 +430,11 @@ def test_retention_rules_apply(
     session.add(other_workflow)
     session.commit()
 
-    command = ["retention-rules-apply"]
+    command = [
+        "retention-rules-apply",
+        "--admin-access-token",
+        default_user.access_token,
+    ]
     if time_delta is not None:
         forced_date = datetime.datetime.now() + time_delta
         command += ["--force-date", forced_date.strftime("%Y-%m-%dT%H:%M:%S")]
@@ -459,14 +468,21 @@ def test_retention_rules_apply(
 
 @patch("reana_server.reana_admin.cli.RetentionRuleDeleter.apply_rule")
 def test_retention_rules_apply_error(
-    apply_rule_mock: Mock, workflow_with_retention_rules
+    apply_rule_mock: Mock, workflow_with_retention_rules, default_user
 ):
     """Test that rules are reset to `active` if there are errors."""
     workflow = workflow_with_retention_rules
     apply_rule_mock.side_effect = Exception()
 
     runner = CliRunner()
-    result = runner.invoke(reana_admin, "retention-rules-apply")
+    result = runner.invoke(
+        reana_admin,
+        [
+            "retention-rules-apply",
+            "--admin-access-token",
+            default_user.access_token,
+        ],
+    )
 
     assert result.exit_code == 0
     assert "Error while applying rule" in result.output
@@ -475,20 +491,37 @@ def test_retention_rules_apply_error(
         assert rule.status == WorkspaceRetentionRuleStatus.active
 
 
-def test_retention_rules_extend(workflow_with_retention_rules):
+def test_retention_rules_extend(workflow_with_retention_rules, default_user):
     """Test extending of retention rules."""
     workflow = workflow_with_retention_rules
     runner = CliRunner()
     extend_days = 5
 
     result = runner.invoke(
-        reana_admin, ["retention-rules-extend", "-w non-valid-id", "-d", extend_days]
+        reana_admin,
+        [
+            "retention-rules-extend",
+            "-w non-valid-id",
+            "-d",
+            extend_days,
+            "--admin-access-token",
+            default_user.access_token,
+        ],
     )
     assert result.output == "Invalid workflow UUID.\n"
     assert result.exit_code == 1
 
     result = runner.invoke(
-        reana_admin, ["retention-rules-extend", "-w", workflow.id_, "-d", extend_days]
+        reana_admin,
+        [
+            "retention-rules-extend",
+            "-w",
+            workflow.id_,
+            "-d",
+            extend_days,
+            "--admin-access-token",
+            default_user.access_token,
+        ],
     )
     assert "Extending rule" in result.output
     assert result.exit_code == 0
@@ -522,7 +555,7 @@ def test_retention_rule_deleter_file_outside_workspace(tmp_path):
 )
 @patch("reana_server.reana_admin.cli.requests.get")
 def test_interactive_session_cleanup(
-    mock_requests, sample_serial_workflow_in_db, days, output
+    mock_requests, sample_serial_workflow_in_db, days, output, default_user
 ):
     """Test closure of long running interactive sessions."""
     runner = CliRunner()
@@ -559,7 +592,14 @@ def test_interactive_session_cleanup(
             ),
         ):
             result = runner.invoke(
-                reana_admin, ["interactive-session-cleanup", "-d", days]
+                reana_admin,
+                [
+                    "interactive-session-cleanup",
+                    "-d",
+                    days,
+                    "--admin-access-token",
+                    default_user.access_token,
+                ],
             )
             assert output in result.output
 

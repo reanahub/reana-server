@@ -233,8 +233,6 @@ def token_grant(admin_access_token, id_, email):
     """Grant a token to the selected user."""
     try:
         admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
-        if admin_access_token != admin.access_token:
-            raise ValueError("Admin access token invalid.")
         user = _get_user_by_criteria(id_, email)
         error_msg = None
         if not user:
@@ -298,10 +296,7 @@ def token_revoke(admin_access_token, id_, email):
     """Revoke selected user's token."""
     try:
         admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
-        if admin_access_token != admin.access_token:
-            raise ValueError("Admin access token invalid.")
         user = _get_user_by_criteria(id_, email)
-
         error_msg = None
         if not user:
             error_msg = f"User {id_ or email} does not exist."
@@ -559,8 +554,11 @@ def list_quota_resources(ctx):
 @click.option(
     "--limit", "-l", help="New limit in canonical unit.", required=True, type=int
 )
+@admin_access_token_option
 @click.pass_context
-def set_quota_limit(ctx, emails, resource_type, resource_name, limit):
+def set_quota_limit(
+    ctx, emails, resource_type, resource_name, limit, admin_access_token
+):
     """Set quota limits to the given users per resource."""
     try:
         for email in emails:
@@ -638,8 +636,9 @@ def set_quota_limit(ctx, emails, resource_type, resource_name, limit):
     "quota-set-default-limits",
     help="Set default quota limits to users that do not have any.",
 )
+@admin_access_token_option
 @click.pass_context
-def set_default_quota_limit(ctx):
+def set_default_quota_limit(ctx, admin_access_token: str):
     """Set default quota limits to users that do not have any."""
     users_without_quota_limits = User.query.filter(~User.resources.any()).all()
     if not users_without_quota_limits:
@@ -682,11 +681,13 @@ def set_default_quota_limit(ctx):
     default=False,
     help="Manually decide which messages to remove from the queue.",
 )
+@admin_access_token_option
 def queue_consume(
     queue_name: str,
     key: Optional[str],
     values_to_delete: List[str],
     interactive: bool,
+    admin_access_token: str,
 ):
     """Start consuming specified queue and remove selected messages.
 
@@ -750,12 +751,14 @@ def queue_consume(
 )
 @add_user_options
 @add_workflow_option()
+@admin_access_token_option
 def retention_rules_apply(
     dry_run: bool,
     force_date: Optional[datetime.datetime],
     yes_i_am_sure: bool,
     user: Optional[User],
     workflow: Optional[Workflow],
+    admin_access_token: str,
 ) -> None:
     """Apply pending retentions rules."""
     if user and workflow and user.id_ != workflow.owner_id:
@@ -838,7 +841,10 @@ def retention_rules_apply(
     required=True,
     type=click.IntRange(min=0),
 )
-def retention_rules_extend(workflow: Optional[Workflow], days: int) -> None:
+@admin_access_token_option
+def retention_rules_extend(
+    workflow: Optional[Workflow], days: int, admin_access_token: str
+) -> None:
     """Extend active retentions rules."""
     click.echo("Fetching all the active rules")
     active_rules = WorkspaceRetentionRule.query.filter(
@@ -875,8 +881,11 @@ def retention_rules_extend(workflow: Optional[Workflow], days: int) -> None:
     default=None,
     help="Default value is now.",
 )
+@admin_access_token_option
 def check_workflows(
-    date_start: datetime.datetime, date_end: Optional[datetime.datetime]
+    date_start: datetime.datetime,
+    date_end: Optional[datetime.datetime],
+    admin_access_token: str,
 ) -> None:
     """Check consistency of selected workflow run statuses between database, message queue and Kubernetes."""
     from .check_workflows import (
@@ -968,7 +977,10 @@ def check_workflows(
     default=False,
     help="Show which interactive sessions would be closed, without closing them. [default=False]",
 )
-def interactive_session_cleanup(days: int, dry_run: bool) -> None:
+@admin_access_token_option
+def interactive_session_cleanup(
+    days: int, dry_run: bool, admin_access_token: str
+) -> None:
     """Close inactive interactive sessions."""
     click.echo(
         f"Starting to close interactive sessions running longer than {days} days.."
