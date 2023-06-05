@@ -30,7 +30,6 @@ from reana_server.config import (
     REANA_GITLAB_OAUTH_APP_ID,
     REANA_GITLAB_OAUTH_APP_SECRET,
     REANA_GITLAB_URL,
-    REANA_HOSTNAME,
 )
 from reana_server.decorators import signin_required
 from reana_server.utils import (
@@ -382,7 +381,7 @@ def gitlab_webhook(user):  # noqa
                 REANA_GITLAB_URL + "/api/v4/projects/" + "{0}/hooks?access_token={1}"
             )
             webhook_payload = {
-                "url": "https://{}/api/workflows".format(REANA_HOSTNAME),
+                "url": url_for("workflows.create_workflow", _external=True),
                 "push_events": True,
                 "push_events_branch_filter": "master",
                 "merge_requests_events": True,
