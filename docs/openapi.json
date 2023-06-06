@@ -455,6 +455,18 @@
                   },
                   "type": "object"
                 },
+                "maximum_interactive_session_inactivity_period": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string",
+                      "x-nullable": true
+                    }
+                  },
+                  "type": "object"
+                },
                 "maximum_kubernetes_jobs_timeout": {
                   "properties": {
                     "title": {

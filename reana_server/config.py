@@ -207,6 +207,7 @@ PROXYFIX_CONFIG = {"x_proto": 1}
 APP_DEFAULT_SECURE_HEADERS["content_security_policy"] = {}
 APP_HEALTH_BLUEPRINT_ENABLED = False
 
+
 # Rate limiting configuration using invenio-app
 # ===========================
 
@@ -328,11 +329,9 @@ REANA_GITLAB_OAUTH_APP_SECRET = os.getenv("REANA_GITLAB_OAUTH_APP_SECRET", "CHAN
 REANA_GITLAB_HOST = os.getenv("REANA_GITLAB_HOST", None)
 REANA_GITLAB_URL = "https://{}".format((REANA_GITLAB_HOST or "CHANGE ME"))
 
-
 # Email configuration
 # ===================
 ADMIN_EMAIL = os.getenv("REANA_EMAIL_SENDER", "CHANGE_ME")
-
 
 # Workflow scheduler
 # ==================
@@ -388,6 +387,19 @@ The value "forever" means "do not apply any rules to files by default", and it i
 
 DEFAULT_WORKSPACE_RETENTION_RULE = "**/*"
 """Workspace retention rule which will be applied to all the workflows by default."""
+
+# Interactive sessions configuration
+# ==================
+_reana_interactive_session_max_inactivity_period_env = os.getenv(
+    "REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD", "forever"
+)
+if _reana_interactive_session_max_inactivity_period_env == "forever":
+    REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD: Optional[str] = None
+else:
+    REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD: Optional[
+        str
+    ] = _reana_interactive_session_max_inactivity_period_env
+"""Maximum allowed period (in days) for interactive session inactivity before automatic closure."""
 
 # Kubernetes jobs timeout
 # ==================

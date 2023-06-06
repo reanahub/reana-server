@@ -23,6 +23,7 @@ from reana_server.config import (
     REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT,
     REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
+    REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD,
 )
 from reana_server.decorators import signin_required
 
@@ -140,6 +141,10 @@ def info(user, **kwargs):  # noqa
                 title="Maximum timeout for Kubernetes jobs",
                 value=REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
             ),
+            maximum_interactive_session_inactivity_period=dict(
+                title="Maximum inactivity period in days before automatic closure of interactive sessions",
+                value=REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD,
+            ),
         )
         return InfoSchema().dump(cluster_information)
 
@@ -180,3 +185,6 @@ class InfoSchema(Schema):
     maximum_workspace_retention_period = fields.Nested(StringNullableInfoValue)
     default_kubernetes_jobs_timeout = fields.Nested(StringInfoValue)
     maximum_kubernetes_jobs_timeout = fields.Nested(StringInfoValue)
+    maximum_interactive_session_inactivity_period = fields.Nested(
+        StringNullableInfoValue
+    )
