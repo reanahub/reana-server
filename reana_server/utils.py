@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -42,6 +42,7 @@ from reana_db.models import (
     RunStatus,
     User,
     UserResource,
+    UserToken,
     UserTokenStatus,
     UserTokenType,
     Workflow,
@@ -226,16 +227,14 @@ def filter_input_files(workspace: Union[str, pathlib.Path], reana_spec: Dict) ->
 
 def get_user_from_token(access_token):
     """Validate that the token provided is valid."""
-    user = (
-        Session.query(User)
-        .join(User.tokens)
-        .filter_by(token=access_token, type_=UserTokenType.reana)
+    user_token = UserToken.query.filter_by(
+        token=access_token, type_=UserTokenType.reana
     ).one_or_none()
-    if not user:
+    if not user_token:
         raise ValueError("Token not valid.")
-    if user.access_token_status == UserTokenStatus.revoked.name:
+    if user_token.status == UserTokenStatus.revoked:
         raise ValueError("User access token revoked.")
-    return user
+    return user_token.user_
 
 
 def publish_workflow_submission(workflow, user_id, parameters):
