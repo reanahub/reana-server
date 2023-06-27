@@ -25,3 +25,4 @@ recursive-include docs *.rst
 recursive-include tests *.py
 recursive-include tests *.txt
 global-exclude *.py[co] .DS_Store
+exclude .readthedocs.yaml
