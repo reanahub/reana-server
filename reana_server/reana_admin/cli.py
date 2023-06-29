@@ -129,7 +129,7 @@ def users_create_default(email, password, id_):
 def list_users(ctx, id, email, user_access_token, admin_access_token, output_format):
     """List users according to the search criteria."""
     try:
-        response = _get_users(id, email, user_access_token, admin_access_token)
+        response = _get_users(id, email, user_access_token)
         headers = ["id", "email", "access_token", "access_token_status"]
         data = []
         for user in response:
@@ -174,7 +174,7 @@ def list_users(ctx, id, email, user_access_token, admin_access_token, output_for
 def create_user(ctx, email, user_access_token, admin_access_token):
     """Create a new user. Requires the token of an administrator."""
     try:
-        response = _create_user(email, user_access_token, admin_access_token)
+        response = _create_user(email, user_access_token)
         headers = ["id", "email", "access_token"]
         data = [(str(response.id_), response.email, response.access_token)]
         click.echo(click.style("User was successfully created.", fg="green"))
@@ -195,7 +195,7 @@ def create_user(ctx, email, user_access_token, admin_access_token):
 def export_users(ctx, admin_access_token):
     """Export all users in current REANA cluster."""
     try:
-        csv_file = _export_users(admin_access_token)
+        csv_file = _export_users()
         click.echo(csv_file.getvalue(), nl=False)
     except Exception as e:
         click.secho(
@@ -218,7 +218,7 @@ def export_users(ctx, admin_access_token):
 def import_users(ctx, admin_access_token, file_):
     """Import users from file."""
     try:
-        _import_users(admin_access_token, file_)
+        _import_users(file_)
         click.secho("Users successfully imported.", fg="green")
     except Exception as e:
         click.secho(
@@ -463,7 +463,7 @@ def list_quota_usage(
 ):
     """List quota usage of users."""
     try:
-        response = _get_users(id, email, user_access_token, admin_access_token)
+        response = _get_users(id, email, user_access_token)
         headers = ["id", "email", "cpu-used", "cpu-limit", "disk-used", "disk-limit"]
         health_order = {
             QuotaHealth.healthy.name: 0,
