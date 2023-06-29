@@ -10,45 +10,17 @@
 
 import functools
 import logging
-import os
 import traceback
-import sys
 
-import click
 from flask import jsonify, request
 from flask_login import current_user
 from reana_commons.errors import REANAQuotaExceededError
 
 from reana_server.utils import (
     _get_user_from_invenio_user,
-    _validate_admin_access_token,
     get_user_from_token,
     get_quota_excess_message,
 )
-
-
-def admin_access_token_option(func):
-    """Click option to load admin access token."""
-
-    @click.option(
-        "--admin-access-token",
-        required=True,
-        default=os.environ.get("REANA_ADMIN_ACCESS_TOKEN"),
-        help="The access token of an administrator.",
-    )
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            _validate_admin_access_token(kwargs.get("admin_access_token"))
-        except ValueError as e:
-            click.echo(
-                click.style(str(e), fg="red"),
-                err=True,
-            )
-            sys.exit(1)
-        return func(*args, **kwargs)
-
-    return wrapper
 
 
 def signin_required(include_gitlab_login=False, token_required=True):

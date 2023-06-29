@@ -7,14 +7,42 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 """Common options for the REANA administrator command line tool."""
 
-import sys
-import click
 import functools
+import os
+import sys
 
+import click
 from reana_db.models import Workflow
-from reana_db.utils import _get_workflow_by_uuid
 
-from reana_server.utils import _get_user_by_criteria, is_uuid_v4
+from reana_server.utils import (
+    _get_user_by_criteria,
+    _validate_admin_access_token,
+    is_uuid_v4,
+)
+
+
+def admin_access_token_option(func):
+    """Click option to load admin access token."""
+
+    @click.option(
+        "--admin-access-token",
+        required=True,
+        default=os.environ.get("REANA_ADMIN_ACCESS_TOKEN"),
+        help="The access token of an administrator.",
+    )
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            _validate_admin_access_token(kwargs.get("admin_access_token"))
+        except ValueError as e:
+            click.echo(
+                click.style(str(e), fg="red"),
+                err=True,
+            )
+            sys.exit(1)
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 def add_user_options(func):

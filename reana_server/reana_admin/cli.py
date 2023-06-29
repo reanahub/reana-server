@@ -47,8 +47,11 @@ from reana_db.models import (
 from reana_db.utils import update_workspace_retention_rules
 
 from reana_server.config import ADMIN_EMAIL, ADMIN_USER_ID, REANA_HOSTNAME
-from reana_server.decorators import admin_access_token_option
-from reana_server.reana_admin.options import add_user_options, add_workflow_option
+from reana_server.reana_admin.options import (
+    add_user_options,
+    add_workflow_option,
+    admin_access_token_option,
+)
 from reana_server.reana_admin.retention_rule_deleter import RetentionRuleDeleter
 from reana_server.status import STATUS_OBJECT_TYPES
 from reana_server.api_client import current_rwc_api_client
