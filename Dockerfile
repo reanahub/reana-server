@@ -5,7 +5,7 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 
 # Use Ubuntu LTS base image
-FROM ubuntu:20.04
+FROM docker.io/library/ubuntu:20.04
 
 # Use default answers in installation commands
 ENV DEBIAN_FRONTEND=noninteractive

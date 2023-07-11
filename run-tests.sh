@@ -43,7 +43,7 @@ clean_old_db_container () {
 
 start_db_container () {
     echo '==> [INFO] Starting DB container...'
-    docker run --rm --name postgres__reana-server -p 5432:5432 -e POSTGRES_PASSWORD=mysecretpassword -d postgres:12.13
+    docker run --rm --name postgres__reana-server -p 5432:5432 -e POSTGRES_PASSWORD=mysecretpassword -d docker.io/library/postgres:12.13
     _check_ready "Postgres" _db_check
 }
 
@@ -90,11 +90,11 @@ check_pytest () {
 }
 
 check_dockerfile () {
-    docker run -i --rm hadolint/hadolint:v1.18.2 < Dockerfile
+    docker run -i --rm docker.io/hadolint/hadolint:v1.18.2 < Dockerfile
 }
 
 check_docker_build () {
-    docker build -t reanahub/reana-server .
+    docker build -t docker.io/reanahub/reana-server .
 }
 
 check_all () {
