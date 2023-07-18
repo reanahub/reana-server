@@ -211,6 +211,9 @@ def get_workflows(user, **kwargs):  # noqa
                         run_started_at:
                           type: string
                           x-nullable: true
+                        run_stopped_at:
+                          type: string
+                          x-nullable: true
                         running:
                           properties:
                             job_ids:
@@ -984,6 +987,9 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
                     type: string
                     x-nullable: true
                   run_finished_at:
+                    type: string
+                    x-nullable: true
+                  run_stopped_at:
                     type: string
                     x-nullable: true
                   total:

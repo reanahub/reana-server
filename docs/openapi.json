@@ -1427,6 +1427,10 @@
                             "type": "string",
                             "x-nullable": true
                           },
+                          "run_stopped_at": {
+                            "type": "string",
+                            "x-nullable": true
+                          },
                           "running": {
                             "properties": {
                               "job_ids": {
@@ -3443,6 +3447,10 @@
                       "x-nullable": true
                     },
                     "run_started_at": {
+                      "type": "string",
+                      "x-nullable": true
+                    },
+                    "run_stopped_at": {
                       "type": "string",
                       "x-nullable": true
                     },
