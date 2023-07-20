@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2020, 2021, 2022 CERN.
+# Copyright (C) 2017, 2018, 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -14,6 +14,7 @@ import os
 
 import click
 from apispec import APISpec
+from apispec_webframeworks.flask import FlaskPlugin
 from flask import current_app
 from flask.cli import with_appcontext
 from reana_commons.utils import copy_openapi_specs
@@ -57,8 +58,9 @@ def build_openapi_spec(publish):
     spec = APISpec(
         title=package,
         version=ver,
+        openapi_version="2.0",
         info=dict(description=desc),
-        plugins=("apispec.ext.flask", "apispec.ext.marshmallow"),
+        plugins=(FlaskPlugin(),),
     )
 
     # Add marshmallow schemas to the specification here
@@ -67,7 +69,7 @@ def build_openapi_spec(publish):
     # Collect OpenAPI docstrings from Flask endpoints
     for key in current_app.view_functions:
         if key != "static" and key != "get_openapi_spec":
-            spec.add_path(view=current_app.view_functions[key])
+            spec.path(view=current_app.view_functions[key])
 
     spec_json = json.dumps(
         spec.to_dict(), indent=2, separators=(",", ": "), sort_keys=True

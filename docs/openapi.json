@@ -1,11 +1,9 @@
 {
-  "definitions": {},
   "info": {
     "description": "Submit workflows to be run on REANA Cloud",
     "title": "REANA Server",
     "version": "0.9.1a3"
   },
-  "parameters": {},
   "paths": {
     "/account/settings/linkedaccounts/": {},
     "/account/settings/linkedaccounts/static/{filename}": {},
@@ -4450,6 +4448,5 @@
     "/signin": {},
     "/signup/": {}
   },
-  "swagger": "2.0",
-  "tags": []
+  "swagger": "2.0"
 }

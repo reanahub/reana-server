@@ -53,7 +53,79 @@ def info(user, **kwargs):  # noqa
         200:
           description: >-
             Request succeeded. The response contains general info about the cluster.
-          schema: InfoSchema
+          schema:
+            properties:
+              compute_backends:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              default_kubernetes_jobs_timeout:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              default_kubernetes_memory_limit:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              default_workspace:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              kubernetes_max_memory_limit:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                    x-nullable: true
+                type: object
+              maximum_interactive_session_inactivity_period:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                    x-nullable: true
+                type: object
+              maximum_kubernetes_jobs_timeout:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              maximum_workspace_retention_period:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                    x-nullable: true
+                type: object
+              workspaces_available:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    items:
+                      type: string
+                    type: array
+                type: object
+            type: object
           examples:
             application/json:
               {
