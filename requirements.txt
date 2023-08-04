@@ -24,7 +24,7 @@ cachecontrol[filecache]==0.12.11  # via schema-salad
 cachelib==0.9.0           # via flask-caching, flask-oauthlib, invenio-oauth2server
 cachetools==5.3.0         # via google-auth
 celery==5.2.7             # via flask-celeryext, invenio-celery
-certifi==2022.12.7        # via kubernetes, requests
+certifi==2023.7.22        # via kubernetes, requests
 cffi==1.15.1              # via cryptography
 chardet==3.0.4            # via requests
 checksumdir==1.1.9        # via packtivity, reana-commons, yadage
