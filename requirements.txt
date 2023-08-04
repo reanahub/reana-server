@@ -145,7 +145,7 @@ pyasn1-modules==0.2.8     # via google-auth
 pyasn1==0.4.8             # via pyasn1-modules, rsa
 pycparser==2.21           # via cffi
 pydot==1.4.2              # via cwltool
-pygments==2.14.0          # via ipython
+pygments==2.15.0          # via ipython
 pyjwt==2.6.0              # via invenio-accounts, invenio-oauth2server
 pynpm==0.1.2              # via flask-webpackext, pywebpack
 pyopenssl==23.0.0         # via requests
