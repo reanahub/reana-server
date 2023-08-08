@@ -104,6 +104,10 @@ def launch(user, url, name="", parameters="{}", specification=None):
             Request succeeded. Information of the workflow launched.
           schema:
             type: object
+            required:
+              - workflow_id
+              - workflow_name
+              - message
             properties:
               workflow_id:
                 type: string
@@ -111,6 +115,16 @@ def launch(user, url, name="", parameters="{}", specification=None):
                 type: string
               message:
                 type: string
+              validation_warnings:
+                description: >-
+                    Dictionary of validation warnings, if any. Each
+                    key is a property that was not correctly validated.
+                type: object
+                properties:
+                  additional_properties:
+                    type: array
+                    items:
+                      type: string
           examples:
             application/json:
               {
@@ -180,7 +194,7 @@ def launch(user, url, name="", parameters="{}", specification=None):
         with load_reana_spec_lock:
             reana_yaml = load_reana_spec(spec_path, workspace_path=tmpdir)
         input_parameters = json.loads(parameters)
-        validate_workflow(reana_yaml, input_parameters)
+        validation_warnings = validate_workflow(reana_yaml, input_parameters)
 
         # Keep only files and directories listed as workflow's inputs
         filter_input_files(tmpdir, reana_yaml)
@@ -223,6 +237,11 @@ def launch(user, url, name="", parameters="{}", specification=None):
             "workflow_name": workflow.name,
             "message": "The workflow has been successfully submitted.",
         }
+        if validation_warnings:
+            response_data[
+                "message"
+            ] = "The workflow has been successfully submitted, but some warnings were issued."
+            response_data["validation_warnings"] = validation_warnings
         return LaunchSchema().dump(response_data)
     except HTTPError as e:
         logging.error(traceback.format_exc())
@@ -271,3 +290,4 @@ class LaunchSchema(Schema):
     workflow_id = fields.UUID()
     workflow_name = fields.Str()
     message = fields.Str()
+    validation_warnings = fields.Dict()

@@ -582,6 +582,18 @@
                 "message": {
                   "type": "string"
                 },
+                "validation_warnings": {
+                  "description": "Dictionary of validation warnings, if any. Each key is a property that was not correctly validated.",
+                  "properties": {
+                    "additional_properties": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
                 "workflow_id": {
                   "type": "string"
                 },
@@ -589,6 +601,11 @@
                   "type": "string"
                 }
               },
+              "required": [
+                "workflow_id",
+                "workflow_name",
+                "message"
+              ],
               "type": "object"
             }
           },

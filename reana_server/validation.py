@@ -10,7 +10,7 @@
 
 import itertools
 import pathlib
-from typing import Dict
+from typing import Dict, List
 
 from reana_commons.config import WORKSPACE_PATHS
 from reana_commons.errors import REANAValidationError
@@ -107,7 +107,7 @@ def validate_inputs(reana_yaml: Dict) -> None:
             )
 
 
-def validate_workflow(reana_yaml: Dict, input_parameters: Dict) -> None:
+def validate_workflow(reana_yaml: Dict, input_parameters: Dict) -> Dict:
     """Validate REANA workflow specification by calling all the validation utilities.
 
     :param reana_yaml: dictionary which represents REANA specification file.
@@ -119,12 +119,13 @@ def validate_workflow(reana_yaml: Dict, input_parameters: Dict) -> None:
     operational_options = reana_yaml.get("inputs", {}).get("options", {})
     original_parameters = reana_yaml.get("inputs", {}).get("parameters", {})
 
-    validate_reana_yaml(reana_yaml)
+    reana_yaml_warnings = validate_reana_yaml(reana_yaml)
     validate_operational_options(workflow_type, operational_options)
     validate_input_parameters(input_parameters, original_parameters)
     validate_compute_backends(reana_yaml)
     validate_workspace_path(reana_yaml)
     validate_inputs(reana_yaml)
+    return reana_yaml_warnings
 
 
 def validate_retention_rule(rule: str, days: int) -> None:
