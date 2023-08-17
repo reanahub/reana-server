@@ -87,7 +87,6 @@ install_requires = [
     "invenio-i18n>=1.3.3,<2.0.0",
     # Invenio database
     "invenio-db[postgresql]>=1.0.5,<1.1.0",
-    "SQLAlchemy-Utils[encrypted]>=0.33.0,<0.36.0",
     "six>=1.12.0",  # required by Flask-Breadcrumbs
 ]
 
