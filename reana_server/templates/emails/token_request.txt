@@ -6,15 +6,15 @@ There is a new access token request for {{ reana_hostname }}:
 
 To obtain administration credentials, please run:
 
-$ export REANA_ACCESS_TOKEN=$(kubectl get secret reana-admin-access-token -o json | jq -r '.data | map_values(@base64d) | .ADMIN_ACCESS_TOKEN')
+$ export REANA_ACCESS_TOKEN=$(kubectl get -n {{ namespace }} secret {{ component_prefix }}-admin-access-token -o json | jq -r '.data.ADMIN_ACCESS_TOKEN' | base64 --decode)
 
 To grant the user token, please run:
 
-$ kubectl exec -i -t deployment/reana-server -- flask reana-admin token-grant -e {{ user_email }} --admin-access-token $REANA_ACCESS_TOKEN
+$ kubectl exec -n {{ namespace }} -i -t deployment/{{ component_prefix }}-server -- flask reana-admin token-grant -e {{ user_email }} --admin-access-token $REANA_ACCESS_TOKEN
 
 To reject the user token, please run:
 
-$ kubectl exec -i -t deployment/reana-server -- flask reana-admin token-revoke -e {{ user_email }} --admin-access-token $REANA_ACCESS_TOKEN
+$ kubectl exec -n {{ namespace }} -i -t deployment/{{ component_prefix }}-server -- flask reana-admin token-revoke -e {{ user_email }} --admin-access-token $REANA_ACCESS_TOKEN
 
 Thanks,
 

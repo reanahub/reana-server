@@ -14,6 +14,10 @@ import traceback
 from bravado.exception import HTTPError
 from flask import Blueprint, jsonify
 from reana_db.models import AuditLogAction
+from reana_commons.config import (
+    REANA_COMPONENT_PREFIX,
+    REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
+)
 from reana_commons.email import send_email
 from reana_commons.errors import REANAEmailNotificationError
 
@@ -319,6 +323,8 @@ def request_token(user):
             user_data=user_data,
             user_email=user.email,
             reana_hostname=REANA_HOSTNAME,
+            namespace=REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
+            component_prefix=REANA_COMPONENT_PREFIX,
         )
         try:
             send_email(ADMIN_EMAIL, email_subject, email_body)
