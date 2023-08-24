@@ -30,8 +30,12 @@ from marshmallow.validate import Email
 from urllib import parse as urlparse
 
 from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK, SHARED_VOLUME_PATH
-from reana_commons.email import send_email
-from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
+from reana_commons.email import send_email, REANA_EMAIL_SENDER
+from reana_commons.errors import (
+    REANAQuotaExceededError,
+    REANAValidationError,
+    REANAEmailNotificationError,
+)
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import get_quota_resource_usage
 from reana_commons.yadage import yadage_load_from_workspace
@@ -62,7 +66,6 @@ from reana_server.complexity import (
     validate_job_memory_limits,
 )
 from reana_server.config import (
-    ADMIN_EMAIL,
     ADMIN_USER_ID,
     REANA_GITLAB_URL,
     REANA_HOSTNAME,
@@ -377,7 +380,7 @@ def _send_confirmation_email(confirm_token, user):
         user_full_name=user.full_name,
         reana_hostname=REANA_HOSTNAME,
         ui_config=REANAConfig.load("ui"),
-        sender_email=ADMIN_EMAIL,
+        sender_email=REANA_EMAIL_SENDER,
         confirm_token=confirm_token,
     )
     send_email(user.email, "Confirm your REANA email address", email_body)
@@ -390,7 +393,12 @@ def _create_and_associate_local_user(sender, user, **kwargs):
     username = user.email
     reana_user = _create_and_associate_reana_user(user_email, user_fullname, username)
     if REANA_USER_EMAIL_CONFIRMATION:
-        _send_confirmation_email(kwargs.get("confirm_token"), reana_user)
+        try:
+            _send_confirmation_email(kwargs.get("confirm_token"), reana_user)
+        except REANAEmailNotificationError as e:
+            logging.error(
+                f"Something went wrong while sending the confirmation email! {e}"
+            )
     return reana_user
 
 

@@ -26,7 +26,7 @@ from reana_commons.config import (
     REANA_RESOURCE_HEALTH_COLORS,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
 )
-from reana_commons.email import send_email
+from reana_commons.email import send_email, REANA_EMAIL_SENDER
 from reana_commons.errors import REANAEmailNotificationError
 from reana_commons.utils import click_table_printer
 from reana_commons.k8s.api_client import current_k8s_corev1_api_client
@@ -46,7 +46,7 @@ from reana_db.models import (
 )
 from reana_db.utils import update_workspace_retention_rules
 
-from reana_server.config import ADMIN_EMAIL, ADMIN_USER_ID, REANA_HOSTNAME
+from reana_server.config import ADMIN_USER_ID, REANA_HOSTNAME
 from reana_server.reana_admin.options import (
     add_user_options,
     add_workflow_option,
@@ -271,7 +271,7 @@ def token_grant(admin_access_token, id_, email):
             user_full_name=user.full_name,
             reana_hostname=REANA_HOSTNAME,
             ui_config=REANAConfig.load("ui"),
-            sender_email=ADMIN_EMAIL,
+            sender_email=REANA_EMAIL_SENDER,
         )
         send_email(user.email, email_subject, email_body)
 
@@ -327,7 +327,7 @@ def token_revoke(admin_access_token, id_, email):
             user_full_name=user.full_name,
             reana_hostname=REANA_HOSTNAME,
             ui_config=REANAConfig.load("ui"),
-            sender_email=ADMIN_EMAIL,
+            sender_email=REANA_EMAIL_SENDER,
         )
         send_email(user.email, email_subject, email_body)
 

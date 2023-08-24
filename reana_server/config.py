@@ -329,10 +329,6 @@ REANA_GITLAB_OAUTH_APP_SECRET = os.getenv("REANA_GITLAB_OAUTH_APP_SECRET", "CHAN
 REANA_GITLAB_HOST = os.getenv("REANA_GITLAB_HOST", None)
 REANA_GITLAB_URL = "https://{}".format((REANA_GITLAB_HOST or "CHANGE ME"))
 
-# Email configuration
-# ===================
-ADMIN_EMAIL = os.getenv("REANA_EMAIL_SENDER", "CHANGE_ME")
-
 # Workflow scheduler
 # ==================
 REANA_SCHEDULER_REQUEUE_SLEEP = float(os.getenv("REANA_SCHEDULER_REQUEUE_SLEEP", "15"))
