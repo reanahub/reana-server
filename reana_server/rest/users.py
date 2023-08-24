@@ -18,11 +18,11 @@ from reana_commons.config import (
     REANA_COMPONENT_PREFIX,
     REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
 )
-from reana_commons.email import send_email
+from reana_commons.email import send_email, REANA_EMAIL_RECEIVER
 from reana_commons.errors import REANAEmailNotificationError
 
 from reana_server import __version__
-from reana_server.config import ADMIN_EMAIL, REANA_HOSTNAME
+from reana_server.config import REANA_HOSTNAME
 from reana_server.decorators import signin_required
 from reana_server.utils import JinjaEnv
 
@@ -327,7 +327,7 @@ def request_token(user):
             component_prefix=REANA_COMPONENT_PREFIX,
         )
         try:
-            send_email(ADMIN_EMAIL, email_subject, email_body)
+            send_email(REANA_EMAIL_RECEIVER, email_subject, email_body)
         except REANAEmailNotificationError:
             logging.error(traceback.format_exc())
 
