@@ -191,7 +191,7 @@ ua-parser==0.16.1         # via invenio-accounts
 uritools==4.0.1           # via invenio-app, invenio-oauthclient
 urllib3==1.26.14          # via kubernetes, requests
 uwsgi-tools==1.1.1        # via reana-server (setup.py)
-uwsgi==2.0.21             # via reana-server (setup.py)
+uwsgi==2.0.22             # via reana-server (setup.py)
 uwsgitop==0.11            # via reana-server (setup.py)
 validators==0.20.0        # via wtforms-components
 vine==5.0.0               # via amqp, celery, kombu
