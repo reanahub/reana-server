@@ -65,7 +65,7 @@ flask-sqlalchemy==2.5.1   # via flask-alembic, invenio-db
 flask-talisman==0.8.1     # via invenio-app
 flask-webpackext==1.0.2   # via invenio-assets
 flask-wtf==1.1.1          # via flask-security, invenio-accounts, invenio-oauth2server, invenio-userprofiles
-flask==2.1.3              # via flask-alembic, flask-babelex, flask-breadcrumbs, flask-caching, flask-celeryext, flask-collect-invenio, flask-cors, flask-kvsession-invenio, flask-limiter, flask-login, flask-mail, flask-menu, flask-oauthlib, flask-principal, flask-security, flask-shell-ipython, flask-sqlalchemy, flask-webpackext, flask-wtf, invenio-base, invenio-config, invenio-mail, reana-server (setup.py)
+flask==2.2.5              # via flask-alembic, flask-babelex, flask-breadcrumbs, flask-caching, flask-celeryext, flask-collect-invenio, flask-cors, flask-kvsession-invenio, flask-limiter, flask-login, flask-mail, flask-menu, flask-oauthlib, flask-principal, flask-security, flask-shell-ipython, flask-sqlalchemy, flask-webpackext, flask-wtf, invenio-base, invenio-config, invenio-mail, reana-server (setup.py)
 fs==2.4.16                # via reana-commons
 future==0.18.3            # via invenio-oauth2server
 gitdb==4.0.10             # via gitpython
