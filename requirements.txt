@@ -197,7 +197,7 @@ validators==0.20.0        # via wtforms-components
 vine==5.0.0               # via amqp, celery, kombu
 wcmatch==8.4.1            # via reana-commons
 wcwidth==0.2.6            # via prompt-toolkit
-webargs==5.5.3            # via invenio-rest
+webargs==6.0.0            # via invenio-rest
 webcolors==1.12           # via jsonschema
 websocket-client==1.5.1   # via kubernetes
 werkzeug==2.0.3           # via flask, flask-kvsession-invenio, invenio-base, reana-commons, reana-server (setup.py)
