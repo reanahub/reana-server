@@ -492,8 +492,7 @@ def create_workflow(user):  # noqa
         if request.args.get("spec"):
             return jsonify("Not implemented"), 501
 
-        json_body_is_not_present = not request.json
-        if json_body_is_not_present:
+        if not request.is_json:
             raise Exception(
                 "Either remote repository or REANA specification needs to be provided"
             )
@@ -914,7 +913,7 @@ def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
               }
     """
     try:
-        steps = request.json or None
+        steps = request.json if request.is_json else None
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
 
@@ -1289,7 +1288,7 @@ def start_workflow(workflow_id_or_name, user):  # noqa
     try:
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-        parameters = request.json
+        parameters = request.json if request.is_json else {}
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
         operational_options = parameters.get("operational_options", {})
         operational_options = validate_operational_options(
@@ -1511,7 +1510,7 @@ def set_workflow_status(workflow_id_or_name, user):  # noqa
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
         status = request.args.get("status")
-        parameters = request.json
+        parameters = request.json if request.is_json else None
         response, http_response = current_rwc_api_client.api.set_workflow_status(
             user=str(user.id_),
             workflow_id_or_name=workflow_id_or_name,
@@ -2510,7 +2509,7 @@ def open_interactive_session(
             user=str(user.id_),
             workflow_id_or_name=workflow_id_or_name,
             interactive_session_type=interactive_session_type,
-            interactive_session_configuration=request.json or {},
+            interactive_session_configuration=request.json if request.is_json else None,
         ).result()
 
         return jsonify(response), http_response.status_code
@@ -2936,7 +2935,7 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
               }
     """
     try:
-        parameters = request.json or {}
+        parameters = request.json if request.is_json else {}
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")

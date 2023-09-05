@@ -16,11 +16,11 @@ import click
 from apispec import APISpec
 from apispec_webframeworks.flask import FlaskPlugin
 from flask import current_app
-from flask.cli import with_appcontext
 from reana_commons.utils import copy_openapi_specs
 from swagger_spec_validator.validator20 import validate_json
 
 from reana_server.version import __version__
+from reana_server.app import app
 
 # Import your marshmallow schemas here
 # from example_package.schemas import Example_schema,
@@ -44,7 +44,6 @@ __output_path__ = "temp_openapi.json"
     "E.g. --publish.",
     count=True,
 )
-@with_appcontext
 def build_openapi_spec(publish):
     """Creates an OpenAPI definition of Flask application,
     check conformity of generated definition against OpenAPI 2.0 specification
@@ -108,4 +107,5 @@ def build_openapi_spec(publish):
 
 
 if __name__ == "__main__":
-    build_openapi_spec()
+    with app.app_context():
+        build_openapi_spec()
