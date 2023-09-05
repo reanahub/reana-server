@@ -50,18 +50,22 @@ setup_requires = [
 ]
 
 install_requires = [
+    # These bounds on Flask/Werkzeug are needed because Werkzeug v2.1 removes `safe_str_cmp`,
+    # which is needed by Flask-Login. This was fixed in Flask-Login v0.6.0 (see the issue
+    # https://github.com/maxcountryman/flask-login/pull/585), but invenio-accounts<2
+    # requires Flask-Login<0.5
     "Flask>=2.1.1,<2.2.0",
+    "Werkzeug<2.1",
     "flask-celeryext<0.5.0",
     "gitpython>=3.1",
     "marshmallow>2.13.0,<=2.20.1",
     "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.3a6,<0.10.0",
-    "reana-db>=0.9.1,<0.10.0",
+    "reana-db>=0.9.2a1,<0.10.0",
     "requests==2.25.0",
     "tablib>=0.12.1",
     "uWSGI>=2.0.17",
     "uwsgi-tools>=1.1.1",
     "uwsgitop>=0.10",
-    "werkzeug<2.1",
     "wtforms<3.0.0",
     # Yadage dependencies
     # Pinning adage/packtivity/yadage/yadage-schemas to make sure we use compatible versions.
