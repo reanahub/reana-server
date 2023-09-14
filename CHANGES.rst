@@ -11,6 +11,7 @@ Version 0.9.1 (UNRELEASED)
 - Adds new ``prune_workspace`` endpoint to allow users to delete all the files of a workflow, specifying whether to also delete the inputs and/or the outputs.
 - Adds ``interactive-session-cleanup`` command that can be used by REANA administrators to close interactive sessions that are inactive for more than the specified number of days.
 - Changes the system status report to simplify and clarify the disk usage summary.
+- Changes ``check-workflows`` command to also check the presence of workspaces on the shared volume.
 - Fixes GitLab integration to automatically redirect the user to the correct URL when the access request is accepted.
 - Fixes authentication flow to correctly deny access to past revoked tokens in case the same user has also other new active tokens.
 - Fixes the email templates to show the correct ``kubectl`` commands when REANA is deployed inside a non-default namespace or with a custom component name prefix.

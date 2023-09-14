@@ -20,6 +20,7 @@ from click.testing import CliRunner
 import pytest
 from pytest_reana.test_utils import make_mock_api_client
 from reana_db.models import (
+    generate_uuid,
     AuditLogAction,
     InteractiveSession,
     User,
@@ -31,6 +32,7 @@ from reana_db.models import (
 
 from reana_server.api_client import WorkflowSubmissionPublisher
 from reana_server.reana_admin import reana_admin
+from reana_server.reana_admin.check_workflows import check_workspaces
 from reana_server.reana_admin.cli import RetentionRuleDeleter
 from reana_server.reana_admin.consumer import MessageConsumer
 
@@ -730,6 +732,40 @@ class TestCheckWorkflows:
             assert len(out_of_sync) == 0
             assert len(in_sync) == 1
 
+    @patch(
+        "reana_server.reana_admin.check_workflows._collect_messages_from_scheduler_queue",
+        Mock(return_value={}),
+    )
+    def test_check_workflow_without_workspace(
+        self, session, sample_serial_workflow_in_db
+    ):
+        sample_serial_workflow_in_db.created = (
+            datetime.datetime.now() - datetime.timedelta(hours=12)
+        )
+        sample_serial_workflow_in_db.status = RunStatus.finished
+        # change workspace path to invalid directory
+        sample_serial_workflow_in_db.workspace_path = (
+            sample_serial_workflow_in_db.workspace_path + "xyz"
+        )
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+
+        with patch(
+            "reana_server.reana_admin.check_workflows._get_all_pods",
+            Mock(return_value=[]),
+        ):
+            from reana_server.reana_admin.check_workflows import check_workflows
+
+            in_sync, out_of_sync, total_workflows = check_workflows(
+                datetime.datetime.now() - datetime.timedelta(hours=24), None
+            )
+            assert total_workflows == 1
+            assert len(out_of_sync) == 1
+            assert len(in_sync) == 0
+            assert out_of_sync[0].source.id == str(sample_serial_workflow_in_db.id_)
+            assert len(out_of_sync[0].errors) == 1
+            assert "not exist" in str(out_of_sync[0].errors[0])
+
     def test_check_correct_created_session(self, session, sample_serial_workflow_in_db):
         interactive_session = InteractiveSession(
             name=f"run-session-{sample_serial_workflow_in_db.id_}",
@@ -883,3 +919,52 @@ class TestCheckWorkflows:
             assert len(in_sync) == 0
             assert len(out_of_sync) == 0
             assert len(pods_without_session) == 1
+
+    @pytest.mark.parametrize(
+        "user_id, workflow_id",
+        [
+            (None, None),  # actual user/workflow UUID saved in database
+            (generate_uuid(), generate_uuid()),
+            ("random-user", "random-workflow"),
+        ],
+    )
+    def test_check_workspaces(
+        self,
+        app,
+        user_id,
+        workflow_id,
+        sample_serial_workflow_in_db,
+        tmp_path: pathlib.Path,
+    ):
+        workflow = None
+        if not workflow_id:
+            workflow = sample_serial_workflow_in_db
+            workflow_id = str(workflow.id_)
+        user = None
+        if not user_id:
+            user = sample_serial_workflow_in_db.owner
+            user_id = str(user.id_)
+
+        # prepare wrong workspace
+        extra_workspace_path = tmp_path.joinpath(
+            "users", user_id, "workflows", workflow_id
+        )
+        extra_workspace_path.mkdir(parents=True)
+
+        with patch(
+            "reana_server.reana_admin.check_workflows.SHARED_VOLUME_PATH",
+            str(tmp_path),
+        ):
+            extra_workspaces = check_workspaces()
+
+        assert len(extra_workspaces) == 1
+        result = extra_workspaces[0]
+        assert result.source.workspace == str(extra_workspace_path)
+        assert result.source.id == (str(workflow.id_) if workflow else None)
+        assert result.source.user == (user.email if user else None)
+        assert result.source.name == (workflow.name if workflow else None)
+        assert result.errors
+        assert any("not owned" in str(error) for error in result.errors)
+        if workflow:
+            assert len(result.errors) == 2
+            assert any(workflow.workspace_path in str(error) for error in result.errors)

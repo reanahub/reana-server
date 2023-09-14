@@ -47,6 +47,7 @@ from reana_db.models import (
 from reana_db.utils import update_workspace_retention_rules
 
 from reana_server.config import ADMIN_USER_ID, REANA_HOSTNAME
+from reana_server.reana_admin.check_workflows import check_workspaces
 from reana_server.reana_admin.options import (
     add_user_options,
     add_workflow_option,
@@ -959,7 +960,18 @@ def check_workflows(
             )
             display_results(pods_without_session)
 
-    if workflows_in_sync and sessions_in_sync:
+    click.secho("\nChecking if workspaces on disk are in-sync...", fg="yellow")
+    extra_workspaces = check_workspaces()
+    if extra_workspaces:
+        click.secho(
+            "\nOut-of-sync workspaces found on shared volume\n",
+            fg="red",
+        )
+        display_results(
+            extra_workspaces, headers=["workspace", "name", "user", "status"]
+        )
+
+    if workflows_in_sync and sessions_in_sync and not extra_workspaces:
         click.secho("\nOK")
     else:
         click.secho("\nFAILED")
