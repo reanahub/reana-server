@@ -885,10 +885,18 @@ def retention_rules_extend(
     default=None,
     help="Default value is now.",
 )
+@click.option(
+    "--all",
+    "-a",
+    "show_all",
+    is_flag=True,
+    help="Show all workflows/sessions/workspaces, even if in-sync.",
+)
 @admin_access_token_option
 def check_workflows(
     date_start: datetime.datetime,
     date_end: Optional[datetime.datetime],
+    show_all: bool,
     admin_access_token: str,
 ) -> None:
     """Check consistency of selected workflow run statuses between database, message queue and Kubernetes."""
@@ -899,7 +907,7 @@ def check_workflows(
         InfoCollectionError,
     )
 
-    click.secho("\nChecking if workflows are in-sync...", fg="yellow")
+    click.secho("Checking if workflows are in-sync...", fg="yellow")
     workflows_in_sync = True
     try:
         in_sync_workflows, out_of_sync_workflows, total_workflows = check_workflows(
@@ -909,7 +917,10 @@ def check_workflows(
         workflows_in_sync = False
         logging.exception(error)
     else:
-        if in_sync_workflows:
+        if not out_of_sync_workflows:
+            click.secho("All workflows are in-sync!", fg="green")
+
+        if show_all and in_sync_workflows:
             click.secho(
                 f"\nIn-sync workflows ({len(in_sync_workflows)} out of {total_workflows})\n",
                 fg="green",
@@ -937,7 +948,10 @@ def check_workflows(
         sessions_in_sync = False
         logging.exception(error)
     else:
-        if in_sync_sessions:
+        if not out_of_sync_sessions:
+            click.secho("All sessions are in-sync!", fg="green")
+
+        if show_all and in_sync_sessions:
             click.secho(
                 f"\nIn-sync sessions ({len(in_sync_sessions)} out of {total_sessions})\n",
                 fg="green",
@@ -960,7 +974,7 @@ def check_workflows(
             )
             display_results(pods_without_session)
 
-    click.secho("\nChecking if workspaces on disk are in-sync...", fg="yellow")
+    click.secho("\nChecking if workspaces on shared volume are in-sync...", fg="yellow")
     extra_workspaces = check_workspaces()
     if extra_workspaces:
         click.secho(
@@ -970,11 +984,13 @@ def check_workflows(
         display_results(
             extra_workspaces, headers=["workspace", "name", "user", "status"]
         )
+    else:
+        click.secho("All workspaces found on shared volume are in-sync!", fg="green")
 
     if workflows_in_sync and sessions_in_sync and not extra_workspaces:
-        click.secho("\nOK")
+        click.secho("\nOK", fg="green")
     else:
-        click.secho("\nFAILED")
+        click.secho("\nFAILED", fg="red")
         sys.exit(1)
 
 

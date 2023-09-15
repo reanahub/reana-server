@@ -347,6 +347,9 @@ def check_workspaces() -> List[CheckResult]:
         except FileNotFoundError:
             # "workflows" directory does not exist
             continue
+    click.echo(
+        f"Found {len(workspaces_on_disk)} workspace(s) on shared volume.",
+    )
 
     workspaces_in_db = {
         Path(row[0]) for row in Session.query(Workflow.workspace_path.distinct())
