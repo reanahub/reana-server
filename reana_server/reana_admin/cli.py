@@ -16,20 +16,20 @@ import traceback
 from typing import List, Optional
 
 import click
-import tablib
 import requests
+import tablib
 from flask.cli import with_appcontext
 from invenio_accounts.utils import register_user
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (
-    REANAConfig,
     REANA_RESOURCE_HEALTH_COLORS,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
+    REANAConfig,
 )
-from reana_commons.email import send_email, REANA_EMAIL_SENDER
+from reana_commons.email import REANA_EMAIL_SENDER, send_email
 from reana_commons.errors import REANAEmailNotificationError
-from reana_commons.utils import click_table_printer
 from reana_commons.k8s.api_client import current_k8s_corev1_api_client
+from reana_commons.utils import click_table_printer
 from reana_db.config import DEFAULT_QUOTA_LIMITS
 from reana_db.database import Session
 from reana_db.models import (
@@ -46,6 +46,7 @@ from reana_db.models import (
 )
 from reana_db.utils import update_workspace_retention_rules
 
+from reana_server.api_client import current_rwc_api_client
 from reana_server.config import ADMIN_USER_ID, REANA_HOSTNAME
 from reana_server.reana_admin.check_workflows import check_workspaces
 from reana_server.reana_admin.options import (
@@ -55,8 +56,8 @@ from reana_server.reana_admin.options import (
 )
 from reana_server.reana_admin.retention_rule_deleter import RetentionRuleDeleter
 from reana_server.status import STATUS_OBJECT_TYPES
-from reana_server.api_client import current_rwc_api_client
 from reana_server.utils import (
+    JinjaEnv,
     _create_user,
     _export_users,
     _get_user_by_criteria,
@@ -65,7 +66,6 @@ from reana_server.utils import (
     _validate_email,
     _validate_password,
     create_user_workspace,
-    JinjaEnv,
 )
 
 
@@ -638,24 +638,53 @@ def set_quota_limit(
 
 @reana_admin.command(
     "quota-set-default-limits",
-    help="Set default quota limits to users that do not have any.",
+    help="""Set default quota limits for users who do not have any custom limits
+         defined.
+
+    Note that any previously set user limits, either via old defaults or via
+    custom settings, will be kept during the upgrade, and won't be automatically
+    updated to match the new default limit value.""",
 )
 @admin_access_token_option
 @click.pass_context
 def set_default_quota_limit(ctx, admin_access_token: str):
-    """Set default quota limits to users that do not have any."""
-    users_without_quota_limits = User.query.filter(~User.resources.any()).all()
+    """Set default quota limits for users who do not have any custom limits defined."""
+    users_without_quota_limits = (
+        Session.query(User)
+        .filter(
+            User.id_.in_(
+                Session.query(UserResource.user_id).filter(
+                    UserResource.quota_limit == 0
+                )
+            )
+        )
+        .all()
+    )
+
     if not users_without_quota_limits:
         click.secho("There are no users without quota limits.", fg="green")
         sys.exit(0)
-    for resource in Resource.query:
-        ctx.invoke(
-            set_quota_limit,
-            emails=[user.email for user in users_without_quota_limits],
-            resource_name=resource.name,
-            resource_type=resource.type_.name,
-            limit=DEFAULT_QUOTA_LIMITS.get(resource.type_.name),
-        )
+
+    resources = Resource.query.all()
+
+    for user in users_without_quota_limits:
+        for resource in resources:
+            user_resource = UserResource.query.filter_by(
+                user_id=user.id_, resource_id=resource.id_
+            ).first()
+
+            if user_resource and user_resource.quota_limit == 0:
+                # If no limit exists, set the default limit
+                default_limit = DEFAULT_QUOTA_LIMITS.get(resource.type_.name)
+                if default_limit is not None and default_limit != 0:
+                    ctx.invoke(
+                        set_quota_limit,
+                        emails=[user.email],
+                        resource_name=resource.name,
+                        resource_type=resource.type_.name,
+                        limit=default_limit,
+                        admin_access_token=admin_access_token,
+                    )
 
 
 @reana_admin.command("queue-consume")
@@ -901,10 +930,10 @@ def check_workflows(
 ) -> None:
     """Check consistency of selected workflow run statuses between database, message queue and Kubernetes."""
     from .check_workflows import (
-        check_workflows,
-        check_interactive_sessions,
-        display_results,
         InfoCollectionError,
+        check_interactive_sessions,
+        check_workflows,
+        display_results,
     )
 
     click.secho("Checking if workflows are in-sync...", fg="yellow")

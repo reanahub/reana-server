@@ -8,26 +8,28 @@
 
 """Test command line application."""
 
-import datetime
 import csv
+import datetime
 import io
 import pathlib
 import secrets
-from unittest.mock import Mock, MagicMock, patch
 import uuid
+from unittest.mock import MagicMock, Mock, patch
 
-from click.testing import CliRunner
 import pytest
+from click.testing import CliRunner
 from pytest_reana.test_utils import make_mock_api_client
 from reana_db.models import (
-    generate_uuid,
     AuditLogAction,
     InteractiveSession,
-    User,
-    UserTokenStatus,
+    Resource,
     RunStatus,
+    User,
+    UserResource,
+    UserTokenStatus,
     Workflow,
     WorkspaceRetentionRuleStatus,
+    generate_uuid,
 )
 
 from reana_server.api_client import WorkflowSubmissionPublisher
@@ -968,3 +970,33 @@ class TestCheckWorkflows:
         if workflow:
             assert len(result.errors) == 2
             assert any(workflow.workspace_path in str(error) for error in result.errors)
+
+
+def test_quota_set_default_limits_for_user_with_custom_limits(default_user, session):
+    """Test setting default quota when there are is one user with custom quota limits."""
+    runner = CliRunner()
+
+    resources = session.query(Resource).all()
+
+    for resource in resources:
+        user_resource = (
+            session.query(UserResource)
+            .filter_by(user_id=default_user.id_, resource_id=resource.id_)
+            .first()
+        )
+
+        if user_resource:
+            user_resource.quota_limit = 12345
+
+    session.commit()
+
+    result = runner.invoke(
+        reana_admin,
+        [
+            "quota-set-default-limits",
+            "--admin-access-token",
+            default_user.access_token,
+        ],
+    )
+
+    assert "There are no users without quota limits." in result.output

@@ -4,6 +4,7 @@ Changes
 Version 0.9.1 (UNRELEASED)
 --------------------------
 
+- Fixes ``quota-set-default-limits`` command to propagate default quota limits to all users without custom quota limit values..
 - Changes ``launch`` endpoint also include the warnings of the validation of the workflow specification.
 - Changes OpenAPI specification with respect to return the maximum inactivity time before automatic closure of interactive sessions in ``info`` endpoint.
 - Adds the timestamp of when the workflow was stopped (``run_stopped_at``) to the workflow list and the workflow status endpoints.
