@@ -9,6 +9,7 @@
 """REANA Server command line tool."""
 
 import logging
+import signal
 
 import click
 from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
@@ -21,5 +22,12 @@ def start_scheduler():
     """Start a workflow execution scheduler process."""
     logging.basicConfig(level=REANA_LOG_LEVEL, format=REANA_LOG_FORMAT, force=True)
     scheduler = WorkflowExecutionScheduler()
+
+    def stop_scheduler(signum, frame):
+        logging.info("Stopping scheduler...")
+        scheduler.should_stop = True
+
+    signal.signal(signal.SIGTERM, stop_scheduler)
+
     logging.info("Starting scheduler...")
     scheduler.run()

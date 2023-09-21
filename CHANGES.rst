@@ -16,6 +16,7 @@ Version 0.9.1 (UNRELEASED)
 - Fixes GitLab integration to automatically redirect the user to the correct URL when the access request is accepted.
 - Fixes authentication flow to correctly deny access to past revoked tokens in case the same user has also other new active tokens.
 - Fixes the email templates to show the correct ``kubectl`` commands when REANA is deployed inside a non-default namespace or with a custom component name prefix.
+- Fixes ``start-scheduler`` command to gracefully stop when being terminated.
 - Adds logic to support SSO with third-party Keycloak authentication services to ``config.py``.
 
 Version 0.9.0 (2023-01-19)
