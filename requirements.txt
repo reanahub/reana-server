@@ -190,7 +190,7 @@ typing-extensions==4.8.0  # via alembic, bravado, cwltool, ipython, kombu, swagg
 tzdata==2023.3            # via backports-zoneinfo, celery
 ua-parser==0.18.0         # via invenio-accounts
 uritools==4.0.2           # via invenio-app, invenio-oauthclient
-urllib3==1.26.16          # via google-auth, kubernetes, requests
+urllib3==1.26.18          # via google-auth, kubernetes, requests
 uwsgi==2.0.22             # via reana-server (setup.py)
 uwsgi-tools==1.1.1        # via reana-server (setup.py)
 uwsgitop==0.11            # via reana-server (setup.py)
