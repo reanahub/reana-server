@@ -201,7 +201,7 @@ wcwidth==0.2.6            # via prompt-toolkit
 webargs==5.5.3            # via invenio-rest
 webcolors==1.13           # via jsonschema
 websocket-client==1.6.3   # via kubernetes
-werkzeug==2.0.3           # via flask, flask-kvsession-invenio, invenio-base, reana-commons, reana-server (setup.py)
+werkzeug==3.0.1           # via flask, flask-kvsession-invenio, invenio-base, reana-commons, reana-server (setup.py)
 wrapt==1.15.0             # via snakemake
 wtforms==2.3.3            # via flask-wtf, invenio-oauth2server, reana-server (setup.py), wtforms-alchemy, wtforms-components
 wtforms-alchemy==0.18.0   # via invenio-oauth2server
