@@ -59,7 +59,7 @@ install_requires = [
     "flask-celeryext<0.5.0",
     "gitpython>=3.1",
     "marshmallow>2.13.0,<=2.20.1",
-    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.3,<0.10.0",
+    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.4a3,<0.10.0",
     "reana-db>=0.9.2,<0.10.0",
     "requests==2.25.0",
     "tablib>=0.12.1",
