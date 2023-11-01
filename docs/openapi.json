@@ -3234,6 +3234,9 @@
                 "message": {
                   "type": "string"
                 },
+                "run_number": {
+                  "type": "string"
+                },
                 "status": {
                   "type": "string"
                 },

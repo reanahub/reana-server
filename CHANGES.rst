@@ -1,6 +1,12 @@
 Changes
 =======
 
+Version 0.9.2 (UNRELEASED)
+--------------------------
+
+- Changes the OpenAPI specification of the ``start_workflow`` endpoint's response to add missing ``run_number`` field.
+- Fixes the ``start_workflow`` endpoint by changing the type of the ``run_number`` response field from a number to a string, in order to support restarting a workflow more than nine times.
+
 Version 0.9.1 (2023-09-27)
 --------------------------
 
