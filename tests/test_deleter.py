@@ -10,8 +10,6 @@ import pytest
 import pathlib
 import uuid
 
-import wdb
-
 from reana_server.deleter import Deleter, InOrOut
 from reana_commons.workspace import iterdir, is_directory, walk
 

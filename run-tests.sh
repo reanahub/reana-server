@@ -85,6 +85,7 @@ check_sphinx () {
 check_pytest () {
     clean_old_db_container
     start_db_container
+    trap clean_old_db_container SIGINT SIGTERM SIGSEGV ERR
     python setup.py test
     stop_db_container
 }
