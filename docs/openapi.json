@@ -2972,6 +2972,197 @@
         "summary": "Get the retention rules of a workflow."
       }
     },
+    "/api/workflows/{workflow_id_or_name}/share": {
+      "post": {
+        "description": "This resource shares a workflow with another user. This resource is expecting a workflow UUID and some parameters.",
+        "operationId": "share_workflow",
+        "parameters": [
+          {
+            "description": "The API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Required. Workflow UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Required. User to share the workflow with.",
+            "in": "query",
+            "name": "user_email_to_share_with",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Optional. Message to include when sharing the workflow.",
+            "in": "query",
+            "name": "message",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Optional. Date when access to the workflow will expire (format YYYY-MM-DD).",
+            "in": "query",
+            "name": "valid_until",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The workflow has been shared with the user.",
+            "examples": {
+              "application/json": {
+                "message": "The workflow has been shared with the user.",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest.1"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "workflow_id": {
+                  "type": "string"
+                },
+                "workflow_name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed.",
+            "examples": {
+              "application/json": {
+                "errors": [
+                  "Missing data for required field."
+                ],
+                "message": "Malformed request."
+              }
+            },
+            "schema": {
+              "properties": {
+                "errors": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. User is not allowed to share the workflow.",
+            "examples": {
+              "application/json": {
+                "errors": [
+                  "User is not allowed to share the workflow."
+                ]
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Request failed. Workflow does not exist or user does not exist.",
+            "examples": {
+              "application/json": {
+                "errors": [
+                  "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does not exist"
+                ],
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does not exist"
+              }
+            },
+            "schema": {
+              "properties": {
+                "errors": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "409": {
+            "description": "Request failed. The workflow is already shared with the user.",
+            "examples": {
+              "application/json": {
+                "errors": [
+                  "The workflow is already shared with the user."
+                ],
+                "message": "The workflow is already shared with the user."
+              }
+            },
+            "schema": {
+              "properties": {
+                "errors": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal controller error.",
+            "examples": {
+              "application/json": {
+                "errors": [
+                  "Internal controller error."
+                ],
+                "message": "Internal controller error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "errors": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Share a workflow with another user."
+      }
+    },
     "/api/workflows/{workflow_id_or_name}/specification": {
       "get": {
         "description": "This resource returns the REANA workflow specification used to start the workflow run. Resource is expecting a workflow UUID.",

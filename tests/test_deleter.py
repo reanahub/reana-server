@@ -6,14 +6,13 @@
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 """REANA-Server deleter tests."""
-import pytest
 import pathlib
 import uuid
 
+import pytest
 import wdb
-
+from reana_commons.workspace import is_directory, iterdir, walk
 from reana_server.deleter import Deleter, InOrOut
-from reana_commons.workspace import iterdir, is_directory, walk
 
 
 @pytest.mark.parametrize(
@@ -65,7 +64,7 @@ from reana_commons.workspace import iterdir, is_directory, walk
     ],
 )
 def test_file_deletion(
-    initial_list, which_to_keep, final_list, default_user, sample_serial_workflow_in_db
+    initial_list, which_to_keep, final_list, user0, sample_serial_workflow_in_db
 ):
     """Test delete files preserving inputs/outputs/none"""
 

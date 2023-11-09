@@ -1,56 +1,53 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 
 """Reana-Server workflow-functionality Flask-Blueprint."""
-import os
 import json
 import logging
+import os
 import traceback
 
 import requests
 from bravado.exception import HTTPError
-from flask import Blueprint, Response
-from flask import jsonify, request, stream_with_context
+from flask import Blueprint, Response, jsonify, request, stream_with_context
 from jsonschema.exceptions import ValidationError
-
 from reana_commons import workspace
 from reana_commons.config import REANA_WORKFLOW_ENGINES
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
+from reana_commons.specification import load_reana_spec
 from reana_commons.validation.operational_options import validate_operational_options
 from reana_commons.validation.utils import validate_workflow_name
-from reana_commons.specification import load_reana_spec
 from reana_db.database import Session
 from reana_db.models import InteractiveSessionType, RunStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
-from webargs import fields, validate
-from webargs.flaskparser import use_kwargs
-
 from reana_server.api_client import current_rwc_api_client
 from reana_server.config import REANA_HOSTNAME
 from reana_server.decorators import check_quota, signin_required
 from reana_server.deleter import Deleter, InOrOut
-from reana_server.validation import (
-    validate_inputs,
-    validate_workspace_path,
-    validate_workflow,
-)
 from reana_server.utils import (
-    _fail_gitlab_commit_build_status,
     RequestStreamWithLen,
-    _load_and_save_yadage_spec,
+    _fail_gitlab_commit_build_status,
     _get_reana_yaml_from_gitlab,
-    prevent_disk_quota_excess,
-    publish_workflow_submission,
+    _load_and_save_yadage_spec,
     clone_workflow,
     get_quota_excess_message,
     get_workspace_retention_rules,
     is_uuid_v4,
+    prevent_disk_quota_excess,
+    publish_workflow_submission,
 )
+from reana_server.validation import (
+    validate_inputs,
+    validate_workflow,
+    validate_workspace_path,
+)
+from webargs import fields, validate
+from webargs.flaskparser import use_kwargs
 
 try:
     from urllib import parse as urlparse
@@ -3240,6 +3237,194 @@ def prune_workspace(
             "workflow_id": workflow.id_,
             "workflow_name": workflow.name,
         }
+        return jsonify(response), 200
+    except HTTPError as e:
+        logging.exception(str(e))
+        return jsonify(e.response.json()), e.response.status_code
+    except ValueError as e:
+        # In case of invalid workflow name / UUID
+        logging.exception(str(e))
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.exception(str(e))
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route("/workflows/<workflow_id_or_name>/share", methods=["POST"])
+@use_kwargs(
+    {
+        "user_email_to_share_with": fields.String(),
+        "message": fields.String(missing=None),
+        "valid_until": fields.String(missing=None),
+    }
+)
+@signin_required()
+def share_workflow(
+    workflow_id_or_name, user, user_email_to_share_with, message, valid_until
+):
+    r"""Share a workflow with another user.
+
+    ---
+    post:
+      summary: Share a workflow with another user.
+      description: >-
+        This resource shares a workflow with another user.
+        This resource is expecting a workflow UUID and some parameters.
+      operationId: share_workflow
+      produces:
+        - application/json
+      parameters:
+        - name: access_token
+          in: query
+          description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Workflow UUID or name.
+          required: true
+          type: string
+        - name: user_email_to_share_with
+          in: query
+          description: >-
+            Required. User to share the workflow with.
+          required: true
+          type: string
+        - name: message
+          in: query
+          description: Optional. Message to include when sharing the workflow.
+          required: false
+          type: string
+        - name: valid_until
+          in: query
+          description: Optional. Date when access to the workflow will expire (format YYYY-MM-DD).
+          required: false
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. The workflow has been shared with the user.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              workflow_id:
+                type: string
+              workflow_name:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "The workflow has been shared with the user.",
+                "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                "workflow_name": "mytest.1"
+              }
+        400:
+          description: >-
+            Request failed. The incoming data specification seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              errors:
+                type: array
+                items:
+                  type: string
+          examples:
+            application/json:
+              {
+                "message": "Malformed request.",
+                "errors": ["Missing data for required field."]
+              }
+        403:
+          description: >-
+            Request failed. User is not allowed to share the workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "errors": ["User is not allowed to share the workflow."]
+              }
+        404:
+          description: >-
+            Request failed. Workflow does not exist or user does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              errors:
+                type: array
+                items:
+                  type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist",
+                "errors": ["Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
+                            not exist"]
+              }
+        409:
+          description: >-
+            Request failed. The workflow is already shared with the user.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              errors:
+                type: array
+                items:
+                  type: string
+          examples:
+            application/json:
+              {
+                "message": "The workflow is already shared with the user.",
+                "errors": ["The workflow is already shared with the user."]
+              }
+        500:
+          description: >-
+            Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              errors:
+                  type: array
+                  items:
+                    type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal controller error.",
+                "errors": ["Internal controller error."]
+              }
+    """
+    try:
+        share_params = {
+            "workflow_id_or_name": workflow_id_or_name,
+            "user_email_to_share_with": user_email_to_share_with,
+            "user_id": str(user.id_),
+        }
+
+        if message:
+            share_params["message"] = message
+
+        if valid_until:
+            share_params["valid_until"] = valid_until
+
+        response, http_response = current_rwc_api_client.api.share_workflow(
+            **share_params
+        ).result()
+
         return jsonify(response), 200
     except HTTPError as e:
         logging.exception(str(e))
