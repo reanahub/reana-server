@@ -31,7 +31,6 @@ from reana_db.models import (
     WorkspaceRetentionRuleStatus,
     generate_uuid,
 )
-
 from reana_server.api_client import WorkflowSubmissionPublisher
 from reana_server.reana_admin import reana_admin
 from reana_server.reana_admin.check_workflows import check_workspaces
@@ -39,27 +38,27 @@ from reana_server.reana_admin.cli import RetentionRuleDeleter
 from reana_server.reana_admin.consumer import MessageConsumer
 
 
-def test_export_users(default_user):
+def test_export_users(user0):
     """Test exporting all users as csv."""
     runner = CliRunner()
     expected_csv_file = io.StringIO()
     csv_writer = csv.writer(expected_csv_file, dialect="unix")
     csv_writer.writerow(
         [
-            default_user.id_,
-            default_user.email,
-            default_user.access_token,
-            default_user.username,
-            default_user.full_name,
+            user0.id_,
+            user0.email,
+            user0.access_token,
+            user0.username,
+            user0.full_name,
         ]
     )
     result = runner.invoke(
-        reana_admin, ["user-export", "--admin-access-token", default_user.access_token]
+        reana_admin, ["user-export", "--admin-access-token", user0.access_token]
     )
     assert result.output == expected_csv_file.getvalue()
 
 
-def test_import_users(app, session, default_user):
+def test_import_users(app, session, user0):
     """Test importing users from CSV file."""
     runner = CliRunner()
     expected_output = "Users successfully imported."
@@ -81,7 +80,7 @@ def test_import_users(app, session, default_user):
             [
                 "user-import",
                 "--admin-access-token",
-                default_user.access_token,
+                user0.access_token,
                 "--file",
                 users_csv_file_name,
             ],
@@ -95,7 +94,7 @@ def test_import_users(app, session, default_user):
         assert user.full_name == user_full_name
 
 
-def test_grant_token(default_user, session):
+def test_grant_token(user0, session):
     """Test grant access token."""
     runner = CliRunner()
 
@@ -105,7 +104,7 @@ def test_grant_token(default_user, session):
         [
             "token-grant",
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
             "-e",
             "nonexisting@example.org",
         ],
@@ -118,7 +117,7 @@ def test_grant_token(default_user, session):
         [
             "token-grant",
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
             "--id",
             "fake_id",
         ],
@@ -134,7 +133,7 @@ def test_grant_token(default_user, session):
         [
             "token-grant",
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
             "-e",
             user.email,
         ],
@@ -147,7 +146,7 @@ def test_grant_token(default_user, session):
         [
             "token-grant",
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
             "-e",
             user.email,
         ],
@@ -161,7 +160,7 @@ def test_grant_token(default_user, session):
         [
             "token-grant",
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
             "-e",
             user.email,
         ],
@@ -169,7 +168,7 @@ def test_grant_token(default_user, session):
     )
     assert f"Token for user {user.id_} ({user.email}) granted" in result.output
     assert user.access_token
-    assert default_user.audit_logs[-1].action is AuditLogAction.grant_token
+    assert user0.audit_logs[-1].action is AuditLogAction.grant_token
 
     # user with active token
     active_user = User(email="active@cern.ch", access_token="valid_token")
@@ -180,7 +179,7 @@ def test_grant_token(default_user, session):
         [
             "token-grant",
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
             "--id",
             str(active_user.id_),
         ],
@@ -199,17 +198,17 @@ def test_grant_token(default_user, session):
         [
             "token-grant",
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
             "--id",
             str(ui_user.id_),
         ],
     )
     assert ui_user.access_token_status is UserTokenStatus.active.name
     assert ui_user.access_token
-    assert default_user.audit_logs[-1].action is AuditLogAction.grant_token
+    assert user0.audit_logs[-1].action is AuditLogAction.grant_token
 
 
-def test_revoke_token(default_user, session):
+def test_revoke_token(user0, session):
     """Test revoke access token."""
     runner = CliRunner()
 
@@ -222,7 +221,7 @@ def test_revoke_token(default_user, session):
         [
             "token-revoke",
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
             "-e",
             user.email,
         ],
@@ -237,7 +236,7 @@ def test_revoke_token(default_user, session):
         [
             "token-revoke",
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
             "-e",
             user.email,
         ],
@@ -253,14 +252,14 @@ def test_revoke_token(default_user, session):
         [
             "token-revoke",
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
             "--id",
             str(user.id_),
         ],
     )
     assert "was successfully revoked" in result.output
     assert user.access_token_status == UserTokenStatus.revoked.name
-    assert default_user.audit_logs[-1].action is AuditLogAction.revoke_token
+    assert user0.audit_logs[-1].action is AuditLogAction.revoke_token
 
     # try to revoke again
     result = runner.invoke(
@@ -268,7 +267,7 @@ def test_revoke_token(default_user, session):
         [
             "token-revoke",
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
             "--id",
             str(user.id_),
         ],
@@ -398,7 +397,7 @@ def test_is_input_or_output(file_or_dir, expected_result):
     ],
 )
 def test_retention_rules_apply(
-    default_user,
+    user0,
     workflow_with_retention_rules,
     session,
     time_delta,
@@ -437,7 +436,7 @@ def test_retention_rules_apply(
     command = [
         "retention-rules-apply",
         "--admin-access-token",
-        default_user.access_token,
+        user0.access_token,
     ]
     if time_delta is not None:
         forced_date = datetime.datetime.now() + time_delta
@@ -472,7 +471,7 @@ def test_retention_rules_apply(
 
 @patch("reana_server.reana_admin.cli.RetentionRuleDeleter.apply_rule")
 def test_retention_rules_apply_error(
-    apply_rule_mock: Mock, workflow_with_retention_rules, default_user
+    apply_rule_mock: Mock, workflow_with_retention_rules, user0
 ):
     """Test that rules are reset to `active` if there are errors."""
     workflow = workflow_with_retention_rules
@@ -484,7 +483,7 @@ def test_retention_rules_apply_error(
         [
             "retention-rules-apply",
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
         ],
     )
 
@@ -495,7 +494,7 @@ def test_retention_rules_apply_error(
         assert rule.status == WorkspaceRetentionRuleStatus.active
 
 
-def test_retention_rules_extend(workflow_with_retention_rules, default_user):
+def test_retention_rules_extend(workflow_with_retention_rules, user0):
     """Test extending of retention rules."""
     workflow = workflow_with_retention_rules
     runner = CliRunner()
@@ -509,7 +508,7 @@ def test_retention_rules_extend(workflow_with_retention_rules, default_user):
             "-d",
             extend_days,
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
         ],
     )
     assert result.output == "Invalid workflow UUID.\n"
@@ -524,7 +523,7 @@ def test_retention_rules_extend(workflow_with_retention_rules, default_user):
             "-d",
             extend_days,
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
         ],
     )
     assert "Extending rule" in result.output
@@ -559,7 +558,7 @@ def test_retention_rule_deleter_file_outside_workspace(tmp_path):
 )
 @patch("reana_server.reana_admin.cli.requests.get")
 def test_interactive_session_cleanup(
-    mock_requests, sample_serial_workflow_in_db, days, output, default_user
+    mock_requests, sample_serial_workflow_in_db, days, output, user0
 ):
     """Test closure of long running interactive sessions."""
     runner = CliRunner()
@@ -602,7 +601,7 @@ def test_interactive_session_cleanup(
                     "-d",
                     days,
                     "--admin-access-token",
-                    default_user.access_token,
+                    user0.access_token,
                 ],
             )
             assert output in result.output
@@ -972,7 +971,7 @@ class TestCheckWorkflows:
             assert any(workflow.workspace_path in str(error) for error in result.errors)
 
 
-def test_quota_set_default_limits_for_user_with_custom_limits(default_user, session):
+def test_quota_set_default_limits_for_user_with_custom_limits(user0, session):
     """Test setting default quota when there are is one user with custom quota limits."""
     runner = CliRunner()
 
@@ -981,7 +980,7 @@ def test_quota_set_default_limits_for_user_with_custom_limits(default_user, sess
     for resource in resources:
         user_resource = (
             session.query(UserResource)
-            .filter_by(user_id=default_user.id_, resource_id=resource.id_)
+            .filter_by(user_id=user0.id_, resource_id=resource.id_)
             .first()
         )
 
@@ -995,7 +994,7 @@ def test_quota_set_default_limits_for_user_with_custom_limits(default_user, sess
         [
             "quota-set-default-limits",
             "--admin-access-token",
-            default_user.access_token,
+            user0.access_token,
         ],
     )
 
