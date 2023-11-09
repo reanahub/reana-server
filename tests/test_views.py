@@ -18,6 +18,7 @@ import pytest
 from flask import Flask, url_for
 from mock import Mock, patch
 from pytest_reana.test_utils import make_mock_api_client
+
 from reana_db.models import User, InteractiveSessionType, RunStatus
 from reana_commons.k8s.secrets import UserSecrets, Secret
 
@@ -27,7 +28,7 @@ from reana_server.utils import (
 )
 
 
-def test_get_workflows(app, default_user, _get_user_mock):
+def test_get_workflows(app, user0, _get_user_mock):
     """Test get_workflows view."""
     with app.test_client() as client:
         with patch(
@@ -49,7 +50,7 @@ def test_get_workflows(app, default_user, _get_user_mock):
             res = client.get(
                 url_for("workflows.get_workflows"),
                 query_string={
-                    "access_token": default_user.access_token,
+                    "access_token": user0.access_token,
                     "type": "batch",
                 },
             )
@@ -57,7 +58,7 @@ def test_get_workflows(app, default_user, _get_user_mock):
 
 
 def test_create_workflow(
-    app, session, default_user, _get_user_mock, sample_serial_workflow_in_db
+    app, session, user0, _get_user_mock, sample_serial_workflow_in_db
 ):
     """Test create_workflow view."""
     with app.test_client() as client:
@@ -80,7 +81,7 @@ def test_create_workflow(
             res = client.post(
                 url_for("workflows.create_workflow"),
                 query_string={
-                    "access_token": default_user.access_token,
+                    "access_token": user0.access_token,
                     "spec": "not_implemented",
                 },
             )
@@ -89,7 +90,7 @@ def test_create_workflow(
             # no specification provided
             res = client.post(
                 url_for("workflows.create_workflow"),
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": user0.access_token},
             )
             assert res.status_code == 500
 
@@ -102,7 +103,7 @@ def test_create_workflow(
                 url_for("workflows.create_workflow"),
                 headers={"Content-Type": "application/json"},
                 query_string={
-                    "access_token": default_user.access_token,
+                    "access_token": user0.access_token,
                     "workflow_name": "test",
                 },
                 data=json.dumps(workflow_specification),
@@ -114,7 +115,7 @@ def test_create_workflow(
                 url_for("workflows.create_workflow"),
                 headers={"Content-Type": "application/json"},
                 query_string={
-                    "access_token": default_user.access_token,
+                    "access_token": user0.access_token,
                     "workflow_name": str(uuid4()),
                 },
                 data=json.dumps(sample_serial_workflow_in_db.reana_specification),
@@ -129,7 +130,7 @@ def test_create_workflow(
                 url_for("workflows.create_workflow"),
                 headers={"Content-Type": "application/json"},
                 query_string={
-                    "access_token": default_user.access_token,
+                    "access_token": user0.access_token,
                     "workflow_name": "test",
                 },
                 data=json.dumps(workflow_specification),
@@ -144,7 +145,7 @@ def test_create_workflow(
                 url_for("workflows.create_workflow"),
                 headers={"Content-Type": "application/json"},
                 query_string={
-                    "access_token": default_user.access_token,
+                    "access_token": user0.access_token,
                     "workflow_name": "test",
                 },
                 data=json.dumps(workflow_specification),
@@ -157,7 +158,7 @@ def test_create_workflow(
                 url_for("workflows.create_workflow"),
                 headers={"Content-Type": "application/json"},
                 query_string={
-                    "access_token": default_user.access_token,
+                    "access_token": user0.access_token,
                     "workflow_name": "test",
                 },
                 data=json.dumps(workflow_specification),
@@ -166,7 +167,7 @@ def test_create_workflow(
 
 
 def test_start_workflow_validates_specification(
-    app, session, default_user, sample_serial_workflow_in_db
+    app, session, user0, sample_serial_workflow_in_db
 ):
     with app.test_client() as client:
         sample_serial_workflow_in_db.status = RunStatus.created
@@ -185,7 +186,7 @@ def test_start_workflow_validates_specification(
             ),
             headers={"Content-Type": "application/json"},
             query_string={
-                "access_token": default_user.access_token,
+                "access_token": user0.access_token,
             },
             data=json.dumps({}),
         )
@@ -193,7 +194,7 @@ def test_start_workflow_validates_specification(
 
 
 def test_restart_workflow_validates_specification(
-    app, session, default_user, sample_serial_workflow_in_db
+    app, session, user0, sample_serial_workflow_in_db
 ):
     with app.test_client() as client:
         sample_serial_workflow_in_db.status = RunStatus.finished
@@ -213,7 +214,7 @@ def test_restart_workflow_validates_specification(
             url_for("workflows.start_workflow", workflow_id_or_name="test"),
             headers={"Content-Type": "application/json"},
             query_string={
-                "access_token": default_user.access_token,
+                "access_token": user0.access_token,
             },
             data=json.dumps(body),
         )
@@ -221,7 +222,7 @@ def test_restart_workflow_validates_specification(
 
 
 def test_get_workflow_specification(
-    app, default_user, _get_user_mock, sample_yadage_workflow_in_db
+    app, user0, _get_user_mock, sample_yadage_workflow_in_db
 ):
     """Test get_workflow_specification view."""
     with app.test_client() as client:
@@ -248,7 +249,7 @@ def test_get_workflow_specification(
                     workflow_id_or_name=sample_yadage_workflow_in_db.id_,
                 ),
                 headers={"Content-Type": "application/json"},
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": user0.access_token},
                 data=json.dumps(None),
             )
             parsed_res = json.loads(res.data)
@@ -267,7 +268,7 @@ def test_get_workflow_specification(
             )
 
 
-def test_get_workflow_logs(app, default_user, _get_user_mock):
+def test_get_workflow_logs(app, user0, _get_user_mock):
     """Test get_workflow_logs view."""
     with app.test_client() as client:
         with patch(
@@ -288,13 +289,13 @@ def test_get_workflow_logs(app, default_user, _get_user_mock):
             res = client.get(
                 url_for("workflows.get_workflow_logs", workflow_id_or_name="1"),
                 headers={"Content-Type": "application/json"},
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": user0.access_token},
                 data=json.dumps(None),
             )
             assert res.status_code == 200
 
 
-def test_get_workflow_status(app, default_user, _get_user_mock):
+def test_get_workflow_status(app, user0, _get_user_mock):
     """Test get_workflow_logs view."""
     with app.test_client() as client:
         with patch(
@@ -314,12 +315,12 @@ def test_get_workflow_status(app, default_user, _get_user_mock):
             res = client.get(
                 url_for("workflows.get_workflow_status", workflow_id_or_name="1"),
                 headers={"Content-Type": "application/json"},
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": user0.access_token},
             )
             assert res.status_code == 200
 
 
-def test_set_workflow_status(app, default_user, _get_user_mock):
+def test_set_workflow_status(app, user0, _get_user_mock):
     """Test get_workflow_logs view."""
     with app.test_client() as client:
         with patch(
@@ -340,7 +341,7 @@ def test_set_workflow_status(app, default_user, _get_user_mock):
             res = client.put(
                 url_for("workflows.set_workflow_status", workflow_id_or_name="1"),
                 headers={"Content-Type": "application/json"},
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": user0.access_token},
             )
             assert res.status_code == 500
 
@@ -348,7 +349,7 @@ def test_set_workflow_status(app, default_user, _get_user_mock):
                 url_for("workflows.set_workflow_status", workflow_id_or_name="1"),
                 headers={"Content-Type": "application/json"},
                 query_string={
-                    "access_token": default_user.access_token,
+                    "access_token": user0.access_token,
                     "status": "stop",
                 },
                 data=json.dumps(dict(parameters=None)),
@@ -356,7 +357,7 @@ def test_set_workflow_status(app, default_user, _get_user_mock):
             assert res.status_code == 200
 
 
-def test_upload_file(app, default_user, _get_user_mock):
+def test_upload_file(app, user0, _get_user_mock):
     """Test upload_file view."""
     with app.test_client() as client:
         with patch("reana_server.rest.workflows.requests"):
@@ -382,7 +383,7 @@ def test_upload_file(app, default_user, _get_user_mock):
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
                 query_string={
-                    "access_token": default_user.access_token,
+                    "access_token": user0.access_token,
                     "file_name": "test_upload.txt",
                 },
                 headers={"Content-Type": "multipart/form-data"},
@@ -393,7 +394,7 @@ def test_upload_file(app, default_user, _get_user_mock):
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
                 query_string={
-                    "access_token": default_user.access_token,
+                    "access_token": user0.access_token,
                     "file_name": None,
                 },
                 headers={"Content-Type": "application/octet-stream"},
@@ -412,7 +413,7 @@ def test_upload_file(app, default_user, _get_user_mock):
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
                 query_string={
-                    "access_token": default_user.access_token,
+                    "access_token": user0.access_token,
                     "file_name": "test_upload.txt",
                 },
                 headers={"Content-Type": "application/octet-stream"},
@@ -427,7 +428,7 @@ def test_upload_file(app, default_user, _get_user_mock):
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
                 query_string={
-                    "access_token": default_user.access_token,
+                    "access_token": user0.access_token,
                     "file_name": "empty.txt",
                 },
                 headers={"Content-Type": "application/octet-stream"},
@@ -439,7 +440,7 @@ def test_upload_file(app, default_user, _get_user_mock):
             assert not data.read()
 
 
-def test_download_file(app, default_user, _get_user_mock):
+def test_download_file(app, user0, _get_user_mock):
     """Test download_file view."""
     with app.test_client() as client:
         with patch("reana_server.rest.workflows.requests"):
@@ -483,14 +484,14 @@ def test_download_file(app, default_user, _get_user_mock):
                     workflow_id_or_name="1",
                     file_name="test_download",
                 ),
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": user0.access_token},
             )
 
             requests_client.get.assert_called_once()
             assert requests_client.get.return_value.status_code == 200
 
 
-def test_delete_file(app, default_user, _get_user_mock):
+def test_delete_file(app, user0, _get_user_mock):
     """Test delete_file view."""
     mock_response = Mock()
     mock_response.headers = {"Content-Type": "multipart/form-data"}
@@ -530,12 +531,12 @@ def test_delete_file(app, default_user, _get_user_mock):
                     workflow_id_or_name="1",
                     file_name="test_delete.txt",
                 ),
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": user0.access_token},
             )
             assert res.status_code == 200
 
 
-def test_get_files(app, default_user, _get_user_mock):
+def test_get_files(app, user0, _get_user_mock):
     """Test get_files view."""
     with app.test_client() as client:
         with patch(
@@ -553,7 +554,7 @@ def test_get_files(app, default_user, _get_user_mock):
 
             res = client.get(
                 url_for("workflows.get_files", workflow_id_or_name="1"),
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": user0.access_token},
             )
             assert res.status_code == 500
 
@@ -568,12 +569,12 @@ def test_get_files(app, default_user, _get_user_mock):
         ):
             res = client.get(
                 url_for("workflows.get_files", workflow_id_or_name="1"),
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": user0.access_token},
             )
             assert res.status_code == 200
 
 
-def test_move_files(app, default_user, _get_user_mock):
+def test_move_files(app, user0, _get_user_mock):
     """Test move_files view."""
     with app.test_client() as client:
         with patch(
@@ -583,7 +584,7 @@ def test_move_files(app, default_user, _get_user_mock):
             res = client.put(
                 url_for("workflows.move_files", workflow_id_or_name="1"),
                 query_string={
-                    "user": default_user.id_,
+                    "user": user0.id_,
                     "source": "source.txt",
                     "target": "target.txt",
                 },
@@ -593,7 +594,7 @@ def test_move_files(app, default_user, _get_user_mock):
             res = client.put(
                 url_for("workflows.move_files", workflow_id_or_name="1"),
                 query_string={
-                    "user": default_user.id_,
+                    "user": user0.id_,
                     "source": "source.txt",
                     "target": "target.txt",
                     "access_token": "wrongtoken",
@@ -613,7 +614,7 @@ def test_move_files(app, default_user, _get_user_mock):
                 res = client.put(
                     url_for("workflows.move_files", workflow_id_or_name="1"),
                     query_string={
-                        "access_token": default_user.access_token,
+                        "access_token": user0.access_token,
                         "source": "source.txt",
                         "target": "target.txt",
                     },
@@ -628,7 +629,7 @@ def test_move_files(app, default_user, _get_user_mock):
 )
 def test_open_interactive_session(
     app,
-    default_user,
+    user0,
     sample_serial_workflow_in_db,
     interactive_session_type,
     expected_status_code,
@@ -646,7 +647,7 @@ def test_open_interactive_session(
                     workflow_id_or_name=sample_serial_workflow_in_db.id_,
                     interactive_session_type=interactive_session_type,
                 ),
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": user0.access_token},
             )
             assert res.status_code == expected_status_code
 
@@ -654,7 +655,7 @@ def test_open_interactive_session(
 @pytest.mark.parametrize(("expected_status_code"), [200])
 def test_close_interactive_session(
     app,
-    default_user,
+    user0,
     sample_serial_workflow_in_db,
     expected_status_code,
     _get_user_mock,
@@ -670,7 +671,7 @@ def test_close_interactive_session(
                     "workflows.close_interactive_session",
                     workflow_id_or_name=sample_serial_workflow_in_db.id_,
                 ),
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": user0.access_token},
             )
             assert res.status_code == expected_status_code
 
@@ -711,7 +712,7 @@ def test_create_and_associate_local_user(app, session):
     assert user.username == mock_user.email
 
 
-def test_get_workflow_retention_rules(app, default_user):
+def test_get_workflow_retention_rules(app, user0):
     """Test get_workflow_retention_rules."""
     endpoint_url = url_for(
         "workflows.get_workflow_retention_rules", workflow_id_or_name="workflow"
@@ -736,13 +737,13 @@ def test_get_workflow_retention_rules(app, default_user):
             ),
         ):
             res = client.get(
-                endpoint_url, query_string={"access_token": default_user.access_token}
+                endpoint_url, query_string={"access_token": user0.access_token}
             )
             assert res.status_code == status_code
             assert "message" in res.json
 
 
-def test_prune_workspace(app, default_user, sample_serial_workflow_in_db):
+def test_prune_workspace(app, user0, sample_serial_workflow_in_db):
     """Test prune_workspace."""
     endpoint_url = url_for(
         "workflows.prune_workspace",
@@ -763,14 +764,14 @@ def test_prune_workspace(app, default_user, sample_serial_workflow_in_db):
                 "workflows.prune_workspace",
                 workflow_id_or_name="invalid_wf",
             ),
-            query_string={"access_token": default_user.access_token},
+            query_string={"access_token": user0.access_token},
         )
         assert res.status_code == 403
 
         # Test normal behaviour
         status_code = 200
         res = client.post(
-            endpoint_url, query_string={"access_token": default_user.access_token}
+            endpoint_url, query_string={"access_token": user0.access_token}
         )
         assert res.status_code == status_code
         assert "The workspace has been correctly pruned." in res.json["message"]
@@ -778,7 +779,7 @@ def test_prune_workspace(app, default_user, sample_serial_workflow_in_db):
         res = client.post(
             endpoint_url,
             query_string={
-                "access_token": default_user.access_token,
+                "access_token": user0.access_token,
                 "include_inputs": True,
                 "include_outputs": True,
             },
