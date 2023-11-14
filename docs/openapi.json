@@ -3163,6 +3163,139 @@
         "summary": "Share a workflow with another user."
       }
     },
+    "/api/workflows/{workflow_id_or_name}/share-status": {
+      "get": {
+        "description": "This resource returns the share status of a given workflow.",
+        "operationId": "get_workflow_share_status",
+        "parameters": [
+          {
+            "description": "The API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Required. Workflow UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The response contains the share status of the workflow.",
+            "examples": {
+              "application/json": {
+                "shared_with": [
+                  {
+                    "user_email": "bob@example.org",
+                    "valid_until": "2022-11-24T23:59:59"
+                  }
+                ],
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest.1"
+              }
+            },
+            "schema": {
+              "properties": {
+                "shared_with": {
+                  "items": {
+                    "properties": {
+                      "user_email": {
+                        "type": "string"
+                      },
+                      "valid_until": {
+                        "type": "string",
+                        "x-nullable": true
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "workflow_id": {
+                  "type": "string"
+                },
+                "workflow_name": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Request failed. User not signed in.",
+            "examples": {
+              "application/json": {
+                "message": "User not signed in."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. Credentials are invalid or revoked.",
+            "examples": {
+              "application/json": {
+                "message": "Token not valid."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Request failed. Workflow does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Workflow mytest.1 does not exist."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Something went wrong."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get the share status of a workflow."
+      }
+    },
     "/api/workflows/{workflow_id_or_name}/specification": {
       "get": {
         "description": "This resource returns the REANA workflow specification used to start the workflow run. Resource is expecting a workflow UUID.",
