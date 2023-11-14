@@ -3608,3 +3608,132 @@ def unshare_workflow(workflow_id_or_name, user, user_email_to_unshare_with):
     except Exception as e:
         logging.exception(str(e))
         return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route("/workflows/<workflow_id_or_name>/share-status", methods=["GET"])
+@signin_required()
+def get_workflow_share_status(workflow_id_or_name, user):
+    r"""Get the share status of a workflow.
+
+    ---
+    get:
+      summary: Get the share status of a workflow.
+      description: >-
+        This resource returns the share status of a given workflow.
+      operationId: get_workflow_share_status
+      produces:
+       - application/json
+      parameters:
+        - name: access_token
+          in: query
+          description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Workflow UUID or name.
+          required: true
+          type: string
+      responses:
+        200:
+          description: >-
+            Request succeeded. The response contains the share status of the workflow.
+          schema:
+            type: object
+            properties:
+              workflow_id:
+                type: string
+              workflow_name:
+                type: string
+              shared_with:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    user_email:
+                      type: string
+                    valid_until:
+                      type: string
+                      x-nullable: true
+          examples:
+            application/json:
+              {
+                "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
+                "workflow_name": "mytest.1",
+                "shared_with": [
+                    {
+                      "user_email": "bob@example.org",
+                      "valid_until": "2022-11-24T23:59:59"
+                    }
+                ]
+              }
+        401:
+          description: >-
+            Request failed. User not signed in.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "User not signed in."
+              }
+        403:
+          description: >-
+            Request failed. Credentials are invalid or revoked.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Token not valid."
+              }
+        404:
+          description: >-
+            Request failed. Workflow does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Workflow mytest.1 does not exist."
+              }
+        500:
+          description: >-
+            Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Something went wrong."
+              }
+    """
+    try:
+        share_status_params = {
+            "workflow_id_or_name": workflow_id_or_name,
+            "user_id": str(user.id_),
+        }
+
+        response, http_response = current_rwc_api_client.api.get_workflow_share_status(
+            **share_status_params
+        ).result()
+
+        return jsonify(response), 200
+    except HTTPError as e:
+        logging.exception(str(e))
+        return jsonify(e.response.json()), e.response.status_code
+    except Exception as e:
+        logging.exception(str(e))
+        return jsonify({"message": str(e)}), 500
