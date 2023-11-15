@@ -149,13 +149,18 @@ class WorkflowExecutionScheduler(BaseConsumer):
             logs=logs,
         )
 
-    def _retry_submission(self, workflow_id: str, workflow_submission: Dict) -> None:
+    def _retry_submission(
+        self, workflow_id: str, workflow_submission: Dict, reason: Optional[str] = None
+    ) -> None:
         retry_count = workflow_submission.get("retry_count", 0)
+
         if retry_count >= REANA_SCHEDULER_REQUEUE_COUNT:
             error_message = (
                 f"Workflow {workflow_submission['workflow_id_or_name']} failed to schedule after "
                 f"{retry_count} retries. Giving up."
             )
+            if reason:
+                error_message += f"\nReason: {reason}"
             logging.error(error_message)
             self._fail_workflow(workflow_id, logs=error_message)
         else:
@@ -202,12 +207,12 @@ class WorkflowExecutionScheduler(BaseConsumer):
                     f'Workflow {http_response_json["workflow_id"]} successfully started.'
                 )
 
-            except HTTPBadGateway as api_e:
-                logging.error(
-                    "Workflow failed to start because RWC got an error while calling"
-                    f"an external service (i.e. DB):\n {api_e}",
-                    exc_info=True,
+            except HTTPBadGateway:
+                error = (
+                    "Workflow failed to start because reana-workflow-controller got an "
+                    "error while calling an external service (i.e. database)."
                 )
+                logging.exception(error)
             except HTTPNotFound as not_found_e:
                 # if workflow is not found, we cannot retry or report an error to workflow logs
                 retry = False
@@ -233,15 +238,14 @@ class WorkflowExecutionScheduler(BaseConsumer):
                     exc_info=True,
                 )
                 self._fail_workflow(workflow_id, logs=error_message)
-            except Exception as e:
-                logging.error(
-                    f"Something went wrong while calling RWC:\n {e}", exc_info=True
-                )
+            except Exception:
+                error = "Something went wrong while calling reana-workflow-controller."
+                logging.exception(error)
             finally:
                 sleep(REANA_SCHEDULER_REQUEUE_SLEEP)
                 if not started and retry:
                     message.reject()
-                    self._retry_submission(workflow_id, workflow_submission_copy)
+                    self._retry_submission(workflow_id, workflow_submission_copy, error)
                 else:
                     message.ack()
         else:
@@ -251,4 +255,4 @@ class WorkflowExecutionScheduler(BaseConsumer):
             )
             sleep(REANA_SCHEDULER_REQUEUE_SLEEP)
             message.reject()
-            self._retry_submission(workflow_id, workflow_submission_copy)
+            self._retry_submission(workflow_id, workflow_submission_copy, error)
