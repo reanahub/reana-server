@@ -1189,6 +1189,8 @@ def start_workflow(workflow_id_or_name, user):  # noqa
                 type: string
               status:
                 type: string
+              run_number:
+                type: string
               user:
                 type: string
           examples:
