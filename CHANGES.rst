@@ -5,6 +5,7 @@ Version 0.9.2 (UNRELEASED)
 --------------------------
 
 - Changes workflow scheduler logging behaviour to also report the main reason behind scheduling errors to the users.
+- Changes ``get_workflow_status`` endpoint to add an optional ``include_command`` parameter to show info about currently executing command.
 
 Version 0.9.1 (2023-09-27)
 --------------------------

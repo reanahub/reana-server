@@ -67,6 +67,7 @@ blueprint = Blueprint("workflows", __name__)
         "size": fields.Int(validate=validate.Range(min=1)),
         "include_progress": fields.Bool(location="query"),
         "include_workspace_size": fields.Bool(location="query"),
+        "include_last_command": fields.Bool(location="query"),
         "workflow_id_or_name": fields.Str(),
     }
 )
@@ -132,6 +133,10 @@ def get_workflows(user, **kwargs):  # noqa
         - name: include_workspace_size
           in: query
           description: Include size information of the workspace.
+          type: boolean
+        - name: include_last_command
+          in: query
+          description: Include information about the current command.
           type: boolean
         - name: workflow_id_or_name
           in: query
@@ -937,8 +942,14 @@ def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/status", methods=["GET"])
+@use_kwargs(
+    {
+        "include_workspace_size": fields.Bool(location="query"),
+        "include_last_command": fields.Bool(location="query"),
+    }
+)
 @signin_required()
-def get_workflow_status(workflow_id_or_name, user):  # noqa
+def get_workflow_status(workflow_id_or_name, user, **kwargs):  # noqa
     r"""Get workflow status.
 
     ---
@@ -961,6 +972,11 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
           description: The API access_token of workflow owner.
           required: false
           type: string
+        - name: include_last_command
+          in: query
+          description: Include additional information about the current command.
+          required: false
+          type: boolean
       responses:
         200:
           description: >-
@@ -1115,7 +1131,7 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
             raise ValueError("workflow_id_or_name is not supplied")
 
         response, http_response = current_rwc_api_client.api.get_workflow_status(
-            user=str(user.id_), workflow_id_or_name=workflow_id_or_name
+            user=str(user.id_), workflow_id_or_name=workflow_id_or_name, **kwargs
         ).result()
 
         return jsonify(response), http_response.status_code

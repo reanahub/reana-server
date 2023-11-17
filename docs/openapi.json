@@ -1319,6 +1319,12 @@
             "type": "boolean"
           },
           {
+            "description": "Include information about the current command.",
+            "in": "query",
+            "name": "include_last_command",
+            "type": "boolean"
+          },
+          {
             "description": "Optional analysis UUID or name to filter.",
             "in": "query",
             "name": "workflow_id_or_name",
@@ -3368,6 +3374,13 @@
             "name": "access_token",
             "required": false,
             "type": "string"
+          },
+          {
+            "description": "Include additional information about the current command.",
+            "in": "query",
+            "name": "include_last_command",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "produces": [
