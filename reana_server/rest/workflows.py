@@ -69,6 +69,9 @@ blueprint = Blueprint("workflows", __name__)
         "include_progress": fields.Bool(location="query"),
         "include_workspace_size": fields.Bool(location="query"),
         "workflow_id_or_name": fields.Str(),
+        "shared": fields.Bool(location="query"),
+        "shared_by": fields.Str(location="query"),
+        "shared_with": fields.Str(location="query"),
     }
 )
 @signin_required(token_required=False)
@@ -139,6 +142,21 @@ def get_workflows(user, **kwargs):  # noqa
           description: Optional analysis UUID or name to filter.
           required: false
           type: string
+        - name: shared
+          in: query
+          description: Optional flag to list all shared (owned and unowned) workflows.
+          required: false
+          type: boolean
+        - name: shared_by
+          in: query
+          description: Optional argument to list workflows shared by the specified user(s).
+          required: false
+          type: string
+        - name: shared_with
+          in: query
+          description: Optional argument to list workflows shared with the specified user(s).
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -171,6 +189,10 @@ def get_workflows(user, **kwargs):  # noqa
                     launcher_url:
                       type: string
                       x-nullable: true
+                    owner_email:
+                        type: string
+                    shared_with:
+                        type: string
                     created:
                       type: string
                     session_status:
