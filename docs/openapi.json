@@ -1324,6 +1324,27 @@
             "name": "workflow_id_or_name",
             "required": false,
             "type": "string"
+          },
+          {
+            "description": "Optional flag to list all shared (owned and unowned) workflows.",
+            "in": "query",
+            "name": "shared",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "Optional argument to list workflows shared by the specified user(s).",
+            "in": "query",
+            "name": "shared_by",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Optional argument to list workflows shared with the specified user(s).",
+            "in": "query",
+            "name": "shared_with",
+            "required": false,
+            "type": "string"
           }
         ],
         "produces": [
@@ -1396,6 +1417,9 @@
                         "x-nullable": true
                       },
                       "name": {
+                        "type": "string"
+                      },
+                      "owner_email": {
                         "type": "string"
                       },
                       "progress": {
@@ -1486,6 +1510,9 @@
                         "type": "string"
                       },
                       "session_uri": {
+                        "type": "string"
+                      },
+                      "shared_with": {
                         "type": "string"
                       },
                       "size": {
