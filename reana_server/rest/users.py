@@ -13,7 +13,8 @@ import traceback
 
 from bravado.exception import HTTPError
 from flask import Blueprint, jsonify
-from reana_db.models import AuditLogAction
+from reana_db.database import Session
+from reana_db.models import AuditLogAction, User, UserWorkflow, Workflow
 from reana_commons.config import (
     REANA_COMPONENT_PREFIX,
     REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
@@ -345,6 +346,268 @@ def request_token(user):
             200,
         )
 
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route("/users/shared-with-you", methods=["GET"])
+@signin_required()
+def get_users_shared_with_you(user):
+    r"""Endpoint to get users that shared workflow(s) with the authenticated user.
+
+    ---
+    get:
+      summary: Gets users that shared workflow(s) with the authenticated user.
+      description: >-
+        This resource provides information about users that shared
+        workflow(s) with the authenticated user.
+      operationId: get_users_shared_with_you
+      produces:
+        - application/json
+      parameters:
+        - name: access_token
+          in: query
+          description: API access_token of user.
+          required: false
+          type: string
+      responses:
+        200:
+          description: >-
+            Users that shared workflow(s) with the authenticated user.
+          schema:
+            type: object
+            properties:
+              users:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    email:
+                      type: string
+                    full_name:
+                      type: string
+                    username:
+                      type: string
+          examples:
+            application/json:
+              {
+                "users_shared_with_you": [
+                  {
+                    "email": "john.doe@example.org",
+                    "full_name": "John Doe",
+                    "username": "jdoe"
+                    }
+                ]
+            }
+        401:
+          description: >-
+            Error message indicating that the uses is not authenticated.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "User not logged in"
+              }
+        403:
+          description: >-
+            Request failed. User token not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Token is not valid."
+              }
+        500:
+          description: >-
+            Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal server error."
+              }
+    """
+    try:
+        shared_workflows_ids = (
+            Session.query(UserWorkflow.workflow_id)
+            .filter(UserWorkflow.user_id == user.id_)
+            .subquery()
+        )
+
+        shared_workflow_owners_ids = (
+            Session.query(Workflow.owner_id)
+            .filter(Workflow.id_.in_(shared_workflows_ids))
+            .distinct()
+            .subquery()
+        )
+
+        users = (
+            Session.query(User.email, User.full_name, User.username)
+            .filter(User.id_.in_(shared_workflow_owners_ids))
+            .all()
+        )
+
+        response = {"users_shared_with_you": []}
+
+        for email, full_name, username in users:
+            response["users_shared_with_you"].append(
+                {
+                    "email": email,
+                    "full_name": full_name,
+                    "username": username,
+                }
+            )
+
+        return jsonify(response), 200
+    except HTTPError as e:
+        logging.error(traceback.format_exc())
+        return jsonify(e.response.json()), e.response.status_code
+    except ValueError as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 403
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
+
+
+@blueprint.route("/users/you-shared-with", methods=["GET"])
+@signin_required()
+def get_users_you_shared_with(user):
+    r"""Endpoint to get users that the authenticated user shared workflow(s) with.
+
+    ---
+    get:
+      summary: Gets users that the authenticated user shared workflow(s) with.
+      description: >-
+        This resource provides information about users that the authenticated user
+        shared workflow(s) with.
+      operationId: get_users_you_shared_with
+      produces:
+        - application/json
+      parameters:
+        - name: access_token
+          in: query
+          description: API access_token of user.
+          required: false
+          type: string
+      responses:
+        200:
+          description: >-
+            Users that the authenticated user shared workflow(s) with.
+          schema:
+            type: object
+            properties:
+              users:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    email:
+                      type: string
+                    full_name:
+                      type: string
+                    username:
+                      type: string
+          examples:
+            application/json:
+              {
+                "users_you_shared_with": [
+                  {
+                    "email": "john.doe@example.org",
+                    "full_name": "John Doe",
+                    "username": "jdoe"
+                    }
+                ]
+            }
+        401:
+          description: >-
+            Error message indicating that the uses is not authenticated.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "User not logged in"
+              }
+        403:
+          description: >-
+            Request failed. User token not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Token is not valid."
+              }
+        500:
+          description: >-
+            Request failed. Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Internal server error."
+              }
+    """
+    try:
+        owned_workflows_ids = (
+            Session.query(Workflow.id_).filter(Workflow.owner_id == user.id_).subquery()
+        )
+
+        users_you_shared_with_ids = (
+            Session.query(UserWorkflow.user_id)
+            .filter(UserWorkflow.workflow_id.in_(owned_workflows_ids))
+            .distinct()
+            .subquery()
+        )
+
+        users = (
+            Session.query(User.email, User.full_name, User.username)
+            .filter(User.id_.in_(users_you_shared_with_ids))
+            .all()
+        )
+
+        response = {"users_you_shared_with": []}
+
+        for email, full_name, username in users:
+            response["users_you_shared_with"].append(
+                {
+                    "email": email,
+                    "full_name": full_name,
+                    "username": username,
+                }
+            )
+
+        return jsonify(response), 200
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code

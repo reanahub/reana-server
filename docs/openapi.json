@@ -1242,6 +1242,216 @@
         "summary": "Requests a new access token for the authenticated user."
       }
     },
+    "/api/users/shared-with-you": {
+      "get": {
+        "description": "This resource provides information about users that shared workflow(s) with the authenticated user.",
+        "operationId": "get_users_shared_with_you",
+        "parameters": [
+          {
+            "description": "API access_token of user.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Users that shared workflow(s) with the authenticated user.",
+            "examples": {
+              "application/json": {
+                "users_shared_with_you": [
+                  {
+                    "email": "john.doe@example.org",
+                    "full_name": "John Doe",
+                    "username": "jdoe"
+                  }
+                ]
+              }
+            },
+            "schema": {
+              "properties": {
+                "users": {
+                  "items": {
+                    "properties": {
+                      "email": {
+                        "type": "string"
+                      },
+                      "full_name": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Error message indicating that the uses is not authenticated.",
+            "examples": {
+              "application/json": {
+                "message": "User not logged in"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. User token not valid.",
+            "examples": {
+              "application/json": {
+                "message": "Token is not valid."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal server error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Gets users that shared workflow(s) with the authenticated user."
+      }
+    },
+    "/api/users/you-shared-with": {
+      "get": {
+        "description": "This resource provides information about users that the authenticated user shared workflow(s) with.",
+        "operationId": "get_users_you_shared_with",
+        "parameters": [
+          {
+            "description": "API access_token of user.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Users that the authenticated user shared workflow(s) with.",
+            "examples": {
+              "application/json": {
+                "users_you_shared_with": [
+                  {
+                    "email": "john.doe@example.org",
+                    "full_name": "John Doe",
+                    "username": "jdoe"
+                  }
+                ]
+              }
+            },
+            "schema": {
+              "properties": {
+                "users": {
+                  "items": {
+                    "properties": {
+                      "email": {
+                        "type": "string"
+                      },
+                      "full_name": {
+                        "type": "string"
+                      },
+                      "username": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Error message indicating that the uses is not authenticated.",
+            "examples": {
+              "application/json": {
+                "message": "User not logged in"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. User token not valid.",
+            "examples": {
+              "application/json": {
+                "message": "Token is not valid."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal server error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Gets users that the authenticated user shared workflow(s) with."
+      }
+    },
     "/api/workflows": {
       "get": {
         "description": "This resource return all current workflows in JSON format.",
