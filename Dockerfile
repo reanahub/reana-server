@@ -37,10 +37,6 @@ RUN apt-get update -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
-COPY requirements.txt /code/
-RUN pip install --no-cache-dir -r /code/requirements.txt
-
 # Copy cluster component source code
 WORKDIR /code
 COPY . /code
