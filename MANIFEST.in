@@ -11,7 +11,6 @@ include *.txt
 include .flake8
 include pytest.ini
 include docs/*.json
-include scripts/*
 include docs/requirements.txt
 include Dockerfile
 include .dockerignore
@@ -22,6 +21,8 @@ prune docs/_build
 recursive-include docs *.py
 recursive-include docs *.png
 recursive-include docs *.rst
+recursive-include scripts *.py
+recursive-include scripts *.sh
 recursive-include tests *.py
 recursive-include tests *.txt
 global-exclude *.py[co] .DS_Store
