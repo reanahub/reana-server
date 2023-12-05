@@ -587,7 +587,15 @@
                   "properties": {
                     "additional_properties": {
                       "items": {
-                        "type": "string"
+                        "properties": {
+                          "path": {
+                            "type": "string"
+                          },
+                          "property": {
+                            "type": "string"
+                          }
+                        },
+                        "type": "object"
                       },
                       "type": "array"
                     }
