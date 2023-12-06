@@ -5,6 +5,7 @@ Version 0.9.2 (UNRELEASED)
 --------------------------
 
 - Changes workflow scheduler logging behaviour to also report the main reason behind scheduling errors to the users.
+- Fixes runtime uWSGI warning by rebuilding uWSGI with the PCRE support.
 
 Version 0.9.1 (2023-09-27)
 --------------------------
