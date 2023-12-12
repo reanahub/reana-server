@@ -71,3 +71,15 @@ EXPOSE 5000
 
 # Run server
 CMD ["uwsgi --ini uwsgi.ini"]
+
+# Set image labels
+LABEL org.opencontainers.image.authors="team@reanahub.io"
+LABEL org.opencontainers.image.created="2023-12-12"
+LABEL org.opencontainers.image.description="REANA reproducible analysis platform - server component"
+LABEL org.opencontainers.image.documentation="https://reana-server.readthedocs.io/"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.source="https://github.com/reanahub/reana-server"
+LABEL org.opencontainers.image.title="reana-server"
+LABEL org.opencontainers.image.url="https://github.com/reanahub/reana-server"
+LABEL org.opencontainers.image.vendor="reanahub"
+LABEL org.opencontainers.image.version="0.9.2"
