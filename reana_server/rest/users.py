@@ -195,6 +195,7 @@ def get_you(user):
             return (
                 jsonify(
                     {
+                        "id_": user.id_,
                         "email": user.email,
                         "reana_server_version": __version__,
                         "reana_token": {
