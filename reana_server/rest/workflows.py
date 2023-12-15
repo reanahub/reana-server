@@ -790,7 +790,9 @@ def get_workflow_specification(workflow_id_or_name, user):  # noqa
     try:
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
+        workflow = _get_workflow_with_uuid_or_name(
+            workflow_id_or_name, str(user.id_), True
+        )
 
         return (
             jsonify(
@@ -2969,7 +2971,9 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
+        workflow = _get_workflow_with_uuid_or_name(
+            workflow_id_or_name, str(user.id_), True
+        )
         summarize = bool(parameters.get("summarize", False))
         search = parameters.get("search", None)
         disk_usage_info = workflow.get_workspace_disk_usage(
