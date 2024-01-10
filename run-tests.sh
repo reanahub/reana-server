@@ -1,15 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2017, 2018, 2020, 2021, 2022, 2023, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 
-# Quit on errors
 set -o errexit
-
-# Quit on unbound symbols
 set -o nounset
 
 export REANA_SQLALCHEMY_DATABASE_URI=postgresql+psycopg2://postgres:mysecretpassword@localhost/postgres
@@ -52,8 +49,26 @@ stop_db_container () {
     docker stop postgres__reana-server
 }
 
-check_script () {
-    shellcheck run-tests.sh
+check_commitlint () {
+    from=${2:-master}
+    to=${3:-HEAD}
+    npx commitlint --from="$from" --to="$to"
+    found=0
+    while IFS= read -r line; do
+        if echo "$line" | grep -qP "\(\#[0-9]+\)$"; then
+            true
+        else
+            echo "✖   PR number missing in $line"
+            found=1
+        fi
+    done < <(git log "$from..$to" --format="%s")
+    if [ $found -gt 0 ]; then
+        exit 1
+    fi
+}
+
+check_shellcheck () {
+    find . -name "*.sh" -exec shellcheck {} \;
 }
 
 check_pydocstyle () {
@@ -99,7 +114,8 @@ check_docker_build () {
 }
 
 check_all () {
-    check_script
+    check_commitlint
+    check_shellcheck
     check_pydocstyle
     check_black
     check_flake8
@@ -116,19 +132,19 @@ if [ $# -eq 0 ]; then
     exit 0
 fi
 
-for arg in "$@"
-do
-    case $arg in
-        --check-shellscript) check_script;;
-        --check-pydocstyle) check_pydocstyle;;
-        --check-black) check_black;;
-        --check-flake8) check_flake8;;
-        --check-openapi-spec) check_openapi_spec;;
-        --check-manifest) check_manifest;;
-        --check-sphinx) check_sphinx;;
-        --check-pytest) check_pytest;;
-        --check-dockerfile) check_dockerfile;;
-        --check-docker-build) check_docker_build;;
-        *)
-    esac
-done
+arg="$1"
+case $arg in
+    --check-commitlint) check_commitlint "$@";;
+    --check-shellcheck) check_shellcheck;;
+    --check-pydocstyle) check_pydocstyle;;
+    --check-black) check_black;;
+    --check-flake8) check_flake8;;
+    --check-openapi-spec) check_openapi_spec;;
+    --check-manifest) check_manifest;;
+    --check-sphinx) check_sphinx;;
+    --check-pytest) check_pytest;;
+    --check-all) check_all;;
+    --check-dockerfile) check_dockerfile;;
+    --check-docker-build) check_docker_build;;
+    *) echo "[ERROR] Invalid argument '$arg'. Exiting." && exit 1;;
+esac
