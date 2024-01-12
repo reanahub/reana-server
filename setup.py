@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -87,6 +87,7 @@ install_requires = [
     "invenio-oauth2server>=1.3.0,<1.4.0",
     "invenio-oauthclient>=1.5.0,<1.6.0",
     "invenio-userprofiles>=1.2.0,<1.3.0",
+    "invenio-userprofiles>=1.2.0,<1.2.5",  # pin <1.2.5 due to import-related changes in upstream
     "invenio-theme>=1.4.7,<2.0.0",
     "invenio-i18n>=1.3.3,<2.0.0",
     # Invenio database
