@@ -15,6 +15,14 @@
         { "type": "docs", "section": "Documentation", "hidden": false },
         { "type": "chore", "section": "Chores", "hidden": true }
       ],
+      "extra-files": [
+        "Dockerfile",
+        {
+          "type": "json",
+          "path": "docs/openapi.json",
+          "jsonpath": "$.info.version"
+        }
+      ],
       "versioning": "always-bump-patch"
     }
   },
