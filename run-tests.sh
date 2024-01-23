@@ -68,7 +68,7 @@ check_commitlint () {
 }
 
 check_shellcheck () {
-    find . -name "*.sh" -exec shellcheck {} \;
+    find . -name "*.sh" -exec shellcheck {} \+
 }
 
 check_pydocstyle () {
