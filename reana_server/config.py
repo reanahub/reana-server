@@ -392,9 +392,9 @@ _reana_interactive_session_max_inactivity_period_env = os.getenv(
 if _reana_interactive_session_max_inactivity_period_env == "forever":
     REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD: Optional[str] = None
 else:
-    REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD: Optional[
-        str
-    ] = _reana_interactive_session_max_inactivity_period_env
+    REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD: Optional[str] = (
+        _reana_interactive_session_max_inactivity_period_env
+    )
 """Maximum allowed period (in days) for interactive session inactivity before automatic closure."""
 
 # Kubernetes jobs timeout

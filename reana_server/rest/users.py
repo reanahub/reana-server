@@ -199,9 +199,11 @@ def get_you(user):
                         "reana_token": {
                             "value": user.access_token,
                             "status": user.access_token_status,
-                            "requested_at": user.latest_access_token.created
-                            if user.latest_access_token
-                            else None,
+                            "requested_at": (
+                                user.latest_access_token.created
+                                if user.latest_access_token
+                                else None
+                            ),
                         },
                         "full_name": user.full_name,
                         "username": user.username,

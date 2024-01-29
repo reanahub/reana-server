@@ -238,9 +238,9 @@ def launch(user, url, name="", parameters="{}", specification=None):
             "message": "The workflow has been successfully submitted.",
         }
         if validation_warnings:
-            response_data[
-                "message"
-            ] = "The workflow has been successfully submitted, but some warnings were issued."
+            response_data["message"] = (
+                "The workflow has been successfully submitted, but some warnings were issued."
+            )
             response_data["validation_warnings"] = validation_warnings
         return LaunchSchema().dump(response_data)
     except HTTPError as e:
