@@ -15,8 +15,8 @@ import re
 
 from setuptools import find_packages, setup
 
-readme = open("README.rst").read()
-history = open("CHANGES.rst").read()
+readme = open("README.md").read()
+history = open("CHANGELOG.md").read()
 
 tests_require = [
     "pytest-reana>=0.9.2,<0.10.0",
@@ -29,6 +29,7 @@ extras_require = {
         "Flask-DebugToolbar",
     ],
     "docs": [
+        "myst-parser",
         "Sphinx>=1.5.1",
         "sphinx-rtd-theme>=0.1.9",
         "sphinxcontrib-httpdomain>=1.5.0",
@@ -109,6 +110,7 @@ setup(
     version=version,
     description=__doc__,
     long_description=readme + "\n\n" + history,
+    long_description_content_type="text/markdown",
     author="REANA",
     author_email="info@reana.io",
     url="https://github.com/reanahub/reana-server",

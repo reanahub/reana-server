@@ -6,7 +6,6 @@
 
 include *.json
 include *.md
-include *.rst
 include *.sh
 include *.txt
 include *.yaml
@@ -23,7 +22,7 @@ recursive-include reana_server/templates *.txt
 prune docs/_build
 recursive-include docs *.py
 recursive-include docs *.png
-recursive-include docs *.rst
+recursive-include docs *.md
 recursive-include scripts *.py
 recursive-include scripts *.sh
 recursive-include tests *.py
