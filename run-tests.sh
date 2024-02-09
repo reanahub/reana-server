@@ -40,7 +40,7 @@ clean_old_db_container () {
 
 start_db_container () {
     echo '==> [INFO] Starting DB container...'
-    docker run --rm --name postgres__reana-server -p 5432:5432 -e POSTGRES_PASSWORD=mysecretpassword -d docker.io/library/postgres:12.13
+    docker run --rm --name postgres__reana-server -p 5432:5432 -e POSTGRES_PASSWORD=mysecretpassword -d docker.io/library/postgres:14.10
     _check_ready "Postgres" _db_check
 }
 
