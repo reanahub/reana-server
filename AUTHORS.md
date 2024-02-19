@@ -3,8 +3,9 @@
 The list of contributors in alphabetical order:
 
 - [Adelina Lintuluoto](https://orcid.org/0000-0002-0726-1452)
-- [Audrius Mecionis](https://orcid.org/0000-0002-3759-1663)
 - [Anton Khodak](https://orcid.org/0000-0003-3263-4553)
+- [Audrius Mecionis](https://orcid.org/0000-0002-3759-1663)
+- [Bruno Rosendo](https://orcid.org/0000-0002-0923-3148)
 - [Camila Diaz](https://orcid.org/0000-0001-5543-797X)
 - [Daan Rosendal](https://github.com/DaanRosendal)
 - [Diego Rodriguez](https://orcid.org/0000-0003-0649-2002)
@@ -17,6 +18,7 @@ The list of contributors in alphabetical order:
 - [Marco Donadoni](https://orcid.org/0000-0003-2922-5505)
 - [Marco Vidal](https://orcid.org/0000-0002-9363-4971)
 - [Michael R. Crusoe](https://orcid.org/0000-0002-2961-9670)
+- [Parth Shandilya](https://github.com/ParthS007)
 - [Rokas Maciulaitis](https://orcid.org/0000-0003-1064-6967)
 - [Sinclert Perez](https://www.linkedin.com/in/sinclert)
 - [Tibor Simko](https://orcid.org/0000-0001-7202-5803)
