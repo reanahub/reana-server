@@ -157,8 +157,8 @@ pywebpack==1.2.0          # via flask-webpackext
 pyyaml==6.0.1             # via bravado, bravado-core, kubernetes, packtivity, reana-commons, snakemake, swagger-spec-validator, yadage, yadage-schemas
 ratelimiter==1.2.0.post0  # via snakemake
 rdflib==5.0.0             # via cwltool, prov, schema-salad
-reana-commons[cwl,kubernetes,snakemake,yadage]==0.9.7	# via reana-commons, reana-db, reana-server (setup.py)
-reana-db==0.9.3	# via reana-server (setup.py)
+reana-commons[cwl,kubernetes,snakemake,yadage]==0.9.8	# via reana-commons, reana-db, reana-server (setup.py)
+reana-db==0.9.4	# via reana-server (setup.py)
 redis==5.0.1              # via invenio-accounts, invenio-celery
 requests[security]==2.25.0  # via bravado, bravado-core, cachecontrol, cwltool, kubernetes, packtivity, reana-server (setup.py), requests-oauthlib, schema-salad, snakemake, yadage, yadage-schemas
 requests-oauthlib==1.1.0  # via flask-oauthlib, invenio-oauth2server, invenio-oauthclient, kubernetes
