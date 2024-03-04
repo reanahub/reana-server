@@ -2,7 +2,7 @@
   "info": {
     "description": "Submit workflows to be run on REANA Cloud",
     "title": "REANA Server",
-    "version": "0.9.2"
+    "version": "0.9.3"
   },
   "paths": {
     "/account/settings/linkedaccounts/": {},

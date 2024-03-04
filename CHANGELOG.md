@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.9.3](https://github.com/reanahub/reana-server/compare/0.9.2...0.9.3) (2024-03-04)
+
+
+### Build
+
+* **deps:** pin invenio-userprofiles to 1.2.4 ([#665](https://github.com/reanahub/reana-server/issues/665)) ([d6cb168](https://github.com/reanahub/reana-server/commit/d6cb16854aea78d852ab43987a44933a9d6fbcad))
+* **docker:** non-editable submodules in "latest" mode ([#656](https://github.com/reanahub/reana-server/issues/656)) ([d16fefb](https://github.com/reanahub/reana-server/commit/d16fefb421e1d0cc712006c6a697ea67057b1f6c))
+* **python:** bump all required packages as of 2024-03-04 ([#674](https://github.com/reanahub/reana-server/issues/674)) ([f40b82f](https://github.com/reanahub/reana-server/commit/f40b82f983d295348a4a5a537b4147a9dc8b6dae))
+* **python:** bump shared modules ([#676](https://github.com/reanahub/reana-server/issues/676)) ([47ad3ca](https://github.com/reanahub/reana-server/commit/47ad3caab04119568b0f790075784aae59c3818d))
+* **python:** bump shared REANA packages as of 2024-03-04 ([#674](https://github.com/reanahub/reana-server/issues/674)) ([aa18394](https://github.com/reanahub/reana-server/commit/aa18394458d56806913e224e1b6651a177d18b39))
+
+
+### Code refactoring
+
+* **docs:** move from reST to Markdown ([#671](https://github.com/reanahub/reana-server/issues/671)) ([b6d1799](https://github.com/reanahub/reana-server/commit/b6d1799552085e1a9c2ad53eafcd572f1af4f3bf))
+
+
+### Code style
+
+* **black:** format with black v24 ([#670](https://github.com/reanahub/reana-server/issues/670)) ([6d2b898](https://github.com/reanahub/reana-server/commit/6d2b898b2322e6677739fdb1c3bd3916a3cf0887))
+
+
+### Continuous integration
+
+* **commitlint:** addition of commit message linter ([#665](https://github.com/reanahub/reana-server/issues/665)) ([2b43ecc](https://github.com/reanahub/reana-server/commit/2b43eccdd7587970f92093b4d315a7a90b5f45ac))
+* **commitlint:** allow release commit style ([#675](https://github.com/reanahub/reana-server/issues/675)) ([e0299ef](https://github.com/reanahub/reana-server/commit/e0299efb273f2c95f88f86261c97a4bc6100786d))
+* **commitlint:** check for the presence of concrete PR number ([#669](https://github.com/reanahub/reana-server/issues/669)) ([87c6145](https://github.com/reanahub/reana-server/commit/87c6145e636d852ba5fd5ca6fa2cfc23ff6563d2))
+* **pytest:** move to PostgreSQL 14.10 ([#672](https://github.com/reanahub/reana-server/issues/672)) ([e888ddd](https://github.com/reanahub/reana-server/commit/e888ddd70d8ca17d4567c24b7d78a57bf6f8e060))
+* **release-please:** initial configuration ([#665](https://github.com/reanahub/reana-server/issues/665)) ([1d5e7c5](https://github.com/reanahub/reana-server/commit/1d5e7c5f4c3d471d0b2028274ec1785b53552d89))
+* **release-please:** update version in Dockerfile/OpenAPI specs ([#668](https://github.com/reanahub/reana-server/issues/668)) ([3b3dc41](https://github.com/reanahub/reana-server/commit/3b3dc418f40d5ce461e4a7418178f6a8cec2721f))
+* **shellcheck:** fix exit code propagation ([#669](https://github.com/reanahub/reana-server/issues/669)) ([d7eac6b](https://github.com/reanahub/reana-server/commit/d7eac6b26742797cb1b2c7077071fc3d2053aff1))
+
+
+### Documentation
+
+* **authors:** complete list of contributors ([#673](https://github.com/reanahub/reana-server/issues/673)) ([71b3f38](https://github.com/reanahub/reana-server/commit/71b3f387b0816e23a3315c379ed45af0bb6661a3))
+
 ## 0.9.2 (2023-12-12)
 
 - Adds automated multi-platform container image building for amd64 and arm64 architectures.
@@ -210,4 +247,3 @@
 ## 0.1.0 (2018-01-30)
 
 - Initial public release.
-
