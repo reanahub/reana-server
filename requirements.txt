@@ -5,14 +5,14 @@
 #    pip-compile --annotation-style=line --output-file=requirements.txt setup.py
 #
 adage==0.10.1             # via reana-commons, reana-server (setup.py), yadage
-alembic==1.12.1           # via flask-alembic, reana-db
+alembic==1.13.1           # via flask-alembic, reana-db
 amqp==5.2.0               # via kombu
 appdirs==1.4.4            # via fs, snakemake
-argcomplete==3.1.6        # via cwltool
+argcomplete==3.2.2        # via cwltool
 asttokens==2.4.1          # via stack-data
 async-timeout==4.0.3      # via redis
-attrs==23.1.0             # via jsonschema
-babel==2.13.1             # via flask-babelex, invenio-i18n
+attrs==23.2.0             # via jsonschema
+babel==2.14.0             # via flask-babelex, invenio-i18n
 backcall==0.2.0           # via ipython
 backports-zoneinfo[tzdata]==0.2.1  # via celery, kombu
 bagit==1.8.1              # via cwltool
@@ -20,12 +20,12 @@ billiard==3.6.4.0         # via celery
 blinker==1.7.0            # via flask-mail, flask-principal, invenio-base, invenio-oauthclient
 bracex==2.4               # via wcmatch
 bravado==10.3.2           # via reana-commons
-bravado-core==6.1.0       # via bravado
+bravado-core==6.1.0       # via bravado, reana-commons
 cachecontrol[filecache]==0.13.1  # via cachecontrol, schema-salad
 cachelib==0.9.0           # via flask-caching, flask-oauthlib, invenio-oauth2server
-cachetools==5.3.2         # via google-auth
+cachetools==5.3.3         # via google-auth
 celery==5.2.7             # via flask-celeryext, invenio-celery
-certifi==2023.11.17       # via kubernetes, requests
+certifi==2024.2.2         # via kubernetes, requests
 cffi==1.16.0              # via cryptography
 chardet==3.0.4            # via requests
 checksumdir==1.1.9        # via packtivity, reana-commons, yadage
@@ -36,16 +36,17 @@ click-repl==0.3.0         # via celery
 coloredlogs==15.0.1       # via cwltool
 configargparse==1.7       # via snakemake
 connection-pool==0.0.3    # via snakemake
-cryptography==41.0.7      # via invenio-accounts, pyopenssl, requests, sqlalchemy-utils
+cryptography==42.0.5      # via invenio-accounts, pyopenssl, requests, sqlalchemy-utils
 cwltool==3.1.20210628163208  # via reana-commons
 datrie==0.8.2             # via snakemake
 decorator==5.1.1          # via ipython, jsonpath-rw, networkx
-dnspython==2.4.2          # via email-validator
+dnspython==2.6.1          # via email-validator
 docutils==0.20.1          # via snakemake
-email-validator==2.1.0.post1  # via invenio-accounts, wtforms-components
+dpath==2.1.6              # via yte
+email-validator==2.1.1    # via invenio-accounts, wtforms-components
 executing==2.0.1          # via stack-data
-fastjsonschema==2.19.0    # via nbformat
-filelock==3.13.1          # via cachecontrol, snakemake
+fastjsonschema==2.19.1    # via nbformat
+filelock==3.13.1          # via cachecontrol
 flask==2.1.3              # via flask-alembic, flask-babelex, flask-breadcrumbs, flask-caching, flask-celeryext, flask-collect-invenio, flask-cors, flask-kvsession-invenio, flask-limiter, flask-login, flask-mail, flask-menu, flask-oauthlib, flask-principal, flask-security, flask-shell-ipython, flask-sqlalchemy, flask-webpackext, flask-wtf, invenio-base, invenio-config, invenio-mail, reana-server (setup.py)
 flask-alembic==2.0.1      # via invenio-db
 flask-babelex==0.9.4      # via flask-security, invenio-i18n
@@ -68,25 +69,25 @@ flask-talisman==0.8.1     # via invenio-app
 flask-webpackext==1.0.2   # via invenio-assets
 flask-wtf==1.2.1          # via flask-security, invenio-accounts, invenio-oauth2server, invenio-userprofiles
 fs==2.4.16                # via reana-commons
-future==0.18.3            # via invenio-oauth2server
+future==1.0.0             # via invenio-oauth2server
 gitdb==4.0.11             # via gitpython
-gitpython==3.1.40         # via reana-server (setup.py), snakemake
+gitpython==3.1.42         # via reana-server (setup.py), snakemake
 glob2==0.7                # via packtivity, yadage
-google-auth==2.24.0       # via kubernetes
-humanfriendly==10.0       # via coloredlogs
+google-auth==2.28.1       # via kubernetes
+humanfriendly==10.0       # via coloredlogs, snakemake
 idna==2.10                # via email-validator, jsonschema, requests
 importlib-metadata==4.13.0  # via alembic, flask, invenio-base, invenio-celery, invenio-oauth2server
-importlib-resources==6.1.1  # via alembic, invenio-base, schema-salad
+importlib-resources==6.1.2  # via alembic, invenio-base, schema-salad
 infinity==1.5             # via intervals
 intervals==0.9.2          # via wtforms-components
 invenio-accounts==1.4.13  # via invenio-oauth2server, invenio-oauthclient, invenio-userprofiles, reana-server (setup.py)
 invenio-app==1.3.4        # via reana-server (setup.py)
-invenio-assets==3.0.0     # via invenio-theme
-invenio-base==1.2.16      # via invenio-accounts, invenio-assets, invenio-cache, invenio-celery, invenio-db, invenio-i18n, invenio-oauth2server, invenio-oauthclient, invenio-rest, invenio-theme, invenio-userprofiles, reana-server (setup.py)
+invenio-assets==3.0.2     # via invenio-theme
+invenio-base==1.2.17      # via invenio-accounts, invenio-assets, invenio-cache, invenio-celery, invenio-db, invenio-i18n, invenio-oauth2server, invenio-oauthclient, invenio-rest, invenio-theme, invenio-userprofiles, reana-server (setup.py)
 invenio-cache==1.1.1      # via invenio-app, reana-server (setup.py)
 invenio-celery==1.2.5     # via invenio-accounts, invenio-app, invenio-logging
-invenio-config==1.0.3     # via invenio-app, reana-server (setup.py)
-invenio-db[postgresql]==1.0.14  # via invenio-db, invenio-logging, reana-server (setup.py)
+invenio-config==1.0.4     # via invenio-app, reana-server (setup.py)
+invenio-db[postgresql]==1.0.14  # via invenio-logging, reana-server (setup.py)
 invenio-i18n==1.3.3       # via invenio-accounts, invenio-oauth2server, invenio-oauthclient, invenio-theme, invenio-userprofiles, reana-server (setup.py)
 invenio-logging==1.3.2    # via reana-server (setup.py)
 invenio-mail==1.0.2       # via invenio-oauthclient, reana-server (setup.py)
@@ -99,23 +100,23 @@ ipython==8.12.3           # via flask-shell-ipython
 isodate==0.6.1            # via rdflib
 itsdangerous==2.0.1       # via flask, flask-kvsession-invenio, flask-security, flask-wtf, invenio-base, invenio-rest
 jedi==0.19.1              # via ipython
-jinja2==3.1.2             # via flask, flask-babelex, invenio-accounts
+jinja2==3.1.3             # via flask, flask-babelex, invenio-accounts, snakemake
 jq==1.6.0                 # via packtivity, yadage
 jsmin==3.0.1              # via invenio-theme
 jsonpath-rw==1.4.0        # via packtivity, yadage
 jsonpointer==2.4          # via jsonschema, packtivity, yadage
 jsonref==1.1.0            # via bravado-core, packtivity, yadage, yadage-schemas
 jsonschema[format]==3.2.0  # via bravado-core, nbformat, packtivity, reana-commons, snakemake, swagger-spec-validator, yadage, yadage-schemas
-jupyter-core==5.5.0       # via nbformat
-kombu==5.3.4              # via celery, reana-commons
+jupyter-core==5.7.1       # via nbformat
+kombu==5.3.5              # via celery, reana-commons
 kubernetes==22.6.0        # via reana-commons
 limits==1.6               # via flask-limiter, invenio-app
-lxml==4.9.3               # via prov
-mako==1.3.0               # via alembic
-markupsafe==2.1.3         # via invenio-base, jinja2, mako, wtforms, wtforms-components
+lxml==5.1.0               # via prov
+mako==1.3.2               # via alembic
+markupsafe==2.1.5         # via invenio-base, jinja2, mako, wtforms, wtforms-components
 marshmallow==2.20.1       # via invenio-rest, reana-server (setup.py), webargs
 matplotlib-inline==0.1.6  # via ipython
-maxminddb==2.5.1          # via maxminddb-geolite2
+maxminddb==2.5.2          # via maxminddb-geolite2
 maxminddb-geolite2==2018.703  # via invenio-accounts
 mistune==2.0.5            # via schema-salad
 mock==3.0.5               # via packtivity, reana-commons
@@ -127,53 +128,55 @@ nbformat==5.9.2           # via snakemake
 networkx==1.11            # via adage, prov
 node-semver==0.1.1        # via invenio-assets, pywebpack
 oauthlib==2.1.0           # via flask-oauthlib, invenio-oauthclient, requests-oauthlib
+packaging==23.2           # via snakemake
 packtivity==0.14.24       # via reana-server (setup.py), yadage
 parso==0.8.3              # via jedi
 passlib==1.7.4            # via flask-security, invenio-accounts
 pexpect==4.9.0            # via ipython
 pickleshare==0.7.5        # via ipython
-platformdirs==4.0.0       # via jupyter-core
+plac==1.4.3               # via yte
+platformdirs==4.2.0       # via jupyter-core
 ply==3.11                 # via jsonpath-rw
-prompt-toolkit==3.0.41    # via click-repl, ipython
+prompt-toolkit==3.0.43    # via click-repl, ipython
 prov==1.5.1               # via cwltool
-psutil==5.9.6             # via cwltool, snakemake, yadage
+psutil==5.9.8             # via cwltool, snakemake, yadage
 psycopg2-binary==2.9.9    # via invenio-db, reana-db
 ptyprocess==0.7.0         # via pexpect
-pulp==2.7.0               # via snakemake
+pulp==2.7.0               # via reana-commons, snakemake
 pure-eval==0.2.2          # via stack-data
 pyasn1==0.5.1             # via pyasn1-modules, rsa
 pyasn1-modules==0.3.0     # via google-auth
 pycparser==2.21           # via cffi
-pydot==1.4.2              # via cwltool
+pydot==2.0.0              # via cwltool
 pygments==2.17.2          # via ipython
 pyjwt==2.8.0              # via invenio-accounts, invenio-oauth2server
 pynpm==0.2.0              # via flask-webpackext, pywebpack
-pyopenssl==23.3.0         # via requests
+pyopenssl==24.0.0         # via requests
 pyparsing==3.1.1          # via pydot, rdflib
 pyrsistent==0.20.0        # via jsonschema
-python-dateutil==2.8.2    # via bravado, bravado-core, kubernetes, prov
-pytz==2023.3.post1        # via babel, bravado-core, celery
+python-dateutil==2.9.0    # via bravado, bravado-core, kubernetes, prov
+pytz==2024.1              # via babel, bravado-core, celery
 pywebpack==1.2.0          # via flask-webpackext
-pyyaml==6.0.1             # via bravado, bravado-core, kubernetes, packtivity, reana-commons, snakemake, swagger-spec-validator, yadage, yadage-schemas
-ratelimiter==1.2.0.post0  # via snakemake
+pyyaml==6.0.1             # via bravado, bravado-core, kubernetes, packtivity, reana-commons, snakemake, swagger-spec-validator, yadage, yadage-schemas, yte
 rdflib==5.0.0             # via cwltool, prov, schema-salad
-reana-commons[cwl,kubernetes,snakemake,yadage]==0.9.8	# via reana-commons, reana-db, reana-server (setup.py)
-reana-db==0.9.4	# via reana-server (setup.py)
-redis==5.0.1              # via invenio-accounts, invenio-celery
+reana-commons[cwl,kubernetes,snakemake,yadage]==0.9.8  # via reana-db, reana-server (setup.py)
+reana-db==0.9.4           # via reana-server (setup.py)
+redis==5.0.2              # via invenio-accounts, invenio-celery
 requests[security]==2.25.0  # via bravado, bravado-core, cachecontrol, cwltool, kubernetes, packtivity, reana-server (setup.py), requests-oauthlib, schema-salad, snakemake, yadage, yadage-schemas
 requests-oauthlib==1.1.0  # via flask-oauthlib, invenio-oauth2server, invenio-oauthclient, kubernetes
+reretry==0.11.8           # via snakemake
 rfc3987==1.3.8            # via jsonschema
 rsa==4.9                  # via google-auth
 ruamel-yaml==0.17.10      # via cwltool, schema-salad
 ruamel-yaml-clib==0.2.8   # via ruamel-yaml
-schema-salad==8.4.20231117150958  # via cwltool
+schema-salad==8.5.20240102191335  # via cwltool
 shellescape==3.8.1        # via cwltool
 simplejson==3.19.2        # via bravado, bravado-core
 simplekv==0.14.1          # via flask-kvsession-invenio, invenio-accounts
 six==1.16.0               # via asttokens, bravado, bravado-core, flask-breadcrumbs, flask-kvsession-invenio, flask-limiter, flask-menu, flask-talisman, fs, isodate, jsonpath-rw, jsonschema, kubernetes, limits, mock, prov, python-dateutil, rdflib, reana-server (setup.py), sqlalchemy-continuum, wtforms-components
-smart-open==6.4.0         # via snakemake
+smart-open==7.0.1         # via snakemake
 smmap==5.0.1              # via gitdb
-snakemake==6.8.0          # via reana-commons
+snakemake==7.32.4         # via reana-commons
 speaklater==1.3           # via flask-babelex
 sqlalchemy==1.3.24        # via alembic, flask-alembic, flask-sqlalchemy, invenio-db, reana-db, sqlalchemy-continuum, sqlalchemy-utils, wtforms-alchemy
 sqlalchemy-continuum==1.3.15  # via invenio-db
@@ -184,31 +187,33 @@ strict-rfc3339==0.7       # via jsonschema
 swagger-spec-validator==3.0.3  # via bravado-core
 tablib==3.5.0             # via reana-server (setup.py)
 tabulate==0.8.10          # via reana-commons, snakemake
+throttler==1.2.2          # via snakemake
 toposort==1.10            # via snakemake
-traitlets==5.14.0         # via ipython, jupyter-core, matplotlib-inline, nbformat
-typing-extensions==4.8.0  # via alembic, bravado, cwltool, ipython, kombu, swagger-spec-validator
-tzdata==2023.3            # via backports-zoneinfo, celery
+traitlets==5.14.1         # via ipython, jupyter-core, matplotlib-inline, nbformat
+typing-extensions==4.10.0  # via alembic, bravado, cwltool, ipython, kombu, swagger-spec-validator
+tzdata==2024.1            # via backports-zoneinfo, celery
 ua-parser==0.18.0         # via invenio-accounts
 uritools==4.0.2           # via invenio-app, invenio-oauthclient
 urllib3==1.26.18          # via kubernetes, requests
-uwsgi==2.0.23             # via reana-server (setup.py)
+uwsgi==2.0.24             # via reana-server (setup.py)
 uwsgi-tools==1.1.1        # via reana-server (setup.py)
 uwsgitop==0.11            # via reana-server (setup.py)
 validators==0.22.0        # via wtforms-components
 vine==5.1.0               # via amqp, celery, kombu
 watchdog==2.2.1           # via invenio-base
 wcmatch==8.4.1            # via reana-commons
-wcwidth==0.2.12           # via prompt-toolkit
+wcwidth==0.2.13           # via prompt-toolkit
 webargs==5.5.3            # via invenio-rest
 webcolors==1.13           # via jsonschema
-websocket-client==1.6.4   # via kubernetes
+websocket-client==1.7.0   # via kubernetes
 werkzeug==2.0.3           # via flask, flask-kvsession-invenio, invenio-base, reana-commons, reana-server (setup.py)
-wrapt==1.16.0             # via snakemake
+wrapt==1.16.0             # via smart-open, snakemake
 wtforms==2.3.3            # via flask-wtf, invenio-oauth2server, reana-server (setup.py), wtforms-alchemy, wtforms-components
 wtforms-alchemy==0.18.0   # via invenio-oauth2server
 wtforms-components==0.10.5  # via wtforms-alchemy
 yadage==0.20.1            # via reana-commons, reana-server (setup.py)
 yadage-schemas==0.10.6    # via packtivity, reana-commons, reana-server (setup.py), yadage
+yte==1.5.4                # via snakemake
 zipp==3.17.0              # via importlib-metadata, importlib-resources
 
 # The following packages are considered to be unsafe in a requirements file:
