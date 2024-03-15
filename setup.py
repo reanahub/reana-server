@@ -19,7 +19,7 @@ readme = open("README.md").read()
 history = open("CHANGELOG.md").read()
 
 tests_require = [
-    "pytest-reana>=0.9.2,<0.10.0",
+    "pytest-reana>=0.95.0a2,<0.96.0",
 ]
 
 extras_require = {
@@ -60,8 +60,8 @@ install_requires = [
     "flask-celeryext<0.5.0",
     "gitpython>=3.1",
     "marshmallow>2.13.0,<=2.20.1",
-    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.9.8,<0.10.0",
-    "reana-db>=0.9.4,<0.10.0",
+    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a2,<0.96.0",
+    "reana-db>=0.95.0a2,<0.96.0",
     "requests==2.25.0",
     "tablib>=0.12.1",
     "uWSGI>=2.0.17",

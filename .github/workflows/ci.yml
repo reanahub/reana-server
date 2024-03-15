@@ -190,6 +190,7 @@ jobs:
       - docs-sphinx
       - lint-black
       - lint-check-manifest
+      - lint-commitlint
       - lint-dockerfile
       - lint-flake8
       - lint-pydocstyle
