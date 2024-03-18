@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.95.0](https://github.com/reanahub/reana-server/compare/0.9.3...0.95.0) (2024-03-18)
+
+
+### Continuous integration
+
+* **actions:** update GitHub actions due to Node 16 deprecation ([#680](https://github.com/reanahub/reana-server/issues/680)) ([b7cc00a](https://github.com/reanahub/reana-server/commit/b7cc00afddb5035a3ed8f964ea33fb94bca3e2d8))
+
+
+### Chores
+
+* **master:** release 0.95.0-alpha.1 ([9fa4059](https://github.com/reanahub/reana-server/commit/9fa40595ce840391c4aed999c3d4dda4de7ad2eb))
+
 ## [0.9.3](https://github.com/reanahub/reana-server/compare/0.9.2...0.9.3) (2024-03-04)
 
 
