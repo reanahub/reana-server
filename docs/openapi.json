@@ -148,6 +148,22 @@
       "get": {
         "description": "Retrieve projects from GitLab.",
         "operationId": "gitlab_projects",
+        "parameters": [
+          {
+            "description": "The API access_token of the current user.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "The search string to filter the project list.",
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "type": "string"
+          }
+        ],
         "produces": [
           "application/json"
         ],

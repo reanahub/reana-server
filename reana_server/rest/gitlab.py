@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -10,6 +10,8 @@
 
 import logging
 import traceback
+from typing import Optional
+from urllib.parse import urljoin
 
 import requests
 from flask import (
@@ -25,6 +27,9 @@ from invenio_oauthclient.utils import get_safe_redirect_target
 from itsdangerous import BadData, TimedJSONWebSignatureSerializer
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from werkzeug.local import LocalProxy
+from webargs import fields
+from webargs.flaskparser import use_kwargs
+
 
 from reana_server.config import (
     REANA_GITLAB_OAUTH_APP_ID,
@@ -182,8 +187,9 @@ def gitlab_oauth(user):  # noqa
 
 
 @blueprint.route("/gitlab/projects", methods=["GET"])
+@use_kwargs({"search": fields.Str(location="query")})
 @signin_required()
-def gitlab_projects(user):  # noqa
+def gitlab_projects(user, search: Optional[str] = None):  # noqa
     r"""Endpoint to retrieve GitLab projects.
     ---
     get:
@@ -193,6 +199,17 @@ def gitlab_projects(user):  # noqa
         Retrieve projects from GitLab.
       produces:
        - application/json
+      parameters:
+        - name: access_token
+          in: query
+          description: The API access_token of the current user.
+          required: false
+          type: string
+        - name: search
+          in: query
+          description: The search string to filter the project list.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -228,16 +245,25 @@ def gitlab_projects(user):  # noqa
     try:
         secrets_store = REANAUserSecretsStore(str(user.id_))
         gitlab_token = secrets_store.get_secret_value("gitlab_access_token")
-        gitlab_url = (
-            f"{REANA_GITLAB_URL}/api/v4/projects/"
+
+        if not gitlab_token:
+            return jsonify({"message": "Missing GitLab access token."}), 401
+
+        gitlab_url = urljoin(REANA_GITLAB_URL, "/api/v4/projects")
+        params = {
+            "access_token": gitlab_token,
             # show projects in which user is at least a `Maintainer`
-            "?min_access_level=40"
+            # as that's the minimum access level needed to create webhooks
+            "min_access_level": 40,
+            "per_page": 100,
+            "search": search,
+            # include ancestor namespaces when matching search criteria
+            "search_namespaces": "true",
             # return only basic information about the projects
-            "&simple=true"
-            "&per_page=100"
-            f"&access_token={gitlab_token}"
-        )
-        response = requests.get(gitlab_url)
+            "simple": "true",
+        }
+
+        response = requests.get(gitlab_url, params=params)
         projects = dict()
         if response.status_code == 200:
             for gitlab_project in response.json():
