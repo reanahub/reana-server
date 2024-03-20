@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -15,7 +15,7 @@ from io import BytesIO
 from uuid import uuid4
 
 import pytest
-from flask import url_for
+from flask import Flask, url_for
 from mock import Mock, patch
 from pytest_reana.test_utils import make_mock_api_client
 from reana_db.models import User, InteractiveSessionType, RunStatus
@@ -784,3 +784,87 @@ def test_prune_workspace(app, default_user, sample_serial_workflow_in_db):
         )
         assert res.status_code == status_code
         assert "The workspace has been correctly pruned." in res.json["message"]
+
+
+def test_gitlab_projects(app: Flask, default_user):
+    """Test fetching of GitLab projects."""
+    with app.test_client() as client:
+        # token not provided
+        res = client.get("/api/gitlab/projects")
+        assert res.status_code == 401
+
+        # invalid REANA token
+        res = client.get(
+            "/api/gitlab/projects", query_string={"access_token": "invalid"}
+        )
+        assert res.status_code == 403
+
+        # missing GitLab token
+        mock_get_secret_value = Mock()
+        mock_get_secret_value.return_value = None
+        with patch(
+            "reana_commons.k8s.secrets.REANAUserSecretsStore.get_secret_value",
+            mock_get_secret_value,
+        ):
+            res = client.get(
+                "/api/gitlab/projects",
+                query_string={"access_token": default_user.access_token},
+            )
+            assert res.status_code == 401
+
+        # normal behaviour
+        mock_response_projects = Mock()
+        mock_response_projects.headers = {
+            "x-prev-page": "3",
+            "x-next-page": "",
+            "x-page": "4",
+            "x-total": "100",
+            "x-per-page": "20",
+        }
+        mock_response_projects.ok = True
+        mock_response_projects.status_code = 200
+        mock_response_projects.json.return_value = [
+            {
+                "id": 123,
+                "path_with_namespace": "abcd",
+                "web_url": "url",
+                "name": "qwerty",
+            }
+        ]
+
+        mock_response_webhook = Mock()
+        mock_response_webhook.ok = True
+        mock_response_webhook.status_code = 200
+        mock_response_webhook.json.return_value = [
+            {"id": 1234, "url": "wrong_url"},
+            {
+                "id": 456,
+                "url": "http://localhost:5000/api/workflows",
+            },
+        ]
+
+        mock_requests_get = Mock()
+        mock_requests_get.side_effect = [mock_response_projects, mock_response_webhook]
+
+        mock_get_secret_value = Mock()
+        mock_get_secret_value.return_value = "gitlab_token"
+
+        with patch("requests.get", mock_requests_get), patch(
+            "reana_commons.k8s.secrets.REANAUserSecretsStore.get_secret_value",
+            mock_get_secret_value,
+        ):
+            res = client.get(
+                "/api/gitlab/projects",
+                query_string={"access_token": default_user.access_token},
+            )
+
+        assert res.status_code == 200
+        assert res.json["has_prev"]
+        assert not res.json["has_next"]
+        assert res.json["total"] == 100
+        assert len(res.json["items"]) == 1
+        assert res.json["items"][0]["id"] == 123
+        assert res.json["items"][0]["name"] == "qwerty"
+        assert res.json["items"][0]["url"] == "url"
+        assert res.json["items"][0]["path"] == "abcd"
+        assert res.json["items"][0]["hook_id"] == 456

@@ -162,6 +162,20 @@
             "name": "search",
             "required": false,
             "type": "string"
+          },
+          {
+            "description": "Results page number (pagination).",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "type": "integer"
+          },
+          {
+            "description": "Number of results per page (pagination).",
+            "in": "query",
+            "name": "size",
+            "required": false,
+            "type": "integer"
           }
         ],
         "produces": [
@@ -169,7 +183,52 @@
         ],
         "responses": {
           "200": {
-            "description": "This resource return all projects owned by the user on GitLab in JSON format."
+            "description": "This resource return all projects owned by the user on GitLab in JSON format.",
+            "schema": {
+              "properties": {
+                "has_next": {
+                  "type": "boolean"
+                },
+                "has_prev": {
+                  "type": "boolean"
+                },
+                "items": {
+                  "items": {
+                    "properties": {
+                      "hook_id": {
+                        "type": "integer",
+                        "x-nullable": true
+                      },
+                      "id": {
+                        "type": "integer"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "url": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "page": {
+                  "type": "integer"
+                },
+                "size": {
+                  "type": "integer"
+                },
+                "total": {
+                  "type": "integer",
+                  "x-nullable": true
+                }
+              },
+              "type": "object"
+            }
           },
           "403": {
             "description": "Request failed. User token not valid.",
