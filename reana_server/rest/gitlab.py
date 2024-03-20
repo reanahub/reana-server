@@ -27,7 +27,7 @@ from invenio_oauthclient.utils import get_safe_redirect_target
 from itsdangerous import BadData, TimedJSONWebSignatureSerializer
 from reana_commons.k8s.secrets import REANAUserSecretsStore
 from werkzeug.local import LocalProxy
-from webargs import fields
+from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
 
 
@@ -187,9 +187,17 @@ def gitlab_oauth(user):  # noqa
 
 
 @blueprint.route("/gitlab/projects", methods=["GET"])
-@use_kwargs({"search": fields.Str(location="query")})
+@use_kwargs(
+    {
+        "search": fields.Str(location="query"),
+        "page": fields.Int(validate=validate.Range(min=1), location="query"),
+        "size": fields.Int(validate=validate.Range(min=1), location="query"),
+    }
+)
 @signin_required()
-def gitlab_projects(user, search: Optional[str] = None):  # noqa
+def gitlab_projects(
+    user, search: Optional[str] = None, page: int = 1, size: Optional[int] = None
+):  # noqa
     r"""Endpoint to retrieve GitLab projects.
     ---
     get:
@@ -210,11 +218,51 @@ def gitlab_projects(user, search: Optional[str] = None):  # noqa
           description: The search string to filter the project list.
           required: false
           type: string
+        - name: page
+          in: query
+          description: Results page number (pagination).
+          required: false
+          type: integer
+        - name: size
+          in: query
+          description: Number of results per page (pagination).
+          required: false
+          type: integer
       responses:
         200:
           description: >-
             This resource return all projects owned by
             the user on GitLab in JSON format.
+          schema:
+            type: object
+            properties:
+              has_next:
+                type: boolean
+              has_prev:
+                type: boolean
+              page:
+                type: integer
+              size:
+                type: integer
+              total:
+                type: integer
+                x-nullable: true
+              items:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+                    path:
+                      type: string
+                    url:
+                      type: string
+                    hook_id:
+                      type: integer
+                      x-nullable: true
         403:
           description: >-
             Request failed. User token not valid.
@@ -255,7 +303,8 @@ def gitlab_projects(user, search: Optional[str] = None):  # noqa
             # show projects in which user is at least a `Maintainer`
             # as that's the minimum access level needed to create webhooks
             "min_access_level": 40,
-            "per_page": 100,
+            "page": page,
+            "per_page": size,
             "search": search,
             # include ancestor namespaces when matching search criteria
             "search_namespaces": "true",
@@ -263,21 +312,38 @@ def gitlab_projects(user, search: Optional[str] = None):  # noqa
             "simple": "true",
         }
 
-        response = requests.get(gitlab_url, params=params)
-        projects = dict()
-        if response.status_code == 200:
-            for gitlab_project in response.json():
+        gitlab_res = requests.get(gitlab_url, params=params)
+        if gitlab_res.status_code == 200:
+            projects = list()
+            for gitlab_project in gitlab_res.json():
                 hook_id = _get_gitlab_hook_id(gitlab_project["id"], gitlab_token)
-                projects[gitlab_project["id"]] = {
-                    "name": gitlab_project["name"],
-                    "path": gitlab_project["path_with_namespace"],
-                    "url": gitlab_project["web_url"],
-                    "hook_id": hook_id,
-                }
-            return jsonify(projects), 200
+                projects.append(
+                    {
+                        "id": gitlab_project["id"],
+                        "name": gitlab_project["name"],
+                        "path": gitlab_project["path_with_namespace"],
+                        "url": gitlab_project["web_url"],
+                        "hook_id": hook_id,
+                    }
+                )
+
+            response = {
+                "has_next": bool(gitlab_res.headers.get("x-next-page")),
+                "has_prev": bool(gitlab_res.headers.get("x-prev-page")),
+                "items": projects,
+                "page": int(gitlab_res.headers.get("x-page")),
+                "size": int(gitlab_res.headers.get("x-per-page")),
+                "total": (
+                    int(gitlab_res.headers.get("x-total"))
+                    if gitlab_res.headers.get("x-total")
+                    else None
+                ),
+            }
+
+            return jsonify(response), 200
         return (
             jsonify({"message": "Project list could not be retrieved"}),
-            response.status_code,
+            gitlab_res.status_code,
         )
     except ValueError:
         return jsonify({"message": "Token is not valid."}), 403

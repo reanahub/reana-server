@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -509,23 +509,29 @@ def _get_gitlab_hook_id(project_id, gitlab_token):
     :param project_id: Project id on GitLab.
     :param gitlab_token: GitLab token.
     """
-    reana_hook_id = None
     gitlab_hooks_url = (
         REANA_GITLAB_URL
         + "/api/v4/projects/{0}/hooks?access_token={1}".format(project_id, gitlab_token)
     )
-    response_json = requests.get(gitlab_hooks_url).json()
-    create_workflow_url = url_for("workflows.create_workflow", _external=True)
-    if response_json:
-        reana_hook_id = next(
-            (
-                hook["id"]
-                for hook in response_json
-                if hook["url"] and hook["url"] == create_workflow_url
-            ),
-            None,
+    response = requests.get(gitlab_hooks_url)
+
+    if not response.ok:
+        logging.warning(
+            f"GitLab hook request failed with status code: {response.status_code}, "
+            f"content: {response.content}"
         )
-    return reana_hook_id
+        return None
+
+    response_json = response.json()
+    create_workflow_url = url_for("workflows.create_workflow", _external=True)
+    return next(
+        (
+            hook["id"]
+            for hook in response_json
+            if hook["url"] and hook["url"] == create_workflow_url
+        ),
+        None,
+    )
 
 
 class RequestStreamWithLen(object):
