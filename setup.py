@@ -139,6 +139,7 @@ setup(
         ],
     },
     include_package_data=True,
+    python_requires=">=3.8",
     extras_require=extras_require,
     install_requires=install_requires,
     setup_requires=setup_requires,
