@@ -17,7 +17,7 @@ import pathlib
 import secrets
 import sys
 import shutil
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Generator
 from uuid import UUID, uuid4
 
 import click
@@ -500,6 +500,19 @@ def _format_gitlab_secrets(gitlab_response):
     }
 
 
+def _unpaginate_gitlab_endpoint(url: str) -> Generator[Any, None, None]:
+    """Get all the paginated records of a given GitLab endpoint.
+
+    :param url: Endpoint URL to the first page.
+    """
+    while url:
+        logging.debug(f"Request to '{url}' while unpaginating GitLab endpoint")
+        response = requests.get(url)
+        response.raise_for_status()
+        yield from response.json()
+        url = response.links.get("next", {}).get("url")
+
+
 def _get_gitlab_hook_id(project_id, gitlab_token):
     """Return REANA hook id from a GitLab project if it is connected.
 
@@ -509,30 +522,24 @@ def _get_gitlab_hook_id(project_id, gitlab_token):
     :param project_id: Project id on GitLab.
     :param gitlab_token: GitLab token.
     """
-    # FIXME: handle pagination of results
     gitlab_hooks_url = (
         REANA_GITLAB_URL
-        + "/api/v4/projects/{0}/hooks?access_token={1}".format(project_id, gitlab_token)
-    )
-    response = requests.get(gitlab_hooks_url)
-
-    if not response.ok:
-        logging.warning(
-            f"GitLab hook request failed with status code: {response.status_code}, "
-            f"content: {response.content}"
+        + "/api/v4/projects/{0}/hooks?per_page=100&access_token={1}".format(
+            project_id, gitlab_token
         )
-        return None
-
-    response_json = response.json()
-    create_workflow_url = url_for("workflows.create_workflow", _external=True)
-    return next(
-        (
-            hook["id"]
-            for hook in response_json
-            if hook["url"] and hook["url"] == create_workflow_url
-        ),
-        None,
     )
+    create_workflow_url = url_for("workflows.create_workflow", _external=True)
+
+    try:
+        for hook in _unpaginate_gitlab_endpoint(gitlab_hooks_url):
+            if hook["url"] and hook["url"] == create_workflow_url:
+                return hook["id"]
+    except requests.HTTPError as e:
+        logging.warning(
+            f"GitLab hook request failed with status code: {e.response.status_code}, "
+            f"content: {e.response.content}"
+        )
+    return None
 
 
 class RequestStreamWithLen(object):
