@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2021, 2022, 2023 CERN.
+# Copyright (C) 2021, 2022, 2023, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -7,11 +7,17 @@
 """REANA-Server tests for utils module."""
 
 import pathlib
+from unittest.mock import call, patch, Mock
 import pytest
 
 from reana_commons.errors import REANAValidationError
 from reana_db.models import UserToken, UserTokenStatus, UserTokenType
-from reana_server.utils import is_valid_email, filter_input_files, get_user_from_token
+from reana_server.utils import (
+    is_valid_email,
+    filter_input_files,
+    get_user_from_token,
+    _unpaginate_gitlab_endpoint,
+)
 
 
 @pytest.mark.parametrize(
@@ -81,3 +87,25 @@ def test_get_user_from_token_two_tokens(default_user, session):
     # Check that old revoked token does not work
     with pytest.raises(ValueError, match="revoked"):
         get_user_from_token(old_token.token)
+
+
+@patch("requests.get")
+def test_gitlab_pagination(mock_get):
+    """Test getting all paginated results from GitLab."""
+    # simulating two pages
+    first_response = Mock()
+    first_response.ok = True
+    first_response.links = {"next": {"url": "next_url"}}
+    first_response.json.return_value = [1, 2]
+
+    second_response = Mock()
+    second_response.ok = True
+    second_response.links = {}
+    second_response.json.return_value = [3, 4]
+
+    mock_get.side_effect = [first_response, second_response]
+
+    res = list(_unpaginate_gitlab_endpoint("first_url"))
+
+    assert res == [1, 2, 3, 4]
+    assert mock_get.call_args_list == [call("first_url"), call("next_url")]

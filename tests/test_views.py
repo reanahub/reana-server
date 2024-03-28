@@ -835,6 +835,7 @@ def test_gitlab_projects(app: Flask, default_user):
         mock_response_webhook = Mock()
         mock_response_webhook.ok = True
         mock_response_webhook.status_code = 200
+        mock_response_webhook.links = {}
         mock_response_webhook.json.return_value = [
             {"id": 1234, "url": "wrong_url"},
             {
