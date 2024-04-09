@@ -16,7 +16,6 @@ from reana_server.utils import (
     is_valid_email,
     filter_input_files,
     get_user_from_token,
-    _unpaginate_gitlab_endpoint,
 )
 
 
@@ -87,25 +86,3 @@ def test_get_user_from_token_two_tokens(default_user, session):
     # Check that old revoked token does not work
     with pytest.raises(ValueError, match="revoked"):
         get_user_from_token(old_token.token)
-
-
-@patch("requests.get")
-def test_gitlab_pagination(mock_get):
-    """Test getting all paginated results from GitLab."""
-    # simulating two pages
-    first_response = Mock()
-    first_response.ok = True
-    first_response.links = {"next": {"url": "next_url"}}
-    first_response.json.return_value = [1, 2]
-
-    second_response = Mock()
-    second_response.ok = True
-    second_response.links = {}
-    second_response.json.return_value = [3, 4]
-
-    mock_get.side_effect = [first_response, second_response]
-
-    res = list(_unpaginate_gitlab_endpoint("first_url"))
-
-    assert res == [1, 2, 3, 4]
-    assert mock_get.call_args_list == [call("first_url"), call("next_url")]

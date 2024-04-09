@@ -37,6 +37,11 @@ from reana_server.config import (
     REANA_GITLAB_URL,
 )
 from reana_server.decorators import signin_required
+from reana_server.gitlab_client import (
+    GitLabClient,
+    GitLabClientRequestError,
+    GitLabClientInvalidToken,
+)
 from reana_server.utils import (
     _format_gitlab_secrets,
     _get_gitlab_hook_id,
@@ -167,12 +172,20 @@ def gitlab_oauth(user):  # noqa
                 "code": gitlab_code,
                 "grant_type": "authorization_code",
             }
-            gitlab_response = requests.post(
-                REANA_GITLAB_URL + "/oauth/token", data=params
-            ).content
+
+            # request access token
+            anonymous_gitlab_client = GitLabClient()
+            gitlab_response = anonymous_gitlab_client.oauth_token(params).json()
+            access_token = gitlab_response["access_token"]
+
+            # get GitLab user details
+            authenticated_gitlab_client = GitLabClient(access_token=access_token)
+            gitlab_user = authenticated_gitlab_client.get_user().json()
+
+            # store access token inside k8s secrets
             secrets_store = REANAUserSecretsStore(str(user.id_))
             secrets_store.add_secrets(
-                _format_gitlab_secrets(gitlab_response), overwrite=True
+                _format_gitlab_secrets(gitlab_user, access_token), overwrite=True
             )
             return redirect(next_url), 302
         else:
@@ -291,20 +304,10 @@ def gitlab_projects(
               }
     """
     try:
-        secrets_store = REANAUserSecretsStore(str(user.id_))
-        gitlab_token = secrets_store.get_secret_value("gitlab_access_token")
-
-        if not gitlab_token:
-            return jsonify({"message": "Missing GitLab access token."}), 401
-
-        gitlab_url = urljoin(REANA_GITLAB_URL, "/api/v4/projects")
         params = {
-            "access_token": gitlab_token,
             # show projects in which user is at least a `Maintainer`
             # as that's the minimum access level needed to create webhooks
             "min_access_level": 40,
-            "page": page,
-            "per_page": size,
             "search": search,
             # include ancestor namespaces when matching search criteria
             "search_namespaces": "true",
@@ -312,38 +315,43 @@ def gitlab_projects(
             "simple": "true",
         }
 
-        gitlab_res = requests.get(gitlab_url, params=params)
-        if gitlab_res.status_code == 200:
-            projects = list()
-            for gitlab_project in gitlab_res.json():
-                hook_id = _get_gitlab_hook_id(gitlab_project["id"], gitlab_token)
-                projects.append(
-                    {
-                        "id": gitlab_project["id"],
-                        "name": gitlab_project["name"],
-                        "path": gitlab_project["path_with_namespace"],
-                        "url": gitlab_project["web_url"],
-                        "hook_id": hook_id,
-                    }
-                )
+        gitlab_client = GitLabClient.from_k8s_secret(user.id_)
+        gitlab_res = gitlab_client.get_projects(page=page, per_page=size, **params)
 
-            response = {
-                "has_next": bool(gitlab_res.headers.get("x-next-page")),
-                "has_prev": bool(gitlab_res.headers.get("x-prev-page")),
-                "items": projects,
-                "page": int(gitlab_res.headers.get("x-page")),
-                "size": int(gitlab_res.headers.get("x-per-page")),
-                "total": (
-                    int(gitlab_res.headers.get("x-total"))
-                    if gitlab_res.headers.get("x-total")
-                    else None
-                ),
-            }
+        projects = list()
+        for gitlab_project in gitlab_res.json():
+            hook_id = _get_gitlab_hook_id(gitlab_project["id"], gitlab_client)
+            projects.append(
+                {
+                    "id": gitlab_project["id"],
+                    "name": gitlab_project["name"],
+                    "path": gitlab_project["path_with_namespace"],
+                    "url": gitlab_project["web_url"],
+                    "hook_id": hook_id,
+                }
+            )
 
-            return jsonify(response), 200
+        response = {
+            "has_next": bool(gitlab_res.headers.get("x-next-page")),
+            "has_prev": bool(gitlab_res.headers.get("x-prev-page")),
+            "items": projects,
+            "page": int(gitlab_res.headers.get("x-page")),
+            "size": int(gitlab_res.headers.get("x-per-page")),
+            "total": (
+                int(gitlab_res.headers.get("x-total"))
+                if gitlab_res.headers.get("x-total")
+                else None
+            ),
+        }
+
+        return jsonify(response), 200
+    except GitLabClientInvalidToken as e:
+        return jsonify({"message": str(e)}), 401
+    except GitLabClientRequestError as e:
+        logging.error(str(e))
         return (
             jsonify({"message": "Project list could not be retrieved"}),
-            gitlab_res.status_code,
+            e.response.status_code,
         )
     except ValueError:
         return jsonify({"message": "Token is not valid."}), 403
@@ -465,14 +473,10 @@ def gitlab_webhook(user):  # noqa
     """
 
     try:
-        secrets_store = REANAUserSecretsStore(str(user.id_))
-        gitlab_token = secrets_store.get_secret_value("gitlab_access_token")
+        gitlab_client = GitLabClient.from_k8s_secret(user.id_)
         parameters = request.json
         if request.method == "POST":
-            gitlab_url = (
-                REANA_GITLAB_URL + "/api/v4/projects/" + "{0}/hooks?access_token={1}"
-            )
-            webhook_payload = {
+            webhook_config = {
                 "url": url_for("workflows.create_workflow", _external=True),
                 "push_events": True,
                 "push_events_branch_filter": "master",
@@ -480,24 +484,23 @@ def gitlab_webhook(user):  # noqa
                 "enable_ssl_verification": False,
                 "token": user.access_token,
             }
-            webhook = requests.post(
-                gitlab_url.format(parameters["project_id"], gitlab_token),
-                data=webhook_payload,
-            )
-            return jsonify({"id": webhook.json()["id"]}), 201
+            webhook = gitlab_client.create_webhook(
+                parameters["project_id"], webhook_config
+            ).json()
+            return jsonify({"id": webhook["id"]}), 201
         elif request.method == "DELETE":
-            gitlab_url = (
-                REANA_GITLAB_URL
-                + "/api/v4/projects/"
-                + "{0}/hooks/{1}?access_token={2}"
-            )
-            resp = requests.delete(
-                gitlab_url.format(
-                    parameters["project_id"], parameters["hook_id"], gitlab_token
-                )
-            )
+            project_id = parameters["project_id"]
+            hook_id = parameters["hook_id"]
+            resp = gitlab_client.delete_webhook(project_id, hook_id)
             return resp.content, resp.status_code
-
+    except GitLabClientInvalidToken as e:
+        return jsonify({"message": str(e)}), 401
+    except GitLabClientRequestError as e:
+        logging.error(str(e))
+        return (
+            jsonify({"message": "Error while creating or deleting webhook"}),
+            e.response.status_code,
+        )
     except ValueError:
         return jsonify({"message": "Token is not valid."}), 403
     except Exception as e:

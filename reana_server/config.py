@@ -328,8 +328,6 @@ REANA_GITLAB_OAUTH_APP_ID = os.getenv("REANA_GITLAB_OAUTH_APP_ID", "CHANGE_ME")
 REANA_GITLAB_OAUTH_APP_SECRET = os.getenv("REANA_GITLAB_OAUTH_APP_SECRET", "CHANGE_ME")
 REANA_GITLAB_HOST = os.getenv("REANA_GITLAB_HOST", None)
 REANA_GITLAB_URL = "https://{}".format((REANA_GITLAB_HOST or "CHANGE ME"))
-REANA_GITLAB_MAX_PER_PAGE = 100
-"""Maximum number of items that can be listed in a single GitLab's paginated response."""
 
 # Workflow scheduler
 # ==================

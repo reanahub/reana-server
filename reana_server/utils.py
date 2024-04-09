@@ -67,8 +67,6 @@ from reana_server.complexity import (
 )
 from reana_server.config import (
     ADMIN_USER_ID,
-    REANA_GITLAB_MAX_PER_PAGE,
-    REANA_GITLAB_URL,
     REANA_HOSTNAME,
     REANA_USER_EMAIL_CONFIRMATION,
     REANA_WORKFLOW_SCHEDULING_POLICY,
@@ -76,6 +74,10 @@ from reana_server.config import (
     REANA_QUOTAS_DOCS_URL,
     WORKSPACE_RETENTION_PERIOD,
     DEFAULT_WORKSPACE_RETENTION_RULE,
+)
+from reana_server.gitlab_client import (
+    GitLabClient,
+    GitLabClientException,
 )
 from reana_server.validation import validate_retention_rule, validate_workflow
 
@@ -433,11 +435,6 @@ def _get_user_from_invenio_user(id):
 
 
 def _get_reana_yaml_from_gitlab(webhook_data, user_id):
-    gitlab_api = (
-        REANA_GITLAB_URL
-        + "/api/v4/projects/{0}"
-        + "/repository/files/{1}/raw?ref={2}&access_token={3}"
-    )
     reana_yaml = "reana.yaml"
     if webhook_data["object_kind"] == "push":
         branch = webhook_data["project"]["default_branch"]
@@ -445,14 +442,11 @@ def _get_reana_yaml_from_gitlab(webhook_data, user_id):
     elif webhook_data["object_kind"] == "merge_request":
         branch = webhook_data["object_attributes"]["source_branch"]
         commit_sha = webhook_data["object_attributes"]["last_commit"]["id"]
-    secrets_store = REANAUserSecretsStore(str(user_id))
-    gitlab_token = secrets_store.get_secret_value("gitlab_access_token")
     project_id = webhook_data["project"]["id"]
-    yaml_file = requests.get(
-        gitlab_api.format(project_id, reana_yaml, branch, gitlab_token)
-    )
+    gitlab_client = GitLabClient.from_k8s_secret(user_id)
+    yaml_file = gitlab_client.get_file(project_id, reana_yaml, branch).content
     return (
-        yaml.load(yaml_file.content, Loader=yaml.FullLoader),
+        yaml.safe_load(yaml_file),
         webhook_data["project"]["path_with_namespace"],
         webhook_data["project"]["name"],
         branch,
@@ -468,78 +462,43 @@ def _fail_gitlab_commit_build_status(
     HTTP errors will be ignored.
     """
     state = "failed"
-    system_name = "reana"
-    git_repo = urlparse.quote_plus(git_repo)
-    description = urlparse.quote_plus(description)
-
-    secret_store = REANAUserSecretsStore(user.id_)
-    gitlab_access_token = secret_store.get_secret_value("gitlab_access_token")
-    commit_status_url = (
-        f"{REANA_GITLAB_URL}/api/v4/projects/{git_repo}/statuses/"
-        f"{git_ref}?access_token={gitlab_access_token}&state={state}"
-        f"&description={description}&name={system_name}"
-    )
-    requests.post(commit_status_url)
+    try:
+        gitlab_client = GitLabClient.from_k8s_secret(user.id_)
+        gitlab_client.set_commit_build_status(git_repo, git_ref, state, description)
+    except GitLabClientException as e:
+        logging.warn(f"Could not set commit build status: {e}")
 
 
-def _format_gitlab_secrets(gitlab_response):
-    access_token = json.loads(gitlab_response)["access_token"]
-    user = json.loads(
-        requests.get(
-            REANA_GITLAB_URL + "/api/v4/user?access_token={0}".format(access_token)
-        ).content
-    )
+def _format_gitlab_secrets(gitlab_user, access_token):
     return {
         "gitlab_access_token": {
             "value": base64.b64encode(access_token.encode("utf-8")).decode("utf-8"),
             "type": "env",
         },
         "gitlab_user": {
-            "value": base64.b64encode(user["username"].encode("utf-8")).decode("utf-8"),
+            "value": base64.b64encode(gitlab_user["username"].encode("utf-8")).decode(
+                "utf-8"
+            ),
             "type": "env",
         },
     }
 
 
-def _unpaginate_gitlab_endpoint(url: str) -> Generator[Any, None, None]:
-    """Get all the paginated records of a given GitLab endpoint.
-
-    :param url: Endpoint URL to the first page.
-    """
-    while url:
-        logging.debug(f"Request to '{url}' while unpaginating GitLab endpoint")
-        response = requests.get(url)
-        response.raise_for_status()
-        yield from response.json()
-        url = response.links.get("next", {}).get("url")
-
-
-def _get_gitlab_hook_id(project_id, gitlab_token):
+def _get_gitlab_hook_id(project_id, gitlab_client: GitLabClient):
     """Return REANA hook id from a GitLab project if it is connected.
 
     By checking its webhooks and comparing them to REANA ones.
 
-    :param response: Flask response.
     :param project_id: Project id on GitLab.
-    :param gitlab_token: GitLab token.
+    :param gitlab_client: GitLab client.
     """
-    gitlab_hooks_url = (
-        REANA_GITLAB_URL
-        + f"/api/v4/projects/{project_id}/hooks?"
-        + f"per_page={REANA_GITLAB_MAX_PER_PAGE}&"
-        + f"access_token={gitlab_token}"
-    )
     create_workflow_url = url_for("workflows.create_workflow", _external=True)
-
     try:
-        for hook in _unpaginate_gitlab_endpoint(gitlab_hooks_url):
+        for hook in gitlab_client.get_all_webhooks(project_id):
             if hook["url"] and hook["url"] == create_workflow_url:
                 return hook["id"]
-    except requests.HTTPError as e:
-        logging.warning(
-            f"GitLab hook request failed with status code: {e.response.status_code}, "
-            f"content: {e.response.content}"
-        )
+    except GitLabClientException as e:
+        logging.warn(f"GitLab hook request failed: {e}")
     return None
 
 

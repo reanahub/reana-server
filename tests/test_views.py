@@ -850,7 +850,7 @@ def test_gitlab_projects(app: Flask, default_user):
         mock_get_secret_value = Mock()
         mock_get_secret_value.return_value = "gitlab_token"
 
-        with patch("requests.get", mock_requests_get), patch(
+        with patch("requests.request", mock_requests_get), patch(
             "reana_commons.k8s.secrets.REANAUserSecretsStore.get_secret_value",
             mock_get_secret_value,
         ):
