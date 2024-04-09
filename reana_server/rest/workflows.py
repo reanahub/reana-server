@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -34,6 +34,10 @@ from reana_server.api_client import current_rwc_api_client
 from reana_server.config import REANA_HOSTNAME
 from reana_server.decorators import check_quota, signin_required
 from reana_server.deleter import Deleter, InOrOut
+from reana_server.gitlab_client import (
+    GitLabClientRequestError,
+    GitLabClientInvalidToken,
+)
 from reana_server.validation import (
     validate_inputs,
     validate_workspace_path,
@@ -579,6 +583,14 @@ def create_workflow(user):  # noqa
             parameters = request.json
             publish_workflow_submission(workflow, user.id_, parameters)
         return jsonify(response), http_response.status_code
+    except GitLabClientInvalidToken as e:
+        return jsonify({"message": str(e)}), 401
+    except GitLabClientRequestError as e:
+        logging.error(str(e))
+        return (
+            jsonify({"message": "Could not retrieve REANA specification from GitLab."}),
+            e.response.status_code,
+        )
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
@@ -1673,7 +1685,6 @@ def upload_file(workflow_id_or_name, user):  # noqa
             params={"user": str(user.id_), "file_name": request.args.get("file_name")},
             headers={"Content-Type": "application/octet-stream"},
         )
-
         return jsonify(http_response.json()), http_response.status_code
     except HTTPError as e:
         logging.error(traceback.format_exc())
