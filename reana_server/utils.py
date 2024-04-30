@@ -36,7 +36,7 @@ from reana_commons.errors import (
     REANAValidationError,
     REANAEmailNotificationError,
 )
-from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.k8s.secrets import Secret, UserSecretsStore
 from reana_commons.utils import get_quota_resource_usage
 from reana_commons.yadage import yadage_load_from_workspace
 from reana_db.database import Session
@@ -444,8 +444,9 @@ def _get_reana_yaml_from_gitlab(webhook_data, user_id):
     elif webhook_data["object_kind"] == "merge_request":
         branch = webhook_data["object_attributes"]["source_branch"]
         commit_sha = webhook_data["object_attributes"]["last_commit"]["id"]
-    secrets_store = REANAUserSecretsStore(str(user_id))
-    gitlab_token = secrets_store.get_secret_value("gitlab_access_token")
+    secrets_store = UserSecretsStore.fetch(user_id)
+    # TODO: properly handle missing secret, this will be fixed by a refactor of GitLab API requests
+    gitlab_token = secrets_store.get_secret("gitlab_access_token").value_str
     project_id = webhook_data["project"]["id"]
     yaml_file = requests.get(
         gitlab_api.format(project_id, reana_yaml, branch, gitlab_token)
@@ -471,14 +472,29 @@ def _fail_gitlab_commit_build_status(
     git_repo = urlparse.quote_plus(git_repo)
     description = urlparse.quote_plus(description)
 
-    secret_store = REANAUserSecretsStore(user.id_)
-    gitlab_access_token = secret_store.get_secret_value("gitlab_access_token")
+    secret_store = UserSecretsStore.fetch(user.id_)
+    gitlab_access_token_secret = secret_store.get_secret("gitlab_access_token")
+    if not gitlab_access_token_secret:
+        # only logging, this function never returns errors
+        logging.error(
+            f"Skipping setting commit status to {state} for {git_repo}@{git_ref} of user "
+            f"{user.id_}: GitLab access token not found"
+        )
+        return
+    gitlab_access_token = gitlab_access_token_secret.value_str
+
     commit_status_url = (
         f"{REANA_GITLAB_URL}/api/v4/projects/{git_repo}/statuses/"
         f"{git_ref}?access_token={gitlab_access_token}&state={state}"
         f"&description={description}&name={system_name}"
     )
-    requests.post(commit_status_url)
+
+    res = requests.post(commit_status_url)
+    if res.status_code >= 400:
+        logging.error(
+            f"Failed to set commit status to {state} for {git_repo}@{git_ref} of user "
+            f"{user.id_}: status code {res.status_code}, content {res.text}"
+        )
 
 
 def _format_gitlab_secrets(gitlab_response):
@@ -488,16 +504,10 @@ def _format_gitlab_secrets(gitlab_response):
             REANA_GITLAB_URL + "/api/v4/user?access_token={0}".format(access_token)
         ).content
     )
-    return {
-        "gitlab_access_token": {
-            "value": base64.b64encode(access_token.encode("utf-8")).decode("utf-8"),
-            "type": "env",
-        },
-        "gitlab_user": {
-            "value": base64.b64encode(user["username"].encode("utf-8")).decode("utf-8"),
-            "type": "env",
-        },
-    }
+    return [
+        Secret("gitlab_access_token", type_="env", value=access_token),
+        Secret("gitlab_user", type_="env", value=user["username"]),
+    ]
 
 
 def _get_gitlab_hook_id(project_id, gitlab_token):
