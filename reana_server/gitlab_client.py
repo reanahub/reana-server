@@ -10,7 +10,7 @@ from urllib.parse import quote_plus
 import requests
 import yaml
 
-from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.k8s.secrets import UserSecretsStore
 
 from reana_server.config import REANA_GITLAB_HOST
 
@@ -63,11 +63,11 @@ class GitLabClient:
 
         :param user_id: User UUID.
         """
-        secrets_store = REANAUserSecretsStore(str(user_id))
-        gitlab_token = secrets_store.get_secret_value("gitlab_access_token")
-        if not gitlab_token:
+        user_secrets = UserSecretsStore.fetch(user_id)
+        gitlab_token_secret = user_secrets.get_secret("gitlab_access_token")
+        if not gitlab_token_secret:
             raise GitLabClientInvalidToken
-        return cls(access_token=gitlab_token, **kwargs)
+        return cls(access_token=gitlab_token_secret.value_str, **kwargs)
 
     def __init__(
         self,

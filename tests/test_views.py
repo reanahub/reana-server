@@ -19,6 +19,7 @@ from flask import Flask, url_for
 from mock import Mock, patch
 from pytest_reana.test_utils import make_mock_api_client
 from reana_db.models import User, InteractiveSessionType, RunStatus
+from reana_commons.k8s.secrets import UserSecrets, Secret
 
 from reana_server.utils import (
     _create_and_associate_local_user,
@@ -800,11 +801,14 @@ def test_gitlab_projects(app: Flask, default_user):
         assert res.status_code == 403
 
         # missing GitLab token
-        mock_get_secret_value = Mock()
-        mock_get_secret_value.return_value = None
+        fetch_mock = Mock()
+        fetch_mock.return_value = UserSecrets(
+            user_id=str(default_user.id_),
+            k8s_secret_name="k8s_secret_name",
+        )
         with patch(
-            "reana_commons.k8s.secrets.REANAUserSecretsStore.get_secret_value",
-            mock_get_secret_value,
+            "reana_commons.k8s.secrets.UserSecretsStore.fetch",
+            fetch_mock,
         ):
             res = client.get(
                 "/api/gitlab/projects",
@@ -847,12 +851,19 @@ def test_gitlab_projects(app: Flask, default_user):
         mock_requests_get = Mock()
         mock_requests_get.side_effect = [mock_response_projects, mock_response_webhook]
 
-        mock_get_secret_value = Mock()
-        mock_get_secret_value.return_value = "gitlab_token"
-
-        with patch("requests.request", mock_requests_get), patch(
-            "reana_commons.k8s.secrets.REANAUserSecretsStore.get_secret_value",
-            mock_get_secret_value,
+        mock_fetch = Mock()
+        mock_fetch.return_value = UserSecrets(
+            user_id=str(default_user.id_),
+            k8s_secret_name="gitlab_token",
+            secrets=[
+                Secret(name="gitlab_access_token", type_="env", value="gitlab_token")
+            ],
+        )
+        with patch(
+            "reana_server.gitlab_client.GitLabClient._request", mock_requests_get
+        ), patch(
+            "reana_commons.k8s.secrets.UserSecretsStore.fetch",
+            mock_fetch,
         ):
             res = client.get(
                 "/api/gitlab/projects",

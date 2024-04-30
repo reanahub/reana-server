@@ -962,10 +962,6 @@
               "additionalProperties": {
                 "description": "Secret definition.",
                 "properties": {
-                  "name": {
-                    "description": "Secret name",
-                    "type": "string"
-                  },
                   "type": {
                     "description": "How will be the secret assigned to the jobs, either exported as an environment variable or mounted as a file.",
                     "enum": [

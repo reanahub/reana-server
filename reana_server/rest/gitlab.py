@@ -25,7 +25,7 @@ from flask import (
 from flask_login.utils import _create_identifier
 from invenio_oauthclient.utils import get_safe_redirect_target
 from itsdangerous import BadData, TimedJSONWebSignatureSerializer
-from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.k8s.secrets import UserSecretsStore
 from werkzeug.local import LocalProxy
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
@@ -183,10 +183,11 @@ def gitlab_oauth(user):  # noqa
             gitlab_user = authenticated_gitlab_client.get_user().json()
 
             # store access token inside k8s secrets
-            secrets_store = REANAUserSecretsStore(str(user.id_))
-            secrets_store.add_secrets(
+            user_secrets = UserSecretsStore.fetch(user.id_)
+            user_secrets.add_secrets(
                 _format_gitlab_secrets(gitlab_user, access_token), overwrite=True
             )
+            UserSecretsStore.update(user_secrets)
             return redirect(next_url), 302
         else:
             return jsonify({"message": "OK"}), 200
