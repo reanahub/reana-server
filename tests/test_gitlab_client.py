@@ -11,7 +11,7 @@ import unittest.mock as mock
 from uuid import uuid4
 
 import pytest
-from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.k8s.secrets import UserSecrets, Secret
 
 import reana_server.config as config
 from reana_server.gitlab_client import GitLabClient, GitLabClientInvalidToken
@@ -27,32 +27,34 @@ def mock_response(status_code=200, json={}, content=b"", links={}):
     return response
 
 
-def test_gitlab_client_from_k8s_secret(monkeypatch):
+def test_gitlab_client_from_k8s_secret():
     """Test creating authenticated GitLab client from user k8s secret."""
     user_id = uuid4()
 
-    def get_secret_value(store, secret_name):
-        assert secret_name == "gitlab_access_token"
-        return "gitlab_token"
-
-    monkeypatch.setattr(REANAUserSecretsStore, "get_secret_value", get_secret_value)
-
-    gitlab_client = GitLabClient.from_k8s_secret(user_id, host="gitlab.example.org")
+    mock_fetch = mock.Mock()
+    mock_fetch.return_value = UserSecrets(
+        user_id=str(user_id),
+        k8s_secret_name="gitlab_token",
+        secrets=[Secret(name="gitlab_access_token", type_="env", value="gitlab_token")],
+    )
+    with mock.patch("reana_commons.k8s.secrets.UserSecretsStore.fetch", mock_fetch):
+        gitlab_client = GitLabClient.from_k8s_secret(user_id, host="gitlab.example.org")
     assert gitlab_client.access_token == "gitlab_token"
     assert gitlab_client.host == "gitlab.example.org"
 
 
-def test_gitlab_client_from_k8s_secret_invalid_token(monkeypatch):
+def test_gitlab_client_from_k8s_secret_invalid_token():
     """Test creating authenticated GitLab client when secret is not available."""
-
-    def get_secret_value(store, secret_name):
-        assert secret_name == "gitlab_access_token"
-        return None
-
-    monkeypatch.setattr(REANAUserSecretsStore, "get_secret_value", get_secret_value)
-
-    with pytest.raises(GitLabClientInvalidToken):
-        GitLabClient.from_k8s_secret(uuid4(), host="gitlab.example.org")
+    user_id = uuid4()
+    mock_fetch = mock.Mock()
+    mock_fetch.return_value = UserSecrets(
+        user_id=str(user_id),
+        k8s_secret_name="k8s-secret-name",
+        secrets=[],
+    )
+    with mock.patch("reana_commons.k8s.secrets.UserSecretsStore.fetch", mock_fetch):
+        with pytest.raises(GitLabClientInvalidToken):
+            GitLabClient.from_k8s_secret(user_id)
 
 
 def test_gitlab_client_oauth_token():
