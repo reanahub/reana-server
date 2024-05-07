@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.95.0](https://github.com/reanahub/reana-server/compare/0.9.3...0.95.0) (2024-05-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **gitlab:** The REST API endpoint `gitlab_projects` now includes pagination details.
+
+### Features
+
+* **gitlab:** add search query parameter to filter projects ([#681](https://github.com/reanahub/reana-server/issues/681)) ([109cf38](https://github.com/reanahub/reana-server/commit/109cf38be440e15676e53ec1458ff9efe7d4a395)), closes [#518](https://github.com/reanahub/reana-server/issues/518)
+* **gitlab:** add support for paginated project list ([#681](https://github.com/reanahub/reana-server/issues/681)) ([4d23c62](https://github.com/reanahub/reana-server/commit/4d23c62d57b8ada0d12895fe03190b898b4abd61)), closes [#518](https://github.com/reanahub/reana-server/issues/518)
+
+
+### Bug fixes
+
+* **gitlab:** handle pagination of GitLab webhooks ([#684](https://github.com/reanahub/reana-server/issues/684)) ([3f716f7](https://github.com/reanahub/reana-server/commit/3f716f7369230ab2a864b6bfcae44a952ca5bf90)), closes [#682](https://github.com/reanahub/reana-server/issues/682)
+
+
+### Continuous integration
+
+* **actions:** update GitHub actions due to Node 16 deprecation ([#680](https://github.com/reanahub/reana-server/issues/680)) ([b7cc00a](https://github.com/reanahub/reana-server/commit/b7cc00afddb5035a3ed8f964ea33fb94bca3e2d8))
+
+
+### Chores
+
+* **master:** release 0.95.0-alpha.1 ([9fa4059](https://github.com/reanahub/reana-server/commit/9fa40595ce840391c4aed999c3d4dda4de7ad2eb))
+
 ## [0.9.3](https://github.com/reanahub/reana-server/compare/0.9.2...0.9.3) (2024-03-04)
 
 
