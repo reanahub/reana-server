@@ -45,18 +45,12 @@ for key, reqs in extras_require.items():
     extras_require["all"].extend(reqs)
 
 install_requires = [
-    # These bounds on Flask/Werkzeug are needed because Werkzeug v2.1 removes `safe_str_cmp`,
-    # which is needed by Flask-Login. This was fixed in Flask-Login v0.6.0 (see the issue
-    # https://github.com/maxcountryman/flask-login/pull/585), but invenio-accounts<2
-    # requires Flask-Login<0.5
-    "Flask>=2.1.1,<2.2.0",
-    "Werkzeug<2.1",
-    "flask-celeryext<0.5.0",
+    "Flask>=2.1.1,<2.3.0",  # same upper pin as invenio-base
     "gitpython>=3.1",
-    "marshmallow>2.13.0,<=2.20.1",
-    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a2,<0.96.0",
-    "reana-db>=0.95.0a2,<0.96.0",
-    "requests==2.25.0",
+    "marshmallow>2.13.0,<3.0.0",
+    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a3,<0.96.0",
+    "reana-db>=0.95.0a3,<0.96.0",
+    "requests>=2.25.0",
     "tablib>=0.12.1",
     "uWSGI>=2.0.17",
     "uwsgi-tools>=1.1.1",
@@ -65,28 +59,31 @@ install_requires = [
     # Yadage dependencies
     # Pinning adage/packtivity/yadage/yadage-schemas to make sure we use compatible versions.
     # See https://github.com/reanahub/reana-workflow-engine-yadage/pull/236#discussion_r992475484
-    "adage==0.10.1",
-    "packtivity==0.14.24",
-    "yadage==0.20.1",
-    "yadage-schemas==0.10.6",
+    "adage==0.11.0",  # matches the version in r-w-e-yadage
+    "packtivity==0.16.2",  # matches the version in r-w-e-yadage
+    "yadage==0.20.1",  # matches the version in r-w-e-yadage
+    "yadage-schemas==0.10.6",  # matches the version in r-w-e-yadage
     # Invenio dependencies
-    "invenio-app>=1.3.0,<1.4.0",
-    "invenio-base>=1.2.0,<1.3.0",
-    "invenio-cache>=1.1.0,<1.2.0",
-    "invenio-config>=1.0.3,<1.1.0",
+    "invenio-app>=1.5.0",  # 1.5 needed for Python 3.12 support
+    "flask-limiter>=2.3",  # dependency of invenio-app, 2.3 needed for Python 3.12 support
+    "invenio-base>=1.2.0",
+    "importlib-metadata<5.0.0",  # needed by `invenio instance migrate-secret-key`
+    "invenio-cache>=1.1.0",
+    "invenio-config>=1.0.3",
     # From base bundle
-    "invenio-logging>=1.3.0,<1.4.0",
-    "invenio-mail>=1.0.2,<1.1.0",
+    "invenio-logging>=1.3.0",
+    "invenio-mail>=1.0.2",
     # From auth bundle
-    "invenio-accounts>=1.4.2,<1.5.0",
-    "invenio-oauth2server>=1.3.0,<1.4.0",
-    "invenio-oauthclient>=1.5.0,<1.6.0",
-    "invenio-userprofiles>=1.2.0,<1.3.0",
-    "invenio-userprofiles>=1.2.0,<1.2.5",  # pin <1.2.5 due to import-related changes in upstream
-    "invenio-theme>=1.4.7,<2.0.0",
-    "invenio-i18n>=1.3.3,<2.0.0",
+    "invenio-accounts>=2.0.0",
+    "invenio-oauth2server>=1.3.0",
+    "invenio-oauthclient>=1.5.0",
+    "invenio-userprofiles>=1.2.0",
+    "invenio-userprofiles>=1.2.0",
+    "invenio-theme>=1.4.7",
+    "invenio-i18n>=1.3.3",
+    "invenio-access>=2.0.0",
     # Invenio database
-    "invenio-db[postgresql]>=1.0.5,<1.1.0",
+    "invenio-db[postgresql]>=1.0.5",
     "six>=1.12.0",  # required by Flask-Breadcrumbs
 ]
 
@@ -143,7 +140,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python",
         "Programming Language :: Python",

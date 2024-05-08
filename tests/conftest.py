@@ -24,7 +24,7 @@ from reana_db.models import (
     WorkspaceRetentionRuleStatus,
 )
 
-from reana_server.factory import create_app
+from reana_server.factory import create_minimal_app
 
 
 @pytest.fixture(scope="module")
@@ -42,7 +42,7 @@ def base_app(tmp_shared_volume_path):
         "APP_THEME": None,
         "THEME_ICONS": None,
     }
-    app_ = create_app(config_mapping=config_mapping)
+    app_ = create_minimal_app(config_mapping=config_mapping)
     return app_
 
 

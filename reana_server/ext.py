@@ -53,7 +53,13 @@ def handle_args_validation_error(error: UnprocessableEntity):
 
 
 class REANA(object):
-    """REANA Invenio app."""
+    """REANA Invenio app.
+
+    This is used to initialise REANA as a Flask/Invenio extension,
+    and this is used in production.
+
+    See the docsting of `reana_server/factory.py` for more details.
+    """
 
     def __init__(self, app=None):
         """Extension initialization."""

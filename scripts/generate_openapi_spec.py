@@ -20,7 +20,7 @@ from reana_commons.utils import copy_openapi_specs
 from swagger_spec_validator.validator20 import validate_json
 
 from reana_server.version import __version__
-from reana_server.app import app
+from reana_server.factory import create_minimal_app
 
 # Import your marshmallow schemas here
 # from example_package.schemas import Example_schema,
@@ -107,5 +107,6 @@ def build_openapi_spec(publish):
 
 
 if __name__ == "__main__":
+    app = create_minimal_app()
     with app.app_context():
         build_openapi_spec()

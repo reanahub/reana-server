@@ -7,10 +7,6 @@
   "paths": {
     "/account/settings/linkedaccounts/": {},
     "/account/settings/linkedaccounts/static/{filename}": {},
-    "/account/settings/login": {},
-    "/account/settings/security/": {},
-    "/account/settings/sessions/revoke/": {},
-    "/account/settings/static/{filename}": {},
     "/api/config": {
       "get": {
         "description": "This resource provides configuration needed by Reana-UI.",
@@ -4543,6 +4539,7 @@
     "/oauth/disconnect/{remote_app}/": {},
     "/oauth/login": {},
     "/oauth/login/{remote_app}/": {},
+    "/oauth/logout": {},
     "/oauth/signup/{remote_app}/": {},
     "/oauth/static/{filename}": {},
     "/signin": {},

@@ -8,9 +8,9 @@
 
 """Test factory app."""
 
-from reana_server.factory import create_app
+from reana_server.factory import create_minimal_app
 
 
 def test_create_app():
-    """Test create_app() method."""
-    create_app()
+    """Test create_minimal_app() method."""
+    create_minimal_app()

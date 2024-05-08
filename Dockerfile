@@ -5,15 +5,13 @@
 # under the terms of the MIT License; see LICENSE file for more details.
 
 # Use Ubuntu LTS base image
-FROM docker.io/library/ubuntu:20.04
+FROM docker.io/library/ubuntu:24.04
 
 # Use default answers in installation commands
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Use distutils provided by the standard Python library instead of the vendored one in
-# setuptools, so that editable installations are stored in the right directory.
-# See https://github.com/pypa/setuptools/issues/3301
-ENV SETUPTOOLS_USE_DISTUTILS=stdlib
+# Allow pip to install packages in the system site-packages dir
+ENV PIP_BREAK_SYSTEM_PACKAGES=true
 
 # Prepare list of Python dependencies
 COPY requirements.txt /code/
@@ -27,17 +25,17 @@ RUN apt-get update -y && \
       libffi-dev \
       libpcre3 \
       libpcre3-dev \
-      libpython3.8 \
+      libpython3.12 \
       procps \
       python3-pip \
-      python3.8 \
-      python3.8-dev \
+      python3.12 \
+      python3.12-dev \
       vim-tiny && \
-    pip install --no-cache-dir --upgrade pip 'setuptools<71' && \
+    pip install --no-cache-dir --upgrade setuptools && \
     pip install --no-cache-dir -r /code/requirements.txt && \
     apt-get remove -y \
       gcc \
-      python3.8-dev && \
+      python3.12-dev && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -68,7 +66,7 @@ RUN if test -e modules/reana-commons; then \
     fi
 
 # A quick fix to allow eduGAIN and social login users that wouldn't otherwise match Invenio username rules
-RUN sed -i 's|^username_regex = re.compile\(.*\)$|username_regex = re.compile("^\\S+$")|g' /usr/local/lib/python3.8/dist-packages/invenio_userprofiles/validators.py
+RUN sed -i 's|^username_regex = re.compile\(.*\)$|username_regex = re.compile("^\\S+$")|g' /usr/local/lib/python3.12/dist-packages/invenio_userprofiles/validators.py
 
 # Check for any broken Python dependencies
 # hadolint ignore=DL3059
