@@ -59,9 +59,10 @@ install_requires = [
     "Werkzeug<2.1",
     "flask-celeryext<0.5.0",
     "gitpython>=3.1",
-    "marshmallow>2.13.0,<=2.20.1",
+    "marshmallow>2.13.0,<3",
     "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a2,<0.96.0",
-    "reana-db>=0.95.0a2,<0.96.0",
+    # commenting out so that I can test newer dependencies
+    # "reana-db>=0.95.0a2,<0.96.0",
     "requests==2.25.0",
     "tablib>=0.12.1",
     "uWSGI>=2.0.17",
@@ -76,23 +77,24 @@ install_requires = [
     "yadage==0.20.1",
     "yadage-schemas==0.10.6",
     # Invenio dependencies
-    "invenio-app>=1.3.0,<1.4.0",
-    "invenio-base>=1.2.0,<1.3.0",
-    "invenio-cache>=1.1.0,<1.2.0",
-    "invenio-config>=1.0.3,<1.1.0",
+    "invenio-app>=1.3.0",
+    "invenio-base>=1.2.0",
+    "invenio-cache>=1.1.0",
+    "invenio-config>=1.0.3",
     # From base bundle
-    "invenio-logging>=1.3.0,<1.4.0",
-    "invenio-mail>=1.0.2,<1.1.0",
+    "invenio-logging>=1.3.0",
+    "invenio-mail>=1.0.2",
     # From auth bundle
-    "invenio-accounts>=1.4.2,<1.5.0",
-    "invenio-oauth2server>=1.3.0,<1.4.0",
-    "invenio-oauthclient>=1.5.0,<1.6.0",
-    "invenio-userprofiles>=1.2.0,<1.3.0",
-    "invenio-userprofiles>=1.2.0,<1.2.5",  # pin <1.2.5 due to import-related changes in upstream
-    "invenio-theme>=1.4.7,<2.0.0",
-    "invenio-i18n>=1.3.3,<2.0.0",
+    "invenio-accounts>=1.4.2",
+    "invenio-oauth2server>=1.3.0",
+    "invenio-oauthclient>=1.5.0",
+    "invenio-userprofiles>=1.2.0",
+    "invenio-userprofiles>=1.2.0",
+    "invenio-theme>=1.4.7",
+    "invenio-i18n>=1.3.3",
+    "invenio-access",
     # Invenio database
-    "invenio-db[postgresql]>=1.0.5,<1.1.0",
+    "invenio-db[postgresql]>=1.0.5",
     "six>=1.12.0",  # required by Flask-Breadcrumbs
 ]
 
