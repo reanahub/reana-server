@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.4](https://github.com/reanahub/reana-server/compare/0.9.3...0.9.4) (2024-05-15)
+
+
+### Bug fixes
+
+* **reana-admin:** respect service domain when cleaning sessions ([#687](https://github.com/reanahub/reana-server/issues/687)) ([ede882d](https://github.com/reanahub/reana-server/commit/ede882d384ae0959eb8a9484b7d491baa628a1ee))
+
 ## [0.9.3](https://github.com/reanahub/reana-server/compare/0.9.2...0.9.3) (2024-03-04)
 
 
