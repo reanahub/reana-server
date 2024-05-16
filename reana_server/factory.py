@@ -31,7 +31,6 @@ def create_app(config_mapping=None):
     app.config.from_object("reana_server.config")
     if config_mapping:
         app.config.from_mapping(config_mapping)
-    app.secret_key = "hyper secret key"
 
     app.session = Session
 

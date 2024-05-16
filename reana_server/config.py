@@ -186,7 +186,9 @@ CORS_SUPPORTS_CREDENTIALS = False
 
 #: Secret key - each installation (dev, production, ...) needs a separate key.
 #: It should be changed before deploying.
-SECRET_KEY = "CHANGE_ME"
+SECRET_KEY = os.getenv("REANA_SECRET_KEY", "CHANGE_ME")
+"""Secret key used for the application user sessions."""
+
 #: Sets cookie with the secure flag by default
 SESSION_COOKIE_SECURE = True
 #: Sets session to be samesite to avoid CSRF attacks
