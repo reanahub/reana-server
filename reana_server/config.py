@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -396,6 +396,11 @@ else:
         _reana_interactive_session_max_inactivity_period_env
     )
 """Maximum allowed period (in days) for interactive session inactivity before automatic closure."""
+
+REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS = json.loads(
+    os.getenv("REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS", "{}")
+)
+"""Allowed and recommended environments to be used for interactive sessions."""
 
 # Kubernetes jobs timeout
 # ==================
