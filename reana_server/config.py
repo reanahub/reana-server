@@ -136,8 +136,10 @@ MAIL_SUPPRESS_SEND = True
 # Accounts
 # ========
 #: Redis URL
-ACCOUNTS_SESSION_REDIS_URL = "redis://{host}:6379/1".format(
-    host=REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES["cache"]
+REANA_CACHE_PASSWORD = os.getenv("REANA_CACHE_PASSWORD", "")
+ACCOUNTS_SESSION_REDIS_URL = "redis://:{password}@{host}:6379/1".format(
+    password=REANA_CACHE_PASSWORD,
+    host=REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES["cache"],
 )
 #: Email address used as sender of account registration emails.
 SECURITY_EMAIL_SENDER = SUPPORT_EMAIL
