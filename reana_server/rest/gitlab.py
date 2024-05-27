@@ -25,7 +25,7 @@ from flask import (
 from flask_login.utils import _create_identifier
 from invenio_oauthclient.utils import get_safe_redirect_target
 from itsdangerous import BadData, TimedJSONWebSignatureSerializer
-from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.k8s.secrets import UserSecretsStore
 from werkzeug.local import LocalProxy
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
@@ -170,10 +170,11 @@ def gitlab_oauth(user):  # noqa
             gitlab_response = requests.post(
                 REANA_GITLAB_URL + "/oauth/token", data=params
             ).content
-            secrets_store = REANAUserSecretsStore(str(user.id_))
+            secrets_store = UserSecretsStore.fetch(user.id_)
             secrets_store.add_secrets(
                 _format_gitlab_secrets(gitlab_response), overwrite=True
             )
+            UserSecretsStore.update(secrets_store)
             return redirect(next_url), 302
         else:
             return jsonify({"message": "OK"}), 200
@@ -291,11 +292,13 @@ def gitlab_projects(
               }
     """
     try:
-        secrets_store = REANAUserSecretsStore(str(user.id_))
-        gitlab_token = secrets_store.get_secret_value("gitlab_access_token")
+        secrets_store = UserSecretsStore.fetch(user.id_)
+        gitlab_token_secret = secrets_store.get_secret("gitlab_access_token")
 
-        if not gitlab_token:
+        if not gitlab_token_secret:
             return jsonify({"message": "Missing GitLab access token."}), 401
+
+        gitlab_token = gitlab_token_secret.value_str
 
         gitlab_url = urljoin(REANA_GITLAB_URL, "/api/v4/projects")
         params = {
@@ -465,8 +468,9 @@ def gitlab_webhook(user):  # noqa
     """
 
     try:
-        secrets_store = REANAUserSecretsStore(str(user.id_))
-        gitlab_token = secrets_store.get_secret_value("gitlab_access_token")
+        secrets_store = UserSecretsStore.fetch(user.id_)
+        # TODO: properly handle missing secret, this will be fixed by a refactor of GitLab API requests
+        gitlab_token = secrets_store.get_secret("gitlab_access_token").value_str
         parameters = request.json
         if request.method == "POST":
             gitlab_url = (
