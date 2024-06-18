@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2021, 2022 CERN.
+# Copyright (C) 2021, 2022, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -24,6 +24,7 @@ from reana_server.config import (
     REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT,
     REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
     REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD,
+    REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS,
 )
 from reana_server.decorators import signin_required
 
@@ -125,6 +126,15 @@ def info(user, **kwargs):  # noqa
                       type: string
                     type: array
                 type: object
+              interactive_session_recommended_jupyter_images:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    image:
+                      type: string
+                    name:
+                      type: string
             type: object
           examples:
             application/json:
@@ -164,6 +174,13 @@ def info(user, **kwargs):  # noqa
                 "maximum_kubernetes_jobs_timeout": {
                     "title": "Maximum timeout for Kubernetes jobs",
                     "value": "1209600"
+                },
+                "interactive_session_recommended_jupyter_images": {
+                  "title": "Recommended jupyter images for interactive sessions",
+                  "value": [
+                      {'image': 'docker.io/jupyter/scipy-notebook:notebook-6.4.5', 'name': 'Jupyter SciPy Notebook 6.4.5'},
+                      {'image': 'docker.io/jupyter/scipy-notebook:notebook-9.4.5', 'name': 'Jupyter SciPy Notebook 9.4.5'}
+                  ]
                 },
               }
         500:
@@ -217,6 +234,10 @@ def info(user, **kwargs):  # noqa
                 title="Maximum inactivity period in days before automatic closure of interactive sessions",
                 value=REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD,
             ),
+            interactive_session_recommended_jupyter_images=dict(
+                title="Recommended jupyter images for interactive sessions",
+                value=REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS["jupyter"]["recommended"],
+            ),
         )
         return InfoSchema().dump(cluster_information)
 
@@ -260,3 +281,4 @@ class InfoSchema(Schema):
     maximum_interactive_session_inactivity_period = fields.Nested(
         StringNullableInfoValue
     )
+    interactive_session_recommended_jupyter_images = fields.Nested(StringInfoValue)
