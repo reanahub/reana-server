@@ -206,7 +206,7 @@ def test_restart_workflow_validates_specification(
         workflow_specification["workflow"]["type"] = "unknown"
         body = {
             "reana_specification": workflow_specification,
-            "restart": "can be anything here doesnt matter",
+            "restart": True,
         }
         res = client.post(
             url_for("workflows.start_workflow", workflow_id_or_name="test"),

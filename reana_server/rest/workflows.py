@@ -1132,8 +1132,16 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
 
 @blueprint.route("/workflows/<workflow_id_or_name>/start", methods=["POST"])
 @signin_required()
+@use_kwargs(
+    {
+        "operational_options": fields.Dict(location="json"),
+        "input_parameters": fields.Dict(location="json"),
+        "restart": fields.Boolean(location="json"),
+        "reana_specification": fields.Raw(location="json"),
+    }
+)
 @check_quota
-def start_workflow(workflow_id_or_name, user):  # noqa
+def start_workflow(workflow_id_or_name, user, **parameters):  # noqa
     r"""Start workflow.
     ---
     post:
@@ -1166,12 +1174,20 @@ def start_workflow(workflow_id_or_name, user):  # noqa
             type: object
             properties:
               operational_options:
-                type: object
-              reana_specification:
+                description: Optional. Additional operational options for workflow execution.
                 type: object
               input_parameters:
+                description: >-
+                  Optional. Additional input parameters that override the ones from
+                  the workflow specification.
+                type: object
+              reana_specification:
+                description: >-
+                  Optional. Replace the original workflow specification with the given one.
+                  Only considered when restarting a workflow.
                 type: object
               restart:
+                description: Optional. If true, restart the given workflow.
                 type: boolean
       responses:
         200:
@@ -1285,17 +1301,23 @@ def start_workflow(workflow_id_or_name, user):  # noqa
                 "message": "Status resume is not supported yet."
               }
     """
+
+    operational_options = parameters.get("operational_options", {})
+    input_parameters = parameters.get("input_parameters", {})
+    restart = parameters.get("restart", False)
+    reana_specification = parameters.get("reana_specification")
+
     try:
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-        parameters = request.json if request.is_json else {}
+
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
-        operational_options = parameters.get("operational_options", {})
         operational_options = validate_operational_options(
             workflow.type_, operational_options
         )
+
         restart_type = None
-        if "restart" in parameters:
+        if restart:
             if workflow.status not in [RunStatus.finished, RunStatus.failed]:
                 raise ValueError("Only finished or failed workflows can be restarted.")
             if workflow.workspace_has_pending_retention_rules():
@@ -1303,14 +1325,9 @@ def start_workflow(workflow_id_or_name, user):  # noqa
                     "The workflow cannot be restarted because some retention rules are "
                     "currently being applied to the workspace. Please retry later."
                 )
-            restart_type = (
-                parameters.get("reana_specification", {})
-                .get("workflow", {})
-                .get("type", None)
-            )
-            workflow = clone_workflow(
-                workflow, parameters.get("reana_specification", None), restart_type
-            )
+            if reana_specification:
+                restart_type = reana_specification.get("workflow", {}).get("type", None)
+            workflow = clone_workflow(workflow, reana_specification, restart_type)
         elif workflow.status != RunStatus.created:
             raise ValueError(
                 "Workflow {} is already {} and cannot be started "
@@ -1319,11 +1336,12 @@ def start_workflow(workflow_id_or_name, user):  # noqa
         if "yadage" in (workflow.type_, restart_type):
             _load_and_save_yadage_spec(workflow, operational_options)
 
-        input_parameters = parameters.get("input_parameters", {})
         validate_workflow(
             workflow.reana_specification, input_parameters=input_parameters
         )
 
+        # when starting the workflow, the scheduler will call RWC's `set_workflow_status`
+        # with the given `parameters`
         publish_workflow_submission(workflow, user.id_, parameters)
         response = {
             "message": "Workflow submitted.",

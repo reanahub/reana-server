@@ -3198,15 +3198,19 @@
             "schema": {
               "properties": {
                 "input_parameters": {
+                  "description": "Optional. Additional input parameters that override the ones from the workflow specification.",
                   "type": "object"
                 },
                 "operational_options": {
+                  "description": "Optional. Additional operational options for workflow execution.",
                   "type": "object"
                 },
                 "reana_specification": {
+                  "description": "Optional. Replace the original workflow specification with the given one. Only considered when restarting a workflow.",
                   "type": "object"
                 },
                 "restart": {
+                  "description": "Optional. If true, restart the given workflow.",
                   "type": "boolean"
                 }
               },
