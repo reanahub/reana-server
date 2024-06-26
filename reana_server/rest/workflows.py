@@ -765,7 +765,8 @@ def get_workflow_specification(workflow_id_or_name, user):  # noqa
             jsonify(
                 {
                     "specification": workflow.reana_specification,
-                    "parameters": workflow.input_parameters,
+                    # `input_parameters` can be null, if so return an empty dict
+                    "parameters": workflow.input_parameters or {},
                 }
             ),
             200,
