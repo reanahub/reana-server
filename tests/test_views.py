@@ -319,7 +319,7 @@ def test_get_workflow_status(app, default_user, _get_user_mock):
 
 
 def test_set_workflow_status(app, default_user, _get_user_mock):
-    """Test get_workflow_logs view."""
+    """Test set_workflow_status view."""
     with app.test_client() as client:
         with patch(
             "reana_server.rest.workflows.current_rwc_api_client",
@@ -341,7 +341,7 @@ def test_set_workflow_status(app, default_user, _get_user_mock):
                 headers={"Content-Type": "application/json"},
                 query_string={"access_token": default_user.access_token},
             )
-            assert res.status_code == 500
+            assert res.status_code == 422
 
             res = client.put(
                 url_for("workflows.set_workflow_status", workflow_id_or_name="1"),
