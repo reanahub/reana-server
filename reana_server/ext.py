@@ -16,7 +16,15 @@ from marshmallow.exceptions import ValidationError
 from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
 from werkzeug.exceptions import UnprocessableEntity
 
+from invenio_oauthclient.signals import account_info_received
+from flask_security.signals import user_registered
+
+
 from reana_server import config
+from reana_server.utils import (
+    _create_and_associate_local_user,
+    _create_and_associate_oauth_user,
+)
 
 
 def handle_rate_limit_error(error: RateLimitExceeded):
@@ -75,6 +83,9 @@ class REANA(object):
         self.init_config(app)
         self.init_error_handlers(app)
 
+        account_info_received.connect(_create_and_associate_oauth_user)
+        user_registered.connect(_create_and_associate_local_user)
+
         @app.teardown_appcontext
         def shutdown_reana_db_session(response_or_exc):
             """Close session on app teardown."""
@@ -84,20 +95,6 @@ class REANA(object):
             reana_db_session.remove()
             invenio_db.session.remove()
             return response_or_exc
-
-        @app.before_first_request
-        def connect_signals():
-            """Connect OAuthClient signals."""
-            from invenio_oauthclient.signals import account_info_received
-            from flask_security.signals import user_registered
-
-            from .utils import (
-                _create_and_associate_local_user,
-                _create_and_associate_oauth_user,
-            )
-
-            account_info_received.connect(_create_and_associate_oauth_user)
-            user_registered.connect(_create_and_associate_local_user)
 
     def init_config(self, app):
         """Initialize configuration."""
