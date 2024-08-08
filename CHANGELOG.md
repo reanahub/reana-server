@@ -1,5 +1,51 @@
 # Changelog
 
+## [0.95.0](https://github.com/reanahub/reana-server/compare/0.9.3...0.95.0) (2024-08-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* **python:** drop support for Python 3.6 and 3.7
+* **gitlab:** The REST API endpoint `gitlab_projects` now includes pagination details.
+
+### Build
+
+* **docker:** pin setuptools to v70 ([#696](https://github.com/reanahub/reana-server/issues/696)) ([c1b4b71](https://github.com/reanahub/reana-server/commit/c1b4b710fee23c2215a5a884bedbd00c90881596))
+* **docker:** upgrade to Ubuntu 24.04 and Python 3.12 ([#692](https://github.com/reanahub/reana-server/issues/692)) ([091a9ed](https://github.com/reanahub/reana-server/commit/091a9ed327b4f7a28f16e89bab46110c0a463749))
+* **python:** add minimal `pyproject.toml` ([#696](https://github.com/reanahub/reana-server/issues/696)) ([6313720](https://github.com/reanahub/reana-server/commit/631372081660d7c8e831b351c3db0123cc76c911))
+* **python:** drop support for Python 3.6 and 3.7 ([#683](https://github.com/reanahub/reana-server/issues/683)) ([868dee9](https://github.com/reanahub/reana-server/commit/868dee9330bf28727f550965416ab6c670d32f9d))
+* **python:** remove deprecated `pytest-runner` ([#696](https://github.com/reanahub/reana-server/issues/696)) ([20431fe](https://github.com/reanahub/reana-server/commit/20431fe5f3fc0e451afa1f4f8e6734bd41b84acc))
+* **python:** use optional deps instead of `tests_require` ([#696](https://github.com/reanahub/reana-server/issues/696)) ([9c2a31f](https://github.com/reanahub/reana-server/commit/9c2a31f154c4d60d5a1887ca69d7f30525d482f4))
+
+
+### Features
+
+* **gitlab:** add search query parameter to filter projects ([#681](https://github.com/reanahub/reana-server/issues/681)) ([109cf38](https://github.com/reanahub/reana-server/commit/109cf38be440e15676e53ec1458ff9efe7d4a395)), closes [#518](https://github.com/reanahub/reana-server/issues/518)
+* **gitlab:** add support for paginated project list ([#681](https://github.com/reanahub/reana-server/issues/681)) ([4d23c62](https://github.com/reanahub/reana-server/commit/4d23c62d57b8ada0d12895fe03190b898b4abd61)), closes [#518](https://github.com/reanahub/reana-server/issues/518)
+
+
+### Bug fixes
+
+* **flask:** avoid deprecated decorator `before_first_request` ([#692](https://github.com/reanahub/reana-server/issues/692)) ([6d3fe7d](https://github.com/reanahub/reana-server/commit/6d3fe7dcf83ef1fea42dcaae0a15b2b83b4a5e10))
+* **gitlab:** handle pagination of GitLab webhooks ([#684](https://github.com/reanahub/reana-server/issues/684)) ([3f716f7](https://github.com/reanahub/reana-server/commit/3f716f7369230ab2a864b6bfcae44a952ca5bf90)), closes [#682](https://github.com/reanahub/reana-server/issues/682)
+
+
+### Code refactoring
+
+* **gitlab:** move all GitLab requests to dedicated client ([#685](https://github.com/reanahub/reana-server/issues/685)) ([703af19](https://github.com/reanahub/reana-server/commit/703af19e4232af5c9b3ecdefb0b90a60e796605c)), closes [#676](https://github.com/reanahub/reana-server/issues/676)
+
+
+### Continuous integration
+
+* **actions:** update GitHub actions due to Node 16 deprecation ([#680](https://github.com/reanahub/reana-server/issues/680)) ([b7cc00a](https://github.com/reanahub/reana-server/commit/b7cc00afddb5035a3ed8f964ea33fb94bca3e2d8))
+* **commitlint:** improve checking of merge commits ([#692](https://github.com/reanahub/reana-server/issues/692)) ([9a7bd8c](https://github.com/reanahub/reana-server/commit/9a7bd8c94b76c0a7942b3f3cbae671fde334e49b))
+* **pytest:** invoke `pytest` directly instead of `setup.py test` ([#696](https://github.com/reanahub/reana-server/issues/696)) ([bd6762f](https://github.com/reanahub/reana-server/commit/bd6762fc3ef1a79d5354ac167e0e08383eec9d6c))
+
+
+### Chores
+
+* **master:** release 0.95.0-alpha.1 ([9fa4059](https://github.com/reanahub/reana-server/commit/9fa40595ce840391c4aed999c3d4dda4de7ad2eb))
+
 ## [0.9.3](https://github.com/reanahub/reana-server/compare/0.9.2...0.9.3) (2024-03-04)
 
 
