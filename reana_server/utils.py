@@ -36,7 +36,6 @@ from reana_commons.errors import (
     REANAValidationError,
     REANAEmailNotificationError,
 )
-from reana_commons.k8s.secrets import REANAUserSecretsStore
 from reana_commons.utils import get_quota_resource_usage
 from reana_commons.yadage import yadage_load_from_workspace
 from reana_db.database import Session
