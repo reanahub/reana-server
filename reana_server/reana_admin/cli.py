@@ -10,6 +10,7 @@
 
 import datetime
 import logging
+from pathlib import Path
 import secrets
 import sys
 import traceback
@@ -850,6 +851,17 @@ def retention_rules_apply(
         click.echo("No rules to be applied!")
 
     for rule in pending_rules:
+        if not Path(rule.workflow.workspace_path).exists():
+            # workspace was deleted, set rule as if it was already applied
+            click.secho(
+                f"Workspace {rule.workflow.workspace_path} of rule {rule.id_} does not exist, "
+                "setting the status to `applied`",
+                fg="red",
+            )
+            update_workspace_retention_rules(
+                [rule], WorkspaceRetentionRuleStatus.applied
+            )
+            continue
         # if there are errors, the status of the rule will be reset to `active`
         # so that the rule will be applied again at the next execution of the cronjob
         next_status = WorkspaceRetentionRuleStatus.active
