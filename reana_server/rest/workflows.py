@@ -3262,3 +3262,55 @@ def prune_workspace(
     except Exception as e:
         logging.exception(str(e))
         return jsonify({"message": str(e)}), 500
+
+@blueprint.route("/validation", methods=["POST"])
+#@signin_required()
+def workflow_validation():
+    r"""Endpoint to validate reana yaml in the server. Responds with a result.
+    ---
+    post:
+      summary: Validate reana yaml in the server
+      operationId: validate_workflow
+      description: >-
+        Validate reana yaml in the server.
+      consumes:
+        - application/json
+      produces:
+       - application/json
+      parameters:
+        - name: reana_yaml
+          in: body
+          required: false
+          description: >-
+            The yaml file to create the workflow.
+          schema:
+            type: object
+      responses:
+        200:
+          description: >-
+            Get reana yaml validation results.
+          schema:
+            type: object
+            properties:
+              message:
+                type: object
+              status:
+                type: string
+          examples:
+            application/json:
+              message: OK
+              status: 200
+    """
+    reana_yaml = request.json
+    logging.info("test")
+    logging.info(reana_yaml)
+
+    from reana_commons.validation.utils import validate_reana_yaml, validate_workflow_name
+    validation_warnings = validate_reana_yaml(reana_yaml)
+
+    response = { "warnings": validation_warnings}
+
+    logging.info("Response:")
+    logging.info(response)
+
+    return jsonify(message=response, status="200"), 200
