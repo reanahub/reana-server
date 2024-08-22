@@ -3319,13 +3319,13 @@ def workflow_validation():
             return jsonify(message=e.message, status="400"), 400
 
     """Validate parameters."""
-    validation_parameters = None
+    reana_spec_params = None
     try:
-        validation_parameters = validate_parameters(reana_yaml)
+        reana_spec_params = validate_parameters(reana_yaml)
     except REANAValidationError as e:
         return jsonify(message=e.message, status="400"), 400
 
-    response = { "warnings": validation_warnings, "validation_parameters": vars(validation_parameters)["reana_params_warnings"]}
+    response = { "warnings": validation_warnings, "reana_spec_params": vars(reana_spec_params)["reana_params_warnings"]}
 
     logging.info("Response:")
     logging.info(response)
