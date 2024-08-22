@@ -17,13 +17,15 @@ from bravado.exception import HTTPError
 from flask import Blueprint, Response
 from flask import jsonify, request, stream_with_context
 from jsonschema.exceptions import ValidationError
+from typing import Dict
 
 from reana_commons import workspace
 from reana_commons.config import REANA_WORKFLOW_ENGINES
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.validation.operational_options import validate_operational_options
-from reana_commons.validation.utils import validate_workflow_name
-from reana_commons.specification import load_reana_spec
+from reana_commons.validation.utils import validate_reana_yaml, validate_workflow_name
+from reana_commons.validation.parameters import build_parameters_validator
+from reana_commons.specification import load_reana_spec, load_workflow_spec_from_reana_yaml, load_input_parameters
 from reana_db.database import Session
 from reana_db.models import InteractiveSessionType, RunStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
@@ -3305,12 +3307,40 @@ def workflow_validation():
     logging.info("test")
     logging.info(reana_yaml)
 
-    from reana_commons.validation.utils import validate_reana_yaml, validate_workflow_name
     validation_warnings = validate_reana_yaml(reana_yaml)
 
-    response = { "warnings": validation_warnings}
+    """Validate REANA specification file."""
+    if "options" in reana_yaml.get("inputs", {}):
+        workflow_type = reana_yaml["workflow"]["type"]
+        workflow_options = reana_yaml["inputs"]["options"]
+        try:
+            validate_operational_options(workflow_type, workflow_options)
+        except REANAValidationError as e:
+            return jsonify(message=e.message, status="400"), 400
+
+    """Validate parameters."""
+    validation_parameters = None
+    try:
+        validation_parameters = validate_parameters(reana_yaml)
+    except REANAValidationError as e:
+        return jsonify(message=e.message, status="400"), 400
+
+    response = { "warnings": validation_warnings, "validation_parameters": vars(validation_parameters)["reana_params_warnings"]}
 
     logging.info("Response:")
     logging.info(response)
 
     return jsonify(message=response, status="200"), 200
+
+def validate_parameters(reana_yaml: Dict) -> None:
+    """Validate the presence of input parameters in workflow step commands and viceversa.
+
+    :param reana_yaml: REANA YAML specification.
+    """
+
+    validator = build_parameters_validator(reana_yaml)
+    try:
+        validator.validate_parameters()
+        return validator
+    except REANAValidationError as e:
+        raise e
