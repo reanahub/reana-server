@@ -34,7 +34,7 @@ extras_require = {
         "sphinx-click>=1.0.4",
     ],
     "tests": [
-        "pytest-reana>=0.95.0a2,<0.96.0",
+        "pytest-reana>=0.95.0a4,<0.96.0",
     ],
 }
 
@@ -49,7 +49,7 @@ install_requires = [
     "gitpython>=3.1",
     "marshmallow>2.13.0,<3.0.0",
     "reana-commons[kubernetes,yadage,snakemake,cwl] @ git+https://github.com/reanahub/reana-commons.git@0.95.0a4",
-    "reana-db>=0.95.0a3,<0.96.0",
+    "reana-db>=0.95.0a4,<0.96.0",
     "requests>=2.25.0",
     "tablib>=0.12.1",
     "uWSGI>=2.0.17",

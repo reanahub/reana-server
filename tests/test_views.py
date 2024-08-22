@@ -788,7 +788,7 @@ def test_prune_workspace(app, user0, sample_serial_workflow_in_db):
         assert "The workspace has been correctly pruned." in res.json["message"]
 
 
-def test_gitlab_projects(app: Flask, default_user):
+def test_gitlab_projects(app: Flask, user0):
     """Test fetching of GitLab projects."""
     with app.test_client() as client:
         # token not provided
@@ -804,7 +804,7 @@ def test_gitlab_projects(app: Flask, default_user):
         # missing GitLab token
         fetch_mock = Mock()
         fetch_mock.return_value = UserSecrets(
-            user_id=str(default_user.id_),
+            user_id=str(user0.id_),
             k8s_secret_name="k8s_secret_name",
         )
         with patch(
@@ -813,7 +813,7 @@ def test_gitlab_projects(app: Flask, default_user):
         ):
             res = client.get(
                 "/api/gitlab/projects",
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": user0.access_token},
             )
             assert res.status_code == 401
 
@@ -854,7 +854,7 @@ def test_gitlab_projects(app: Flask, default_user):
 
         mock_fetch = Mock()
         mock_fetch.return_value = UserSecrets(
-            user_id=str(default_user.id_),
+            user_id=str(user0.id_),
             k8s_secret_name="gitlab_token",
             secrets=[
                 Secret(name="gitlab_access_token", type_="env", value="gitlab_token")
@@ -868,7 +868,7 @@ def test_gitlab_projects(app: Flask, default_user):
         ):
             res = client.get(
                 "/api/gitlab/projects",
-                query_string={"access_token": default_user.access_token},
+                query_string={"access_token": user0.access_token},
             )
 
         assert res.status_code == 200

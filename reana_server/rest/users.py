@@ -392,18 +392,12 @@ def get_users_shared_with_you(user):
                   properties:
                     email:
                       type: string
-                    full_name:
-                      type: string
-                    username:
-                      type: string
           examples:
             application/json:
               {
                 "users_shared_with_you": [
                   {
                     "email": "john.doe@example.org",
-                    "full_name": "John Doe",
-                    "username": "jdoe"
                     }
                 ]
             }
@@ -457,27 +451,16 @@ def get_users_shared_with_you(user):
         shared_workflow_owners_ids = (
             Session.query(Workflow.owner_id)
             .filter(Workflow.id_.in_(shared_workflows_ids))
-            .distinct()
             .subquery()
         )
 
         users = (
-            Session.query(User.email, User.full_name, User.username)
+            Session.query(User.email)
             .filter(User.id_.in_(shared_workflow_owners_ids))
             .all()
         )
 
-        response = {"users_shared_with_you": []}
-
-        for email, full_name, username in users:
-            response["users_shared_with_you"].append(
-                {
-                    "email": email,
-                    "full_name": full_name,
-                    "username": username,
-                }
-            )
-
+        response = {"users_shared_with_you": [{"email": user.email} for user in users]}
         return jsonify(response), 200
     except HTTPError as e:
         logging.error(traceback.format_exc())
@@ -524,18 +507,12 @@ def get_users_you_shared_with(user):
                   properties:
                     email:
                       type: string
-                    full_name:
-                      type: string
-                    username:
-                      type: string
           examples:
             application/json:
               {
                 "users_you_shared_with": [
                   {
                     "email": "john.doe@example.org",
-                    "full_name": "John Doe",
-                    "username": "jdoe"
                     }
                 ]
             }
@@ -592,22 +569,12 @@ def get_users_you_shared_with(user):
         )
 
         users = (
-            Session.query(User.email, User.full_name, User.username)
+            Session.query(User.email)
             .filter(User.id_.in_(users_you_shared_with_ids))
             .all()
         )
 
-        response = {"users_you_shared_with": []}
-
-        for email, full_name, username in users:
-            response["users_you_shared_with"].append(
-                {
-                    "email": email,
-                    "full_name": full_name,
-                    "username": username,
-                }
-            )
-
+        response = {"users_you_shared_with": [{"email": user.email} for user in users]}
         return jsonify(response), 200
     except HTTPError as e:
         logging.error(traceback.format_exc())

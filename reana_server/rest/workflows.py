@@ -149,12 +149,12 @@ def get_workflows(user, **kwargs):  # noqa
           type: boolean
         - name: shared_by
           in: query
-          description: Optional argument to list workflows shared by the specified user(s).
+          description: Optional argument to list workflows shared by the specified user.
           required: false
           type: string
         - name: shared_with
           in: query
-          description: Optional argument to list workflows shared with the specified user(s).
+          description: Optional argument to list workflows shared with the specified user.
           required: false
           type: string
       responses:
@@ -192,7 +192,9 @@ def get_workflows(user, **kwargs):  # noqa
                     owner_email:
                         type: string
                     shared_with:
-                        type: string
+                        type: array
+                        items:
+                          type: string
                     created:
                       type: string
                     session_status:
@@ -3289,7 +3291,14 @@ def prune_workspace(
 
 @blueprint.route("/workflows/<workflow_id_or_name>/share", methods=["POST"])
 @signin_required()
-def share_workflow(workflow_id_or_name, user):
+@use_kwargs(
+    {
+        "user_email_to_share_with": fields.Str(required=True, location="json"),
+        "message": fields.Str(location="json"),
+        "valid_until": fields.Str(location="json"),
+    },
+)
+def share_workflow(workflow_id_or_name, user, **kwargs):
     r"""Share a workflow with another user.
 
     ---
@@ -3352,6 +3361,11 @@ def share_workflow(workflow_id_or_name, user):
         400:
           description: >-
             Request failed. The incoming data seems malformed.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
         401:
           description: >-
             Request failed. User not signed in.
@@ -3381,6 +3395,11 @@ def share_workflow(workflow_id_or_name, user):
         404:
           description: >-
             Request failed. Workflow does not exist or user does not exist.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -3390,6 +3409,11 @@ def share_workflow(workflow_id_or_name, user):
         409:
           description: >-
             Request failed. The workflow is already shared with the user.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -3398,6 +3422,11 @@ def share_workflow(workflow_id_or_name, user):
         500:
           description: >-
             Request failed. Internal controller error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
           examples:
             application/json:
               {
@@ -3408,7 +3437,7 @@ def share_workflow(workflow_id_or_name, user):
         response, http_response = current_rwc_api_client.api.share_workflow(
             workflow_id_or_name=workflow_id_or_name,
             user=str(user.id_),
-            share_details=request.json,
+            share_details=kwargs,
         ).result()
 
         return jsonify(response), 200
@@ -3484,15 +3513,10 @@ def unshare_workflow(workflow_id_or_name, user, user_email_to_unshare_with):
             properties:
               message:
                 type: string
-              errors:
-                type: array
-                items:
-                  type: string
           examples:
             application/json:
               {
-                "message": "Malformed request.",
-                "errors": ["Missing data for required field."]
+                "message": "Malformed request."
               }
         403:
           description: >-
@@ -3502,14 +3526,10 @@ def unshare_workflow(workflow_id_or_name, user, user_email_to_unshare_with):
             properties:
               message:
                 type: string
-              errors:
-                type: array
-                items:
-                  type: string
           examples:
             application/json:
               {
-                "errors": ["User is not allowed to unshare the workflow."]
+                "message": "User is not allowed to unshare the workflow."
               }
         404:
           description: >-
@@ -3519,17 +3539,11 @@ def unshare_workflow(workflow_id_or_name, user, user_email_to_unshare_with):
             properties:
               message:
                 type: string
-              errors:
-                type: array
-                items:
-                  type: string
           examples:
             application/json:
               {
                 "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
                             not exist",
-                "errors": ["Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
-                            not exist"]
               }
         409:
           description: >-
@@ -3539,15 +3553,10 @@ def unshare_workflow(workflow_id_or_name, user, user_email_to_unshare_with):
             properties:
               message:
                 type: string
-              errors:
-                type: array
-                items:
-                  type: string
           examples:
             application/json:
               {
-                "message": "The workflow is not shared with the user.",
-                "errors": ["The workflow is not shared with the user."]
+                "message": "The workflow is not shared with the user."
               }
         500:
           description: >-
@@ -3557,22 +3566,17 @@ def unshare_workflow(workflow_id_or_name, user, user_email_to_unshare_with):
             properties:
               message:
                 type: string
-              errors:
-                  type: array
-                  items:
-                    type: string
           examples:
             application/json:
               {
-                "message": "Internal controller error.",
-                "errors": ["Internal controller error."]
+                "message": "Internal controller error."
               }
     """
     try:
         unshare_params = {
             "workflow_id_or_name": workflow_id_or_name,
             "user_email_to_unshare_with": user_email_to_unshare_with,
-            "user_id": str(user.id_),
+            "user": str(user.id_),
         }
 
         response, http_response = current_rwc_api_client.api.unshare_workflow(
@@ -3705,7 +3709,7 @@ def get_workflow_share_status(workflow_id_or_name, user):
     try:
         share_status_params = {
             "workflow_id_or_name": workflow_id_or_name,
-            "user_id": str(user.id_),
+            "user": str(user.id_),
         }
 
         response, http_response = current_rwc_api_client.api.get_workflow_share_status(
