@@ -3302,12 +3302,31 @@ def workflow_validation():
             application/json:
               message: OK
               status: 200
+        400:
+          description: >-
+            Validation failed due to an error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              status:
+                type: string
+          examples:
+            application/json:
+              message: Invalid REANA specification: None is not of type 'object'
+              status: 400
     """
     reana_yaml = request.json
     logging.info("test")
     logging.info(reana_yaml)
 
-    validation_warnings = validate_reana_yaml(reana_yaml)
+    try:
+        validation_warnings = validate_reana_yaml(reana_yaml)
+    except Exception as e:
+        logging.info("sent error:")
+        logging.info(str(e))
+        return jsonify(message=str(e), status="400"), 400
 
     """Validate REANA specification file."""
     if "options" in reana_yaml.get("inputs", {}):
@@ -3325,7 +3344,7 @@ def workflow_validation():
     except REANAValidationError as e:
         return jsonify(message=e.message, status="400"), 400
 
-    response = { "warnings": validation_warnings, "reana_spec_params": vars(reana_spec_params)["reana_params_warnings"]}
+    response = { "warnings": validation_warnings, "reana_spec_params": json.dumps(vars(reana_spec_params), default=list)}
 
     logging.info("Response:")
     logging.info(response)
