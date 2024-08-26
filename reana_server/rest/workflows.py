@@ -3318,9 +3318,10 @@ def workflow_validation():
               status: 400
     """
     reana_yaml = request.json
-    logging.info("test")
+    logging.info("Received:")
     logging.info(reana_yaml)
 
+    # If runtime parameters exist, get them
     if "runtime_parameters" in reana_yaml:
       runtime_parameters = reana_yaml['runtime_parameters']
       logging.info("runtime_parameters")
@@ -3328,10 +3329,8 @@ def workflow_validation():
       del reana_yaml['runtime_parameters']
 
     try:
-        validation_warnings = validate_reana_yaml(reana_yaml)
+        reana_spec_file_warnings = validate_reana_yaml(reana_yaml)
     except Exception as e:
-        logging.info("sent error:")
-        logging.info(str(e))
         return jsonify(message=str(e), status="400"), 400
 
     """Validate REANA specification file."""
@@ -3344,15 +3343,16 @@ def workflow_validation():
             return jsonify(message=str(e), status="400"), 400
 
     """Validate parameters."""
-    reana_spec_params = None
+    reana_spec_params_warnings = None
     try:
-        reana_spec_params = validate_parameters(reana_yaml)
+        reana_spec_params_warnings = validate_parameters(reana_yaml)
     except Exception as e:
         return jsonify(message=str(e), status="400"), 400
 
-    response = { "warnings": validation_warnings, "reana_spec_params": json.dumps(vars(reana_spec_params), default=list)}
+    response = { "reana_spec_file_warnings": reana_spec_file_warnings, 
+                "reana_spec_params_warnings": json.dumps(vars(reana_spec_params_warnings), default=list)}
 
-    logging.info("Response:")
+    logging.info("Sending Response:")
     logging.info(response)
 
     return jsonify(message=response, status="200"), 200
