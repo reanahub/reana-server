@@ -3321,6 +3321,12 @@ def workflow_validation():
     logging.info("test")
     logging.info(reana_yaml)
 
+    if "runtime_parameters" in reana_yaml:
+      runtime_parameters = reana_yaml['runtime_parameters']
+      logging.info("runtime_parameters")
+      logging.info(runtime_parameters)
+      del reana_yaml['runtime_parameters']
+
     try:
         validation_warnings = validate_reana_yaml(reana_yaml)
     except Exception as e:
@@ -3334,15 +3340,15 @@ def workflow_validation():
         workflow_options = reana_yaml["inputs"]["options"]
         try:
             validate_operational_options(workflow_type, workflow_options)
-        except REANAValidationError as e:
-            return jsonify(message=e.message, status="400"), 400
+        except Exception as e:
+            return jsonify(message=str(e), status="400"), 400
 
     """Validate parameters."""
     reana_spec_params = None
     try:
         reana_spec_params = validate_parameters(reana_yaml)
-    except REANAValidationError as e:
-        return jsonify(message=e.message, status="400"), 400
+    except Exception as e:
+        return jsonify(message=str(e), status="400"), 400
 
     response = { "warnings": validation_warnings, "reana_spec_params": json.dumps(vars(reana_spec_params), default=list)}
 
