@@ -21,6 +21,7 @@ from typing import Dict
 
 from reana_commons import workspace
 from reana_commons.config import REANA_WORKFLOW_ENGINES
+from reana_commons.config import COMMAND_DANGEROUS_OPERATIONS
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.validation.operational_options import validate_operational_options
 from reana_commons.validation.utils import validate_reana_yaml, validate_workflow_name
@@ -3326,7 +3327,29 @@ def workflow_validation():
       runtime_parameters = reana_yaml['runtime_parameters']
       logging.info("runtime_parameters")
       logging.info(runtime_parameters)
+
+      runtime_params_warnings = []
+
+      # Check for dangerous operations
+      for parameter in runtime_parameters:
+        for dangerous_command in COMMAND_DANGEROUS_OPERATIONS:
+          if dangerous_command in runtime_parameters[parameter]:
+            runtime_params_warnings.append('Operation "' + runtime_parameters[parameter] + '" might be dangerous.')
+
+      # Check if a runtime parameter already exists in the provided reana_yaml
+      parameters_in_yaml = []
+      for parameter_name in reana_yaml["inputs"]["parameters"]:
+          parameters_in_yaml.append(parameter_name)
+      
+      for parameter in runtime_parameters:
+          if parameter not in parameters_in_yaml:
+            runtime_params_warnings.append('Given parameter "' + parameter + '" is not in reana.yaml.')
+          
+      logging.info("runtime_params_warnings")
+      logging.info(runtime_params_warnings)
+      # delete runtime parameters as they are no longer needed
       del reana_yaml['runtime_parameters']
+
 
     try:
         reana_spec_file_warnings = validate_reana_yaml(reana_yaml)
@@ -3349,8 +3372,9 @@ def workflow_validation():
     except Exception as e:
         return jsonify(message=str(e), status="400"), 400
 
-    response = { "reana_spec_file_warnings": reana_spec_file_warnings, 
-                "reana_spec_params_warnings": json.dumps(vars(reana_spec_params_warnings), default=list)}
+    response = {"reana_spec_file_warnings": reana_spec_file_warnings, 
+                "reana_spec_params_warnings": json.dumps(vars(reana_spec_params_warnings), default=list),
+                "runtime_params_warnings": runtime_params_warnings}
 
     logging.info("Sending Response:")
     logging.info(response)
