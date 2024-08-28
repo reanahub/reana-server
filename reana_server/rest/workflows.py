@@ -3329,6 +3329,7 @@ def workflow_validation():
       logging.info(runtime_parameters)
 
       runtime_params_warnings = []
+      runtime_params_errors = []
 
       # Check for dangerous operations
       for parameter in runtime_parameters:
@@ -3343,7 +3344,7 @@ def workflow_validation():
       
       for parameter in runtime_parameters:
           if parameter not in parameters_in_yaml:
-            runtime_params_warnings.append('Given parameter "' + parameter + '" is not in reana.yaml.')
+            runtime_params_errors.append('Command-line parameter "' + parameter + '" is not defined in reana.yaml.')
           
       logging.info("runtime_params_warnings")
       logging.info(runtime_params_warnings)
@@ -3374,7 +3375,8 @@ def workflow_validation():
 
     response = {"reana_spec_file_warnings": reana_spec_file_warnings, 
                 "reana_spec_params_warnings": json.dumps(vars(reana_spec_params_warnings), default=list),
-                "runtime_params_warnings": runtime_params_warnings}
+                "runtime_params_warnings": runtime_params_warnings,
+                "runtime_params_errors": runtime_params_errors}
 
     logging.info("Sending Response:")
     logging.info(response)
