@@ -3322,14 +3322,14 @@ def workflow_validation():
     logging.info("Received:")
     logging.info(reana_yaml)
 
+    runtime_params_warnings = []
+    runtime_params_errors = []
+
     # If runtime parameters exist, get them
-    if "runtime_parameters" in reana_yaml:
+    if "runtime_parameters" in reana_yaml and (reana_yaml['runtime_parameters'] != False):
       runtime_parameters = reana_yaml['runtime_parameters']
       logging.info("runtime_parameters")
       logging.info(runtime_parameters)
-
-      runtime_params_warnings = []
-      runtime_params_errors = []
 
       # Check for dangerous operations
       for parameter in runtime_parameters:
