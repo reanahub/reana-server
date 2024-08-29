@@ -17,12 +17,13 @@ from bravado.exception import HTTPError
 from flask import Blueprint, Response
 from flask import jsonify, request, stream_with_context
 from jsonschema.exceptions import ValidationError
-from typing import Dict
+from typing import Dict, List, Optional
 
 from reana_commons import workspace
 from reana_commons.config import REANA_WORKFLOW_ENGINES
 from reana_commons.config import COMMAND_DANGEROUS_OPERATIONS
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
+from reana_commons.validation.compute_backends import build_compute_backends_validator
 from reana_commons.validation.operational_options import validate_operational_options
 from reana_commons.validation.utils import validate_reana_yaml, validate_workflow_name
 from reana_commons.validation.parameters import build_parameters_validator
@@ -3322,6 +3323,15 @@ def workflow_validation():
     logging.info("Received:")
     logging.info(reana_yaml)
 
+    server_capabilities = []
+
+    if "server_capabilities" in reana_yaml and (reana_yaml['server_capabilities'] != False):
+      logging.info("Validating server capabilities")
+      server_capabilities = validate_server_capabilities(reana_yaml)
+      logging.info(server_capabilities)
+      # delete server_capabilities section as it is no longer needed
+      del reana_yaml['server_capabilities']
+
     runtime_params_warnings = []
     runtime_params_errors = []
 
@@ -3376,7 +3386,8 @@ def workflow_validation():
     response = {"reana_spec_file_warnings": reana_spec_file_warnings, 
                 "reana_spec_params_warnings": json.dumps(vars(reana_spec_params_warnings), default=list),
                 "runtime_params_warnings": runtime_params_warnings,
-                "runtime_params_errors": runtime_params_errors}
+                "runtime_params_errors": runtime_params_errors,
+                "server_capabilities": server_capabilities}
 
     logging.info("Sending Response:")
     logging.info(response)
@@ -3395,3 +3406,54 @@ def validate_parameters(reana_yaml: Dict) -> None:
         return validator
     except REANAValidationError as e:
         raise e
+
+def validate_server_capabilities(reana_yaml: Dict) -> None:
+    """Validate server capabilities in REANA specification file.
+
+    :param reana_yaml: dictionary which represents REANA specification file.
+    """
+
+    validation_results = []
+    supported_backends = os.environ.get('REANA_COMPUTE_BACKENDS', None)
+    validation_results.append(validate_compute_backends(reana_yaml, supported_backends))
+
+    root_path = reana_yaml.get("workspace", {}).get("root_path")
+    available_workspaces = os.environ.get('WORKSPACE_PATHS', None)
+    validation_results.append(validate_workspace(root_path, available_workspaces))
+
+    return validation_results
+
+def validate_compute_backends(
+    reana_yaml: Dict, supported_backends: Optional[List[str]]
+) -> None:
+    """Validate compute backends in REANA specification file according to workflow type.
+
+    :param reana_yaml: dictionary which represents REANA specification file.
+    :param supported_backends: a list of the supported compute backends.
+    """
+
+    validator = build_compute_backends_validator(reana_yaml, supported_backends)
+    try:
+        validator.validate()
+    except REANAValidationError as e:
+        return {"message": str(e), "msg_type": "error"}
+
+    return {"message": "Workflow compute backends appear to be valid.", "msg_type": "success"}
+
+def validate_workspace(
+    root_path: str, available_workspaces: Optional[List[str]]
+) -> None:
+    """Validate workspace in REANA specification file.
+
+    :param root_path: workspace root path to be validated.
+    :param available_workspaces: a list of the available workspaces.
+
+    :raises ValidationError: Given workspace in REANA spec file does not validate against
+        allowed workspaces.
+    """
+    if root_path:
+        try:
+            validate_workspace(root_path, available_workspaces)
+            return {"message": "Workflow workspace appears valid.", "msg_type": "success"}
+        except REANAValidationError as e:
+            return {"message": str(e), "msg_type": "error"}
