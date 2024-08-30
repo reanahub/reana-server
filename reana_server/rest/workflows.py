@@ -25,7 +25,7 @@ from reana_commons.config import COMMAND_DANGEROUS_OPERATIONS
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.validation.compute_backends import build_compute_backends_validator
 from reana_commons.validation.operational_options import validate_operational_options
-from reana_commons.validation.utils import validate_reana_yaml, validate_workflow_name
+from reana_commons.validation.utils import validate_reana_yaml, validate_workflow_name, validate_workspace
 from reana_commons.validation.parameters import build_parameters_validator
 from reana_commons.specification import load_reana_spec, load_workflow_spec_from_reana_yaml, load_input_parameters
 from reana_db.database import Session
@@ -3329,8 +3329,9 @@ def workflow_validation():
       logging.info("Validating server capabilities")
       server_capabilities = validate_server_capabilities(reana_yaml)
       logging.info(server_capabilities)
-      # delete server_capabilities section as it is no longer needed
-      del reana_yaml['server_capabilities']
+
+    # delete server_capabilities section as it is no longer needed
+    del reana_yaml['server_capabilities']
 
     runtime_params_warnings = []
     runtime_params_errors = []
@@ -3358,8 +3359,9 @@ def workflow_validation():
           
       logging.info("runtime_params_warnings")
       logging.info(runtime_params_warnings)
-      # delete runtime parameters as they are no longer needed
-      del reana_yaml['runtime_parameters']
+
+    # delete runtime parameters as they are no longer needed
+    del reana_yaml['runtime_parameters']
 
 
     try:
@@ -3419,7 +3421,7 @@ def validate_server_capabilities(reana_yaml: Dict) -> None:
 
     root_path = reana_yaml.get("workspace", {}).get("root_path")
     available_workspaces = os.environ.get('WORKSPACE_PATHS', None)
-    validation_results.append(validate_workspace(root_path, available_workspaces))
+    validation_results.append(validate_available_workspace(root_path, available_workspaces))
 
     return validation_results
 
@@ -3440,7 +3442,7 @@ def validate_compute_backends(
 
     return {"message": "Workflow compute backends appear to be valid.", "msg_type": "success"}
 
-def validate_workspace(
+def validate_available_workspace(
     root_path: str, available_workspaces: Optional[List[str]]
 ) -> None:
     """Validate workspace in REANA specification file.
