@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.9.4](https://github.com/reanahub/reana-server/compare/0.9.3...0.9.4) (2024-09-03)
+
+
+### Bug fixes
+
+* **get_workflow_specification:** avoid returning null parameters ([#689](https://github.com/reanahub/reana-server/issues/689)) ([46633d6](https://github.com/reanahub/reana-server/commit/46633d6bcc151c73880f9ecbd2c02d2246492794))
+* **reana-admin:** respect service domain when cleaning sessions ([#687](https://github.com/reanahub/reana-server/issues/687)) ([ede882d](https://github.com/reanahub/reana-server/commit/ede882d384ae0959eb8a9484b7d491baa628a1ee))
+* **set_workflow_status:** publish workflows to submission queue ([#691](https://github.com/reanahub/reana-server/issues/691)) ([6e35bd7](https://github.com/reanahub/reana-server/commit/6e35bd776e17c1bc04145c68c1f5ea3ce5143b7e)), closes [#690](https://github.com/reanahub/reana-server/issues/690)
+* **start:** validate endpoint parameters ([#689](https://github.com/reanahub/reana-server/issues/689)) ([d2d3673](https://github.com/reanahub/reana-server/commit/d2d3673dac8917d746ddafd84bb3660e7f83c9b6))
+
+
+### Continuous integration
+
+* **commitlint:** improve checking of merge commits ([#689](https://github.com/reanahub/reana-server/issues/689)) ([69f45fc](https://github.com/reanahub/reana-server/commit/69f45fc3aae9bc625ed733de9af13eb7c0111048))
+
 ## [0.9.3](https://github.com/reanahub/reana-server/compare/0.9.2...0.9.3) (2024-03-04)
 
 
