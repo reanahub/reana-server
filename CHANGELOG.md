@@ -1,5 +1,66 @@
 # Changelog
 
+## [0.95.0](https://github.com/reanahub/reana-server/compare/0.9.3...0.95.0) (2024-09-04)
+
+
+### ⚠ BREAKING CHANGES
+
+* **python:** drop support for Python 3.6 and 3.7
+* **gitlab:** The REST API endpoint `gitlab_projects` now includes pagination details.
+
+### Build
+
+* **docker:** pin setuptools to v70 ([#696](https://github.com/reanahub/reana-server/issues/696)) ([c1b4b71](https://github.com/reanahub/reana-server/commit/c1b4b710fee23c2215a5a884bedbd00c90881596))
+* **docker:** upgrade to Ubuntu 24.04 and Python 3.12 ([#692](https://github.com/reanahub/reana-server/issues/692)) ([091a9ed](https://github.com/reanahub/reana-server/commit/091a9ed327b4f7a28f16e89bab46110c0a463749))
+* **python:** add minimal `pyproject.toml` ([#696](https://github.com/reanahub/reana-server/issues/696)) ([6313720](https://github.com/reanahub/reana-server/commit/631372081660d7c8e831b351c3db0123cc76c911))
+* **python:** drop support for Python 3.6 and 3.7 ([#683](https://github.com/reanahub/reana-server/issues/683)) ([868dee9](https://github.com/reanahub/reana-server/commit/868dee9330bf28727f550965416ab6c670d32f9d))
+* **python:** remove deprecated `pytest-runner` ([#696](https://github.com/reanahub/reana-server/issues/696)) ([20431fe](https://github.com/reanahub/reana-server/commit/20431fe5f3fc0e451afa1f4f8e6734bd41b84acc))
+* **python:** use optional deps instead of `tests_require` ([#696](https://github.com/reanahub/reana-server/issues/696)) ([9c2a31f](https://github.com/reanahub/reana-server/commit/9c2a31f154c4d60d5a1887ca69d7f30525d482f4))
+
+
+### Features
+
+* **gitlab:** add search query parameter to filter projects ([#681](https://github.com/reanahub/reana-server/issues/681)) ([109cf38](https://github.com/reanahub/reana-server/commit/109cf38be440e15676e53ec1458ff9efe7d4a395)), closes [#518](https://github.com/reanahub/reana-server/issues/518)
+* **gitlab:** add support for paginated project list ([#681](https://github.com/reanahub/reana-server/issues/681)) ([4d23c62](https://github.com/reanahub/reana-server/commit/4d23c62d57b8ada0d12895fe03190b898b4abd61)), closes [#518](https://github.com/reanahub/reana-server/issues/518)
+* **rest:** add endpoint for sharing workflows ([#658](https://github.com/reanahub/reana-server/issues/658)) ([045d275](https://github.com/reanahub/reana-server/commit/045d2752cce08956c73ed14983ff5d6519dc149d))
+* **rest:** add endpoint to get workflow share status ([#658](https://github.com/reanahub/reana-server/issues/658)) ([b7d14bb](https://github.com/reanahub/reana-server/commit/b7d14bb83284f3f577f096b4110324ec07904651))
+* **rest:** add endpoint to unshare workflows ([#658](https://github.com/reanahub/reana-server/issues/658)) ([727c04e](https://github.com/reanahub/reana-server/commit/727c04ef7f0a5cfc26f1f2af4213933efcab38f6))
+* **rest:** add endpoints to fetch sharing users ([#658](https://github.com/reanahub/reana-server/issues/658)) ([3a1c5ea](https://github.com/reanahub/reana-server/commit/3a1c5ea900afb850f5c5e2e4fe0b69275480b9b1))
+* **rest:** add share-related parameters to `get_workflows` ([#658](https://github.com/reanahub/reana-server/issues/658)) ([a72f1ac](https://github.com/reanahub/reana-server/commit/a72f1ac1a95311ef1e048c271b923cc511cf0ac9))
+* **rest:** add user id to get-you endpoint ([#658](https://github.com/reanahub/reana-server/issues/658)) ([20246c9](https://github.com/reanahub/reana-server/commit/20246c956d1458851212130a7ed1f214bae9ba1f))
+* **rest:** make details available for shared workflows ([#658](https://github.com/reanahub/reana-server/issues/658)) ([b274a29](https://github.com/reanahub/reana-server/commit/b274a2995fefa0bb1601529bfb05aaa058580205))
+
+
+### Bug fixes
+
+* **flask:** avoid deprecated decorator `before_first_request` ([#692](https://github.com/reanahub/reana-server/issues/692)) ([6d3fe7d](https://github.com/reanahub/reana-server/commit/6d3fe7dcf83ef1fea42dcaae0a15b2b83b4a5e10))
+* **gitlab:** handle pagination of GitLab webhooks ([#684](https://github.com/reanahub/reana-server/issues/684)) ([3f716f7](https://github.com/reanahub/reana-server/commit/3f716f7369230ab2a864b6bfcae44a952ca5bf90)), closes [#682](https://github.com/reanahub/reana-server/issues/682)
+* **reana-admin:** skip retention rules for deleted workspaces ([#697](https://github.com/reanahub/reana-server/issues/697)) ([d1cd1a5](https://github.com/reanahub/reana-server/commit/d1cd1a5a593323ba74d8a8053bab32e4a7d903a1))
+* **rest:** fix workflow sharing endpoints after changes ([#658](https://github.com/reanahub/reana-server/issues/658)) ([50495fc](https://github.com/reanahub/reana-server/commit/50495fc8a2eca691357eaa307ed3580ed7aac91d))
+
+
+### Code refactoring
+
+* **gitlab:** move all GitLab requests to dedicated client ([#685](https://github.com/reanahub/reana-server/issues/685)) ([703af19](https://github.com/reanahub/reana-server/commit/703af19e4232af5c9b3ecdefb0b90a60e796605c)), closes [#676](https://github.com/reanahub/reana-server/issues/676)
+* **secrets:** adapt to reana-commons secret-handling changes ([#686](https://github.com/reanahub/reana-server/issues/686)) ([3596ee0](https://github.com/reanahub/reana-server/commit/3596ee058a9888d723a8fcd6247bb14ff1095821))
+
+
+### Test suite
+
+* **pytest:** adapt to fixture changes from default_user to user0 ([#658](https://github.com/reanahub/reana-server/issues/658)) ([72a6964](https://github.com/reanahub/reana-server/commit/72a6964de3c232f23e2f6a9321b98a3a859e2364))
+
+
+### Continuous integration
+
+* **actions:** update GitHub actions due to Node 16 deprecation ([#680](https://github.com/reanahub/reana-server/issues/680)) ([b7cc00a](https://github.com/reanahub/reana-server/commit/b7cc00afddb5035a3ed8f964ea33fb94bca3e2d8))
+* **commitlint:** improve checking of merge commits ([#692](https://github.com/reanahub/reana-server/issues/692)) ([9a7bd8c](https://github.com/reanahub/reana-server/commit/9a7bd8c94b76c0a7942b3f3cbae671fde334e49b))
+* **pytest:** invoke `pytest` directly instead of `setup.py test` ([#696](https://github.com/reanahub/reana-server/issues/696)) ([bd6762f](https://github.com/reanahub/reana-server/commit/bd6762fc3ef1a79d5354ac167e0e08383eec9d6c))
+
+
+### Chores
+
+* **master:** release 0.95.0-alpha.1 ([9fa4059](https://github.com/reanahub/reana-server/commit/9fa40595ce840391c4aed999c3d4dda4de7ad2eb))
+
 ## [0.9.3](https://github.com/reanahub/reana-server/compare/0.9.2...0.9.3) (2024-03-04)
 
 
