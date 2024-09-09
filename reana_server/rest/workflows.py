@@ -3371,12 +3371,12 @@ def workflow_validation():
     del reana_yaml['runtime_parameters']
 
 
-    validate_environments = []
+    environments_warnings = []
 
     if "skip_validate_environments" in reana_yaml and (reana_yaml['skip_validate_environments'] == False):
       logging.info("validate_environments_results")
-      validate_environments_results = validate_environment(reana_yaml)
-      logging.info(validate_environments_results)
+      environments_warnings = validate_environment(reana_yaml)
+      logging.info(environments_warnings)
 
     # delete skip_validate_environments section as it is no longer needed
     del reana_yaml['skip_validate_environments']
@@ -3408,7 +3408,7 @@ def workflow_validation():
                 "runtime_params_warnings": runtime_params_warnings,
                 "runtime_params_errors": runtime_params_errors,
                 "server_capabilities": server_capabilities,
-                "validate_environments": validate_environments}
+                "environments_warnings": environments_warnings}
 
     logging.info("Sending Response:")
     logging.info(response)
