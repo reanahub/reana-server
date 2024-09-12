@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2021, 2022 CERN.
+# Copyright (C) 2021, 2022, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -24,6 +24,11 @@ from reana_server.config import (
     REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT,
     REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
     REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD,
+    DASK_ENABLED,
+    REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
+    REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT,
+    REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
+    REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY,
 )
 from reana_server.decorators import signin_required
 
@@ -125,6 +130,41 @@ def info(user, **kwargs):  # noqa
                       type: string
                     type: array
                 type: object
+              dask_enabled:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              dask_cluster_max_memory_limit:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              dask_cluster_default_number_of_workers:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              dask_cluster_default_single_worker_memory:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              dask_cluster_max_single_worker_memory:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
             type: object
           examples:
             application/json:
@@ -164,6 +204,26 @@ def info(user, **kwargs):  # noqa
                 "maximum_kubernetes_jobs_timeout": {
                     "title": "Maximum timeout for Kubernetes jobs",
                     "value": "1209600"
+                },
+                "dask_enabled": {
+                    "title": "Dask workflows allowed in the cluster",
+                    "value": "False"
+                },
+                "dask_cluster_max_memory_limit": {
+                    "title": "The maximum memory limit for Dask clusters created by users",
+                    "value": "16Gi"
+                },
+                "dask_cluster_default_number_of_workers": {
+                    "title": "The number of Dask workers created by default",
+                    "value": "2Gi"
+                },
+                "dask_cluster_default_single_worker_memory": {
+                    "title": "The amount of memory used by default by a single Dask worker",
+                    "value": "2Gi"
+                },
+                "dask_cluster_max_single_worker_memory": {
+                    "title": "The maximum amount of memory that users can ask for the single Dask worker",
+                    "value": "8Gi"
                 },
               }
         500:
@@ -217,7 +277,29 @@ def info(user, **kwargs):  # noqa
                 title="Maximum inactivity period in days before automatic closure of interactive sessions",
                 value=REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD,
             ),
+            dask_enabled=dict(
+                title="Dask workflows allowed in the cluster",
+                value=bool(DASK_ENABLED),
+            ),
         )
+        if DASK_ENABLED:
+            cluster_information["dask_cluster_default_number_of_workers"] = dict(
+                title="The number of Dask workers created by default",
+                value=REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
+            )
+            cluster_information["dask_cluster_max_memory_limit"] = dict(
+                title="The maximum memory limit for Dask clusters created by users",
+                value=REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT,
+            )
+            cluster_information["dask_cluster_default_single_worker_memory"] = dict(
+                title="The amount of memory used by default by a single Dask worker",
+                value=REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
+            )
+            cluster_information["dask_cluster_max_single_worker_memory"] = dict(
+                title="The maximum amount of memory that users can ask for the single Dask worker",
+                value=REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY,
+            )
+
         return InfoSchema().dump(cluster_information)
 
     except Exception as e:
@@ -260,3 +342,10 @@ class InfoSchema(Schema):
     maximum_interactive_session_inactivity_period = fields.Nested(
         StringNullableInfoValue
     )
+    kubernetes_max_memory_limit = fields.Nested(StringInfoValue)
+    dask_enabled = fields.Nested(StringInfoValue)
+    if DASK_ENABLED:
+        dask_cluster_default_number_of_workers = fields.Nested(StringInfoValue)
+        dask_cluster_max_memory_limit = fields.Nested(StringInfoValue)
+        dask_cluster_default_single_worker_memory = fields.Nested(StringInfoValue)
+        dask_cluster_max_single_worker_memory = fields.Nested(StringInfoValue)

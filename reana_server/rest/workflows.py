@@ -49,6 +49,7 @@ from reana_server.validation import (
     validate_inputs,
     validate_workflow,
     validate_workspace_path,
+    validate_dask_memory_and_cores_limits,
 )
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
@@ -565,6 +566,8 @@ def create_workflow(user):  # noqa
         validate_workspace_path(reana_spec_file)
 
         validate_inputs(reana_spec_file)
+
+        validate_dask_memory_and_cores_limits(reana_spec_file)
 
         retention_days = reana_spec_file.get("workspace", {}).get("retention_days")
         retention_rules = get_workspace_retention_rules(retention_days)
