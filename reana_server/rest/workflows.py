@@ -66,6 +66,40 @@ from reana_server.utils import (
     is_uuid_v4,
 )
 
+from kubernetes import client
+from kubernetes.client.models.v1_delete_options import V1DeleteOptions
+from kubernetes.client.rest import ApiException
+from reana_commons.config import (
+    K8S_CERN_EOS_AVAILABLE,
+    REANA_COMPONENT_NAMING_SCHEME,
+    REANA_COMPONENT_PREFIX,
+    REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
+    REANA_JOB_HOSTPATH_MOUNTS,
+    REANA_JOB_CONTROLLER_CONNECTION_CHECK_SLEEP,
+    REANA_RUNTIME_KUBERNETES_KEEP_ALIVE_JOBS_WITH_STATUSES,
+    REANA_RUNTIME_KUBERNETES_NAMESPACE,
+    REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
+    REANA_RUNTIME_JOBS_KUBERNETES_NODE_LABEL,
+    REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME,
+    REANA_STORAGE_BACKEND,
+    WORKFLOW_RUNTIME_GROUP_NAME,
+    WORKFLOW_RUNTIME_USER_GID,
+    WORKFLOW_RUNTIME_USER_NAME,
+    WORKFLOW_RUNTIME_USER_UID,
+    WORKSPACE_PATHS,
+)
+from reana_commons.k8s.api_client import current_k8s_batchv1_api_client
+from reana_commons.k8s.kerberos import get_kerberos_k8s_config
+from reana_commons.k8s.secrets import REANAUserSecretsStore
+from reana_commons.k8s.volumes import (
+    create_cvmfs_persistent_volume_claim,
+    get_workspace_volume,
+)
+from reana_commons.utils import (
+    build_unique_component_name,
+    format_cmd,
+)
+
 try:
     from urllib import parse as urlparse
 except ImportError:
@@ -3329,6 +3363,25 @@ def workflow_validation():
     logging.info("Received:")
     logging.info(reana_yaml)
 
+    logging.info("\nStaring container:\n")
+    #workflow_run_name = self._workflow_run_name_generator("batch")
+    workflow_run_name = "test"
+    job = create_sandbox_spec(
+        name=workflow_run_name,
+        overwrite_input_parameters=None,
+        overwrite_operational_options=None,
+    )
+
+    try:
+
+        current_k8s_batchv1_api_client.create_namespaced_job(
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE, body=job
+        )
+    except ApiException as e:
+        msg = "Workflow engine/job controller pod " "creation failed {}".format(e)
+        logging.error(msg, exc_info=True)
+        raise e
+
     server_capabilities = []
 
     if "server_capabilities" in reana_yaml and (reana_yaml['server_capabilities'] != False):
@@ -3969,3 +4022,101 @@ class EnvironmentValidatorSnakemake(EnvironmentValidatorBase):
             kubernetes_uid = step.get("kubernetes_uid")
             self._validate_environment_image(image, kubernetes_uid=kubernetes_uid)
   
+def create_sandbox_spec(
+        name,
+        command=None,
+        image=None,
+        env_vars=None,
+        overwrite_input_parameters=None,
+        overwrite_operational_options=None,
+    ):
+        """Instantiate a Kubernetes job.
+
+        :param name: Name of the job.
+        :param image: Docker image to use to run the job on.
+        :param command: List of commands to run on the given job.
+        :param env_vars: List of environment variables (dictionaries) to
+            inject into the workflow engine container.
+        :param interactive_session_type: One of the available interactive
+            session types.
+        :param overwrite_input_params: Dictionary with parameters to be
+            overwritten or added to the current workflow run.
+        :param type: Dict
+        :param overwrite_operational_options: Dictionary with operational
+            options to be overwritten or added to the current workflow run.
+        :param type: Dict
+        """
+
+        workflow_engine_container = client.V1Container(
+            name="workflow-engine2",
+            image=image,
+            image_pull_policy="IfNotPresent",
+            env=[],
+            volume_mounts=[],
+            command=["/bin/bash", "-c"],
+            args=command,
+        )
+
+        workflow_engine_container.security_context = client.V1SecurityContext(
+            run_as_group=WORKFLOW_RUNTIME_USER_GID,
+            run_as_user=WORKFLOW_RUNTIME_USER_UID,
+        )
+
+        workflow_metadata = client.V1ObjectMeta(
+            name=name,
+            labels={
+                "reana_workflow_mode": "batch",
+                "reana-run-batch-workflow-uuid": "00c0205a-38bd-4412-9a20-1b0207c35800",
+            },
+            namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
+        )
+
+        job_controller_container = client.V1Container(
+            name="job-controller",
+            image="docker.io/reanahub/reana-job-controller:latest",
+            image_pull_policy="IfNotPresent",
+            env=[],
+            volume_mounts=[],
+            #command=["/bin/bash", "-c"],
+            #args="id",
+            ports=[],
+            # Make sure that all the jobs are stopped before the deletion of the run-batch pod
+            lifecycle=client.V1Lifecycle(
+                pre_stop=client.V1Handler(
+                    http_get=client.V1HTTPGetAction(
+                        port=5000,
+                        path="/shutdown",
+                    )
+                )
+            ),
+        )
+
+        job = client.V1Job()
+        job.api_version = "batch/v1"
+        job.kind = "Job"
+        job.metadata = workflow_metadata
+        spec = client.V1JobSpec(template=client.V1PodTemplateSpec())
+
+        job_controller_container.ports = [
+            {"containerPort": 5000}
+        ]
+        #containers = [workflow_engine_container, job_controller_container]
+        containers = [job_controller_container]
+        spec.template.spec = client.V1PodSpec(
+            containers=containers,
+            node_selector=REANA_RUNTIME_BATCH_KUBERNETES_NODE_LABEL,
+            init_containers=[],
+            termination_grace_period_seconds=120,
+        )
+        spec.template.spec.service_account_name = (
+            REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
+        )
+
+
+
+
+
+        job.spec = spec
+        job.spec.template.spec.restart_policy = "Never"
+
+        return job
