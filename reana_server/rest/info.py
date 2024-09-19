@@ -25,6 +25,7 @@ from reana_server.config import (
     REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
     REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD,
     DASK_ENABLED,
+    DASK_AUTOSCALER_ENABLED,
     REANA_DASK_CLUSTER_MAX_CORES_LIMIT,
     REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT,
     REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT,
@@ -139,6 +140,13 @@ def info(user, **kwargs):  # noqa
                   value:
                     type: string
                 type: object
+              dask_autoscaler_enabled:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
               dask_cluster_default_cores_limit:
                 properties:
                   title:
@@ -236,6 +244,10 @@ def info(user, **kwargs):  # noqa
                     "title": "Dask workflows allowed in the cluster",
                     "value": "False"
                 },
+                "dask_autoscaler_enabled": {
+                    "title": "Dask autoscaler is used for the dask clusters",
+                    "value": "False"
+                },
                 "dask_cluster_default_cores_limit": {
                     "title": "Default cores limit for dask clusters",
                     "value": "4"
@@ -318,6 +330,10 @@ def info(user, **kwargs):  # noqa
             ),
         )
         if DASK_ENABLED:
+            cluster_information["dask_autoscaler_enabled"] = dict(
+                title="Dask autoscaler is used for the dask clusters",
+                value=bool(DASK_AUTOSCALER_ENABLED),
+            )
             cluster_information["dask_cluster_default_cores_limit"] = dict(
                 title="Default cores limit for dask clusters",
                 value=REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT,
@@ -388,6 +404,7 @@ class InfoSchema(Schema):
     kubernetes_max_memory_limit = fields.Nested(StringInfoValue)
     dask_enabled = fields.Nested(StringInfoValue)
     if DASK_ENABLED:
+        dask_autoscaler_enabled = fields.Nested(StringInfoValue)
         dask_cluster_default_cores_limit = fields.Nested(StringInfoValue)
         dask_cluster_max_cores_limit = fields.Nested(StringInfoValue)
         dask_cluster_default_memory_limit = fields.Nested(StringInfoValue)

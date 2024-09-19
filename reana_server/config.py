@@ -61,6 +61,9 @@ REANA_SSO_LOGIN_PROVIDERS_SECRETS = json.loads(
 DASK_ENABLED = strtobool(os.getenv("DASK_ENABLED", "true"))
 """Whether dask is enabled in the cluster or not"""
 
+DASK_AUTOSCALER_ENABLED = strtobool(os.getenv("DASK_AUTOSCALER_ENABLED", "true"))
+"""Whether dask autoscaler is enabled in the cluster or not"""
+
 REANA_DASK_CLUSTER_MAX_CORES_LIMIT = float(
     os.getenv("REANA_DASK_CLUSTER_MAX_CORES_LIMIT", 8)
 )
