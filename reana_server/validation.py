@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2022 CERN.
+# Copyright (C) 2022, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -18,8 +18,15 @@ from reana_commons.validation.compute_backends import build_compute_backends_val
 from reana_commons.validation.operational_options import validate_operational_options
 from reana_commons.validation.parameters import build_parameters_validator
 from reana_commons.validation.utils import validate_reana_yaml, validate_workspace
+from reana_commons.job_utils import kubernetes_memory_to_bytes
 
-from reana_server.config import SUPPORTED_COMPUTE_BACKENDS, WORKSPACE_RETENTION_PERIOD
+from reana_server.config import (
+    SUPPORTED_COMPUTE_BACKENDS,
+    WORKSPACE_RETENTION_PERIOD,
+    DASK_ENABLED,
+    REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT,
+    REANA_DASK_CLUSTER_MAX_CORES_LIMIT,
+)
 from reana_server import utils
 
 
@@ -153,3 +160,29 @@ def validate_retention_rule(rule: str, days: int) -> None:
             "Maximum workflow retention period was reached. "
             f"Please use less than {WORKSPACE_RETENTION_PERIOD} days."
         )
+
+
+def validate_dask_memory_and_cores_limits(reana_yaml: Dict) -> None:
+    """Validate Dask workflows are allowed in the cluster and memory limits are respected."""
+    # Validate Dask workflows are allowed in the cluster
+    dask_resources = reana_yaml["workflow"].get("resources", {}).get("dask", {})
+    if not DASK_ENABLED and dask_resources != {}:
+        raise REANAValidationError("Dask workflows are not allowed in this cluster.")
+
+    # Validate Dask memory limit requested by the workflow
+    if dask_resources:
+        requested_dask_cluster_memory = dask_resources.get("memory", "0Mi")
+        if kubernetes_memory_to_bytes(
+            requested_dask_cluster_memory
+        ) > kubernetes_memory_to_bytes(REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT):
+            raise REANAValidationError(
+                f'The "memory" provided in the dask resources exceeds the limit ({REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT}).'
+            )
+        # Validate Dask cores limit requested by the workflow
+        requested_dask_cluster_cores = dask_resources.get("cores", 0)
+        if requested_dask_cluster_cores > REANA_DASK_CLUSTER_MAX_CORES_LIMIT:
+            raise REANAValidationError(
+                f'The "cores" provided in the dask resources exceeds the limit ({REANA_DASK_CLUSTER_MAX_CORES_LIMIT}).'
+            )
+
+    return None
