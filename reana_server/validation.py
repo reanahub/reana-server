@@ -26,6 +26,10 @@ from reana_server.config import (
     DASK_ENABLED,
     REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT,
     REANA_DASK_CLUSTER_MAX_CORES_LIMIT,
+    REANA_DASK_CLUSTER_DEFAULT_MEMORY_LIMIT,
+    REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT,
+    REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_CORES,
+    REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
 )
 from reana_server import utils
 
@@ -171,7 +175,9 @@ def validate_dask_memory_and_cores_limits(reana_yaml: Dict) -> None:
 
     # Validate Dask memory limit requested by the workflow
     if dask_resources:
-        requested_dask_cluster_memory = dask_resources.get("memory", "0Mi")
+        requested_dask_cluster_memory = dask_resources.get(
+            "memory", REANA_DASK_CLUSTER_DEFAULT_MEMORY_LIMIT
+        )
         if kubernetes_memory_to_bytes(
             requested_dask_cluster_memory
         ) > kubernetes_memory_to_bytes(REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT):
@@ -179,10 +185,32 @@ def validate_dask_memory_and_cores_limits(reana_yaml: Dict) -> None:
                 f'The "memory" provided in the dask resources exceeds the limit ({REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT}).'
             )
         # Validate Dask cores limit requested by the workflow
-        requested_dask_cluster_cores = dask_resources.get("cores", 0)
+        requested_dask_cluster_cores = dask_resources.get(
+            "cores", REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT
+        )
         if requested_dask_cluster_cores > REANA_DASK_CLUSTER_MAX_CORES_LIMIT:
             raise REANAValidationError(
                 f'The "cores" provided in the dask resources exceeds the limit ({REANA_DASK_CLUSTER_MAX_CORES_LIMIT}).'
+            )
+
+        # Validate single worker memory is less than total memory
+        single_worker_memory = dask_resources.get(
+            "single_worker_memory", REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY
+        )
+        if kubernetes_memory_to_bytes(
+            single_worker_memory
+        ) > kubernetes_memory_to_bytes(requested_dask_cluster_memory):
+            raise REANAValidationError(
+                f'The "single_worker_memory" ({single_worker_memory}) exceeds the total "memory" ({requested_dask_cluster_memory}).'
+            )
+
+        # Validate single worker cores is less than total cores
+        single_worker_cores = dask_resources.get(
+            "single_worker_cores", REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_CORES
+        )
+        if single_worker_cores > requested_dask_cluster_cores:
+            raise REANAValidationError(
+                f'The "single_worker_cores" ({single_worker_cores}) exceeds the total "cores" ({requested_dask_cluster_cores}).'
             )
 
     return None
