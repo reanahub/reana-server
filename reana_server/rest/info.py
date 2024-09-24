@@ -25,12 +25,10 @@ from reana_server.config import (
     REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
     REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD,
     DASK_ENABLED,
-    REANA_DASK_CLUSTER_MAX_CORES_LIMIT,
+    REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
     REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT,
-    REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT,
-    REANA_DASK_CLUSTER_DEFAULT_MEMORY_LIMIT,
-    REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_CORES,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
+    REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY,
 )
 from reana_server.decorators import signin_required
 
@@ -139,27 +137,6 @@ def info(user, **kwargs):  # noqa
                   value:
                     type: string
                 type: object
-              dask_cluster_default_cores_limit:
-                properties:
-                  title:
-                    type: string
-                  value:
-                    type: string
-                type: object
-              dask_cluster_max_cores_limit:
-                properties:
-                  title:
-                    type: string
-                  value:
-                    type: string
-                type: object
-              dask_cluster_default_memory_limit:
-                properties:
-                  title:
-                    type: string
-                  value:
-                    type: string
-                type: object
               dask_cluster_max_memory_limit:
                 properties:
                   title:
@@ -167,7 +144,7 @@ def info(user, **kwargs):  # noqa
                   value:
                     type: string
                 type: object
-              dask_cluster_default_single_worker_cores:
+              dask_cluster_default_number_of_workers:
                 properties:
                   title:
                     type: string
@@ -175,6 +152,13 @@ def info(user, **kwargs):  # noqa
                     type: string
                 type: object
               dask_cluster_default_single_worker_memory:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              dask_cluster_max_single_worker_memory:
                 properties:
                   title:
                     type: string
@@ -236,29 +220,21 @@ def info(user, **kwargs):  # noqa
                     "title": "Dask workflows allowed in the cluster",
                     "value": "False"
                 },
-                "dask_cluster_default_cores_limit": {
-                    "title": "Default cores limit for dask clusters",
-                    "value": "4"
+                "dask_cluster_max_memory_limit": {
+                    "title": "Maximum memory limit for Dask clusters",
+                    "value": "16Gi"
                 },
-                "dask_cluster_max_cores_limit": {
-                    "title": "Maximum cores limit for dask clusters",
-                    "value": "8"
-                },
-                "dask_cluster_default_memory_limit": {
-                    "title": "Default memory limit for dask clusters",
+                "dask_cluster_default_number_of_workers": {
+                    "title": "Default number of workers for Dask clusters",
                     "value": "2Gi"
                 },
-                "dask_cluster_max_memory_limit": {
-                    "title": "Maximum memory limit for dask clusters",
-                    "value": "4Gi"
-                },
-                "dask_cluster_default_single_worker_cores": {
-                    "title": "Number of cores for one dask worker by default",
-                    "value": "0.5"
-                },
                 "dask_cluster_default_single_worker_memory": {
-                    "title": "Amount of memory for one dask worker by default",
-                    "value": "256Mi"
+                    "title": "Amount of memory for one Dask worker by default",
+                    "value": "2Gi"
+                },
+                "dask_cluster_max_single_worker_memory": {
+                    "title": "Maximum amount of memory for one Dask worker",
+                    "value": "8Gi"
                 },
               }
         500:
@@ -318,29 +294,21 @@ def info(user, **kwargs):  # noqa
             ),
         )
         if DASK_ENABLED:
-            cluster_information["dask_cluster_default_cores_limit"] = dict(
-                title="Default cores limit for dask clusters",
-                value=REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT,
-            )
-            cluster_information["dask_cluster_max_cores_limit"] = dict(
-                title="Maximum cores limit for dask clusters",
-                value=REANA_DASK_CLUSTER_MAX_CORES_LIMIT,
-            )
-            cluster_information["dask_cluster_default_memory_limit"] = dict(
-                title="Default memory limit for dask clusters",
-                value=REANA_DASK_CLUSTER_DEFAULT_MEMORY_LIMIT,
+            cluster_information["dask_cluster_default_number_of_workers"] = dict(
+                title="Number of workers in Dask clusters by default",
+                value=REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
             )
             cluster_information["dask_cluster_max_memory_limit"] = dict(
-                title="Maximum memory limit for dask clusters",
+                title="Maximum memory limit for Dask clusters",
                 value=REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT,
             )
-            cluster_information["dask_cluster_default_single_worker_cores"] = dict(
-                title="Number of cores for one dask worker by default",
-                value=REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_CORES,
-            )
             cluster_information["dask_cluster_default_single_worker_memory"] = dict(
-                title="Memory for one dask worker by default",
+                title="Memory for one Dask worker by default",
                 value=REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
+            )
+            cluster_information["dask_cluster_max_single_worker_memory"] = dict(
+                title="Maximum memory for one Dask worker",
+                value=REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY,
             )
 
         return InfoSchema().dump(cluster_information)
@@ -388,9 +356,7 @@ class InfoSchema(Schema):
     kubernetes_max_memory_limit = fields.Nested(StringInfoValue)
     dask_enabled = fields.Nested(StringInfoValue)
     if DASK_ENABLED:
-        dask_cluster_default_cores_limit = fields.Nested(StringInfoValue)
-        dask_cluster_max_cores_limit = fields.Nested(StringInfoValue)
-        dask_cluster_default_memory_limit = fields.Nested(StringInfoValue)
+        dask_cluster_default_number_of_workers = fields.Nested(StringInfoValue)
         dask_cluster_max_memory_limit = fields.Nested(StringInfoValue)
-        dask_cluster_default_single_worker_cores = fields.Nested(StringInfoValue)
         dask_cluster_default_single_worker_memory = fields.Nested(StringInfoValue)
+        dask_cluster_max_single_worker_memory = fields.Nested(StringInfoValue)

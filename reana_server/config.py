@@ -59,37 +59,27 @@ REANA_SSO_LOGIN_PROVIDERS_SECRETS = json.loads(
 )
 
 DASK_ENABLED = strtobool(os.getenv("DASK_ENABLED", "true"))
-"""Whether dask is enabled in the cluster or not"""
-
-REANA_DASK_CLUSTER_MAX_CORES_LIMIT = float(
-    os.getenv("REANA_DASK_CLUSTER_MAX_CORES_LIMIT", 8)
-)
-"""Maximum cores limit for dask clusters."""
+"""Whether Dask is enabled in the cluster or not"""
 
 REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT = os.getenv(
-    "REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT", "8Gi"
+    "REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT", "16Gi"
 )
-"""Maximum memory limit for dask clusters."""
+"""Maximum memory limit for Dask clusters."""
 
-REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT = float(
-    os.getenv("REANA_DASK_CLUSTER_DEFAULT_CORES_LIMIT", 4)
+REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS = int(
+    os.getenv("REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS", 2)
 )
-"""Default cores limit for dask clusters."""
-
-REANA_DASK_CLUSTER_DEFAULT_MEMORY_LIMIT = os.getenv(
-    "REANA_DASK_CLUSTER_DEFAULT_MEMORY_LIMIT", "4Gi"
-)
-"""Default memory limit for dask clusters."""
-
-REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_CORES = float(
-    os.getenv("REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_CORES", 0.5)
-)
-"""Number of cores for one dask worker by default."""
+"""Number of workers in Dask cluster by default """
 
 REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY = os.getenv(
-    "REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY", "512Mi"
+    "REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY", "2Gi"
 )
-"""Memory for one dask worker by default."""
+"""Memory for one Dask worker by default."""
+
+REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY = os.getenv(
+    "REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY", "8Gi"
+)
+"""Maximum memory for one Dask worker."""
 
 REANA_KUBERNETES_JOBS_MEMORY_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_LIMIT")
 """Maximum memory limit for user job containers for workflow complexity estimation."""
