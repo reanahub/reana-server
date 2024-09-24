@@ -3368,6 +3368,7 @@ def workflow_validation():
     workflow_run_name = "test12345"
     job = create_sandbox_spec(
         name=workflow_run_name,
+        reana_yaml=reana_yaml,
         overwrite_input_parameters=None,
         overwrite_operational_options=None,
     )
@@ -4024,6 +4025,7 @@ class EnvironmentValidatorSnakemake(EnvironmentValidatorBase):
   
 def create_sandbox_spec(
         name,
+        reana_yaml,
         command=None,
         image=None,
         env_vars=None,
@@ -4063,7 +4065,7 @@ def create_sandbox_spec(
         )
 
         workflow_metadata = client.V1ObjectMeta(
-            name=name,
+            name="name123456789",
             labels={
                 "reana_workflow_mode": "batch",
                 "reana-run-batch-workflow-uuid": "00c0205a-38bd-4412-9a20-1b0207c35800",
