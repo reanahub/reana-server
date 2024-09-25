@@ -4049,23 +4049,8 @@ def create_sandbox_spec(
         :param type: Dict
         """
 
-        workflow_engine_container = client.V1Container(
-            name="workflow-engine2",
-            image=image,
-            image_pull_policy="IfNotPresent",
-            env=[],
-            volume_mounts=[],
-            command=["/bin/bash", "-c"],
-            args=command,
-        )
-
-        workflow_engine_container.security_context = client.V1SecurityContext(
-            run_as_group=WORKFLOW_RUNTIME_USER_GID,
-            run_as_user=WORKFLOW_RUNTIME_USER_UID,
-        )
-
         workflow_metadata = client.V1ObjectMeta(
-            name="name123456789",
+            name="name12345678901000",
             labels={
                 "reana_workflow_mode": "batch",
                 "reana-run-batch-workflow-uuid": "00c0205a-38bd-4412-9a20-1b0207c35800",
@@ -4079,18 +4064,7 @@ def create_sandbox_spec(
             image_pull_policy="IfNotPresent",
             env=[],
             volume_mounts=[],
-            #command=["/bin/bash", "-c"],
-            #args="id",
             ports=[],
-            # Make sure that all the jobs are stopped before the deletion of the run-batch pod
-            lifecycle=client.V1Lifecycle(
-                pre_stop=client.V1Handler(
-                    http_get=client.V1HTTPGetAction(
-                        port=5000,
-                        path="/shutdown",
-                    )
-                )
-            ),
         )
 
         job = client.V1Job()
@@ -4099,10 +4073,6 @@ def create_sandbox_spec(
         job.metadata = workflow_metadata
         spec = client.V1JobSpec(template=client.V1PodTemplateSpec())
 
-        job_controller_container.ports = [
-            {"containerPort": 5000}
-        ]
-        #containers = [workflow_engine_container, job_controller_container]
         containers = [job_controller_container]
         spec.template.spec = client.V1PodSpec(
             containers=containers,
@@ -4113,10 +4083,6 @@ def create_sandbox_spec(
         spec.template.spec.service_account_name = (
             REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
         )
-
-
-
-
 
         job.spec = spec
         job.spec.template.spec.restart_policy = "Never"
