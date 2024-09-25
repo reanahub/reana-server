@@ -166,17 +166,6 @@ def info(user, **kwargs):  # noqa
                     type: string
                 type: object
             type: object
-            required:
-              - compute_backends
-              - default_kubernetes_jobs_timeout
-              - default_kubernetes_memory_limit
-              - default_workspace
-              - kubernetes_max_memory_limit
-              - maximum_interactive_session_inactivity_period
-              - maximum_kubernetes_jobs_timeout
-              - maximum_workspace_retention_period
-              - workspaces_available
-              - dask_enabled
           examples:
             application/json:
               {
