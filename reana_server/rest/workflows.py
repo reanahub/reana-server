@@ -883,13 +883,16 @@ def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
                 type: string
               user:
                 type: string
+              live_logs_enabled:
+                type: boolean
           examples:
             application/json:
               {
                 "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
                 "workflow_name": "mytest.1",
                 "logs": "<Workflow engine log output>",
-                "user": "00000000-0000-0000-0000-000000000000"
+                "user": "00000000-0000-0000-0000-000000000000",
+                "live_logs_enabled": true
               }
         400:
           description: >-

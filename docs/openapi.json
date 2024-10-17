@@ -2637,6 +2637,7 @@
             "description": "Request succeeded. Info about a workflow, including the status is returned.",
             "examples": {
               "application/json": {
+                "live_logs_enabled": true,
                 "logs": "<Workflow engine log output>",
                 "user": "00000000-0000-0000-0000-000000000000",
                 "workflow_id": "256b25f4-4cfb-4684-b7a8-73872ef455a1",
@@ -2645,6 +2646,9 @@
             },
             "schema": {
               "properties": {
+                "live_logs_enabled": {
+                  "type": "boolean"
+                },
                 "logs": {
                   "type": "string"
                 },
