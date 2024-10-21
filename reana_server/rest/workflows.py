@@ -3307,6 +3307,68 @@ def prune_workspace(
         logging.exception(str(e))
         return jsonify({"message": str(e)}), 500
 
+from datetime import datetime
+from reana_db.models import (
+    ResourceUnit,
+)
+from reana_commons.config import WORKFLOW_TIME_FORMAT
+from typing import Union
+def list_files_filter(
+    file_info: Dict[str, Union[str, Dict]], search_filters: Dict[str, List[str]]
+) -> bool:
+    """Filter the file(s) matching the searching parameters.
+
+    :param file_info: names of files and their sizes
+    :param search_filters: search parameters based on `name`
+                           `size` and `last-modified`.
+
+    :return: Boolean after matching with searching filters.
+    """
+    _file = {
+        "name": file_info["name"],
+        "size": str(file_info["size"]["raw"]),
+        "last-modified": file_info["last-modified"],
+    }
+    # Filter file only if all filters match exclusively.
+    return all(
+        _filter.casefold() in _file[k].casefold()
+        for k, v in search_filters.items()
+        for _filter in v
+    )
+def list_directory_files(
+    workspace_path: str, search: Dict[str, List[str]] = None
+) -> List[dict]:
+    """Return a list of files inside a given workspace."""
+    file_list = []
+    for file_name in workspace.walk(workspace_path, include_dirs=False):
+        st = workspace.lstat(workspace_path, file_name)
+
+        contents = ""
+        with workspace.open_file(workspace_path, file_name, mode="r") as f:
+            contents = f.read()
+
+        file_info = {
+            "name": file_name,
+            "last-modified": datetime.fromtimestamp(st.st_mtime).strftime(
+                WORKFLOW_TIME_FORMAT
+            ),
+            "size": dict(
+                raw=st.st_size,
+                human_readable=ResourceUnit.human_readable_unit(
+                    ResourceUnit.bytes_,
+                    st.st_size,
+                ),
+            ),
+            "contents": contents,
+        }
+        if search:
+            filter_file = list_files_filter(file_info, search)
+            if filter_file:
+                file_list.append(file_info)
+        else:
+            file_list.append(file_info)
+    return file_list
+
 @blueprint.route("/validation", methods=["POST"])
 #@signin_required()
 def workflow_validation():
@@ -3363,9 +3425,21 @@ def workflow_validation():
     logging.info("Received:")
     logging.info(reana_yaml)
 
+    workflow = _get_workflow_with_uuid_or_name("22e65045-3f8e-499b-b995-c63ccced1fe6", "00000000-0000-0000-0000-000000000000")
+    file_list = list_directory_files(workflow.workspace_path, search=None)
+
+    logging.info("Workspace files:")
+    logging.info(file_list[0]["name"])
+
+    logging.info("Contents:")
+    logging.info(file_list[0]["contents"])
+
+    reana_yaml=file_list[0]["contents"]
+
     logging.info("\nStaring container:\n")
     #workflow_run_name = self._workflow_run_name_generator("batch")
-    workflow_run_name = "test12345"
+
+    workflow_run_name = "test1234567"
     job = create_sandbox_spec(
         name=workflow_run_name,
         reana_yaml=reana_yaml,
@@ -4050,7 +4124,7 @@ def create_sandbox_spec(
         """
 
         workflow_metadata = client.V1ObjectMeta(
-            name="name12345678901000",
+            name=name,
             labels={
                 "reana_workflow_mode": "batch",
                 "reana-run-batch-workflow-uuid": "00c0205a-38bd-4412-9a20-1b0207c35800",
