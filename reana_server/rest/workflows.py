@@ -3426,6 +3426,12 @@ def workflow_validation():
     logging.info(reana_yaml)
 
     workflow = _get_workflow_with_uuid_or_name("22e65045-3f8e-499b-b995-c63ccced1fe6", "00000000-0000-0000-0000-000000000000")
+    workspace_mount, workspace_volume = get_workspace_volume(
+        workflow.workspace_path
+    )
+
+
+
     file_list = list_directory_files(workflow.workspace_path, search=None)
 
     logging.info("Workspace files:")
@@ -3434,17 +3440,21 @@ def workflow_validation():
     logging.info("Contents:")
     logging.info(file_list[0]["contents"])
 
+    logging.info("Mount:")
+    logging.info(workspace_mount)
+
     reana_yaml_workspace=file_list[0]["contents"]
 
     logging.info("\nStaring container:\n")
     #workflow_run_name = self._workflow_run_name_generator("batch")
 
-    workflow_run_name = "test1234567891234"
+    workflow_run_name = "test12345678912345"
     job = create_sandbox_spec(
         name=workflow_run_name,
         reana_yaml=reana_yaml_workspace,
         overwrite_input_parameters=None,
         overwrite_operational_options=None,
+        workspace_mount=workspace_mount,
     )
 
     try:
@@ -4105,6 +4115,7 @@ def create_sandbox_spec(
         env_vars=None,
         overwrite_input_parameters=None,
         overwrite_operational_options=None,
+        workspace_mount=None,
     ):
         """Instantiate a Kubernetes job.
 
@@ -4132,17 +4143,14 @@ def create_sandbox_spec(
             namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
         )
 
+
+
         job_controller_container = client.V1Container(
             name="job-controller",
             image="docker.io/reanahub/reana-workflow-validator:latest",
             image_pull_policy="IfNotPresent",
-            env=[
-                  client.V1EnvVar(
-                  name='test',
-                  value=reana_yaml,
-                )
-            ],
-            volume_mounts=[],
+            env=[],
+            volume_mounts=[workspace_mount],
             ports=[],
         )
 
