@@ -3434,15 +3434,15 @@ def workflow_validation():
     logging.info("Contents:")
     logging.info(file_list[0]["contents"])
 
-    reana_yaml=file_list[0]["contents"]
+    reana_yaml_workspace=file_list[0]["contents"]
 
     logging.info("\nStaring container:\n")
     #workflow_run_name = self._workflow_run_name_generator("batch")
 
-    workflow_run_name = "test1234567"
+    workflow_run_name = "test1234567891234"
     job = create_sandbox_spec(
         name=workflow_run_name,
-        reana_yaml=reana_yaml,
+        reana_yaml=reana_yaml_workspace,
         overwrite_input_parameters=None,
         overwrite_operational_options=None,
     )
@@ -4136,7 +4136,12 @@ def create_sandbox_spec(
             name="job-controller",
             image="docker.io/reanahub/reana-workflow-validator:latest",
             image_pull_policy="IfNotPresent",
-            env=[],
+            env=[
+                  client.V1EnvVar(
+                  name='test',
+                  value=reana_yaml,
+                )
+            ],
             volume_mounts=[],
             ports=[],
         )
