@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -57,6 +57,29 @@ REANA_SSO_LOGIN_PROVIDERS = json.loads(os.getenv("LOGIN_PROVIDERS_CONFIGS", "[]"
 REANA_SSO_LOGIN_PROVIDERS_SECRETS = json.loads(
     os.getenv("LOGIN_PROVIDERS_SECRETS", "{}")
 )
+
+DASK_ENABLED = strtobool(os.getenv("DASK_ENABLED", "true"))
+"""Whether Dask is enabled in the cluster or not"""
+
+REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT = os.getenv(
+    "REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT", "16Gi"
+)
+"""Maximum memory limit for Dask clusters."""
+
+REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS = int(
+    os.getenv("REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS", 2)
+)
+"""Number of workers in Dask cluster by default """
+
+REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY = os.getenv(
+    "REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY", "2Gi"
+)
+"""Memory for one Dask worker by default."""
+
+REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY = os.getenv(
+    "REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY", "8Gi"
+)
+"""Maximum memory for one Dask worker."""
 
 REANA_KUBERNETES_JOBS_MEMORY_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_LIMIT")
 """Maximum memory limit for user job containers for workflow complexity estimation."""
