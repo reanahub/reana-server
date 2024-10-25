@@ -3307,6 +3307,7 @@ def prune_workspace(
         logging.exception(str(e))
         return jsonify({"message": str(e)}), 500
 
+# FIXME: Move functions for validation to validation.py in the server
 from datetime import datetime
 from reana_db.models import (
     ResourceUnit,
@@ -3370,8 +3371,10 @@ def list_directory_files(
     return file_list
 
 @blueprint.route("/validation", methods=["POST"])
+# FIXME: enable signin_required()
 #@signin_required()
 def workflow_validation():
+    # FIXME: verify that openapi spec is generated correctly
     r"""Endpoint to validate reana yaml in the server. Responds with a result.
     ---
     post:
@@ -3425,15 +3428,17 @@ def workflow_validation():
     logging.info("Received:")
     logging.info(reana_yaml)
 
+    # FIXME: get the workflow uuid or name from the client
     workflow = _get_workflow_with_uuid_or_name("22e65045-3f8e-499b-b995-c63ccced1fe6", "00000000-0000-0000-0000-000000000000")
     workspace_mount, workspace_volume = get_workspace_volume(
         workflow.workspace_path
     )
 
 
-
+    # FIXME: change list_directory_files name and logic to read only reana.yaml
     file_list = list_directory_files(workflow.workspace_path, search=None)
 
+    # FIXME: currently file_list[0] takes into account only the first file
     logging.info("Workspace files:")
     logging.info(file_list[0]["name"])
 
@@ -3455,7 +3460,10 @@ def workflow_validation():
         overwrite_input_parameters=None,
         overwrite_operational_options=None,
         workspace_mount=workspace_mount,
+        workspace_volume=workspace_volume,
     )
+
+    # FIXME: Delete job after it has finished
 
     try:
 
@@ -4116,6 +4124,7 @@ def create_sandbox_spec(
         overwrite_input_parameters=None,
         overwrite_operational_options=None,
         workspace_mount=None,
+        workspace_volume=None,
     ):
         """Instantiate a Kubernetes job.
 
@@ -4149,7 +4158,11 @@ def create_sandbox_spec(
             name="job-controller",
             image="docker.io/reanahub/reana-workflow-validator:latest",
             image_pull_policy="IfNotPresent",
-            env=[],
+            env=[
+              client.V1EnvVar(
+              name='workspace_mount_path',
+              value=workspace_mount) #TODO: get mount path from workspace_mount
+            ],
             volume_mounts=[workspace_mount],
             ports=[],
         )
@@ -4170,6 +4183,12 @@ def create_sandbox_spec(
         spec.template.spec.service_account_name = (
             REANA_RUNTIME_KUBERNETES_SERVICEACCOUNT_NAME
         )
+
+        volumes = [
+            workspace_volume,
+        ]
+
+        spec.template.spec.volumes = list({v["name"]: v for v in volumes}.values())
 
         job.spec = spec
         job.spec.template.spec.restart_policy = "Never"
