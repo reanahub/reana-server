@@ -429,6 +429,10 @@
                     "slurmcern"
                   ]
                 },
+                "dask_autoscaler_enabled": {
+                  "title": "Dask autoscaler enabled in the cluster",
+                  "value": "False"
+                },
                 "dask_cluster_default_number_of_workers": {
                   "title": "The number of Dask workers created by default",
                   "value": "2Gi"
@@ -495,6 +499,17 @@
                         "type": "string"
                       },
                       "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "dask_autoscaler_enabled": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
                     }
                   },
                   "type": "object"
