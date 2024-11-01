@@ -24,6 +24,8 @@ from reana_server.config import (
     REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT,
     REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
     REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD,
+    REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS,
+    REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS_CUSTOM_ALLOWED,
     DASK_ENABLED,
     DASK_AUTOSCALER_ENABLED,
     REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
@@ -107,6 +109,22 @@ def info(user, **kwargs):  # noqa
                   value:
                     type: string
                     x-nullable: true
+                type: object
+              interactive_session_recommended_jupyter_images:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: array
+                    items:
+                      type: string
+                type: object
+              interactive_sessions_custom_image_allowed:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
                 type: object
               maximum_kubernetes_jobs_timeout:
                 properties:
@@ -221,6 +239,17 @@ def info(user, **kwargs):  # noqa
                     "title": "Maximum timeout for Kubernetes jobs",
                     "value": "1209600"
                 },
+                "interactive_session_recommended_jupyter_images": {
+                  "title": "Recommended Jupyter images for interactive sessions",
+                  "value": [
+                      'docker.io/jupyter/scipy-notebook:notebook-6.4.5',
+                      'docker.io/jupyter/scipy-notebook:notebook-9.4.5',
+                  ]
+                },
+                "interactive_sessions_custom_image_allowed": {
+                    "title": "Whether users are allowed to spawn custom interactive session images",
+                    "value": "False"
+                },
                 "dask_enabled": {
                     "title": "Dask workflows allowed in the cluster",
                     "value": "False"
@@ -301,6 +330,19 @@ def info(user, **kwargs):  # noqa
                 title="Maximum inactivity period in days before automatic closure of interactive sessions",
                 value=REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD,
             ),
+            interactive_sessions_custom_image_allowed=dict(
+                title="Users can set custom interactive session images",
+                value=REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS_CUSTOM_ALLOWED,
+            ),
+            interactive_session_recommended_jupyter_images=dict(
+                title="Recommended Jupyter images for interactive sessions",
+                value=[
+                    item["image"]
+                    for item in REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS["jupyter"][
+                        "recommended"
+                    ]
+                ],
+            ),
             dask_enabled=dict(
                 title="Dask workflows allowed in the cluster",
                 value=bool(DASK_ENABLED),
@@ -375,6 +417,8 @@ class InfoSchema(Schema):
         StringNullableInfoValue
     )
     kubernetes_max_memory_limit = fields.Nested(StringInfoValue)
+    interactive_session_recommended_jupyter_images = fields.Nested(ListStringInfoValue)
+    interactive_sessions_custom_image_allowed = fields.Nested(StringInfoValue)
     dask_enabled = fields.Nested(StringInfoValue)
     if DASK_ENABLED:
         dask_autoscaler_enabled = fields.Nested(StringInfoValue)

@@ -465,6 +465,17 @@
                   "title": "Default workspace",
                   "value": "/usr/share"
                 },
+                "interactive_session_recommended_jupyter_images": {
+                  "title": "Recommended Jupyter images for interactive sessions",
+                  "value": [
+                    "docker.io/jupyter/scipy-notebook:notebook-6.4.5",
+                    "docker.io/jupyter/scipy-notebook:notebook-9.4.5"
+                  ]
+                },
+                "interactive_sessions_custom_image_allowed": {
+                  "title": "Whether users are allowed to spawn custom interactive session images",
+                  "value": "False"
+                },
                 "kubernetes_max_memory_limit": {
                   "title": "Maximum allowed memory limit for Kubernetes jobs",
                   "value": "10Gi"
@@ -607,6 +618,31 @@
                   "type": "object"
                 },
                 "default_workspace": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "interactive_session_recommended_jupyter_images": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "interactive_sessions_custom_image_allowed": {
                   "properties": {
                     "title": {
                       "type": "string"

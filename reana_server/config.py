@@ -428,6 +428,21 @@ else:
     )
 """Maximum allowed period (in days) for interactive session inactivity before automatic closure."""
 
+REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS = json.loads(
+    os.getenv("REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS", "{}")
+)
+"""Allowed and recommended environments to be used for interactive sessions."""
+
+REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS_CUSTOM_ALLOWED = (
+    str(
+        REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS.get("jupyter", {}).get(
+            "allow_custom", "false"
+        )
+    ).lower()
+    == "true"
+)
+"""Whether users can set custom interactive session images or not."""
+
 # Kubernetes jobs timeout
 # ==================
 REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT")
