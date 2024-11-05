@@ -445,6 +445,10 @@
                   "title": "The maximum memory limit for Dask clusters created by users",
                   "value": "16Gi"
                 },
+                "dask_cluster_max_number_of_workers": {
+                  "title": "The maximum number of workers that users can ask for the single Dask cluster",
+                  "value": "20"
+                },
                 "dask_cluster_max_single_worker_memory": {
                   "title": "The maximum amount of memory that users can ask for the single Dask worker",
                   "value": "8Gi"
@@ -537,6 +541,17 @@
                   "type": "object"
                 },
                 "dask_cluster_max_memory_limit": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "dask_cluster_max_number_of_workers": {
                   "properties": {
                     "title": {
                       "type": "string"

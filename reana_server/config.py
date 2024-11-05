@@ -74,6 +74,11 @@ REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS = int(
 )
 """Number of workers in Dask cluster by default """
 
+REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS = int(
+    os.getenv("REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS", 20)
+)
+"""Maximum number of workers in Dask cluster."""
+
 REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY = os.getenv(
     "REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY", "2Gi"
 )

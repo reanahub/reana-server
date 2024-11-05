@@ -26,6 +26,7 @@ from reana_server.config import (
     DASK_ENABLED,
     REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT,
     REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
+    REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
     REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY,
 )
@@ -188,6 +189,12 @@ def validate_dask_memory_and_cores_limits(reana_yaml: Dict) -> None:
                 "number_of_workers", REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS
             )
         )
+
+        if number_of_workers > REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS:
+            raise REANAValidationError(
+                f"The number of requested Dask workers ({number_of_workers}) exceeds the maximum limit ({REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS})."
+            )
+
         requested_dask_cluster_memory = (
             kubernetes_memory_to_bytes(single_worker_memory) * number_of_workers
         )

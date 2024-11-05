@@ -30,6 +30,7 @@ from reana_server.config import (
     REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
     REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY,
+    REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS,
 )
 from reana_server.decorators import signin_required
 
@@ -173,6 +174,13 @@ def info(user, **kwargs):  # noqa
                   value:
                     type: string
                 type: object
+              dask_cluster_max_number_of_workers:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
             type: object
           examples:
             application/json:
@@ -236,6 +244,10 @@ def info(user, **kwargs):  # noqa
                 "dask_cluster_max_single_worker_memory": {
                     "title": "The maximum amount of memory that users can ask for the single Dask worker",
                     "value": "8Gi"
+                },
+                "dask_cluster_max_number_of_workers": {
+                    "title": "The maximum number of workers that users can ask for the single Dask cluster",
+                    "value": "20"
                 },
               }
         500:
@@ -315,6 +327,10 @@ def info(user, **kwargs):  # noqa
                 title="The maximum amount of memory that users can ask for the single Dask worker",
                 value=REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY,
             )
+            cluster_information["dask_cluster_max_number_of_workers"] = dict(
+                title="The maximum number of workers that users can ask for the single Dask cluster",
+                value=REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS,
+            )
 
         return InfoSchema().dump(cluster_information)
 
@@ -366,3 +382,4 @@ class InfoSchema(Schema):
         dask_cluster_max_memory_limit = fields.Nested(StringInfoValue)
         dask_cluster_default_single_worker_memory = fields.Nested(StringInfoValue)
         dask_cluster_max_single_worker_memory = fields.Nested(StringInfoValue)
+        dask_cluster_max_number_of_workers = fields.Nested(StringInfoValue)
