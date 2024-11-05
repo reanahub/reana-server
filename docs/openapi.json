@@ -429,6 +429,14 @@
                     "slurmcern"
                   ]
                 },
+                "cwl_engine_tool": {
+                  "title": "CWL engine tool",
+                  "value": "cwltool"
+                },
+                "cwl_engine_version": {
+                  "title": "CWL engine version",
+                  "value": "3.1.20210628163208"
+                },
                 "dask_autoscaler_enabled": {
                   "title": "Dask autoscaler enabled in the cluster",
                   "value": "False"
@@ -492,6 +500,19 @@
                   "title": "Maximum retention period in days for workspace files",
                   "value": "3650"
                 },
+                "snakemake_engine_version": {
+                  "title": "Snakemake engine version",
+                  "value": "8.24.1"
+                },
+                "supported_workflow_engines": {
+                  "title": "List of supported workflow engines",
+                  "value": [
+                    "cwl",
+                    "serial",
+                    "snakemake",
+                    "yadage"
+                  ]
+                },
                 "workspaces_available": {
                   "title": "List of available workspaces",
                   "value": [
@@ -499,6 +520,18 @@
                     "/eos/home",
                     "/var/reana"
                   ]
+                },
+                "yadage_engine_adage_version": {
+                  "title": "Yadage engine adage version",
+                  "value": "0.11.0"
+                },
+                "yadage_engine_packtivity_version": {
+                  "title": "Yadage engine packtivity version",
+                  "value": "0.16.2"
+                },
+                "yadage_engine_version": {
+                  "title": "Yadage engine version",
+                  "value": "0.20.1"
                 }
               }
             },
@@ -514,6 +547,28 @@
                         "type": "string"
                       },
                       "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "cwl_engine_tool": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "cwl_engine_version": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
                     }
                   },
                   "type": "object"
@@ -700,6 +755,31 @@
                   },
                   "type": "object"
                 },
+                "snakemake_engine_version": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "supported_workflow_engines": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
                 "workspaces_available": {
                   "properties": {
                     "title": {
@@ -710,6 +790,39 @@
                         "type": "string"
                       },
                       "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "yadage_engine_adage_version": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "yadage_engine_packtivity_version": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "yadage_engine_version": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
                     }
                   },
                   "type": "object"

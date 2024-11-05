@@ -10,6 +10,7 @@
 
 import logging
 import traceback
+from importlib.metadata import version
 
 from flask import Blueprint, jsonify
 from marshmallow import Schema, fields
@@ -150,6 +151,57 @@ def info(user, **kwargs):  # noqa
                       type: string
                     type: array
                 type: object
+              supported_workflow_engines:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              cwl_engine_tool:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              cwl_engine_version:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              yadage_engine_version:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              yadage_engine_adage_version:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              yadage_engine_packtivity_version:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              snakemake_engine_version:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
               dask_enabled:
                 properties:
                   title:
@@ -250,6 +302,39 @@ def info(user, **kwargs):  # noqa
                     "title": "Whether users are allowed to spawn custom interactive session images",
                     "value": "False"
                 },
+                "supported_workflow_engines": {
+                    "title": "List of supported workflow engines",
+                    "value": [
+                        'cwl',
+                        'serial',
+                        'snakemake',
+                        'yadage'
+                    ]
+                },
+                "cwl_engine_tool": {
+                    "title": "CWL engine tool",
+                    "value": "cwltool"
+                },
+                "cwl_engine_version": {
+                    "title": "CWL engine version",
+                    "value": "3.1.20210628163208"
+                },
+                "yadage_engine_version": {
+                    "title": "Yadage engine version",
+                    "value": "0.20.1"
+                },
+                "yadage_engine_adage_version": {
+                    "title": "Yadage engine adage version",
+                    "value": "0.11.0"
+                },
+                "yadage_engine_packtivity_version": {
+                    "title": "Yadage engine packtivity version",
+                    "value": "0.16.2"
+                },
+                "snakemake_engine_version": {
+                    "title": "Snakemake engine version",
+                    "value": "8.24.1"
+                },
                 "dask_enabled": {
                     "title": "Dask workflows allowed in the cluster",
                     "value": "False"
@@ -343,11 +428,33 @@ def info(user, **kwargs):  # noqa
                     ]
                 ],
             ),
+            supported_workflow_engines=dict(
+                title="List of supported workflow engines",
+                value=["cwl", "serial", "snakemake", "yadage"],
+            ),
+            cwl_engine_tool=dict(title="CWL engine tool", value="cwltool"),
+            cwl_engine_version=dict(
+                title="CWL engine version", value=version("cwltool")
+            ),
+            yadage_engine_version=dict(
+                title="Yadage engine version", value=version("yadage")
+            ),
+            yadage_engine_adage_version=dict(
+                title="Yadage engine adage version", value=version("adage")
+            ),
+            yadage_engine_packtivity_version=dict(
+                title="Yadage engine packtivity version", value=version("packtivity")
+            ),
+            snakemake_engine_version=dict(
+                title="Snakemake engine version",
+                value=version("snakemake"),
+            ),
             dask_enabled=dict(
                 title="Dask workflows allowed in the cluster",
                 value=bool(DASK_ENABLED),
             ),
         )
+
         if DASK_ENABLED:
             cluster_information["dask_autoscaler_enabled"] = dict(
                 title="Dask autoscaler enabled in the cluster",
@@ -419,6 +526,13 @@ class InfoSchema(Schema):
     kubernetes_max_memory_limit = fields.Nested(StringInfoValue)
     interactive_session_recommended_jupyter_images = fields.Nested(ListStringInfoValue)
     interactive_sessions_custom_image_allowed = fields.Nested(StringInfoValue)
+    supported_workflow_engines = fields.Nested(ListStringInfoValue)
+    cwl_engine_tool = fields.Nested(StringInfoValue)
+    cwl_engine_version = fields.Nested(StringInfoValue)
+    yadage_engine_version = fields.Nested(StringInfoValue)
+    yadage_engine_adage_version = fields.Nested(StringInfoValue)
+    yadage_engine_packtivity_version = fields.Nested(StringInfoValue)
+    snakemake_engine_version = fields.Nested(StringInfoValue)
     dask_enabled = fields.Nested(StringInfoValue)
     if DASK_ENABLED:
         dask_autoscaler_enabled = fields.Nested(StringInfoValue)
