@@ -124,7 +124,12 @@ def launch(user, url, name="", parameters="{}", specification=None):
                   additional_properties:
                     type: array
                     items:
-                      type: string
+                      type: object
+                      properties:
+                        property:
+                          type: string
+                        path:
+                          type: string
           examples:
             application/json:
               {
