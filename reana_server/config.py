@@ -150,7 +150,9 @@ SECURITY_EMAIL_SUBJECT_REGISTER = _("Welcome to REANA Server!")
 #: and X-User-ID headers to HTTP response. You MUST ensure that NGINX (or other
 #: proxies) removes these headers again before sending the response to the
 #: client. Set to False, in case of doubt.
-ACCOUNTS_USERINFO_HEADERS = True
+ACCOUNTS_USERINFO_HEADERS = bool(
+    strtobool(os.getenv("ACCOUNTS_USERINFO_HEADERS", "False"))
+)
 #: Disable password recovery by users.
 SECURITY_RECOVERABLE = False
 REANA_USER_EMAIL_CONFIRMATION = strtobool(
