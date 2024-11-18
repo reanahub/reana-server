@@ -210,6 +210,14 @@ if REANA_HOSTNAME:
 PROXYFIX_CONFIG = json.loads(os.getenv("PROXYFIX_CONFIG", '{"x_proto": 1}'))
 
 APP_DEFAULT_SECURE_HEADERS["content_security_policy"] = {}
+APP_DEFAULT_SECURE_HEADERS.update(
+    json.loads(os.getenv("APP_DEFAULT_SECURE_HEADERS", "{}"))
+)
+if "REANA_FORCE_HTTPS" in os.environ:
+    APP_DEFAULT_SECURE_HEADERS["force_https"] = bool(
+        strtobool(os.getenv("REANA_FORCE_HTTPS"))
+    )
+
 APP_HEALTH_BLUEPRINT_ENABLED = False
 
 
