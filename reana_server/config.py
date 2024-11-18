@@ -207,7 +207,8 @@ if REANA_HOSTNAME:
 
 # Security configuration
 # ======================
-PROXYFIX_CONFIG = {"x_proto": 1}
+PROXYFIX_CONFIG = json.loads(os.getenv("PROXYFIX_CONFIG", '{"x_proto": 1}'))
+
 APP_DEFAULT_SECURE_HEADERS["content_security_policy"] = {}
 APP_HEALTH_BLUEPRINT_ENABLED = False
 
