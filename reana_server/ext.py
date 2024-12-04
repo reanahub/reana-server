@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -14,6 +14,7 @@ from flask import jsonify
 from flask_limiter.errors import RateLimitExceeded
 from marshmallow.exceptions import ValidationError
 from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
+from sqlalchemy_utils.types.encrypted.padding import InvalidPaddingError
 from werkzeug.exceptions import UnprocessableEntity
 
 from invenio_oauthclient.signals import account_info_received
@@ -58,6 +59,17 @@ def handle_args_validation_error(error: UnprocessableEntity):
         error_message = ". ".join(validation_messages)
 
     return jsonify({"message": error_message}), 400
+
+
+def handle_invalid_padding_error(error: InvalidPaddingError):
+    """Error handler for sqlalchemy_utils exception ``InvalidPaddingError``.
+
+    This error handler raises an exception with a more understandable message.
+    """
+    raise InvalidPaddingError(
+        "Error decrypting the database. Did you set the correct secret key? "
+        "If you changed the secret key, did you run the migration command?"
+    ) from error
 
 
 class REANA(object):
@@ -106,3 +118,4 @@ class REANA(object):
         """Initialize custom error handlers."""
         app.register_error_handler(RateLimitExceeded, handle_rate_limit_error)
         app.register_error_handler(UnprocessableEntity, handle_args_validation_error)
+        app.register_error_handler(InvalidPaddingError, handle_invalid_padding_error)

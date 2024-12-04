@@ -84,7 +84,7 @@ CMD ["uwsgi --ini uwsgi.ini"]
 
 # Set image labels
 LABEL org.opencontainers.image.authors="team@reanahub.io"
-LABEL org.opencontainers.image.created="2024-03-04"
+LABEL org.opencontainers.image.created="2024-11-29"
 LABEL org.opencontainers.image.description="REANA reproducible analysis platform - server component"
 LABEL org.opencontainers.image.documentation="https://reana-server.readthedocs.io/"
 LABEL org.opencontainers.image.licenses="MIT"
