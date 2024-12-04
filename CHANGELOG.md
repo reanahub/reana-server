@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.9.4](https://github.com/reanahub/reana-server/compare/0.9.3...0.9.4) (2024-11-29)
+
+
+### Build
+
+* **python:** bump shared REANA packages as of 2024-11-28 ([#714](https://github.com/reanahub/reana-server/issues/714)) ([94fbf77](https://github.com/reanahub/reana-server/commit/94fbf7766218f4ffaf3f23be64ec6d46be1acb00))
+
+
+### Features
+
+* **config:** make ACCOUNTS_USERINFO_HEADERS customisable ([#713](https://github.com/reanahub/reana-server/issues/713)) ([8c01d51](https://github.com/reanahub/reana-server/commit/8c01d513c2365f337c26a2211c2ddb82df4186d4))
+* **config:** make APP_DEFAULT_SECURE_HEADERS customisable ([#713](https://github.com/reanahub/reana-server/issues/713)) ([1919358](https://github.com/reanahub/reana-server/commit/1919358cb3b05f09bceff9a904e9607760bc3fb1))
+* **config:** make PROXYFIX_CONFIG customisable ([#713](https://github.com/reanahub/reana-server/issues/713)) ([5b6c276](https://github.com/reanahub/reana-server/commit/5b6c276f57f642cc0965f096fa59875b9599df08))
+* **config:** support password-protected redis ([#713](https://github.com/reanahub/reana-server/issues/713)) ([a2aad8a](https://github.com/reanahub/reana-server/commit/a2aad8ac506b98e5c29d357cec65172b6437cc8f))
+* **ext:** improve error message for db decryption error ([#713](https://github.com/reanahub/reana-server/issues/713)) ([bbab1bf](https://github.com/reanahub/reana-server/commit/bbab1bf7338e9790e2195a02e320df16db1826f6))
+
+
+### Bug fixes
+
+* **config:** do not set DEBUG programmatically ([#713](https://github.com/reanahub/reana-server/issues/713)) ([c98cbc1](https://github.com/reanahub/reana-server/commit/c98cbc1d15afca9309e4839db543ac19cd2036ce))
+* **config:** read secret key from env ([#713](https://github.com/reanahub/reana-server/issues/713)) ([6ee6422](https://github.com/reanahub/reana-server/commit/6ee6422d87d38339b359ad7a306575b97f210440))
+* **get_workflow_specification:** avoid returning null parameters ([#689](https://github.com/reanahub/reana-server/issues/689)) ([46633d6](https://github.com/reanahub/reana-server/commit/46633d6bcc151c73880f9ecbd2c02d2246492794))
+* **reana-admin:** respect service domain when cleaning sessions ([#687](https://github.com/reanahub/reana-server/issues/687)) ([ede882d](https://github.com/reanahub/reana-server/commit/ede882d384ae0959eb8a9484b7d491baa628a1ee))
+* **set_workflow_status:** publish workflows to submission queue ([#691](https://github.com/reanahub/reana-server/issues/691)) ([6e35bd7](https://github.com/reanahub/reana-server/commit/6e35bd776e17c1bc04145c68c1f5ea3ce5143b7e)), closes [#690](https://github.com/reanahub/reana-server/issues/690)
+* **start:** validate endpoint parameters ([#689](https://github.com/reanahub/reana-server/issues/689)) ([d2d3673](https://github.com/reanahub/reana-server/commit/d2d3673dac8917d746ddafd84bb3660e7f83c9b6))
+
+
+### Continuous integration
+
+* **commitlint:** improve checking of merge commits ([#689](https://github.com/reanahub/reana-server/issues/689)) ([69f45fc](https://github.com/reanahub/reana-server/commit/69f45fc3aae9bc625ed733de9af13eb7c0111048))
+
 ## [0.9.3](https://github.com/reanahub/reana-server/compare/0.9.2...0.9.3) (2024-03-04)
 
 

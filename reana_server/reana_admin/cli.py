@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2020, 2021, 2022 CERN.
+# Copyright (C) 2020, 2021, 2022, 2024 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -1089,7 +1089,7 @@ def interactive_session_cleanup(
 
         try:
             session_status = requests.get(
-                f"http://reana-run-session-{workflow_id}.{REANA_RUNTIME_KUBERNETES_NAMESPACE}.svc.cluster.local:8081/{workflow_id}/api/status",
+                f"http://reana-run-session-{workflow_id}.{REANA_RUNTIME_KUBERNETES_NAMESPACE}:8081/{workflow_id}/api/status",
                 headers={"Authorization": f"token {token}"},
             ).json()
         except Exception as e:

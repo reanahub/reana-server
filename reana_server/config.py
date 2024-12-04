@@ -167,8 +167,10 @@ MAIL_SUPPRESS_SEND = True
 # Accounts
 # ========
 #: Redis URL
-ACCOUNTS_SESSION_REDIS_URL = "redis://{host}:6379/1".format(
-    host=REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES["cache"]
+REANA_CACHE_PASSWORD = os.getenv("REANA_CACHE_PASSWORD", "")
+ACCOUNTS_SESSION_REDIS_URL = "redis://:{password}@{host}:6379/1".format(
+    password=REANA_CACHE_PASSWORD,
+    host=REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES["cache"],
 )
 #: Email address used as sender of account registration emails.
 SECURITY_EMAIL_SENDER = SUPPORT_EMAIL
@@ -179,7 +181,9 @@ SECURITY_EMAIL_SUBJECT_REGISTER = _("Welcome to REANA Server!")
 #: and X-User-ID headers to HTTP response. You MUST ensure that NGINX (or other
 #: proxies) removes these headers again before sending the response to the
 #: client. Set to False, in case of doubt.
-ACCOUNTS_USERINFO_HEADERS = True
+ACCOUNTS_USERINFO_HEADERS = bool(
+    strtobool(os.getenv("ACCOUNTS_USERINFO_HEADERS", "False"))
+)
 #: Disable password recovery by users.
 SECURITY_RECOVERABLE = False
 REANA_USER_EMAIL_CONFIRMATION = strtobool(
@@ -217,7 +221,9 @@ CORS_SUPPORTS_CREDENTIALS = False
 
 #: Secret key - each installation (dev, production, ...) needs a separate key.
 #: It should be changed before deploying.
-SECRET_KEY = "CHANGE_ME"
+SECRET_KEY = os.getenv("REANA_SECRET_KEY", "CHANGE_ME")
+"""Secret key used for the application user sessions."""
+
 #: Sets cookie with the secure flag by default
 SESSION_COOKIE_SECURE = True
 #: Sets session to be samesite to avoid CSRF attacks
@@ -234,8 +240,17 @@ if REANA_HOSTNAME:
 
 # Security configuration
 # ======================
-PROXYFIX_CONFIG = {"x_proto": 1}
+PROXYFIX_CONFIG = json.loads(os.getenv("PROXYFIX_CONFIG", '{"x_proto": 1}'))
+
 APP_DEFAULT_SECURE_HEADERS["content_security_policy"] = {}
+APP_DEFAULT_SECURE_HEADERS.update(
+    json.loads(os.getenv("APP_DEFAULT_SECURE_HEADERS", "{}"))
+)
+if "REANA_FORCE_HTTPS" in os.environ:
+    APP_DEFAULT_SECURE_HEADERS["force_https"] = bool(
+        strtobool(os.getenv("REANA_FORCE_HTTPS"))
+    )
+
 APP_HEALTH_BLUEPRINT_ENABLED = False
 
 
@@ -346,8 +361,6 @@ CERN_APP_OPENID_CREDENTIALS = dict(
 
 OAUTHCLIENT_REMOTE_APPS["cern_openid"] = OAUTH_REMOTE_REST_APP
 OAUTHCLIENT_REST_REMOTE_APPS["cern_openid"] = OAUTH_REMOTE_REST_APP
-
-DEBUG = True
 
 SECURITY_PASSWORD_SALT = "security-password-salt"
 
