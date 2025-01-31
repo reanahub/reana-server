@@ -537,7 +537,7 @@ class RequestStreamWithLen(object):
 
 
 def get_workspace_retention_rules(
-    retention_days: Optional[Dict[str, int]]
+    retention_days: Optional[Dict[str, int]],
 ) -> List[Dict[str, any]]:
     """Validate and return a list of retention rules.
 

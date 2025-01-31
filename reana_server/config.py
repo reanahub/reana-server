@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -32,7 +32,7 @@ ADMIN_USER_ID = "00000000-0000-0000-0000-000000000000"
 
 SHARED_VOLUME_PATH = os.getenv("SHARED_VOLUME_PATH", "/var/reana")
 
-REANA_HOSTNAME = os.getenv("REANA_HOSTNAME")
+REANA_HOSTNAME = os.getenv("REANA_HOSTNAME", "localhost")
 
 REANA_SSO_CERN_CONSUMER_KEY = os.getenv("CERN_CONSUMER_KEY", "CHANGE_ME")
 REANA_SSO_CERN_CONSUMER_SECRET = os.getenv("CERN_CONSUMER_SECRET", "CHANGE_ME")
