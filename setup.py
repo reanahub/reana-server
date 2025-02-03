@@ -48,8 +48,8 @@ install_requires = [
     "Flask>=2.1.1,<2.3.0",  # same upper pin as invenio-base
     "gitpython>=3.1",
     "marshmallow>2.13.0,<3.0.0",
-    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a5,<0.96.0",
-    "reana-db>=0.95.0a4,<0.96.0",
+    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a7,<0.96.0",
+    "reana-db>=0.95.0a5,<0.96.0",
     "requests>=2.25.0",
     "tablib>=0.12.1",
     "uWSGI>=2.0.17",
