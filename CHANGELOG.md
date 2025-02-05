@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.5](https://github.com/reanahub/reana-server/compare/0.9.4...0.9.5) (2025-02-05)
+
+
+### Bug fixes
+
+* **config:** set localhost default value for REANA_HOSTNAME ([#717](https://github.com/reanahub/reana-server/issues/717)) ([a24c810](https://github.com/reanahub/reana-server/commit/a24c810f018e5fd925d9ad01ce986537adad7ee8))
+
 ## [0.9.4](https://github.com/reanahub/reana-server/compare/0.9.3...0.9.4) (2024-11-29)
 
 
