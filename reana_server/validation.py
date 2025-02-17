@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2022, 2024 CERN.
+# Copyright (C) 2022, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -29,6 +29,8 @@ from reana_server.config import (
     REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
     REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY,
+    REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
+    REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS,
 )
 from reana_server import utils
 
@@ -165,7 +167,7 @@ def validate_retention_rule(rule: str, days: int) -> None:
         )
 
 
-def validate_dask_memory_and_cores_limits(reana_yaml: Dict) -> None:
+def validate_dask_limits(reana_yaml: Dict) -> None:
     """Validate Dask workflows are allowed in the cluster and memory limits are respected."""
     # Validate Dask workflows are allowed in the cluster
     dask_resources = reana_yaml["workflow"].get("resources", {}).get("dask", {})
@@ -193,6 +195,16 @@ def validate_dask_memory_and_cores_limits(reana_yaml: Dict) -> None:
         if number_of_workers > REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS:
             raise REANAValidationError(
                 f"The number of requested Dask workers ({number_of_workers}) exceeds the maximum limit ({REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS})."
+            )
+
+        single_worker_threads = dask_resources.get(
+            "single_worker_threads",
+            REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
+        )
+
+        if single_worker_threads > REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS:
+            raise REANAValidationError(
+                f'The "single_worker_threads" provided in the dask resources exceeds the limit ({REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS}).'
             )
 
         requested_dask_cluster_memory = (

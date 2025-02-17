@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -49,7 +49,7 @@ from reana_server.validation import (
     validate_inputs,
     validate_workflow,
     validate_workspace_path,
-    validate_dask_memory_and_cores_limits,
+    validate_dask_limits,
 )
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
@@ -567,7 +567,7 @@ def create_workflow(user):  # noqa
 
         validate_inputs(reana_spec_file)
 
-        validate_dask_memory_and_cores_limits(reana_spec_file)
+        validate_dask_limits(reana_spec_file)
 
         retention_days = reana_spec_file.get("workspace", {}).get("retention_days")
         retention_rules = get_workspace_retention_rules(retention_days)

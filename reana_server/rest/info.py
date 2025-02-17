@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2021, 2022, 2024 CERN.
+# Copyright (C) 2021, 2022, 2024, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -34,6 +34,8 @@ from reana_server.config import (
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
     REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY,
     REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS,
+    REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
+    REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS,
 )
 from reana_server.decorators import signin_required
 
@@ -237,6 +239,13 @@ def info(user, **kwargs):  # noqa
                   value:
                     type: string
                 type: object
+              dask_cluster_default_single_worker_threads:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
               dask_cluster_max_single_worker_memory:
                 properties:
                   title:
@@ -245,6 +254,13 @@ def info(user, **kwargs):  # noqa
                     type: string
                 type: object
               dask_cluster_max_number_of_workers:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              dask_cluster_max_single_worker_threads:
                 properties:
                   title:
                     type: string
@@ -355,6 +371,10 @@ def info(user, **kwargs):  # noqa
                     "title": "The amount of memory used by default by a single Dask worker",
                     "value": "2Gi"
                 },
+                "dask_cluster_default_single_worker_threads": {
+                    "title": "The number of threads used by default by a single Dask worker",
+                    "value": "4"
+                },
                 "dask_cluster_max_single_worker_memory": {
                     "title": "The maximum amount of memory that users can ask for the single Dask worker",
                     "value": "8Gi"
@@ -362,6 +382,10 @@ def info(user, **kwargs):  # noqa
                 "dask_cluster_max_number_of_workers": {
                     "title": "The maximum number of workers that users can ask for the single Dask cluster",
                     "value": "20"
+                },
+                "dask_cluster_max_single_worker_threads": {
+                    "title": "The maximum number of threads that users can ask for the single Dask worker",
+                    "value": "8"
                 },
               }
         500:
@@ -480,6 +504,14 @@ def info(user, **kwargs):  # noqa
                 title="The maximum number of workers that users can ask for the single Dask cluster",
                 value=REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS,
             )
+            cluster_information["dask_cluster_default_single_worker_threads"] = dict(
+                title="The number of threads used by default by a single Dask worker",
+                value=REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
+            )
+            cluster_information["dask_cluster_max_single_worker_threads"] = dict(
+                title="The maximum number of threads that users can ask for the single Dask worker",
+                value=REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS,
+            )
 
         return InfoSchema().dump(cluster_information)
 
@@ -541,3 +573,5 @@ class InfoSchema(Schema):
         dask_cluster_default_single_worker_memory = fields.Nested(StringInfoValue)
         dask_cluster_max_single_worker_memory = fields.Nested(StringInfoValue)
         dask_cluster_max_number_of_workers = fields.Nested(StringInfoValue)
+        dask_cluster_default_single_worker_threads = fields.Nested(StringInfoValue)
+        dask_cluster_max_single_worker_threads = fields.Nested(StringInfoValue)
