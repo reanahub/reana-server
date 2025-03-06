@@ -108,7 +108,7 @@ isodate==0.7.2            # via rdflib
 isoduration==20.11.0      # via jsonschema
 itsdangerous==2.0.1       # via flask, flask-kvsession-invenio, flask-security-invenio, flask-wtf, invenio-base, invenio-rest
 jedi==0.19.2              # via ipython
-jinja2==3.1.5             # via flask, flask-babel, snakemake
+jinja2==3.1.6             # via flask, flask-babel, snakemake
 jq==1.8.0                 # via packtivity, yadage
 jsmin==3.0.1              # via invenio-theme
 jsonpath-rw==1.4.0        # via packtivity, yadage
