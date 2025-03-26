@@ -64,9 +64,9 @@ install_requires = [
     "reana-db>=0.9.5,<0.10.0",
     "requests==2.25.0",
     "tablib>=0.12.1",
-    "uWSGI>=2.0.17",
+    "uWSGI>=2.0.28",
     "uwsgi-tools>=1.1.1",
-    "uwsgitop>=0.10",
+    "uwsgitop>=0.12",
     "wtforms<3.0.0",
     # Yadage dependencies
     # Pinning adage/packtivity/yadage/yadage-schemas to make sure we use compatible versions.
