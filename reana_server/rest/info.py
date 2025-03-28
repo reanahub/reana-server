@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2021, 2022 CERN.
+# Copyright (C) 2021, 2022, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -19,7 +19,13 @@ from reana_commons.config import DEFAULT_WORKSPACE_PATH, WORKSPACE_PATHS
 from reana_server.config import (
     SUPPORTED_COMPUTE_BACKENDS,
     WORKSPACE_RETENTION_PERIOD,
+    REANA_KUBERNETES_JOBS_MAX_USER_CPU_REQUEST,
+    REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT,
+    REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST,
     REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
+    REANA_KUBERNETES_JOBS_CPU_REQUEST,
+    REANA_KUBERNETES_JOBS_CPU_LIMIT,
+    REANA_KUBERNETES_JOBS_MEMORY_REQUEST,
     REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT,
     REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
@@ -71,12 +77,37 @@ def info(user, **kwargs):  # noqa
                   value:
                     type: string
                 type: object
+              default_kubernetes_cpu_request:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                    x-nullable: true
+                type: object
+              default_kubernetes_cpu_limit:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                    x-nullable: true
+                type: object
+              default_kubernetes_memory_request:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                    x-nullable: true
+                type: object
               default_kubernetes_memory_limit:
                 properties:
                   title:
                     type: string
                   value:
                     type: string
+                    x-nullable: true
                 type: object
               default_workspace:
                 properties:
@@ -84,6 +115,30 @@ def info(user, **kwargs):  # noqa
                     type: string
                   value:
                     type: string
+                type: object
+              kubernetes_max_cpu_request:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                    x-nullable: true
+                type: object
+              kubernetes_max_cpu_limit:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                    x-nullable: true
+                type: object
+              kubernetes_max_memory_request:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                    x-nullable: true
                 type: object
               kubernetes_max_memory_limit:
                 properties:
@@ -145,9 +200,33 @@ def info(user, **kwargs):  # noqa
                         "slurmcern"
                     ]
                 },
+                "kubernetes_cpu_request": {
+                    "title": "Default CPU request for Kubernetes jobs",
+                    "value": "1"
+                },
+                "kubernetes_cpu_limit": {
+                    "title": "Default CPU limit for Kubernetes jobs",
+                    "value": "2"
+                },
+                "kubernetes_memory_request": {
+                    "title": "Default memory request for Kubernetes jobs",
+                    "value": "1Gi"
+                },
                 "kubernetes_memory_limit": {
                     "title": "Default memory limit for Kubernetes jobs",
                     "value": "3Gi"
+                },
+                "kubernetes_max_cpu_request": {
+                    "title": "Maximum allowed CPU request for Kubernetes jobs",
+                    "value": "2"
+                },
+                "kubernetes_max_cpu_limit": {
+                    "title": "Maximum allowed CPU limit for Kubernetes jobs",
+                    "value": "4"
+                },
+                "kubernetes_max_memory_request": {
+                    "title": "Maximum allowed memory request for Kubernetes jobs",
+                    "value": "5Gi"
                 },
                 "kubernetes_max_memory_limit": {
                     "title": "Maximum allowed memory limit for Kubernetes jobs",
@@ -193,9 +272,33 @@ def info(user, **kwargs):  # noqa
                 title="List of supported compute backends",
                 value=SUPPORTED_COMPUTE_BACKENDS,
             ),
+            default_kubernetes_cpu_request=dict(
+                title="Default CPU request for Kubernetes jobs",
+                value=REANA_KUBERNETES_JOBS_CPU_REQUEST,
+            ),
+            default_kubernetes_cpu_limit=dict(
+                title="Default CPU limit for Kubernetes jobs",
+                value=REANA_KUBERNETES_JOBS_CPU_LIMIT,
+            ),
+            default_kubernetes_memory_request=dict(
+                title="Default memory request for Kubernetes jobs",
+                value=REANA_KUBERNETES_JOBS_MEMORY_REQUEST,
+            ),
             default_kubernetes_memory_limit=dict(
                 title="Default memory limit for Kubernetes jobs",
                 value=REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
+            ),
+            kubernetes_max_cpu_request=dict(
+                title="Maximum allowed CPU request for Kubernetes jobs",
+                value=REANA_KUBERNETES_JOBS_MAX_USER_CPU_REQUEST,
+            ),
+            kubernetes_max_cpu_limit=dict(
+                title="Maximum allowed CPU limit for Kubernetes jobs",
+                value=REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT,
+            ),
+            kubernetes_max_memory_request=dict(
+                title="Maximum allowed memory request for Kubernetes jobs",
+                value=REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST,
             ),
             kubernetes_max_memory_limit=dict(
                 title="Maximum allowed memory limit for Kubernetes jobs",
@@ -252,7 +355,13 @@ class InfoSchema(Schema):
     workspaces_available = fields.Nested(ListStringInfoValue)
     default_workspace = fields.Nested(StringInfoValue)
     compute_backends = fields.Nested(ListStringInfoValue)
+    default_kubernetes_cpu_request = fields.Nested(StringNullableInfoValue)
+    default_kubernetes_cpu_limit = fields.Nested(StringNullableInfoValue)
+    default_kubernetes_memory_request = fields.Nested(StringNullableInfoValue)
     default_kubernetes_memory_limit = fields.Nested(StringInfoValue)
+    kubernetes_max_cpu_request = fields.Nested(StringNullableInfoValue)
+    kubernetes_max_cpu_limit = fields.Nested(StringNullableInfoValue)
+    kubernetes_max_memory_request = fields.Nested(StringNullableInfoValue)
     kubernetes_max_memory_limit = fields.Nested(StringNullableInfoValue)
     maximum_workspace_retention_period = fields.Nested(StringNullableInfoValue)
     default_kubernetes_jobs_timeout = fields.Nested(StringInfoValue)

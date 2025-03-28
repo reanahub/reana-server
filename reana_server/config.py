@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2025 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -58,8 +58,38 @@ REANA_SSO_LOGIN_PROVIDERS_SECRETS = json.loads(
     os.getenv("LOGIN_PROVIDERS_SECRETS", "{}")
 )
 
+REANA_KUBERNETES_JOBS_CPU_REQUEST = os.getenv("REANA_KUBERNETES_JOBS_CPU_REQUEST")
+"""Default cpu request for user job containers."""
+
+REANA_KUBERNETES_JOBS_CPU_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_CPU_LIMIT")
+"""Default cpu limit for user job containers."""
+
+REANA_KUBERNETES_JOBS_MEMORY_REQUEST = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_REQUEST")
+"""Default memory request for user job containers."""
+
 REANA_KUBERNETES_JOBS_MEMORY_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_LIMIT")
-"""Maximum memory limit for user job containers for workflow complexity estimation."""
+"""Default memory limit for user job containers."""
+
+REANA_KUBERNETES_JOBS_MAX_USER_CPU_REQUEST = os.getenv(
+    "REANA_KUBERNETES_JOBS_MAX_USER_CPU_REQUEST"
+)
+"""Maximum cpu request that users can assign to their job containers."""
+
+REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT = os.getenv(
+    "REANA_KUBERNETES_JOBS_MAX_USER_CPU_LIMIT"
+)
+"""Maximum cpu limit that users can assign to their job containers."""
+
+REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST = os.getenv(
+    "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_REQUEST"
+)
+"""Maximum memory request that users can assign to their job containers."""
+
+REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT = os.getenv(
+    "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT"
+)
+"""Maximum memory limit that users can assign to their job containers."""
+
 
 REANA_KUBERNETES_JOBS_MEMORY_LIMIT_IN_BYTES = (
     kubernetes_memory_to_bytes(REANA_KUBERNETES_JOBS_MEMORY_LIMIT)
@@ -67,11 +97,6 @@ REANA_KUBERNETES_JOBS_MEMORY_LIMIT_IN_BYTES = (
     else 0
 )
 """Maximum memory limit for user job containers in bytes."""
-
-REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT = os.getenv(
-    "REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT"
-)
-"""Maximum memory limit that users can assign to their job containers."""
 
 REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT_IN_BYTES = (
     kubernetes_memory_to_bytes(REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT)
