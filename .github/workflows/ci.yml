@@ -10,7 +10,7 @@ on: [push, pull_request]
 
 jobs:
   lint-commitlint:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -36,7 +36,7 @@ jobs:
           ./run-tests.sh --check-commitlint ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} ${{ github.event.pull_request.number }}
 
   lint-shellcheck:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -47,7 +47,7 @@ jobs:
           ./run-tests.sh --check-shellcheck
 
   lint-black:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -63,7 +63,7 @@ jobs:
           ./run-tests.sh --check-black
 
   lint-flake8:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -79,7 +79,7 @@ jobs:
           ./run-tests.sh --check-flake8
 
   lint-pydocstyle:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -95,7 +95,7 @@ jobs:
           ./run-tests.sh --check-pydocstyle
 
   lint-check-manifest:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -111,7 +111,7 @@ jobs:
           ./run-tests.sh --check-manifest
 
   docs-sphinx:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -136,7 +136,7 @@ jobs:
         run: ./run-tests.sh --check-sphinx
 
   python-tests:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -165,7 +165,7 @@ jobs:
           files: coverage.xml
 
   lint-dockerfile:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -174,7 +174,7 @@ jobs:
         run: ./run-tests.sh --check-dockerfile
 
   docker-build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -183,7 +183,7 @@ jobs:
         run: ./run-tests.sh --check-docker-build
 
   release-docker:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     if: >
       vars.RELEASE_DOCKER == 'true' &&
       github.event_name == 'push' &&
