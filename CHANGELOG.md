@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.9.5](https://github.com/reanahub/reana-server/compare/0.9.4...0.9.5) (2025-04-25)
+
+
+### Build
+
+* **docker:** pin setuptools 70 ([#724](https://github.com/reanahub/reana-server/issues/724)) ([26f511e](https://github.com/reanahub/reana-server/commit/26f511ed9795f851e46cb0ecdf3085ec12eff71c))
+
+
+### Features
+
+* **rest:** add K8s resource requests & limits to info endpoint ([#724](https://github.com/reanahub/reana-server/issues/724)) ([ee2820e](https://github.com/reanahub/reana-server/commit/ee2820e3ac0c1c0263e9d119645a2c0b59fd3e1e))
+
+
+### Continuous integration
+
+* **runners:** upgrade CI runners to Ubuntu 22.04 ([#726](https://github.com/reanahub/reana-server/issues/726)) ([b5d4e54](https://github.com/reanahub/reana-server/commit/b5d4e541afaaa0e5240c51af324accd08873f2ee))
+
 ## [0.9.4](https://github.com/reanahub/reana-server/compare/0.9.3...0.9.4) (2024-11-29)
 
 
