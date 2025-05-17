@@ -55,7 +55,7 @@ flask-babel==4.0.0        # via flask-security-invenio, invenio-i18n
 flask-caching==2.3.0      # via invenio-cache
 flask-celeryext==0.5.0    # via invenio-celery
 flask-collect-invenio==1.4.0  # via invenio-assets
-flask-cors==5.0.0         # via invenio-rest
+flask-cors==6.0.0         # via invenio-rest
 flask-kvsession-invenio==0.6.4  # via invenio-accounts
 flask-limiter==2.9.2      # via invenio-app, reana-server (setup.py)
 flask-login==0.6.3        # via flask-security-invenio
