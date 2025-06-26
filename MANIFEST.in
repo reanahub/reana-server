@@ -28,4 +28,5 @@ recursive-include scripts *.sh
 recursive-include tests *.py
 recursive-include tests *.txt
 global-exclude *.py[co] .DS_Store
+exclude .editorconfig
 exclude .readthedocs.yaml

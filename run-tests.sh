@@ -113,6 +113,10 @@ check_sphinx () {
     sphinx-build -qnNW docs docs/_build/html
 }
 
+check_jsonlint() {
+    find . -name "*.json" -exec jsonlint -q {} \+
+}
+
 check_pytest () {
     clean_old_db_container
     start_db_container
@@ -141,6 +145,7 @@ check_all () {
     check_pytest
     check_dockerfile
     check_docker_build
+    check_jsonlint
 }
 
 if [ $# -eq 0 ]; then
@@ -162,5 +167,6 @@ case $arg in
     --check-all) check_all;;
     --check-dockerfile) check_dockerfile;;
     --check-docker-build) check_docker_build;;
+    --check-jsonlint) check_jsonlint ;;
     *) echo "[ERROR] Invalid argument '$arg'. Exiting." && exit 1;;
 esac

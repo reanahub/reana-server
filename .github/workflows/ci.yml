@@ -110,6 +110,20 @@ jobs:
           pip install check-manifest
           ./run-tests.sh --check-manifest
 
+  lint-jsonlint:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+
+      - name: Lint JSON files
+        run: |
+          npm install jsonlint --global
+          ./run-tests.sh --check-jsonlint
+
   docs-sphinx:
     runs-on: ubuntu-24.04
     steps:
