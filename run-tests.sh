@@ -117,6 +117,10 @@ check_jsonlint() {
     find . -name "*.json" -exec jsonlint -q {} \+
 }
 
+check_yamllint() {
+    yamllint .
+}
+
 check_pytest () {
     clean_old_db_container
     start_db_container
@@ -146,6 +150,7 @@ check_all () {
     check_dockerfile
     check_docker_build
     check_jsonlint
+    check_yamllint
 }
 
 if [ $# -eq 0 ]; then
@@ -168,5 +173,6 @@ case $arg in
     --check-dockerfile) check_dockerfile;;
     --check-docker-build) check_docker_build;;
     --check-jsonlint) check_jsonlint ;;
+    --check-yamllint) check_yamllint ;;
     *) echo "[ERROR] Invalid argument '$arg'. Exiting." && exit 1;;
 esac
