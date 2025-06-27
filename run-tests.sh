@@ -131,6 +131,10 @@ check_dockerfile() {
     docker run -i --rm docker.io/hadolint/hadolint:v2.12.0 <Dockerfile
 }
 
+check_markdownlint() {
+    markdownlint-cli2 "**/*.md"
+}
+
 check_docker_build() {
     docker build -t docker.io/reanahub/reana-server .
 }
@@ -154,6 +158,7 @@ check_all() {
     check_jsonlint
     check_yamllint
     check_shfmt
+    check_markdownlint
 }
 
 if [ $# -eq 0 ]; then
@@ -178,5 +183,6 @@ case $arg in
 --check-jsonlint) check_jsonlint ;;
 --check-yamllint) check_yamllint ;;
 --check-shfmt) check_shfmt ;;
+--check-markdownlint) check_markdownlint ;;
 *) echo "[ERROR] Invalid argument '$arg'. Exiting." && exit 1 ;;
 esac

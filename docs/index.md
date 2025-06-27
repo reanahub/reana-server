@@ -1,3 +1,6 @@
+<!-- markdownlint-disable MD041 -->
+<!-- markdownlint-disable MD033 -->
+
 ```{include} ../README.md
 :end-before: "## About"
 ```
