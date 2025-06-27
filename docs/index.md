@@ -22,9 +22,9 @@
 
 ## REST API
 
-The REANA Server offers a REST API for management workloads
-(workflows, jobs, tasks, etc.) running on REANA Cloud.
-Detailed REST API documentation can be found <a href="_static/api.html">here</a>.
+The REANA Server offers a REST API for management workloads (workflows, jobs,
+tasks, etc.) running on REANA Cloud. Detailed REST API documentation can be
+found <a href="_static/api.html">here</a>.
 
 ```{eval-rst}
 .. automodule:: reana_server.rest.ping

@@ -29,4 +29,6 @@ recursive-include tests *.py
 recursive-include tests *.txt
 global-exclude *.py[co] .DS_Store
 exclude .editorconfig
+exclude .prettierrc.yaml
+exclude .prettierignore
 exclude .readthedocs.yaml

@@ -10,8 +10,8 @@
 ## About
 
 REANA-Server is a component of the [REANA](http://www.reana.io/) reusable and
-reproducible research data analysis platform. It implements the API Server
-that takes and performs REST API calls issued by REANA clients.
+reproducible research data analysis platform. It implements the API Server that
+takes and performs REST API calls issued by REANA clients.
 
 ## Features
 
