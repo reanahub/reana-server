@@ -2,6 +2,28 @@
 
 # Changelog
 
+## [0.9.5](https://github.com/reanahub/reana-server/compare/0.9.4...0.9.5) (2025-06-29)
+
+
+### Features
+
+* **config:** make number of threads configurable for Dask ([#719](https://github.com/reanahub/reana-server/issues/719)) ([5b82925](https://github.com/reanahub/reana-server/commit/5b8292541b10126823da8a288dbc3e87591724c0))
+
+
+### Bug fixes
+
+* **config:** set localhost default value for REANA_HOSTNAME ([#717](https://github.com/reanahub/reana-server/issues/717)) ([a24c810](https://github.com/reanahub/reana-server/commit/a24c810f018e5fd925d9ad01ce986537adad7ee8))
+
+
+### Continuous integration
+
+* **commitlint:** fix local running of commit linter on macOS ([#736](https://github.com/reanahub/reana-server/issues/736)) ([40b5356](https://github.com/reanahub/reana-server/commit/40b535698c9200d61eb62cf53c29d5f918cc5c25))
+* **jsonlint:** add JSON linting ([#732](https://github.com/reanahub/reana-server/issues/732)) ([cc3753a](https://github.com/reanahub/reana-server/commit/cc3753a522b732ff3c6f3d5ae90262551577cdd6))
+* **markdownlint:** add Markdown linting ([#735](https://github.com/reanahub/reana-server/issues/735)) ([d05e5af](https://github.com/reanahub/reana-server/commit/d05e5affe0de3153d56183fb8d1ca83b17daad95))
+* **prettier:** add Prettier code formatting checks ([#737](https://github.com/reanahub/reana-server/issues/737)) ([e04d1fd](https://github.com/reanahub/reana-server/commit/e04d1fdd679bc576e685ca0bab978594da775c35))
+* **shfmt:** add shfmt code formatting checks ([#734](https://github.com/reanahub/reana-server/issues/734)) ([1dcc563](https://github.com/reanahub/reana-server/commit/1dcc56380adc5987d2ba9becd2de643166542038))
+* **yamllint:** add YAML linting ([#733](https://github.com/reanahub/reana-server/issues/733)) ([c36c461](https://github.com/reanahub/reana-server/commit/c36c461352cb19ff3f8b9f2901d7520482065e12))
+
 ## [0.9.4](https://github.com/reanahub/reana-server/compare/0.9.3...0.9.4) (2024-11-29)
 
 ### Build
