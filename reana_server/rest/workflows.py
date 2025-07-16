@@ -48,6 +48,7 @@ from reana_server.utils import (
     publish_workflow_submission,
 )
 from reana_server.validation import (
+    validate_images,
     validate_inputs,
     validate_workflow,
     validate_workspace_path,
@@ -572,6 +573,8 @@ def create_workflow(user):  # noqa
 
         validate_inputs(reana_spec_file)
 
+        validate_images(reana_spec_file)
+
         validate_dask_limits(reana_spec_file)
 
         retention_days = reana_spec_file.get("workspace", {}).get("retention_days")
@@ -608,6 +611,8 @@ def create_workflow(user):  # noqa
                     reana_yaml_path, workflow.workspace_path
                 )
                 Session.commit()
+
+            validate_images(workflow.reana_specification)
 
             parameters = request.json
             publish_workflow_submission(workflow, user.id_, parameters)

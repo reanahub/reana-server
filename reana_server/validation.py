@@ -13,6 +13,7 @@ import pathlib
 from typing import Dict, List
 
 from reana_commons.config import WORKSPACE_PATHS
+from reana_commons.validation.images import extract_images
 from reana_commons.errors import REANAValidationError
 from reana_commons.validation.compute_backends import build_compute_backends_validator
 from reana_commons.validation.operational_options import validate_operational_options
@@ -31,8 +32,8 @@ from reana_server.config import (
     REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
     REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS,
+    REANA_VETTED_CONTAINER_IMAGES,
 )
-from reana_server import utils
 
 
 def validate_parameters(reana_yaml: Dict) -> None:
@@ -112,11 +113,27 @@ def validate_inputs(reana_yaml: Dict) -> None:
             raise REANAValidationError(f"Input path declared multiple times: {path}")
         unique_paths.add(path)
 
+    from reana_server import utils
+
     for x, y in itertools.permutations(paths, r=2):
         if utils.is_relative_to(x, y):
             raise REANAValidationError(
                 f"Duplicate input paths '{y}' and '{x}' found. Please deduplicate inputs first."
             )
+
+
+def validate_images(reana_yaml: Dict) -> None:
+    """Check whether the images used in the workflow are allowed or not.
+
+    :param reana_yaml: REANA specification.
+    """
+    if not REANA_VETTED_CONTAINER_IMAGES["enabled"]:
+        return
+
+    allowed_images = REANA_VETTED_CONTAINER_IMAGES["allowlist"]
+    for image in extract_images(reana_yaml):
+        if image and image not in allowed_images:
+            raise REANAValidationError(f"Image not allowed: {image}")
 
 
 def validate_workflow(reana_yaml: Dict, input_parameters: Dict) -> Dict:
@@ -137,6 +154,7 @@ def validate_workflow(reana_yaml: Dict, input_parameters: Dict) -> Dict:
     validate_compute_backends(reana_yaml)
     validate_workspace_path(reana_yaml)
     validate_inputs(reana_yaml)
+    validate_images(reana_yaml)
     return reana_yaml_warnings
 
 
