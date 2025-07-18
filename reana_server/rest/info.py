@@ -42,6 +42,7 @@ from reana_server.config import (
     REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
     REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS,
+    REANA_GITLAB_HOST,
 )
 from reana_server.decorators import signin_required
 
@@ -434,6 +435,10 @@ def info(user, **kwargs):  # noqa
                     "title": "Dask workflows allowed in the cluster",
                     "value": "False"
                 },
+                "gitlab_host": {
+                    "title": "GitLab host",
+                    "value": "gitlab.cern.ch"
+                },
                 "dask_autoscaler_enabled": {
                     "title": "Dask autoscaler enabled in the cluster",
                     "value": "False"
@@ -580,6 +585,10 @@ def info(user, **kwargs):  # noqa
                 title="Dask workflows allowed in the cluster",
                 value=bool(DASK_ENABLED),
             ),
+            gitlab_host=dict(
+                title="GitLab host",
+                value=REANA_GITLAB_HOST,
+            ),
         )
 
         if DASK_ENABLED:
@@ -675,6 +684,8 @@ class InfoSchema(Schema):
     yadage_engine_packtivity_version = fields.Nested(StringInfoValue)
     snakemake_engine_version = fields.Nested(StringInfoValue)
     dask_enabled = fields.Nested(StringInfoValue)
+    gitlab_host = fields.Nested(StringInfoValue)
+
     if DASK_ENABLED:
         dask_autoscaler_enabled = fields.Nested(StringInfoValue)
         dask_cluster_default_number_of_workers = fields.Nested(StringInfoValue)

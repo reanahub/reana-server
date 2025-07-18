@@ -481,6 +481,10 @@
                   "title": "Default workspace",
                   "value": "/usr/share"
                 },
+                "gitlab_host": {
+                  "title": "GitLab host",
+                  "value": "gitlab.cern.ch"
+                },
                 "interactive_session_recommended_jupyter_images": {
                   "title": "Recommended Jupyter images for interactive sessions",
                   "value": [
