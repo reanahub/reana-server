@@ -59,7 +59,12 @@ def info(user, **kwargs):  # noqa
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
-          required: true
+          required: false
+          type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
+          required: false
           type: string
       responses:
         200:

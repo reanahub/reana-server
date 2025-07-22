@@ -51,6 +51,11 @@ def get_you(user):
           description: API access_token of user.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the current user.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -246,6 +251,11 @@ def request_token(user):
           description: API access_token of user.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the current user.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -378,6 +388,11 @@ def get_users_shared_with_you(user):
           description: API access_token of user.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the current user.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -491,6 +506,11 @@ def get_users_you_shared_with(user):
         - name: access_token
           in: query
           description: API access_token of user.
+          required: false
+          type: string
+        - name: Authorization
+          in: header
+          description: The JWT of current user.
           required: false
           type: string
       responses:

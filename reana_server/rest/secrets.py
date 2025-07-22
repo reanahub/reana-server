@@ -68,6 +68,11 @@ def add_secrets(user, overwrite=False):
           description: Secrets owner access token.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of secrets owner.
+          required: false
+          type: string
         - name: overwrite
           in: query
           description: Whether existing secret keys should be overwritten.
@@ -199,6 +204,11 @@ def get_secrets(user):  # noqa
           description: Secrets owner access token.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of secrets owner.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -295,6 +305,11 @@ def delete_secrets(user):  # noqa
         - name: access_token
           in: query
           description: API key of the admin.
+          required: false
+          type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the admin.
           required: false
           type: string
         - name: secrets
