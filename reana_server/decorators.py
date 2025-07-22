@@ -20,10 +20,11 @@ from reana_server.utils import (
     _get_user_from_invenio_user,
     get_user_from_token,
     get_quota_excess_message,
+    _get_user_from_jwt,
 )
 
 
-def signin_required(include_gitlab_login=False, token_required=True):
+def signin_required(include_gitlab_login=False, token_required=True, include_jwt=False):
     """Check if the user is signed in or the access token is valid and return the user."""
 
     def decorator(func):
@@ -37,6 +38,9 @@ def signin_required(include_gitlab_login=False, token_required=True):
                     user = get_user_from_token(request.headers["X-Gitlab-Token"])
                 elif "access_token" in request.args:
                     user = get_user_from_token(request.args.get("access_token"))
+                elif include_jwt and request.headers["Authorization"]:
+                    user = _get_user_from_jwt(request.headers["Authorization"])
+
                 if not user:
                     return jsonify(message="User not signed in"), 401
                 if token_required and not user.active_token:

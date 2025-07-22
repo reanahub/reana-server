@@ -17,6 +17,8 @@ import pathlib
 import secrets
 import sys
 import shutil
+from authlib.jose import jwt, JoseError
+from authlib.jose.rfc7517.jwk import JsonWebKey
 from typing import Any, Dict, List, Optional, Union, Generator
 from uuid import UUID, uuid4
 
@@ -433,6 +435,13 @@ def _get_user_from_invenio_user(id):
     return user
 
 
+def _get_user_by_sub_and_iss(sub, iss):
+    user = Session.query(User).filter_by(idp_subject=sub, idp_issuer=iss).one_or_none()
+    if not user:
+        raise ValueError("No users registered with this idp_id")
+    return user
+
+
 def _get_reana_yaml_from_gitlab(webhook_data, user_id):
     reana_yaml = "reana.yaml"
     if webhook_data["object_kind"] == "push":
@@ -658,3 +667,62 @@ class JinjaEnv:
         """Render template replacing kwargs appropriately."""
         template = JinjaEnv._get().get_template(template_path)
         return template.render(**kwargs)
+
+
+def fetch_and_parse_jwk():
+    """Fetch and return specific JWK from an identity provider.
+
+    Returns:
+        dict: JWK matching the kid
+
+    Raises:
+        ValueError: If JWK fetch fails or no matching key found
+    """
+    if not hasattr(fetch_and_parse_jwk, "_cache"):
+        fetch_and_parse_jwk._cache = None
+
+    if not fetch_and_parse_jwk._cache:
+        response = requests.get("https://iam-escape.cloud.cnaf.infn.it/jwk")
+        if response.status_code != 200:
+            raise ValueError(f"Failed to fetch JWK: {response.status_code}")
+        fetch_and_parse_jwk._cache = response.json()
+    jwks = fetch_and_parse_jwk._cache.get("keys", [])
+    if not jwks:
+        raise ValueError("No JWKs found in the response")
+    return jwks
+
+
+def _get_user_from_jwt(header: str) -> User:
+    """Get user from JWT token.
+
+    Args:
+        header: JWT Authorization header in the format "Bearer <token>"
+
+    Returns:
+        User: REANA user if token is valid
+
+    Raises:
+        ValueError: If token is invalid or user not found
+    """
+    try:
+        if not header.startswith("Bearer "):
+            raise ValueError("Invalid authorization header format")
+
+        token = header.split(" ")[1]
+
+        jwks = fetch_and_parse_jwk()
+        key_set = JsonWebKey.import_key_set(jwks)
+
+        claims = jwt.decode(token, key_set)
+        claims.validate()
+
+        sub = claims.get("sub")
+        iss = claims.get("iss")
+        if not sub or not iss:
+            raise ValueError("Token missing subject claim or iss")
+
+        return _get_user_by_sub_and_iss(sub, iss)
+    except JoseError as e:
+        raise ValueError(f"Invalid token: {str(e)}")
+    except Exception as e:
+        raise ValueError(f"Error processing token: {str(e)}")
