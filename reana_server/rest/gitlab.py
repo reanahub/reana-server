@@ -227,6 +227,11 @@ def gitlab_projects(
           description: The API access_token of the current user.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the current user.
+          required: false
+          type: string
         - name: search
           in: query
           description: The search string to filter the project list.

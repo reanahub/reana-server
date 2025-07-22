@@ -36,6 +36,11 @@ def get_config():
           description: API access_token of user.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of user.
+          required: false
+          type: string
       responses:
         200:
           description: >-

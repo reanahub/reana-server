@@ -302,6 +302,9 @@ OAUTHCLIENT_REST_DEFAULT_ERROR_REDIRECT_URL = OAUTH_REDIRECT_URL
 OAUTHCLIENT_REMOTE_APPS = dict()
 OAUTHCLIENT_REST_REMOTE_APPS = dict()
 
+# Default value for when no login providers are configured. Used for JWT validation.
+REANA_OAUTH_JWK_URL = None
+
 # Keycloak is only configured if login providers are defined
 if REANA_SSO_LOGIN_PROVIDERS:
     # Variables for the first login provider in the JSON
