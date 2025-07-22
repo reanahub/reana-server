@@ -75,6 +75,7 @@ from reana_server.config import (
     REANA_QUOTAS_DOCS_URL,
     WORKSPACE_RETENTION_PERIOD,
     DEFAULT_WORKSPACE_RETENTION_RULE,
+    REANA_OAUTH_JWK_URL,
 )
 from reana_server.gitlab_client import (
     GitLabClient,
@@ -682,7 +683,7 @@ def fetch_and_parse_jwk():
         fetch_and_parse_jwk._cache = None
 
     if not fetch_and_parse_jwk._cache:
-        response = requests.get("https://iam-escape.cloud.cnaf.infn.it/jwk")
+        response = requests.get(REANA_OAUTH_JWK_URL)
         if response.status_code != 200:
             raise ValueError(f"Failed to fetch JWK: {response.status_code}")
         fetch_and_parse_jwk._cache = response.json()
