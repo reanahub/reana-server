@@ -303,7 +303,8 @@ OAUTHCLIENT_REMOTE_APPS = dict()
 OAUTHCLIENT_REST_REMOTE_APPS = dict()
 
 # Default value for when no login providers are configured. Used for JWT validation.
-REANA_OAUTH_JWK_URL = None
+REANA_OAUTH_JWK_URL = os.getenv("REANA_OAUTH_JWK_URL", None)
+REANA_OAUTH_USERINFO_URL = os.getenv("REANA_OAUTH_USERINFO_URL", None)
 
 # Keycloak is only configured if login providers are defined
 if REANA_SSO_LOGIN_PROVIDERS:
@@ -349,7 +350,8 @@ if REANA_SSO_LOGIN_PROVIDERS:
     OAUTHCLIENT_REMOTE_APPS["keycloak"] = KEYCLOAK_APP
     OAUTHCLIENT_REST_REMOTE_APPS["keycloak"] = KEYCLOAK_REST_APP
 
-    REANA_OAUTH_JWK_URL = PROVIDER_CONFIG.get("jwk_url", "")
+    REANA_OAUTH_JWK_URL = PROVIDER_CONFIG["jwk_url"]
+    REANA_OAUTH_USERINFO_URL = PROVIDER_CONFIG["userinfo_url"]
 
 # CERN SSO configuration
 OAUTH_REMOTE_REST_APP = copy.deepcopy(cern_openid.REMOTE_REST_APP)
