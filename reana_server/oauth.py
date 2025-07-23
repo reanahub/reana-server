@@ -1,7 +1,9 @@
 """REANA-Server OAuth utilities."""
 
-import requests
-from typing import Dict
+from authlib.integrations.requests_client import OAuth2Session
+from authlib.oauth2.rfc7523 import JWTBearerToken
+from authlib.oidc.core import UserInfo
+from typing import Dict, Optional
 
 from reana_db.database import Session
 from reana_db.models import User
@@ -9,14 +11,14 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from reana_server.config import REANA_OAUTH_USERINFO_URL
 
-def fetch_user_info(token: str) -> Dict:
-    """Fetch user information from IdP's UserInfo endpoint.
+def fetch_user_info(token: str) -> UserInfo:
+    """Fetch user information from IdP's UserInfo endpoint using Authlib.
 
     Args:
         token: Access token to use for UserInfo request
 
     Returns:
-        Dict: User info from IdP
+        UserInfo: Validated user info from IdP
 
     Raises:
         ValueError: If UserInfo request fails
@@ -25,18 +27,21 @@ def fetch_user_info(token: str) -> Dict:
         raise ValueError("UserInfo endpoint not configured")
 
     try:
-        headers = {"Authorization": f"Bearer {token}"}
-        response = requests.get(REANA_OAUTH_USERINFO_URL, headers=headers)
-        if response.status_code != 200:
-            raise ValueError(f"Failed to fetch user info: {response.status_code}")
+        # Create OAuth2 session with token validation
+        oauth = OAuth2Session(
+            token={'access_token': token},
+            token_cls=JWTBearerToken  # Enables JWT validation
+        )
 
-        user_info = response.json()
-        # Validate required fields
-        if not user_info.get("email"):
-            raise ValueError("Email not provided in UserInfo response")
+        # Fetch and validate user info
+        resp = oauth.get(REANA_OAUTH_USERINFO_URL)
+        user_info = UserInfo(resp.json())
+
+        # Validate required claims
+        user_info.validate('email')  # Will raise if email is missing
 
         return user_info
-    except requests.RequestException as e:
+    except Exception as e:
         raise ValueError(f"Error communicating with IdP: {str(e)}")
 
 
