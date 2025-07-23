@@ -84,6 +84,7 @@ from reana_server.gitlab_client import (
 from reana_server.validation import validate_retention_rule, validate_workflow
 from reana_server.oauth import create_or_update_user_from_idp
 
+
 def is_uuid_v4(uuid_or_name):
     """Check if given string is a valid UUIDv4."""
     # Based on https://gist.github.com/ShawnMilo/7777304

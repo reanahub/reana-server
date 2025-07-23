@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from reana_server.config import REANA_OAUTH_USERINFO_URL
 
+
 def fetch_user_info(token: str) -> UserInfo:
     """Fetch user information from IdP's UserInfo endpoint using Authlib.
 
@@ -29,16 +30,17 @@ def fetch_user_info(token: str) -> UserInfo:
     try:
         # Create OAuth2 session with token validation
         oauth = OAuth2Session(
-            token={'access_token': token},
-            token_cls=JWTBearerToken  # Enables JWT validation
+            token={"access_token": token},
+            token_cls=JWTBearerToken,  # Enables JWT validation
         )
 
         # Fetch and validate user info
         resp = oauth.get(REANA_OAUTH_USERINFO_URL)
         user_info = UserInfo(resp.json())
 
-        # Validate required claims
-        user_info.validate('email')  # Will raise if email is missing
+        # Validate email
+        if not user_info.get("email"):
+            raise ValueError("Email is required in UserInfo response from IdP")
 
         return user_info
     except Exception as e:
@@ -71,6 +73,8 @@ def create_or_update_user(idp_id: str, user_info: Dict) -> User:
             if user:
                 # If found by email, update idp_id
                 user.idp_id = idp_id
+                Session.add(user)
+                Session.commit()
 
         if not user:
             # Create new user
@@ -78,7 +82,7 @@ def create_or_update_user(idp_id: str, user_info: Dict) -> User:
                 "email": email,
                 "idp_id": idp_id,
                 "full_name": user_info.get("name", email),
-                "username": user_info.get("preferred_username", email)
+                "username": user_info.get("preferred_username", email),
             }
             user = User(**user_parameters)
             Session.add(user)
@@ -86,9 +90,11 @@ def create_or_update_user(idp_id: str, user_info: Dict) -> User:
             return user
 
         # Only update user info if it has changed
-        if (user.email != email or
-            user.full_name != user_info.get("name", email) or
-            user.username != user_info.get("preferred_username", email)):
+        if (
+            user.email != email
+            or user.full_name != user_info.get("name", email)
+            or user.username != user_info.get("preferred_username", email)
+        ):
 
             user.email = email
             user.full_name = user_info.get("name", email)
