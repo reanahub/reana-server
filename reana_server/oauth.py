@@ -67,14 +67,11 @@ def create_or_update_user(idp_id: str, user_info: Dict) -> User:
 
         user = Session.query(User).filter_by(idp_id=idp_id).one_or_none()
 
-        # If not found, try by email as fallback
         if not user:
             user = Session.query(User).filter_by(email=email).one_or_none()
             if user:
-                # If found by email, update idp_id
                 user.idp_id = idp_id
             else:
-                # Create new user if not found by idp_id or email
                 user_parameters = {
                     "email": email,
                     "idp_id": idp_id,
@@ -82,19 +79,8 @@ def create_or_update_user(idp_id: str, user_info: Dict) -> User:
                     "username": user_info.get("preferred_username", email),
                 }
                 user = User(**user_parameters)
-
-        # Only update user info if it has changed
-        if (
-            user.email != email
-            or user.full_name != user_info.get("name", email)
-            or user.username != user_info.get("preferred_username", email)
-        ):
-            user.email = email
-            user.full_name = user_info.get("name", email)
-            user.username = user_info.get("preferred_username", email)
-
-        Session.add(user)
-        Session.commit()
+            Session.add(user)
+            Session.commit()
 
         return user
     except SQLAlchemyError as e:
