@@ -93,6 +93,11 @@ def get_workflows(user, **kwargs):  # noqa
           description: The API access_token of workflow owner.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
+          required: false
+          type: string
         - name: type
           in: query
           description: Required. Type of workflows.
@@ -435,6 +440,11 @@ def create_workflow(user):  # noqa
           description: The API access_token of workflow owner.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
+          required: false
+          type: string
       responses:
         201:
           description: >-
@@ -651,6 +661,11 @@ def get_workflow_specification(workflow_id_or_name, user):  # noqa
           description: API access_token of workflow owner.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
+          required: false
+          type: string
         - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -846,6 +861,11 @@ def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
           description: API access_token of workflow owner.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
+          required: false
+          type: string
         - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -1001,6 +1021,11 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
           required: false
           type: string
       responses:
@@ -1276,6 +1301,11 @@ def start_workflow(workflow_id_or_name, user, **parameters):  # noqa
           description: The API access_token of workflow owner.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
+          required: false
+          type: string
         - name: parameters
           in: body
           description: >-
@@ -1461,6 +1491,11 @@ def set_workflow_status(workflow_id_or_name, user, status, **parameters):  # noq
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
           required: false
           type: string
         - name: parameters
@@ -1684,6 +1719,11 @@ def upload_file(workflow_id_or_name, user):  # noqa
           description: The API access_token of workflow owner.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
+          required: false
+          type: string
         - name: preview
           in: query
           description: >-
@@ -1840,6 +1880,11 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
           description: The API access_token of workflow owner.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -1962,6 +2007,11 @@ def delete_file(workflow_id_or_name, file_name, user):  # noqa
           description: The API access_token of workflow owner.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -2078,6 +2128,11 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
           required: false
           type: string
         - name: file_name
@@ -2226,6 +2281,11 @@ def get_workflow_parameters(workflow_id_or_name, user):  # noqa
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
           required: false
           type: string
       responses:
@@ -2379,6 +2439,11 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b, user):  # no
           description: The API access_token of workflow owner.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -2514,6 +2579,11 @@ def open_interactive_session(
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
           required: false
           type: string
         - name: interactive_session_type
@@ -2669,6 +2739,11 @@ def close_interactive_session(workflow_id_or_name, user):  # noqa
           description: The API access_token of workflow owner.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
+          required: false
+          type: string
       responses:
         200:
           description: >-
@@ -2794,6 +2869,11 @@ def move_files(workflow_id_or_name, user):  # noqa
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
           required: false
           type: string
       responses:
@@ -2928,6 +3008,11 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
           required: false
           type: string
         - name: workflow_id_or_name
@@ -3100,6 +3185,11 @@ def get_workflow_retention_rules(workflow_id_or_name, user):
           description: The API access_token of workflow owner.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
+          required: false
+          type: string
         - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -3244,6 +3334,11 @@ def prune_workspace(
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
           required: false
           type: string
         - name: workflow_id_or_name
@@ -3395,6 +3490,11 @@ def share_workflow(workflow_id_or_name, user, **kwargs):
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
           required: false
           type: string
         - name: workflow_id_or_name
@@ -3555,6 +3655,11 @@ def unshare_workflow(workflow_id_or_name, user, user_email_to_unshare_with):
           description: The API access_token of workflow owner.
           required: false
           type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
+          required: false
+          type: string
         - name: workflow_id_or_name
           in: path
           description: Required. Workflow UUID or name.
@@ -3694,6 +3799,11 @@ def get_workflow_share_status(workflow_id_or_name, user):
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
+          required: false
+          type: string
+        - name: Authorization
+          in: header
+          description: The JWT of the workflow owner.
           required: false
           type: string
         - name: workflow_id_or_name
