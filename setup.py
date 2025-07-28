@@ -82,6 +82,8 @@ install_requires = [
     "invenio-theme>=1.4.7",
     "invenio-i18n>=1.3.3",
     "invenio-access>=2.0.0",
+    # JWT Auth support
+    "authlib>=1.6.0",
     # Invenio database
     "invenio-db[postgresql]>=1.0.5",
     "six>=1.12.0",  # required by Flask-Breadcrumbs
