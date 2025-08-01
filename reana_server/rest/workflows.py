@@ -75,7 +75,7 @@ blueprint = Blueprint("workflows", __name__)
         "shared_with": fields.Str(location="query"),
     }
 )
-@signin_required(token_required=False)
+@signin_required(token_required=False, include_jwt=True)
 def get_workflows(user, **kwargs):  # noqa
     r"""Get all current workflows in REANA.
 
