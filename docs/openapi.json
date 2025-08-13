@@ -7,6 +7,23 @@
   "paths": {
     "/account/settings/linkedaccounts/": {},
     "/account/settings/linkedaccounts/static/{filename}": {},
+    "/api/.well-known/openid-configuration": {
+      "get": {
+        "description": "Returns the OpenID configuration for the REANA server.",
+        "responses": {
+          "200": {
+            "description": "OpenID configuration"
+          },
+          "404": {
+            "description": "OpenID configuration not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "summary": "Get OpenID Configuration"
+      }
+    },
     "/api/config": {
       "get": {
         "description": "This resource provides configuration needed by Reana-UI.",

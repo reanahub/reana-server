@@ -483,3 +483,15 @@ REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT = os.getenv(
 Please see the following URL for more details
 https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-and-cleanup.
 """
+
+# Authentication configuration
+# =====================
+REANA_AUTH = {
+    "openid": {
+        "config_url": os.getenv(
+            "OPENID_CONFIG_URL",
+            "https://auth.cern.ch/auth/realms/cern/.well-known/openid-configuration",
+        )
+    }
+}
+"""Authentication configuration for REANA."""
