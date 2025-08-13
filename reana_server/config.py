@@ -486,12 +486,19 @@ https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-a
 
 # Authentication configuration
 # =====================
+# TODO The env location will be changed after `reana-server` jwt PR is merged and env variable structure agreed
 REANA_AUTH = {
     "openid": {
         "config_url": os.getenv(
-            "OPENID_CONFIG_URL",
+            "REANA_AUTH_OPENID_CONFIG_URL",
             "https://auth.cern.ch/auth/realms/cern/.well-known/openid-configuration",
-        )
-    }
+        ),
+    },
+    "client_id": os.getenv(
+        "REANA_AUTH_CLIENT_ID",
+        # TODO Change me to something more reasonable (currently it is just temp client_id)
+        # Used for CLI authentication to avoid extra configuration on client environments
+        "f671a136-8e92-45e5-83bd-05af1942e396",
+    ),
 }
 """Authentication configuration for REANA."""
