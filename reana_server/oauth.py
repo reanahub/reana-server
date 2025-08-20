@@ -47,11 +47,12 @@ def fetch_user_info(token: str) -> UserInfo:
         raise ValueError(f"Error communicating with IdP: {str(e)}")
 
 
-def create_or_update_user(idp_id: str, user_info: Dict) -> User:
+def create_or_update_user(sub: str, iss: str, user_info: Dict) -> User:
     """Create or update user record with information from IdP.
 
     Args:
-        idp_id: Subject identifier from IdP
+        sub: Subject identifier from IdP
+        iss: Issuer identifier from IdP
         user_info: User information from IdP's UserInfo endpoint
 
     Returns:
@@ -65,16 +66,18 @@ def create_or_update_user(idp_id: str, user_info: Dict) -> User:
         if not email:
             raise ValueError("Email is required in UserInfo response from IdP")
 
-        user = Session.query(User).filter_by(idp_id=idp_id).one_or_none()
+        user = Session.query(User).filter_by(idp_subject=sub, idp_issuer=iss).one_or_none()
 
         if not user:
             user = Session.query(User).filter_by(email=email).one_or_none()
             if user:
-                user.idp_id = idp_id
+                user.idp_subject = sub
+                user.idp_issuer = iss
             else:
                 user_parameters = {
                     "email": email,
-                    "idp_id": idp_id,
+                    "idp_subject": sub,
+                    "idp_issuer": iss,
                     "full_name": user_info.get("name", email),
                     "username": user_info.get("preferred_username", email),
                 }
@@ -90,12 +93,13 @@ def create_or_update_user(idp_id: str, user_info: Dict) -> User:
         raise ValueError(f"Error creating or updating user: {str(e)}")
 
 
-def create_or_update_user_from_idp(token: str, user_idp_id: str) -> User:
+def create_or_update_user_from_idp(token: str, sub: str, iss: str) -> User:
     """Create or update user record by fetching info from IdP.
 
     Args:
         token: Access token to fetch user info
-        user_idp_id: Subject identifier from IdP (e.g., sub claim)
+        sub: Subject identifier from IdP (e.g., sub claim)
+        iss: Issuer identifier from IdP (e.g., iss claim)
 
     Returns:
         User: Created or updated user record
@@ -105,6 +109,6 @@ def create_or_update_user_from_idp(token: str, user_idp_id: str) -> User:
     """
     try:
         user_info = fetch_user_info(token)
-        return create_or_update_user(user_idp_id, user_info)
+        return create_or_update_user(sub, iss, user_info)
     except Exception as e:
         raise ValueError(f"Failed to create/update user: {str(e)}")

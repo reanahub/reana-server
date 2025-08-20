@@ -81,8 +81,8 @@ from reana_server.gitlab_client import (
     GitLabClient,
     GitLabClientException,
 )
-from reana_server.validation import validate_retention_rule, validate_workflow
 from reana_server.oauth import create_or_update_user_from_idp
+from reana_server.validation import validate_retention_rule, validate_workflow
 
 
 def is_uuid_v4(uuid_or_name):
@@ -437,8 +437,8 @@ def _get_user_from_invenio_user(id):
     return user
 
 
-def _get_user_by_idpid(idp_id):
-    user = Session.query(User).filter_by(idp_id=idp_id).one_or_none()
+def _get_user_by_sub_and_iss(sub, iss):
+    user = Session.query(User).filter_by(idp_subject=sub, idp_issuer=iss).one_or_none()
     if not user:
         raise ValueError("No users registered with this idp_id")
     return user
@@ -712,22 +712,22 @@ def _get_user_from_jwt(header: str) -> User:
 
         token = header.split(" ")[1]
 
-        # Validate JWT token
         jwks = fetch_and_parse_jwk()
         key_set = JsonWebKey.import_key_set(jwks)
+
         claims = jwt.decode(token, key_set)
         claims.validate()
 
-        idp_id = claims.get("sub")
-        if not idp_id:
-            raise ValueError("Token missing subject claim")
-
+        sub = claims.get("sub")
+        iss = claims.get("iss")
+        if not sub or not iss:
+            raise ValueError("Token missing subject claim or iss")
         try:
-            user = _get_user_by_idpid(idp_id)
+            user = _get_user_by_sub_and_iss(sub, iss)
             return user
         except ValueError:
             # User not found, create/update from IdP
-            return create_or_update_user_from_idp(token, idp_id)
+            return create_or_update_user_from_idp(token, sub, iss)
 
     except JoseError as e:
         raise ValueError(f"Invalid token: {str(e)}")
