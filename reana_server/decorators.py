@@ -24,7 +24,7 @@ from reana_server.utils import (
 )
 
 
-def signin_required(include_gitlab_login=False, token_required=True, include_jwt=False):
+def signin_required(include_gitlab_login=False, token_required=True):
     """Check if the user is signed in or the access token is valid and return the user."""
 
     def decorator(func):
@@ -38,7 +38,7 @@ def signin_required(include_gitlab_login=False, token_required=True, include_jwt
                     user = get_user_from_token(request.headers["X-Gitlab-Token"])
                 elif "access_token" in request.args:
                     user = get_user_from_token(request.args.get("access_token"))
-                elif include_jwt and request.headers["Authorization"]:
+                elif request.headers["Authorization"]:
                     user = _get_user_from_jwt(request.headers["Authorization"])
 
                 if not user:
