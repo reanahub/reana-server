@@ -10,11 +10,12 @@
 
 import itertools
 import pathlib
-from typing import Dict, List
+from typing import Dict
 
 from reana_commons.config import WORKSPACE_PATHS
 from reana_commons.errors import REANAValidationError
 from reana_commons.validation.compute_backends import build_compute_backends_validator
+from reana_commons.validation.kubernetes_queues import validate_kubernetes_queues
 from reana_commons.validation.operational_options import validate_operational_options
 from reana_commons.validation.parameters import build_parameters_validator
 from reana_commons.validation.utils import validate_reana_yaml, validate_workspace
@@ -31,6 +32,9 @@ from reana_server.config import (
     REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
     REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS,
+    KUEUE_AVAILABLE_QUEUES,
+    KUEUE_ENABLED,
+    KUEUE_DEFAULT_QUEUE,
 )
 from reana_server import utils
 
@@ -137,6 +141,14 @@ def validate_workflow(reana_yaml: Dict, input_parameters: Dict) -> Dict:
     validate_compute_backends(reana_yaml)
     validate_workspace_path(reana_yaml)
     validate_inputs(reana_yaml)
+    validate_kubernetes_queues(
+        reana_yaml,
+        KUEUE_ENABLED,
+        supported_queues=[
+            f"{queue['node']}-{queue['name']}" for queue in KUEUE_AVAILABLE_QUEUES
+        ],
+        default_queue=KUEUE_DEFAULT_QUEUE,
+    )
     return reana_yaml_warnings
 
 
