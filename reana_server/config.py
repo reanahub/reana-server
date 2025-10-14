@@ -99,6 +99,17 @@ REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS = int(
 )
 """Maximum number of threads for one Dask worker."""
 
+KUEUE_ENABLED = bool(strtobool(os.getenv("KUEUE_ENABLED", "False")))
+"""Whether to use Kueue to manage job execution."""
+
+KUEUE_AVAILABLE_QUEUES: list[dict] = (
+    json.loads(os.getenv("KUEUE_AVAILABLE_QUEUES", "[]")) or []
+)
+"""List of local queues available for workflow job processing."""
+
+KUEUE_DEFAULT_QUEUE: str = os.getenv("KUEUE_DEFAULT_QUEUE", "")
+"""Default queue to send workflow jobs to."""
+
 REANA_KUBERNETES_JOBS_MEMORY_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_MEMORY_LIMIT")
 """Maximum memory limit for user job containers for workflow complexity estimation."""
 

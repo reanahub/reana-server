@@ -500,6 +500,21 @@
                   "title": "Default memory limit for Kubernetes jobs",
                   "value": "3Gi"
                 },
+                "kueue_available_queues": {
+                  "title": "List of local queues available for job processing",
+                  "value": [
+                    "local-queue-1",
+                    "local-queue-2"
+                  ]
+                },
+                "kueue_default_queue": {
+                  "title": "Default queue to send workflow jobs to",
+                  "value": "local-queue1"
+                },
+                "kueue_enabled": {
+                  "title": "Whether Kueue is enabled for job processing",
+                  "value": "False"
+                },
                 "maximum_kubernetes_jobs_timeout": {
                   "title": "Maximum timeout for Kubernetes jobs",
                   "value": "1209600"
@@ -746,6 +761,42 @@
                     "value": {
                       "type": "string",
                       "x-nullable": true
+                    }
+                  },
+                  "type": "object"
+                },
+                "kueue_available_queues": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "kueue_default_queue": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "kueue_enabled": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
                     }
                   },
                   "type": "object"
