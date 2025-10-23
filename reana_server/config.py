@@ -121,6 +121,9 @@ REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS = int(
 )
 """Maximum number of threads for one Dask worker."""
 
+REANA_QUOTA_MANAGEMENT_SECRET = os.getenv("REANA_QUOTA_MANAGEMENT_SECRET", "")
+"""Secret used to authenticate quota-management REST API requests."""
+
 REANA_KUBERNETES_JOBS_CPU_REQUEST = os.getenv("REANA_KUBERNETES_JOBS_CPU_REQUEST")
 """Default cpu request for user job containers."""
 

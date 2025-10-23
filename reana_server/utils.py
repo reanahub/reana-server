@@ -14,9 +14,11 @@ import logging
 import os
 import pathlib
 import secrets
-import sys
 import shutil
 from typing import Dict, List, Optional, Tuple, Union
+import sys
+import traceback
+
 from uuid import UUID, uuid4
 
 import click
@@ -26,7 +28,6 @@ from invenio_oauthclient.errors import OAuthClientUnAuthorized
 from jinja2 import Environment, PackageLoader, select_autoescape
 from marshmallow.exceptions import ValidationError
 from marshmallow.validate import Email
-
 from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK, SHARED_VOLUME_PATH
 from reana_commons.email import send_email, REANA_EMAIL_SENDER
 from reana_commons.errors import (
@@ -48,6 +49,7 @@ from reana_db.models import (
     UserTokenType,
     Workflow,
     AuditLogAction,
+    Resource,
 )
 from reana_db.utils import get_default_quota_resource
 from sqlalchemy.exc import (
@@ -767,6 +769,129 @@ def _validate_email(ctx, param, value):
         click.secho("ERROR: Invalid email format", fg="red")
         sys.exit(1)
     return value
+
+
+def _set_quota_limit(
+    limit: int,
+    resource_type: Optional[str] = None,
+    resource_name: Optional[str] = None,
+    emails: Optional[list[str]] = None,
+    user_ids: Optional[list[str]] = None,
+) -> tuple[Optional[str], int, bool]:
+    """
+    Set a quota limit for the given users and resource type.
+
+    :param limit: Value of new limit.
+    :param resource_type: Type of the resource.
+    :param resource_name: Name of the resource.
+    :param emails: List of user emails.
+    :param user_ids: List of user IDs.
+    :return: Tuple message, status code and whether the error is fatal.
+    """
+    if (emails is None and user_ids is None) or (emails and user_ids):
+        return (
+            "ERROR: Exactly one of `emails` or `user_ids` must be provided.",
+            400,
+            True,
+        )
+
+    if emails is not None and len(emails) == 0:
+        return "ERROR: `emails` must not be empty.", 400, True
+
+    if user_ids is not None and len(user_ids) == 0:
+        return "ERROR: `user_ids` must not be empty.", 400, True
+
+    if (not resource_type and not resource_name) or (resource_type and resource_name):
+        return (
+            "ERROR: Exactly one of `resource_type` or `resource_name` must be provided.",
+            400,
+            True,
+        )
+
+    if limit < 0:
+        return "ERROR: Provided `limit` must be a positive number.", 400, True
+
+    if user_ids and any(is_valid_email(uid) for uid in user_ids):
+        return (
+            f"ERROR: One or more `user_ids` look like an email: {', '.join(user_ids)}",
+            400,
+            True,
+        )
+
+    try:
+        users = (
+            [_get_user_by_criteria(None, email) for email in emails]
+            if emails
+            else [_get_user_by_criteria(uid, None) for uid in user_ids]
+        )
+
+        if any(user is None for user in users):
+            users_not_found = [
+                id_ for id_, user in zip(emails or user_ids, users) if user is None
+            ]
+            return (
+                f"ERROR: The following users do not exist: {', '.join(users_not_found)}",
+                404,
+                True,
+            )
+
+        # Get resource by name or type
+        resource = None
+        if resource_name:
+            resource = Resource.query.filter_by(name=resource_name).one_or_none()
+        elif resource_type in ResourceType._member_names_:
+            available_resources = Resource.query.filter_by(type_=resource_type).all()
+            if len(available_resources) > 1:
+                return (
+                    f"ERROR: There are more than one `{resource_type}` resource. Please provide resource name to specify the exact resource.",
+                    400,
+                    True,
+                )
+            elif len(available_resources) == 1:
+                resource = available_resources[0]
+
+        if not resource:
+            # Resource was not found
+            available_resources = [
+                (resource.type_.name if resource_type else resource.name)
+                for resource in Resource.query
+            ]
+
+            return (
+                f"ERROR: Provided resource '{resource_name or resource_type}' does not exist. Available resources: {', '.join(available_resources)}",
+                400,
+                True,
+            )
+
+        for user in users:
+            user_resource = UserResource.query.filter_by(
+                user=user, resource=resource
+            ).one_or_none()
+
+            if user_resource:
+                user_resource.quota_limit = limit
+                Session.add(user_resource)
+            else:
+                # Create user resource in case there isn't one. Useful for old users.
+                user.resources.append(
+                    UserResource(
+                        user_id=user.id_,
+                        resource_id=resource.id_,
+                        quota_limit=limit,
+                        quota_used=0,
+                    )
+                )
+
+        Session.commit()
+        return (
+            f"Quota limit {limit} for '{resource.type_.name} ({resource.name})' successfully set to user(s): {', '.join([user.email if emails else str(user.id_) for user in users])}.",
+            200,
+            False,
+        )
+    except Exception as e:
+        logging.debug(traceback.format_exc())
+        logging.debug(str(e))
+        return "Error setting quota limit: \n{}".format(str(e)), 500, False
 
 
 class JinjaEnv:
