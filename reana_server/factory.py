@@ -72,6 +72,7 @@ def create_minimal_app(config_mapping=None):
         workflows,
         info,
         launch,
+        quota,
     )  # noqa
 
     app.register_blueprint(ping.blueprint, url_prefix="/api")
@@ -83,6 +84,7 @@ def create_minimal_app(config_mapping=None):
     app.register_blueprint(status.blueprint, url_prefix="/api")
     app.register_blueprint(info.blueprint, url_prefix="/api")
     app.register_blueprint(launch.blueprint, url_prefix="/api")
+    app.register_blueprint(quota.blueprint, url_prefix="/api")
 
     @app.teardown_appcontext
     def shutdown_session(response_or_exc):
