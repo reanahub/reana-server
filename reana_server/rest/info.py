@@ -36,6 +36,9 @@ from reana_server.config import (
     REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
     REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS,
+    KUEUE_ENABLED,
+    KUEUE_AVAILABLE_QUEUES,
+    KUEUE_DEFAULT_QUEUE,
 )
 from reana_server.decorators import signin_required
 
@@ -91,6 +94,29 @@ def info(user, **kwargs):  # noqa
                     type: string
                 type: object
               default_workspace:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              kueue_enabled:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
+              kueue_available_queues:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              kueue_default_queue:
                 properties:
                   title:
                     type: string
@@ -291,6 +317,21 @@ def info(user, **kwargs):  # noqa
                     "title": "Default memory limit for Kubernetes jobs",
                     "value": "3Gi"
                 },
+                "kueue_enabled": {
+                    "title": "Whether Kueue is enabled for job processing",
+                    "value": "False"
+                },
+                "kueue_available_queues": {
+                    "title": "List of local queues available for job processing",
+                    "value": [
+                        "local-queue-1",
+                        "local-queue-2"
+                    ]
+                },
+                "kueue_default_queue": {
+                    "title": "Default queue to send workflow jobs to",
+                    "value": "local-queue1"
+                },
                 "kubernetes_max_memory_limit": {
                     "title": "Maximum allowed memory limit for Kubernetes jobs",
                     "value": "10Gi"
@@ -419,6 +460,10 @@ def info(user, **kwargs):  # noqa
                 title="Default memory limit for Kubernetes jobs",
                 value=REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
             ),
+            kueue_enabled=dict(
+                title="Kueue enabled for job processing",
+                value=KUEUE_ENABLED,
+            ),
             kubernetes_max_memory_limit=dict(
                 title="Maximum allowed memory limit for Kubernetes jobs",
                 value=REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT,
@@ -478,6 +523,20 @@ def info(user, **kwargs):  # noqa
                 value=bool(DASK_ENABLED),
             ),
         )
+
+        if KUEUE_ENABLED:
+            cluster_information["kueue_available_queues"] = dict(
+                title="Local queues available for job processing",
+                value=[
+                    f"{queue["node"]}-{queue["name"]}"
+                    for queue in KUEUE_AVAILABLE_QUEUES
+                ],
+            )
+
+            cluster_information["kueue_default_queue"] = dict(
+                title="Default queue to send workflow jobs to",
+                value=KUEUE_DEFAULT_QUEUE or "No default queue set",
+            )
 
         if DASK_ENABLED:
             cluster_information["dask_autoscaler_enabled"] = dict(
@@ -555,7 +614,6 @@ class InfoSchema(Schema):
     maximum_interactive_session_inactivity_period = fields.Nested(
         StringNullableInfoValue
     )
-    kubernetes_max_memory_limit = fields.Nested(StringInfoValue)
     interactive_session_recommended_jupyter_images = fields.Nested(ListStringInfoValue)
     interactive_sessions_custom_image_allowed = fields.Nested(StringInfoValue)
     supported_workflow_engines = fields.Nested(ListStringInfoValue)
@@ -566,6 +624,7 @@ class InfoSchema(Schema):
     yadage_engine_packtivity_version = fields.Nested(StringInfoValue)
     snakemake_engine_version = fields.Nested(StringInfoValue)
     dask_enabled = fields.Nested(StringInfoValue)
+
     if DASK_ENABLED:
         dask_autoscaler_enabled = fields.Nested(StringInfoValue)
         dask_cluster_default_number_of_workers = fields.Nested(StringInfoValue)
@@ -575,3 +634,8 @@ class InfoSchema(Schema):
         dask_cluster_max_number_of_workers = fields.Nested(StringInfoValue)
         dask_cluster_default_single_worker_threads = fields.Nested(StringInfoValue)
         dask_cluster_max_single_worker_threads = fields.Nested(StringInfoValue)
+
+    kueue_enabled = fields.Nested(StringInfoValue)
+    if KUEUE_ENABLED:
+        kueue_available_queues = fields.Nested(ListStringInfoValue)
+        kueue_default_queue = fields.Nested(StringNullableInfoValue)
