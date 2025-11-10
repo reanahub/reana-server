@@ -76,7 +76,7 @@ install_requires = [
     # From auth bundle
     "invenio-accounts>=2.0.0",
     "invenio-oauth2server>=1.3.0",
-    "invenio-oauthclient>=1.5.0",
+    "invenio-oauthclient @ git+https://github.com/tiborsimko/invenio-oauthclient.git@reana-een-aai",
     "invenio-userprofiles>=1.2.0",
     "invenio-userprofiles>=1.2.0",
     "invenio-theme>=1.4.7",

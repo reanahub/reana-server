@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -17,7 +17,7 @@ from typing import Optional
 from distutils.util import strtobool
 from limits.util import parse
 from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
-from invenio_oauthclient.contrib import cern_openid
+from invenio_oauthclient.contrib import cern_openid, eosc_aai
 from invenio_oauthclient.contrib.keycloak import KeycloakSettingsHelper
 from reana_commons.config import REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES
 from reana_commons.job_utils import kubernetes_memory_to_bytes
@@ -50,6 +50,26 @@ REANA_SSO_CERN_AUTH_URL = os.getenv(
 REANA_SSO_CERN_USERINFO_URL = os.getenv(
     "CERN_USERINFO_URL",
     "https://auth.cern.ch/auth/realms/cern/protocol/openid-connect/userinfo",
+)
+
+REANA_SSO_EOSC_CONSUMER_KEY = os.getenv("EOSC_CONSUMER_KEY", "CHANGE_ME")
+REANA_SSO_EOSC_CONSUMER_SECRET = os.getenv("EOSC_CONSUMER_SECRET", "CHANGE_ME")
+REANA_SSO_EOSC_BASE_URL = os.getenv(
+    "EOSC_BASE_URL", "https://proxy.testing.eosc-federation.eu"
+)
+REANA_SSO_EOSC_REQUIRED_ENTITLEMENT = os.getenv("EOSC_REQUIRED_ENTITLEMENT", "")
+"""Required EOSC AAI entitlement for login. If set, users must have this entitlement to access REANA."""
+REANA_SSO_EOSC_TOKEN_URL = os.getenv(
+    "EOSC_TOKEN_URL",
+    f"{REANA_SSO_EOSC_BASE_URL}/OIDC/token",
+)
+REANA_SSO_EOSC_AUTH_URL = os.getenv(
+    "EOSC_AUTH_URL",
+    f"{REANA_SSO_EOSC_BASE_URL}/OIDC/authorization",
+)
+REANA_SSO_EOSC_USERINFO_URL = os.getenv(
+    "EOSC_USERINFO_URL",
+    f"{REANA_SSO_EOSC_BASE_URL}/OIDC/userinfo",
 )
 
 # Load Login Providers Configuration and Secrets as JSON from environment variables
@@ -372,14 +392,14 @@ if REANA_SSO_LOGIN_PROVIDERS:
     OAUTHCLIENT_REST_REMOTE_APPS["keycloak"] = KEYCLOAK_REST_APP
 
 # CERN SSO configuration
-OAUTH_REMOTE_REST_APP = copy.deepcopy(cern_openid.REMOTE_REST_APP)
-OAUTH_REMOTE_REST_APP.update(
+CERN_REMOTE_REST_APP = copy.deepcopy(cern_openid.REMOTE_REST_APP)
+CERN_REMOTE_REST_APP.update(
     {
         "authorized_redirect_url": OAUTH_REDIRECT_URL,
         "error_redirect_url": OAUTH_REDIRECT_URL,
     }
 )
-OAUTH_REMOTE_REST_APP["params"].update(
+CERN_REMOTE_REST_APP["params"].update(
     dict(
         request_token_params={"scope": "openid"},
         base_url=REANA_SSO_CERN_BASE_URL,
@@ -394,8 +414,34 @@ CERN_APP_OPENID_CREDENTIALS = dict(
     consumer_secret=REANA_SSO_CERN_CONSUMER_SECRET,
 )
 
-OAUTHCLIENT_REMOTE_APPS["cern_openid"] = OAUTH_REMOTE_REST_APP
-OAUTHCLIENT_REST_REMOTE_APPS["cern_openid"] = OAUTH_REMOTE_REST_APP
+OAUTHCLIENT_REMOTE_APPS["cern_openid"] = CERN_REMOTE_REST_APP
+OAUTHCLIENT_REST_REMOTE_APPS["cern_openid"] = CERN_REMOTE_REST_APP
+
+# EOSC SSO configuration
+EOSC_REMOTE_REST_APP = copy.deepcopy(eosc_aai.REMOTE_REST_APP)
+EOSC_REMOTE_REST_APP.update(
+    {
+        "authorized_redirect_url": OAUTH_REDIRECT_URL,
+        "error_redirect_url": OAUTH_REDIRECT_URL,
+    }
+)
+EOSC_REMOTE_REST_APP["params"].update(
+    dict(
+        request_token_params={"scope": "openid profile email entitlements"},
+        base_url=REANA_SSO_EOSC_BASE_URL,
+        access_token_url=REANA_SSO_EOSC_TOKEN_URL,
+        authorize_url=REANA_SSO_EOSC_AUTH_URL,
+    )
+)
+OAUTHCLIENT_EOSC_AAI_USERINFO_URL = REANA_SSO_EOSC_USERINFO_URL
+
+EOSC_AAI_APP_CREDENTIALS = dict(
+    consumer_key=REANA_SSO_EOSC_CONSUMER_KEY,
+    consumer_secret=REANA_SSO_EOSC_CONSUMER_SECRET,
+)
+
+OAUTHCLIENT_REMOTE_APPS["eosc_aai"] = EOSC_REMOTE_REST_APP
+OAUTHCLIENT_REST_REMOTE_APPS["eosc_aai"] = EOSC_REMOTE_REST_APP
 
 SECURITY_PASSWORD_SALT = "security-password-salt"
 

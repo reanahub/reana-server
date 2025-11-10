@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -24,6 +24,7 @@ import click
 import requests
 import yaml
 from flask import url_for
+from invenio_oauthclient.errors import OAuthClientUnAuthorized
 from jinja2 import Environment, PackageLoader, select_autoescape
 from marshmallow.exceptions import ValidationError
 from marshmallow.validate import Email
@@ -67,6 +68,7 @@ from reana_server.complexity import (
 from reana_server.config import (
     ADMIN_USER_ID,
     REANA_HOSTNAME,
+    REANA_SSO_EOSC_REQUIRED_ENTITLEMENT,
     REANA_USER_EMAIL_CONFIRMATION,
     REANA_WORKFLOW_SCHEDULING_POLICY,
     REANA_WORKFLOW_SCHEDULING_POLICIES,
@@ -368,10 +370,23 @@ def _import_users(users_csv_file):
 
 
 def _create_and_associate_oauth_user(sender, account_info, **kwargs):
-    logging.info(f"account_info: {account_info}")
     user_email = account_info["user"]["email"]
     user_fullname = account_info["user"]["profile"]["full_name"]
-    username = account_info["user"]["profile"]["username"]
+    if "username" in account_info["user"]["profile"]:
+        username = account_info["user"]["profile"]["username"]
+    else:
+        username = user_email  # external_id
+    if "entitlements" in kwargs.get("response", {}):
+        entitlements = kwargs["response"]["entitlements"]
+        if REANA_SSO_EOSC_REQUIRED_ENTITLEMENT:
+            if REANA_SSO_EOSC_REQUIRED_ENTITLEMENT not in entitlements:
+                logging.warning(
+                    f"User {user_email} does not have the required EOSC entitlement "
+                    f"'{REANA_SSO_EOSC_REQUIRED_ENTITLEMENT}'. Login denied."
+                )
+                raise OAuthClientUnAuthorized(
+                    "Access denied. You do not have the required entitlement to use this REANA instance."
+                )
     return _create_and_associate_reana_user(user_email, user_fullname, username)
 
 

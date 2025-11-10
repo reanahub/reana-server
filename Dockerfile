@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -65,7 +65,12 @@ RUN if test -e modules/reana-commons; then \
       fi \
     fi
 
+# Install custom invenio-oauthclient branch
+# hadolint ignore=DL3013
+RUN pip install --no-cache-dir --force-reinstall --no-deps "git+https://github.com/tiborsimko/invenio-oauthclient.git@reana-een-aai"
+
 # A quick fix to allow eduGAIN and social login users that wouldn't otherwise match Invenio username rules
+# hadolint ignore=DL3059
 RUN sed -i 's|^username_regex = re.compile\(.*\)$|username_regex = re.compile("^\\S+$")|g' /usr/local/lib/python3.12/dist-packages/invenio_userprofiles/validators.py
 
 # Check for any broken Python dependencies
