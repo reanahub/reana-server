@@ -492,13 +492,37 @@
                   "title": "Whether users are allowed to spawn custom interactive session images",
                   "value": "False"
                 },
+                "kubernetes_cpu_limit": {
+                  "title": "Default CPU limit for Kubernetes jobs",
+                  "value": "2"
+                },
+                "kubernetes_cpu_request": {
+                  "title": "Default CPU request for Kubernetes jobs",
+                  "value": "1"
+                },
+                "kubernetes_max_cpu_limit": {
+                  "title": "Maximum allowed CPU limit for Kubernetes jobs",
+                  "value": "4"
+                },
+                "kubernetes_max_cpu_request": {
+                  "title": "Maximum allowed CPU request for Kubernetes jobs",
+                  "value": "2"
+                },
                 "kubernetes_max_memory_limit": {
                   "title": "Maximum allowed memory limit for Kubernetes jobs",
                   "value": "10Gi"
                 },
+                "kubernetes_max_memory_request": {
+                  "title": "Maximum allowed memory request for Kubernetes jobs",
+                  "value": "5Gi"
+                },
                 "kubernetes_memory_limit": {
                   "title": "Default memory limit for Kubernetes jobs",
                   "value": "3Gi"
+                },
+                "kubernetes_memory_request": {
+                  "title": "Default memory request for Kubernetes jobs",
+                  "value": "1Gi"
                 },
                 "maximum_kubernetes_jobs_timeout": {
                   "title": "Maximum timeout for Kubernetes jobs",
@@ -680,6 +704,30 @@
                   },
                   "type": "object"
                 },
+                "default_kubernetes_cpu_limit": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string",
+                      "x-nullable": true
+                    }
+                  },
+                  "type": "object"
+                },
+                "default_kubernetes_cpu_request": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string",
+                      "x-nullable": true
+                    }
+                  },
+                  "type": "object"
+                },
                 "default_kubernetes_jobs_timeout": {
                   "properties": {
                     "title": {
@@ -697,7 +745,20 @@
                       "type": "string"
                     },
                     "value": {
+                      "type": "string",
+                      "x-nullable": true
+                    }
+                  },
+                  "type": "object"
+                },
+                "default_kubernetes_memory_request": {
+                  "properties": {
+                    "title": {
                       "type": "string"
+                    },
+                    "value": {
+                      "type": "string",
+                      "x-nullable": true
                     }
                   },
                   "type": "object"
@@ -738,7 +799,43 @@
                   },
                   "type": "object"
                 },
+                "kubernetes_max_cpu_limit": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string",
+                      "x-nullable": true
+                    }
+                  },
+                  "type": "object"
+                },
+                "kubernetes_max_cpu_request": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string",
+                      "x-nullable": true
+                    }
+                  },
+                  "type": "object"
+                },
                 "kubernetes_max_memory_limit": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string",
+                      "x-nullable": true
+                    }
+                  },
+                  "type": "object"
+                },
+                "kubernetes_max_memory_request": {
                   "properties": {
                     "title": {
                       "type": "string"
