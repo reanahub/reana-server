@@ -1074,7 +1074,7 @@ def interactive_session_cleanup(
         try:
             pod_name = pod.metadata.name
             workflow_id = pod.metadata.labels["reana-run-session-workflow-uuid"]
-            user_id = pod.metadata.labels["reana-run-session-owner-uuid"]
+            user_id = pod.metadata.labels["user-uuid"]
             container_args = pod.spec.containers[0].args
             # find `--NotebookApp.token` session container argument and parse the user token value from it
             token = next(filter(lambda a: "token" in a, container_args)).split("'")[1]
