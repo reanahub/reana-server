@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -26,7 +26,6 @@ from reana_server import __version__
 from reana_server.config import REANA_HOSTNAME
 from reana_server.decorators import signin_required
 from reana_server.utils import JinjaEnv
-
 
 blueprint = Blueprint("users", __name__)
 

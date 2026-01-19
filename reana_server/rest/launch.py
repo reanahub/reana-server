@@ -1,5 +1,5 @@
 # This file is part of REANA.
-# Copyright (C) 2022 CERN.
+# Copyright (C) 2022, 2023, 2024, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -44,7 +44,6 @@ from reana_server.utils import (
     get_workspace_retention_rules,
 )
 from reana_server.validation import validate_workflow
-
 
 blueprint = Blueprint("launch", __name__)
 

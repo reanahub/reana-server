@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2023, 2024, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -46,7 +46,6 @@ from reana_server.utils import (
     _format_gitlab_secrets,
     _get_gitlab_hook_id,
 )
-
 
 blueprint = Blueprint("gitlab", __name__)
 
