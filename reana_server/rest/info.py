@@ -323,6 +323,13 @@ def info(user, **kwargs):  # noqa
                   value:
                     type: string
                 type: object
+              gitlab_host:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: string
+                type: object
             type: object
           examples:
             application/json:
@@ -435,10 +442,6 @@ def info(user, **kwargs):  # noqa
                     "title": "Dask workflows allowed in the cluster",
                     "value": "False"
                 },
-                "gitlab_host": {
-                    "title": "GitLab host",
-                    "value": "gitlab.cern.ch"
-                },
                 "dask_autoscaler_enabled": {
                     "title": "Dask autoscaler enabled in the cluster",
                     "value": "False"
@@ -470,6 +473,10 @@ def info(user, **kwargs):  # noqa
                 "dask_cluster_max_single_worker_threads": {
                     "title": "The maximum number of threads that users can ask for the single Dask worker",
                     "value": "8"
+                },
+                "gitlab_host": {
+                    "title": "GitLab host",
+                    "value": "gitlab.cern.ch"
                 },
               }
         500:
