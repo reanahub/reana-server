@@ -1144,6 +1144,309 @@
         "summary": "Ping the server (healthcheck)"
       }
     },
+    "/api/quota": {
+      "get": {
+        "description": "This endpoint gets resource quota limits for a given user.",
+        "operationId": "get_quota_usage",
+        "parameters": [
+          {
+            "description": "REANA user quota management secret",
+            "in": "header",
+            "name": "X-Quota-Management-Secret",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Get the quota limit by user ID (mutually exclusive with `email` and `user_access_token`)",
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Get the quota limit by user email (mutually exclusive with `user_id` and `user_access_token`)",
+            "in": "query",
+            "name": "email",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Get the quota limit by user access token (mutually exclusive with `user_id` and `email`)",
+            "in": "query",
+            "name": "user_access_token",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "The type of resource",
+            "in": "query",
+            "name": "resource_type",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. Raw resource quota limit is returned.",
+            "examples": {
+              "application/json": {
+                "limit": 1000000000,
+                "message": "OK",
+                "usage": 500000000
+              }
+            },
+            "schema": {
+              "properties": {
+                "limit": {
+                  "type": "number"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "usage": {
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "No user specified."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Request failed. Unauthorized.",
+            "examples": {
+              "application/json": {
+                "message": "Unauthorized"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. Forbidden.",
+            "examples": {
+              "application/json": {
+                "message": "Quota functionality is not enabled."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Request failed. Not found.",
+            "examples": {
+              "application/json": {
+                "message": "Quota functionality is not enabled."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Internal server error."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get resource quota limits."
+      },
+      "post": {
+        "description": "This endpoint sets resource quota limits for a given set of users.",
+        "operationId": "set_quota_limit",
+        "parameters": [
+          {
+            "description": "REANA user quota management secret",
+            "in": "header",
+            "name": "X-Quota-Management-Secret",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Data required to set quota limits (exactly one of `user_id` or `email` must be provided).",
+            "in": "body",
+            "name": "data",
+            "required": true,
+            "schema": {
+              "properties": {
+                "email": {
+                  "description": "Email of the target user (mutually exclusive with `user_id`)",
+                  "type": "string"
+                },
+                "limit": {
+                  "description": "Raw quota limit to set",
+                  "type": "integer"
+                },
+                "resource_type": {
+                  "description": "Resource type to set",
+                  "type": "string"
+                },
+                "user_id": {
+                  "description": "ID of the target user (mutually exclusive with `email`)",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resource quotas successfully set.",
+            "examples": {
+              "application/json": {
+                "limit": 1000000000,
+                "message": "OK",
+                "usage": 500000000
+              }
+            },
+            "schema": {
+              "properties": {
+                "limit": {
+                  "type": "number"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "usage": {
+                  "type": "number"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The incoming data specification seems malformed.",
+            "examples": {
+              "application/json": {
+                "message": "Invalid request."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Request failed. Unauthorized.",
+            "examples": {
+              "application/json": {
+                "message": "Unauthorized"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. Forbidden.",
+            "examples": {
+              "application/json": {
+                "message": "Quota functionality is not enabled."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Request failed. User not found.",
+            "examples": {
+              "application/json": {
+                "message": "User not found."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Request failed. Internal server error.",
+            "examples": {
+              "application/json": {
+                "message": "Quota could not be set: {error}"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Set resource quota limits."
+      }
+    },
     "/api/secrets": {
       "get": {
         "description": "Get user secrets.",

@@ -37,7 +37,6 @@ from reana_db.models import (
     AuditLogAction,
     QuotaHealth,
     Resource,
-    ResourceType,
     User,
     UserResource,
     UserTokenStatus,
@@ -67,6 +66,7 @@ from reana_server.utils import (
     _validate_email,
     _validate_password,
     create_user_workspace,
+    _set_quota_limit,
 )
 
 
@@ -565,76 +565,17 @@ def set_quota_limit(
     ctx, emails, resource_type, resource_name, limit, admin_access_token
 ):
     """Set quota limits to the given users per resource."""
-    try:
-        for email in emails:
-            error_msg = None
-            resource = None
-            user = _get_user_by_criteria(None, email)
+    msg, status_code, fatal = _set_quota_limit(
+        resource_type, resource_name, limit, emails=emails
+    )
+    click.secho(
+        msg,
+        fg="green" if status_code == 200 else "red",
+        err=False if status_code == 200 else True,
+    )
 
-            if resource_name:
-                resource = Resource.query.filter_by(name=resource_name).one_or_none()
-            elif resource_type in ResourceType._member_names_:
-                resources = Resource.query.filter_by(type_=resource_type).all()
-                if resources and len(resources) > 1:
-                    click.secho(
-                        f"ERROR: There are more than one `{resource_type}` resource. "
-                        "Please provide resource name with `--resource-name` option to specify the exact resource.",
-                        fg="red",
-                        err=True,
-                    )
-                    sys.exit(1)
-                else:
-                    resource = resources[0]
-
-            if not user:
-                error_msg = f"ERROR: Provided user {email} does not exist."
-            elif not resource:
-                resources = [
-                    f"{resource.type_.name} ({resource.name})"
-                    for resource in Resource.query
-                ]
-                error_msg = (
-                    f"ERROR: Provided resource `{resource_name or resource_type}` does not exist. "
-                    if resource_name or resource_type
-                    else "ERROR: Please provide a resource. "
-                )
-                error_msg += f"Available resources are: {', '.join(resources)}."
-            if error_msg:
-                click.secho(
-                    error_msg,
-                    fg="red",
-                    err=True,
-                )
-                sys.exit(1)
-
-            user_resource = UserResource.query.filter_by(
-                user=user, resource=resource
-            ).one_or_none()
-            if user_resource:
-                user_resource.quota_limit = limit
-                Session.add(user_resource)
-            else:
-                # Create user resource in case there isn't one. Useful for old users.
-                user.resources.append(
-                    UserResource(
-                        user_id=user.id_,
-                        resource_id=resource.id_,
-                        quota_limit=limit,
-                        quota_used=0,
-                    )
-                )
-        Session.commit()
-        click.secho(
-            f"Quota limit {limit} for '{resource.type_.name} ({resource.name})' successfully set to users {emails}.",
-            fg="green",
-        )
-    except Exception as e:
-        logging.debug(traceback.format_exc())
-        logging.debug(str(e))
-        click.echo(
-            click.style("Quota could not be set: \n{}".format(str(e)), fg="red"),
-            err=True,
-        )
+    if fatal:
+        sys.exit(1)
 
 
 @reana_admin.command(
