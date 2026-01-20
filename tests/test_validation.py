@@ -12,7 +12,11 @@ from contextlib import nullcontext as does_not_raise
 
 from reana_commons.errors import REANAValidationError
 
-from reana_server.validation import validate_inputs, validate_retention_rule
+from reana_server.validation import (
+    validate_inputs,
+    validate_images,
+    validate_retention_rule,
+)
 
 
 @pytest.mark.parametrize(
@@ -28,6 +32,61 @@ from reana_server.validation import validate_inputs, validate_retention_rule
 def test_validate_inputs(paths, error):
     with pytest.raises(REANAValidationError, match=error):
         validate_inputs({"inputs": {"directories": paths}})
+
+
+@pytest.mark.parametrize(
+    "config, images, error",
+    [
+        # Validation disabled, anything goes
+        (
+            {"enabled": False, "allowlist": []},
+            ["docker.io/bitcoin-miner:1.2.3"],
+            does_not_raise(),
+        ),
+        # Allowed image
+        (
+            {
+                "enabled": True,
+                "allowlist": ["docker.io/reanahub/reana-env-root6:6.18.04"],
+            },
+            ["docker.io/reanahub/reana-env-root6:6.18.04"],
+            does_not_raise(),
+        ),
+        # Disallowed image
+        (
+            {
+                "enabled": True,
+                "allowlist": ["docker.io/reanahub/reana-env-root6:6.18.04"],
+            },
+            ["docker.io/bitcoin-miner:1.2.3"],
+            pytest.raises(REANAValidationError, match="not allowed"),
+        ),
+        # Mixed images
+        (
+            {
+                "enabled": True,
+                "allowlist": ["docker.io/reanahub/reana-env-root6:6.18.04"],
+            },
+            [
+                "docker.io/reanahub/reana-env-root6:6.18.04",
+                "docker.io/bitcoin-miner:1.2.3",
+            ],
+            pytest.raises(REANAValidationError, match="not allowed"),
+        ),
+    ],
+)
+def test_validate_images(config, images, error):
+    with patch("reana_server.validation.REANA_VETTED_CONTAINER_IMAGES", config):
+        with error:
+            validate_images(
+                {
+                    "workflow": {
+                        "specification": {
+                            "steps": [{"environment": image} for image in images]
+                        }
+                    }
+                }
+            )
 
 
 @pytest.mark.parametrize(

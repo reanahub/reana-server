@@ -549,6 +549,14 @@
                     "yadage"
                   ]
                 },
+                "vetted_container_images_allowlist": {
+                  "title": "List of container images allowed in user workflows",
+                  "value": []
+                },
+                "vetted_container_images_enabled": {
+                  "title": "Whether container image vetting is enabled",
+                  "value": "False"
+                },
                 "workspaces_available": {
                   "title": "List of available workspaces",
                   "value": [
@@ -918,6 +926,31 @@
                         "type": "string"
                       },
                       "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "vetted_container_images_allowlist": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "type": "object"
+                },
+                "vetted_container_images_enabled": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "boolean"
                     }
                   },
                   "type": "object"

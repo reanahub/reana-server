@@ -537,6 +537,11 @@ REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS_CUSTOM_ALLOWED = (
 )
 """Whether users can set custom interactive session images or not."""
 
+REANA_VETTED_CONTAINER_IMAGES = json.loads(
+    os.getenv("REANA_VETTED_CONTAINER_IMAGES", "{}")
+)
+"""Container images that users are allowed to use in their workflows."""
+
 # Kubernetes jobs timeout
 # ==================
 REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT = os.getenv("REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT")
