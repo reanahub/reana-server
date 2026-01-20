@@ -2631,7 +2631,23 @@ def open_interactive_session(
         return jsonify(response), http_response.status_code
     except HTTPError as e:
         logging.error(traceback.format_exc())
-        return jsonify(e.response.json()), e.response.status_code
+        # Try to parse JSON, but gracefully handle empty/non-JSON responses
+        try:
+            error_payload = e.response.json()
+            return jsonify(error_payload), e.response.status_code
+        except ValueError:
+            return (
+                jsonify(
+                    {
+                        "message": (
+                            f"Workflow '{workflow_id_or_name}' does not exist. "
+                            "If you are using the REANA_WORKON environment variable, "
+                            "please ensure it refers to an existing workflow."
+                        )
+                    }
+                ),
+                404,
+            )
     except KeyError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
