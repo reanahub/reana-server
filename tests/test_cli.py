@@ -569,7 +569,7 @@ def test_interactive_session_cleanup(
     mock_session_pod.metadata.labels = {
         "app": mock_session_pod.metadata.name,
         "reana_workflow_mode": "session",
-        "reana-run-session-workflow-uuid": str(sample_serial_workflow_in_db.id_),
+        "workflow-uuid": str(sample_serial_workflow_in_db.id_),
         "user-uuid": str(sample_serial_workflow_in_db.owner_id),
     }
     mock_pod_list = Mock()
