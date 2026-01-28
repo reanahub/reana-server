@@ -58,6 +58,8 @@ def status(**kwargs):  # noqa
                 properties:
                   available:
                     type: number
+                  unavailable:
+                    type: number
                   running:
                     type: number
                   pending:
@@ -74,6 +76,8 @@ def status(**kwargs):  # noqa
                 type: object
                 properties:
                   available:
+                    type: number
+                  unavailable:
                     type: number
                   running:
                     type: number
@@ -94,6 +98,8 @@ def status(**kwargs):  # noqa
                 properties:
                   active:
                     type: number
+                  unavailable:
+                    type: number
                   sort:
                     type: number
           examples:
@@ -104,6 +110,7 @@ def status(**kwargs):  # noqa
                     "pending": 3,
                     "running": 2,
                     "available": 3,
+                    "unavailable": 1,
                     "percentage": 38,
                     "health": "warning",
                     "sort": 1
@@ -118,11 +125,13 @@ def status(**kwargs):  # noqa
                 },
                 "session": {
                     "active": 3,
+                    "unavailable": 1,
                     "sort": 3
                 },
                 "workflow": {
                     "total": 30,
                     "available": 24,
+                    "unavailable": 6,
                     "queued": 2,
                     "running": 4,
                     "pending": 2,
