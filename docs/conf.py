@@ -230,6 +230,7 @@ rest_api_modules = [
     "reana_server.rest.status",
     "reana_server.rest.users",
     "reana_server.rest.workflows",
+    "reana_server.rest.quota",
 ]
 
 
