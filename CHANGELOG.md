@@ -2,6 +2,52 @@
 
 # Changelog
 
+## [0.9.5](https://github.com/reanahub/reana-server/compare/0.9.4...0.9.5) (2026-02-10)
+
+
+### Build
+
+* **docker:** pin setuptools 70 ([#724](https://github.com/reanahub/reana-server/issues/724)) ([bd3d24a](https://github.com/reanahub/reana-server/commit/bd3d24a5a5768d6ba9ef4aa9b2d31d8c91ce4a9c))
+* **docker:** pin setuptools 70 ([#724](https://github.com/reanahub/reana-server/issues/724)) ([26f511e](https://github.com/reanahub/reana-server/commit/26f511ed9795f851e46cb0ecdf3085ec12eff71c))
+* **python:** pin setuptools below 81 ([#761](https://github.com/reanahub/reana-server/issues/761)) ([8059515](https://github.com/reanahub/reana-server/commit/80595156802985af884933e64c73d2886ac30ea2))
+
+
+### Features
+
+* **config:** add EOSC EU Node AAI SSO login method ([#750](https://github.com/reanahub/reana-server/issues/750)) ([bed1ffa](https://github.com/reanahub/reana-server/commit/bed1ffa50d326076d243a25531f093cb7539d7fd))
+* **config:** make number of threads configurable for Dask ([#719](https://github.com/reanahub/reana-server/issues/719)) ([5b82925](https://github.com/reanahub/reana-server/commit/5b8292541b10126823da8a288dbc3e87591724c0))
+* **rest:** add gitlab_host to info endpoint ([#740](https://github.com/reanahub/reana-server/issues/740)) ([db12634](https://github.com/reanahub/reana-server/commit/db126347293fae4cf77ffeb9ca9f7c0d4eabf844))
+* **rest:** add K8s resource requests & limits to info endpoint ([#724](https://github.com/reanahub/reana-server/issues/724)) ([bd3d24a](https://github.com/reanahub/reana-server/commit/bd3d24a5a5768d6ba9ef4aa9b2d31d8c91ce4a9c))
+* **rest:** add K8s resource requests & limits to info endpoint ([#724](https://github.com/reanahub/reana-server/issues/724)) ([ee2820e](https://github.com/reanahub/reana-server/commit/ee2820e3ac0c1c0263e9d119645a2c0b59fd3e1e))
+
+
+### Bug fixes
+
+* **config:** set localhost default value for REANA_HOSTNAME ([#717](https://github.com/reanahub/reana-server/issues/717)) ([a24c810](https://github.com/reanahub/reana-server/commit/a24c810f018e5fd925d9ad01ce986537adad7ee8))
+* **rest:** add gitlab_host schema definition to info endpoint ([#759](https://github.com/reanahub/reana-server/issues/759)) ([464437d](https://github.com/reanahub/reana-server/commit/464437d1e324a464d31a598c1845ea3bdcbd1c7c))
+
+
+### Code refactoring
+
+* **reana-admin:** harmonise `user-uuid` runtime pod label ([#754](https://github.com/reanahub/reana-server/issues/754)) ([5ae23c1](https://github.com/reanahub/reana-server/commit/5ae23c12086b17bb50414d8d22f40e7c639966cf))
+
+
+### Code style
+
+* **python:** adapt code base to the new black version ([#759](https://github.com/reanahub/reana-server/issues/759)) ([6c9e55e](https://github.com/reanahub/reana-server/commit/6c9e55ebddfb461f7bfe4123ecf2d52916655b4c))
+
+
+### Continuous integration
+
+* **commitlint:** fix local running of commit linter on macOS ([#736](https://github.com/reanahub/reana-server/issues/736)) ([40b5356](https://github.com/reanahub/reana-server/commit/40b535698c9200d61eb62cf53c29d5f918cc5c25))
+* **jsonlint:** add JSON linting ([#732](https://github.com/reanahub/reana-server/issues/732)) ([cc3753a](https://github.com/reanahub/reana-server/commit/cc3753a522b732ff3c6f3d5ae90262551577cdd6))
+* **markdownlint:** add Markdown linting ([#735](https://github.com/reanahub/reana-server/issues/735)) ([d05e5af](https://github.com/reanahub/reana-server/commit/d05e5affe0de3153d56183fb8d1ca83b17daad95))
+* **prettier:** add Prettier code formatting checks ([#737](https://github.com/reanahub/reana-server/issues/737)) ([e04d1fd](https://github.com/reanahub/reana-server/commit/e04d1fdd679bc576e685ca0bab978594da775c35))
+* **runners:** upgrade CI runners to Ubuntu 22.04 ([#726](https://github.com/reanahub/reana-server/issues/726)) ([bd3d24a](https://github.com/reanahub/reana-server/commit/bd3d24a5a5768d6ba9ef4aa9b2d31d8c91ce4a9c))
+* **runners:** upgrade CI runners to Ubuntu 22.04 ([#726](https://github.com/reanahub/reana-server/issues/726)) ([b5d4e54](https://github.com/reanahub/reana-server/commit/b5d4e541afaaa0e5240c51af324accd08873f2ee))
+* **shfmt:** add shfmt code formatting checks ([#734](https://github.com/reanahub/reana-server/issues/734)) ([1dcc563](https://github.com/reanahub/reana-server/commit/1dcc56380adc5987d2ba9becd2de643166542038))
+* **yamllint:** add YAML linting ([#733](https://github.com/reanahub/reana-server/issues/733)) ([c36c461](https://github.com/reanahub/reana-server/commit/c36c461352cb19ff3f8b9f2901d7520482065e12))
+
 ## [0.9.4](https://github.com/reanahub/reana-server/compare/0.9.3...0.9.4) (2024-11-29)
 
 ### Build
