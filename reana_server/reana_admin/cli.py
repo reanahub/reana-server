@@ -67,6 +67,7 @@ from reana_server.utils import (
     _validate_email,
     _validate_password,
     create_user_workspace,
+    grant_access_token_to_user,
 )
 
 
@@ -237,6 +238,7 @@ def import_users(ctx, admin_access_token, file_):
 def token_grant(admin_access_token, id_, email):
     """Grant a token to the selected user."""
     try:
+        # token grant is committed before email is sent
         admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
         user = _get_user_by_criteria(id_, email)
         error_msg = None
@@ -256,30 +258,22 @@ def token_grant(admin_access_token, id_, email):
                 " proceed?",
                 abort=True,
             )
-
-        user_granted_token = secrets.token_urlsafe(16)
-        user.access_token = user_granted_token
-        Session.commit()
-        log_msg = (
-            f"Token for user {user.id_} ({user.email}) granted.\n"
-            f"\nToken: {user_granted_token}"
+        _, log_msg = grant_access_token_to_user(
+            user,
+            granted_by=admin,
+            send_notification_email=True,
+            include_token_in_log=True,  # will only send if REANA_ACCESS_TOKEN_ISSUANCE_POLICY == "manual"
+            requested_via="reana_admin.token-grant",
         )
         click.secho(log_msg, fg="green")
-        admin.log_action(AuditLogAction.grant_token, {"reana_admin": log_msg})
-        # send notification to user by email
-        email_subject = "REANA access token granted"
-        email_body = JinjaEnv.render_template(
-            "emails/token_granted.txt",
-            user_full_name=user.full_name,
-            reana_hostname=REANA_HOSTNAME,
-            ui_config=REANAConfig.load("ui"),
-            sender_email=REANA_EMAIL_SENDER,
-        )
-        send_email(user.email, email_subject, email_body)
 
     except click.exceptions.Abort:
         click.echo("Grant token aborted.")
     except REANAEmailNotificationError as e:
+        # Email dispatch failed, but token was granted. Still show the canonical success message.
+        log_msg = getattr(e, "log_msg", None)
+        if log_msg:
+            click.secho(log_msg, fg="green")
         click.secho(
             "Something went wrong while sending email:\n{}".format(e),
             fg="red",

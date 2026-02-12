@@ -36,6 +36,10 @@ from reana_server.reana_admin import reana_admin
 from reana_server.reana_admin.check_workflows import check_workspaces
 from reana_server.reana_admin.cli import RetentionRuleDeleter
 from reana_server.reana_admin.consumer import MessageConsumer
+from reana_server.utils import (
+    _create_and_associate_reana_user,
+    _get_user_from_invenio_user,
+)
 
 
 def test_export_users(user0):
@@ -155,20 +159,26 @@ def test_grant_token(user0, session):
     assert "Grant token aborted" in result.output
 
     # confirm grant
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-grant",
-            "--admin-access-token",
-            user0.access_token,
-            "-e",
-            user.email,
-        ],
-        input="y\n",
-    )
+    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "manual"), patch(
+        "reana_server.utils.REANAConfig.load", return_value={}
+    ), patch("reana_server.utils.JinjaEnv.render_template", return_value="body"), patch(
+        "reana_server.utils.send_email"
+    ) as send_email_mock:
+        result = runner.invoke(
+            reana_admin,
+            [
+                "token-grant",
+                "--admin-access-token",
+                user0.access_token,
+                "-e",
+                user.email,
+            ],
+            input="y\n",
+        )
     assert f"Token for user {user.id_} ({user.email}) granted" in result.output
     assert user.access_token
     assert user0.audit_logs[-1].action is AuditLogAction.grant_token
+    send_email_mock.assert_called()
 
     # user with active token
     active_user = User(email="active@cern.ch", access_token="valid_token")
@@ -193,19 +203,106 @@ def test_grant_token(user0, session):
     ui_user.request_access_token()
     assert ui_user.access_token_status is UserTokenStatus.requested.name
     assert ui_user.access_token is None
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-grant",
-            "--admin-access-token",
-            user0.access_token,
-            "--id",
-            str(ui_user.id_),
-        ],
-    )
+    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "manual"), patch(
+        "reana_server.utils.REANAConfig.load", return_value={}
+    ), patch("reana_server.utils.JinjaEnv.render_template", return_value="body"), patch(
+        "reana_server.utils.send_email"
+    ):
+        result = runner.invoke(
+            reana_admin,
+            [
+                "token-grant",
+                "--admin-access-token",
+                user0.access_token,
+                "--id",
+                str(ui_user.id_),
+            ],
+        )
     assert ui_user.access_token_status is UserTokenStatus.active.name
     assert ui_user.access_token
     assert user0.audit_logs[-1].action is AuditLogAction.grant_token
+
+
+def test_grant_token_auto_policy_still_sends_email_when_explicit_admin_grant(
+    user0, session
+):
+    runner = CliRunner()
+
+    user = User(email="auto@cern.ch")
+    session.add(user)
+    session.commit()
+
+    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "auto"), patch(
+        "reana_server.utils.REANAConfig.load", return_value={}
+    ), patch("reana_server.utils.JinjaEnv.render_template", return_value="body"), patch(
+        "reana_server.utils.send_email"
+    ) as send_email_mock:
+        result = runner.invoke(
+            reana_admin,
+            [
+                "token-grant",
+                "--admin-access-token",
+                user0.access_token,
+                "-e",
+                user.email,
+            ],
+            input="y\n",
+        )
+
+    assert f"Token for user {user.id_} ({user.email}) granted" in result.output
+    assert user.access_token
+    # Explicit admin grant should respect send_notification_email=True regardless of global policy
+    send_email_mock.assert_called()
+
+
+def test_auto_issue_token_for_existing_user_when_policy_flips_to_auto(user0, session):
+    """
+    User created under manual policy with no token should receive a token on next login
+    once ACCESS_TOKEN_ISSUANCE_POLICY becomes 'auto'.
+    """
+
+    user = User(
+        email="pending@cern.ch",
+        full_name="Pending User",
+        username="pending@cern.ch",
+    )
+    session.add(user)
+    session.commit()
+
+    assert user.access_token is None
+
+    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "auto"), patch(
+        "reana_server.utils.send_email"
+    ) as send_email_mock:
+        _create_and_associate_reana_user(user.email, user.full_name, user.username)
+
+    # Token is auto-issued but no email should be sent for automatic issuance
+    assert user.access_token is not None
+    send_email_mock.assert_not_called()
+
+
+def test_auto_issue_token_for_existing_local_user_on_login_resolution(user0, session):
+    """
+    Existing local user (created under manual policy) should receive a token
+    when policy is auto and the user is resolved via _get_user_from_invenio_user().
+    """
+    user = User(
+        email="test2@test.com",
+        full_name="Test Two",
+        username="test2@test.com",
+    )
+    session.add(user)
+    session.commit()
+    assert user.access_token is None
+
+    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "auto"), patch(
+        "reana_server.utils.send_email"
+    ) as send_email_mock:
+        resolved = _get_user_from_invenio_user(user.email)
+
+    assert resolved.id_ == user.id_
+    assert resolved.access_token is not None
+    send_email_mock.assert_not_called()
 
 
 def test_revoke_token(user0, session):
