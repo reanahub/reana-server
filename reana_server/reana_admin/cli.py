@@ -67,6 +67,7 @@ from reana_server.utils import (
     _validate_email,
     _validate_password,
     create_user_workspace,
+    grant_access_token_to_user,
 )
 
 
@@ -256,26 +257,14 @@ def token_grant(admin_access_token, id_, email):
                 " proceed?",
                 abort=True,
             )
-
-        user_granted_token = secrets.token_urlsafe(16)
-        user.access_token = user_granted_token
-        Session.commit()
-        log_msg = (
-            f"Token for user {user.id_} ({user.email}) granted.\n"
-            f"\nToken: {user_granted_token}"
+        _, log_msg = grant_access_token_to_user(
+            user,
+            granted_by=admin,
+            send_notification_email=True,
+            include_token_in_log=True,  # will only send if TOKEN_ISSUANCE_POLICY == "manual"
+            requested_via="reana_admin.token-grant",
         )
         click.secho(log_msg, fg="green")
-        admin.log_action(AuditLogAction.grant_token, {"reana_admin": log_msg})
-        # send notification to user by email
-        email_subject = "REANA access token granted"
-        email_body = JinjaEnv.render_template(
-            "emails/token_granted.txt",
-            user_full_name=user.full_name,
-            reana_hostname=REANA_HOSTNAME,
-            ui_config=REANAConfig.load("ui"),
-            sender_email=REANA_EMAIL_SENDER,
-        )
-        send_email(user.email, email_subject, email_body)
 
     except click.exceptions.Abort:
         click.echo("Grant token aborted.")
