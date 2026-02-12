@@ -13,6 +13,7 @@ import json
 import os
 import re
 from typing import Optional
+import logging
 
 from distutils.util import strtobool
 from limits.util import parse
@@ -554,3 +555,17 @@ REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT = os.getenv(
 Please see the following URL for more details
 https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-and-cleanup.
 """
+
+# Token issuance policy:
+# "manual" (default): users must request token and admin grants via `reana-admin token-grant`
+# "auto": automatically create token when a user logs in for the first time
+TOKEN_ISSUANCE_POLICY = os.getenv("TOKEN_ISSUANCE_POLICY", "manual").strip().lower()
+_TOKEN_ISSUANCE_POLICIES = {"manual", "auto"}
+if TOKEN_ISSUANCE_POLICY not in _TOKEN_ISSUANCE_POLICIES:
+    logging.warning(
+        "Invalid TOKEN_ISSUANCE_POLICY=%r; falling back to 'manual'. "
+        "Allowed values: %s",
+        TOKEN_ISSUANCE_POLICY,
+        sorted(_TOKEN_ISSUANCE_POLICIES),
+    )
+    TOKEN_ISSUANCE_POLICY = "manual"

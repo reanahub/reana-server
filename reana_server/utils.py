@@ -10,25 +10,22 @@
 import base64
 import csv
 import io
-import json
 import logging
 import os
 import pathlib
 import secrets
 import sys
 import shutil
-from typing import Any, Dict, List, Optional, Union, Generator
+from typing import Dict, List, Optional, Union
 from uuid import UUID, uuid4
 
 import click
-import requests
 import yaml
 from flask import url_for
 from invenio_oauthclient.errors import OAuthClientUnAuthorized
 from jinja2 import Environment, PackageLoader, select_autoescape
 from marshmallow.exceptions import ValidationError
 from marshmallow.validate import Email
-from urllib import parse as urlparse
 
 from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK, SHARED_VOLUME_PATH
 from reana_commons.email import send_email, REANA_EMAIL_SENDER
@@ -50,6 +47,7 @@ from reana_db.models import (
     UserTokenStatus,
     UserTokenType,
     Workflow,
+    AuditLogAction,
 )
 from reana_db.utils import get_default_quota_resource
 from sqlalchemy.exc import (
@@ -75,6 +73,7 @@ from reana_server.config import (
     REANA_QUOTAS_DOCS_URL,
     WORKSPACE_RETENTION_PERIOD,
     DEFAULT_WORKSPACE_RETENTION_RULE,
+    TOKEN_ISSUANCE_POLICY,
 )
 from reana_server.gitlab_client import (
     GitLabClient,
@@ -242,6 +241,61 @@ def get_user_from_token(access_token):
     if user_token.status == UserTokenStatus.revoked:
         raise ValueError("User access token revoked.")
     return user_token.user_
+
+
+def grant_access_token_to_user(
+    user: User,
+    *,
+    granted_by: Optional[User] = None,
+    send_notification_email: bool = True,
+    include_token_in_log: bool = True,
+    requested_via: str = "reana_server",
+) -> (str, str):
+    """Grant a REANA access token to a user and persist it.
+
+    Returns: (token_value, log_message)
+    """
+    if user.access_token:
+        raise ValueError(
+            f"User {user.id_} ({user.email}) has already an active access token."
+        )
+
+    user_granted_token = secrets.token_urlsafe(16)
+    user.access_token = user_granted_token
+    Session.commit()
+
+    log_msg = f"Token for user {user.id_} ({user.email}) granted."
+    if include_token_in_log:
+        log_msg += f"\n\nToken: {user_granted_token}"
+
+    # for audit
+    try:
+        if granted_by:
+            granted_by.log_action(
+                AuditLogAction.grant_token,
+                {
+                    "source": requested_via,
+                    "user_id": str(user.id_),
+                    "user_email": user.email,
+                    "reana_admin": log_msg,
+                },
+            )
+    except Exception:
+        logging.exception("Could not write audit log for token grant.")
+
+    # Do not send notification emails when tokens are automatically issued
+    if send_notification_email and TOKEN_ISSUANCE_POLICY == "manual":
+        email_subject = "REANA access token granted"
+        email_body = JinjaEnv.render_template(
+            "emails/token_granted.txt",
+            user_full_name=user.full_name,
+            reana_hostname=REANA_HOSTNAME,
+            ui_config=REANAConfig.load("ui"),
+            sender_email=REANA_EMAIL_SENDER,
+        )
+        send_email(user.email, email_subject, email_body)
+
+    return user_granted_token, log_msg
 
 
 def publish_workflow_submission(workflow, user_id, parameters):
@@ -426,11 +480,31 @@ def _create_and_associate_reana_user(email, fullname, username):
         users = Session.query(User).filter_by(**search_criteria).all()
         if users:
             user = users[0]
+            newly_created = False
         else:
             user_parameters = dict(email=email, full_name=fullname, username=username)
             user = User(**user_parameters)
             Session.add(user)
             Session.commit()
+            newly_created = True
+
+        # Automatically issue token on first login when the user is created
+        if newly_created and TOKEN_ISSUANCE_POLICY == "auto" and not user.access_token:
+            try:
+                grant_access_token_to_user(
+                    user,
+                    granted_by=None,
+                    send_notification_email=False,
+                    include_token_in_log=False,
+                    requested_via="auto_first_login",
+                )
+            except Exception:
+                # Do not block login if token issuance fails
+                logging.exception(
+                    "Automatic token issuance failed for user %s (%s).",
+                    user.id_,
+                    user.email,
+                )
     except (InvalidRequestError, IntegrityError):
         Session.rollback()
         raise ValueError("Could not create user, possible constraint violation")
