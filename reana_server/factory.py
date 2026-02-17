@@ -63,6 +63,7 @@ def create_minimal_app(config_mapping=None):
 
     # Register API routes
     from .rest import (
+        auth,
         config,
         gitlab,
         ping,
@@ -83,6 +84,7 @@ def create_minimal_app(config_mapping=None):
     app.register_blueprint(status.blueprint, url_prefix="/api")
     app.register_blueprint(info.blueprint, url_prefix="/api")
     app.register_blueprint(launch.blueprint, url_prefix="/api")
+    app.register_blueprint(auth.blueprint, url_prefix="/api")
 
     @app.teardown_appcontext
     def shutdown_session(response_or_exc):
