@@ -55,6 +55,7 @@ install_requires = [
     "uWSGI>=2.0.17",
     "uwsgi-tools>=1.1.1",
     "uwsgitop>=0.10",
+    "flask-security-invenio<4.0.0",
     "wtforms<3.0.0",
     # Yadage dependencies
     # Pinning adage/packtivity/yadage/yadage-schemas to make sure we use compatible versions.
@@ -74,7 +75,7 @@ install_requires = [
     "invenio-logging>=1.3.0",
     "invenio-mail>=1.0.2",
     # From auth bundle
-    "invenio-accounts>=2.0.0",
+    "invenio-accounts>=2.0.0,<6.0.0",
     "invenio-oauth2server>=1.3.0",
     "invenio-oauthclient @ git+https://github.com/tiborsimko/invenio-oauthclient.git@reana-een-aai",
     "invenio-userprofiles>=1.2.0",
