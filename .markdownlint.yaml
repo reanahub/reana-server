@@ -1,4 +1,2 @@
 # Allow prompt dollar sign in console examples without showing output
 MD014: false
-# Allow multiple headings with same content (for different releases)
-MD024: false
