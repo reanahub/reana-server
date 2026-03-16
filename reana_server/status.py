@@ -355,18 +355,11 @@ class NodesStatus(REANAStatus):
 
     def get_nodes_memory(self):
         """Get list of all node memory capacities."""
-        try:
-            nodes = current_k8s_corev1_api_client.list_node()
-            return [
-                kubernetes_memory_to_bytes(node.status.capacity["memory"])
-                for node in nodes.items
-            ]
-        except ValueError as e:
-            # FIXME: after new Kubernetes release this should be not needed
-            msg = "Error while retreiving k8s list of nodes."
-            logging.error(msg)
-            logging.error(e)
-            return []
+        nodes = current_k8s_corev1_api_client.list_node()
+        return [
+            kubernetes_memory_to_bytes(node.status.capacity["memory"])
+            for node in nodes.items
+        ]
 
     def get_total_memory(self):
         """Get total memory from all nodes."""
@@ -402,18 +395,13 @@ class NodesStatus(REANAStatus):
                 )
                 result[node_name]["percentage"] = f"{node_usage_percentage}%"
                 result[node_name]["available"] = node_capacity_bytes - node_usage_bytes
+        result[node_name]["available"] = node_capacity_bytes - node_usage_bytes
         except ApiException as e:
-            msg = "Error while calling `metrics.k8s.io` API."
-            logging.error(msg)
-            logging.error(e)
-            return {"error": msg}
-        except ValueError as e:
-            # FIXME: after new Kubernetes release this should be not needed
-            msg = "Error while retreiving k8s list of nodes."
-            logging.error(msg)
-            logging.error(e)
-            return {"error": msg}
-
+        msg = "Error while calling `metrics.k8s.io` API."
+        logging.error(msg)
+        logging.error(e)
+        return {"error": msg}
+    
         return result
 
     def get_available_memory(self):
