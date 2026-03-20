@@ -13,10 +13,12 @@ from typing import Optional
 
 from flask import Blueprint, jsonify, request, Response
 from marshmallow import fields, Schema
-from reana_db.models import ResourceType
+from reana_db.models import ResourceType, UserResource
+from reana_db.utils import get_default_quota_resource
+
 
 from reana_server.config import REANA_QUOTA_MANAGEMENT_SECRET
-from reana_server.utils import _set_quota_limit, _get_users
+from reana_server.utils import _set_quota_limit, _set_quota_period, _get_users
 
 blueprint = Blueprint("quota", __name__)
 
@@ -30,6 +32,17 @@ class SetQuotaLimitBodySchema(Schema):
     limit = fields.Int(required=True)
 
 
+class PatchQuotaBodySchema(Schema):
+    """Schema for patch_quota endpoint body."""
+
+    user_id = fields.Str()
+    email = fields.Str()
+    resource_type = fields.Str(required=True)
+    quota_period_months = fields.Int(allow_none=True)
+    quota_period_anchor_at = fields.DateTime(allow_none=True)
+    quota_period_start_at = fields.DateTime(allow_none=True)
+
+
 def _check_quota_management_secret() -> tuple[Response, int] | None:
     if not REANA_QUOTA_MANAGEMENT_SECRET:
         return jsonify(message="Quota management endpoint is not configured."), 403
@@ -40,6 +53,48 @@ def _check_quota_management_secret() -> tuple[Response, int] | None:
         return jsonify(message="Unauthorized"), 401
 
     return None
+
+
+def _get_quota_period(
+    resource_type: str,
+    user_id: Optional[str] = None,
+    email: Optional[str] = None,
+    user_access_token: Optional[str] = None,
+) -> tuple[Optional[dict], Optional[str], int]:
+    """Get periodic quota metadata for a given user and resource."""
+    users = _get_users(user_id, email, user_access_token) or None
+    user = users[0] if users else None
+    if not user:
+        return None, "User not found.", 404
+
+    if resource_type not in ResourceType._member_names_:
+        return None, (
+            f"Resource type '{resource_type}' is not one of the valid types: "
+            f"{', '.join(ResourceType._member_names_)}"
+        ), 400
+
+    resource = get_default_quota_resource(resource_type)
+    user_resource = UserResource.query.filter_by(
+        user_id=user.id_,
+        resource_id=resource.id_,
+    ).one_or_none()
+
+    if not user_resource:
+        return None, "User resource not found.", 404
+
+    return {
+        "quota_period_months": user_resource.quota_period_months,
+        "quota_period_anchor_at": (
+            user_resource.quota_period_anchor_at.isoformat()
+            if user_resource.quota_period_anchor_at
+            else None
+        ),
+        "quota_period_start_at": (
+            user_resource.quota_period_start_at.isoformat()
+            if user_resource.quota_period_start_at
+            else None
+        ),
+    }, None, 200
 
 
 def _get_quota(
@@ -246,13 +301,24 @@ def get_quota_usage():  # noqa
     if error_msg:
         return jsonify(message=error_msg), status
 
+    period, period_error, period_status = _get_quota_period(
+        resource_type, user_id, email, user_access_token
+    )
+    if period_error:
+        return jsonify(message=period_error), period_status
+
     if usage is None:
         return jsonify(message="Resource usage is not available."), 500
 
     if limit is None:
-        return jsonify(limit=-1, usage=usage, message="Resource limit is not set."), 200
+        return jsonify(
+            limit=-1,
+            usage = usage,
+            message = "Resource limit is not set.",
+            ** period,
+        ), 200
 
-    return jsonify(limit=limit, usage=usage, message="OK"), 200
+    return jsonify(limit=limit, usage=usage, message="OK", **period), 200
 
 
 @blueprint.route("/quota", methods=["POST"])
@@ -422,4 +488,123 @@ def set_quota_limit():  # noqa
     if status_code != 200:
         return jsonify(message=error_msg), status_code
 
-    return jsonify(limit=limit, usage=usage, message="OK"), status_code
+    period, error_msg, status_code = _get_quota_period(resource_type, user_id, email)
+    if status_code != 200:
+        return jsonify(message=error_msg), status_code
+
+    return jsonify(limit=limit, usage=usage, message="OK", **period), status_code
+
+
+@blueprint.route("/quota", methods=["PATCH"])
+def patch_quota():  # noqa
+    r"""Endpoint to patch quota period fields.
+
+    ---
+    patch:
+      summary: Patch periodic quota fields.
+      description: >-
+        This endpoint sets periodic quota accounting fields for a given user.
+      operationId: patch_quota
+      produces:
+        - application/json
+      parameters:
+        - name: X-Quota-Management-Secret
+          in: header
+          description: REANA user quota management secret
+          required: true
+          type: string
+        - name: data
+          in: body
+          description: Data required to patch periodic quota fields.
+          required: true
+          schema:
+            type: object
+            properties:
+              user_id:
+                type: string
+              email:
+                type: string
+              resource_type:
+                type: string
+              quota_period_months:
+                type: integer
+              quota_period_anchor_at:
+                type: string
+                format: date-time
+              quota_period_start_at:
+                type: string
+                format: date-time
+      responses:
+        200:
+          description: Resource quota period fields successfully updated.
+        400:
+          description: Invalid request.
+        401:
+          description: Unauthorized.
+        403:
+          description: Quota functionality is not enabled.
+        404:
+          description: User not found.
+        500:
+          description: Internal server error.
+    """
+    response = _check_quota_management_secret()
+    if response:
+        return response
+
+    json_body: dict = request.get_json()
+    errors = PatchQuotaBodySchema().validate(json_body)
+    if errors:
+        return jsonify(message=f"Invalid request. Errors: {errors}"), 400
+
+    user_id = json_body.get("user_id")
+    email = json_body.get("email")
+    resource_type = json_body.get("resource_type")
+
+    if int(bool(user_id)) + int(bool(email)) != 1:
+        return (
+            jsonify(
+                message="Exactly one of `user_id` or `email` must be provided.",
+            ),
+            400,
+        )
+
+    period_kwargs = {}
+    if "quota_period_months" in json_body:
+        period_kwargs["quota_period_months"] = json_body.get("quota_period_months")
+    if "quota_period_anchor_at" in json_body:
+        period_kwargs["quota_period_anchor_at"] = json_body.get("quota_period_anchor_at")
+    if "quota_period_start_at" in json_body:
+        period_kwargs["quota_period_start_at"] = json_body.get("quota_period_start_at")
+
+    msg, status_code, _ = _set_quota_period(
+        resource_type = resource_type,
+    user_id = user_id,
+    email = email,
+    ** period_kwargs,
+    )
+
+    if status_code != 200:
+        return jsonify(message=msg), status_code
+
+    limit, usage, error_msg, status_code = _get_quota(resource_type, user_id, email)
+    if status_code != 200:
+        return jsonify(message=error_msg), status_code
+
+    period, error_msg, status_code = _get_quota_period(resource_type, user_id, email)
+    if status_code != 200:
+        return jsonify(message=error_msg), status_code
+
+    if usage is None:
+        return jsonify(message="Resource usage is not available."), 500
+
+    if limit is None:
+        return jsonify(
+            limit=-1,
+            usage=usage,
+            message="Resource limit is not set.",
+            **period,
+        ), 200
+
+    return jsonify(limit=limit, usage=usage, message="OK", **period), 200
+

@@ -63,6 +63,7 @@ from reana_server.utils import (
     _get_user_by_criteria,
     _get_users,
     _import_users,
+    _set_quota_period,
     _validate_email,
     _validate_password,
     create_user_workspace,
@@ -567,6 +568,123 @@ def set_quota_limit(
     )
     click.secho(
         msg,
+        fg="green" if status_code == 200 else "red",
+        err=False if status_code == 200 else True,
+    )
+
+    if fatal:
+        sys.exit(1)
+
+@reana_admin.command(
+    "quota-set-period",
+    help="Set periodic quota fields for a given user.",
+)
+@click.option("--id", "user_id", help="The id of the user.")
+@click.option("-e", "--email", help="The email of the user.")
+@click.option(
+    "--resource",
+    "resource_type",
+    required=True,
+    type=click.Choice(["cpu", "disk"]),
+    help="Specify quota resource. Currently only cpu is supported.",
+)
+@click.option(
+    "--quota-period-months",
+    type=int,
+    default=None,
+    help="Length of quota period in months.",
+)
+@click.option(
+    "--quota-period-anchor-at",
+    type=click.DateTime(formats=["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"]),
+    default=None,
+    help="Anchor datetime for the quota period.",
+)
+@click.option(
+    "--quota-period-start-at",
+    type=click.DateTime(formats=["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"]),
+    default=None,
+    help="Current active quota period start datetime.",
+)
+@admin_access_token_option
+@click.pass_context
+def set_quota_period(
+    ctx,
+    user_id,
+    email,
+    resource_type,
+    quota_period_months,
+    quota_period_anchor_at,
+    quota_period_start_at,
+    admin_access_token,
+):
+    """Set periodic quota fields for one user."""
+    if int(bool(user_id)) + int(bool(email)) != 1:
+        click.secho(
+            "ERROR: Exactly one of `user_id` or `email` must be provided.",
+            fg="red",
+            err=True,
+        )
+        sys.exit(1)
+
+    msg, status_code, fatal = _set_quota_period(
+        resource_type=resource_type,
+        quota_period_months=quota_period_months,
+        quota_period_anchor_at=quota_period_anchor_at,
+        quota_period_start_at=quota_period_start_at,
+        user_id=user_id,
+        email=email,
+    )
+
+    click.secho(
+        msg or "Periodic quota fields updated successfully.",
+        fg="green" if status_code == 200 else "red",
+        err=False if status_code == 200 else True,
+    )
+
+    if fatal:
+        sys.exit(1)
+
+
+@reana_admin.command(
+    "quota-replenish",
+    help="Force start a new periodic quota window for a given user.",
+)
+@click.option("--id", "user_id", help="The id of the user.")
+@click.option("-e", "--email", help="The email of the user.")
+@click.option(
+    "--quota-period-start-at",
+    required=True,
+    type=click.DateTime(formats=["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"]),
+    help="New active quota period start datetime.",
+)
+@admin_access_token_option
+@click.pass_context
+def replenish_quota_period(
+    ctx,
+    user_id,
+    email,
+    quota_period_start_at,
+    admin_access_token,
+):
+    """Force start a new CPU quota period for one user."""
+    if int(bool(user_id)) + int(bool(email)) != 1:
+        click.secho(
+            "ERROR: Exactly one of `user_id` or `email` must be provided.",
+            fg="red",
+            err=True,
+        )
+        sys.exit(1)
+
+    msg, status_code, fatal = _set_quota_period(
+        resource_type="cpu",
+        quota_period_start_at=quota_period_start_at,
+        user_id=user_id,
+        email=email,
+    )
+
+    click.secho(
+        msg or "Quota period replenished successfully.",
         fg="green" if status_code == 200 else "red",
         err=False if status_code == 200 else True,
     )
