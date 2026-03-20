@@ -23,6 +23,7 @@ from reana_db.models import (
     AuditLogAction,
     InteractiveSession,
     Resource,
+    ResourceType,
     RunStatus,
     User,
     UserResource,

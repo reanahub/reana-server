@@ -221,6 +221,49 @@ def test_restart_workflow_validates_specification(
         assert res.status_code == 400
 
 
+def test_patch_quota_rejects_invalid_json_body(app):
+    """Test PATCH /api/quota returns a JSON 400 for invalid JSON bodies."""
+    with app.test_client() as client:
+        with patch("reana_server.rest.quota.REANA_QUOTA_MANAGEMENT_SECRET", "secret"):
+            res = client.patch(
+                url_for("quota.patch_quota"),
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Quota-Management-Secret": "secret",
+                },
+                data="not-json",
+            )
+
+    assert res.status_code == 400
+    assert res.json["message"] == "Invalid request. Expected application/json body."
+
+
+def test_patch_quota_rejects_non_integer_quota_period_months(app):
+    """Test PATCH /api/quota rejects non-integer quota period month values."""
+    with app.test_client() as client:
+        with patch("reana_server.rest.quota.REANA_QUOTA_MANAGEMENT_SECRET", "secret"):
+            res = client.patch(
+                url_for("quota.patch_quota"),
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Quota-Management-Secret": "secret",
+                },
+                data=json.dumps(
+                    {
+                        "email": "user@example.org",
+                        "resource_type": "cpu",
+                        "quota_period_months": 0.2,
+                    }
+                ),
+            )
+
+    assert res.status_code == 400
+    assert (
+        res.json["message"]
+        == "Invalid request. Errors: {'quota_period_months': ['Not a valid integer.']}"
+    )
+
+
 def test_get_workflow_specification(
     app, user0, _get_user_mock, sample_yadage_workflow_in_db
 ):

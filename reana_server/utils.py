@@ -15,9 +15,10 @@ import os
 import pathlib
 import secrets
 import shutil
-from typing import Dict, List, Optional, Tuple, Union
 import sys
 import traceback
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple, Union
 
 from uuid import UUID, uuid4
 
@@ -54,7 +55,10 @@ from reana_db.models import (
     AuditLogAction,
     Resource,
 )
-from reana_db.utils import get_default_quota_resource
+from reana_db.utils import (
+    get_current_quota_period_start_at,
+    get_default_quota_resource,
+)
 from sqlalchemy.exc import (
     IntegrityError,
     InvalidRequestError,
@@ -349,6 +353,11 @@ def _calculate_complexity(workflow):
     workflow.complexity = complexity
     Session.commit()
     return complexity
+
+
+def serialize_utc_datetime(dt: Optional[datetime]) -> Optional[str]:
+    """Serialize a naive UTC datetime using an RFC 3339 UTC designator."""
+    return dt.isoformat() + "Z" if dt else None
 
 
 def _load_and_save_yadage_spec(workflow: Workflow, operational_options: Dict):
@@ -938,6 +947,91 @@ def _set_quota_limit(
         logging.debug(traceback.format_exc())
         logging.debug(str(e))
         return "Error setting quota limit: \n{}".format(str(e)), 500, False
+
+
+_UNSET = object()
+
+
+def _set_quota_period(
+    *,
+    resource_type: str,
+    quota_period_months: Optional[int] = _UNSET,
+    quota_period_start_at: Optional[datetime] = _UNSET,
+    email: Optional[str] = None,
+    user_id: Optional[str] = None,
+) -> tuple[Optional[str], int, bool]:
+    """Set periodic quota fields for one user.
+
+    Only CPU resources are supported for now.
+    """
+    if resource_type != ResourceType.cpu.name:
+        return "Periodic quota is currently supported only for CPU.", 400, True
+
+    if int(bool(user_id)) + int(bool(email)) != 1:
+        return "Exactly one of `user_id` or `email` must be provided.", 400, True
+
+    try:
+        user = _get_user_by_criteria(user_id, email)
+        if not user:
+            return "User not found.", 404, True
+
+        cpu_resource = get_default_quota_resource(ResourceType.cpu.name)
+        user_resource = (
+            Session.query(UserResource)
+            .filter_by(
+                user_id=user.id_,
+                resource_id=cpu_resource.id_,
+            )
+            .one_or_none()
+        )
+
+        if not user_resource:
+            return "User CPU quota resource not found.", 404, True
+
+        if (
+            quota_period_months is not _UNSET
+            and quota_period_months is not None
+            and quota_period_months <= 0
+        ):
+            return "`quota_period_months` must be a positive integer.", 400, True
+
+        effective_quota_period_months = (
+            quota_period_months
+            if quota_period_months is not _UNSET
+            else user_resource.quota_period_months
+        )
+
+        if (
+            quota_period_start_at is not _UNSET
+            and effective_quota_period_months is None
+        ):
+            return (
+                "Cannot set `quota_period_start_at` for a user without periodic "
+                "quota cadence. Set `quota_period_months` first.",
+                400,
+                True,
+            )
+
+        if quota_period_months is not _UNSET:
+            user_resource.quota_period_months = quota_period_months
+            if quota_period_months is None:
+                user_resource.quota_period_start_at = None
+        if quota_period_start_at is _UNSET and not user_resource.quota_period_start_at:
+            quota_period_start_at = get_current_quota_period_start_at(
+                reference_start_at=user.created,
+                quota_period_months=effective_quota_period_months,
+            )
+
+        if quota_period_start_at is not _UNSET:
+            user_resource.quota_period_start_at = quota_period_start_at
+
+        Session.commit()
+        return None, 200, False
+    except Exception as e:
+        Session.rollback()
+        logging.debug(traceback.format_exc())
+        logging.debug(str(e))
+        return "Error setting quota period: \n{}".format(str(e)), 500, False
 
 
 class JinjaEnv:

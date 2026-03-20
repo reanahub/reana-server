@@ -6,12 +6,18 @@
 
 """REANA-Server tests for utils module."""
 
+from datetime import datetime
 import pathlib
 
 import pytest
 from reana_commons.errors import REANAValidationError
-from reana_db.models import UserToken, UserTokenStatus, UserTokenType
-from reana_server.utils import filter_input_files, get_user_from_token, is_valid_email
+from reana_db.models import ResourceType, UserToken, UserTokenStatus, UserTokenType
+from reana_server.utils import (
+    _set_quota_period,
+    filter_input_files,
+    get_user_from_token,
+    is_valid_email,
+)
 
 
 @pytest.mark.parametrize(
@@ -81,3 +87,79 @@ def test_get_user_from_token_two_tokens(user0, session):
     # Check that old revoked token does not work
     with pytest.raises(ValueError, match="revoked"):
         get_user_from_token(old_token.token)
+
+
+def test_set_quota_period_rejects_period_start_without_cadence(user0, session):
+    """Test setting a period start requires an existing periodic cadence."""
+    cpu_user_resource = next(
+        resource
+        for resource in user0.resources
+        if resource.resource.type_ == ResourceType.cpu
+    )
+    cpu_user_resource.quota_period_months = None
+    cpu_user_resource.quota_period_start_at = None
+    session.commit()
+
+    msg, status_code, fatal = _set_quota_period(
+        resource_type=ResourceType.cpu.name,
+        email=user0.email,
+        quota_period_start_at=datetime(2026, 7, 1, 0, 0, 0),
+    )
+
+    session.refresh(cpu_user_resource)
+    assert status_code == 400
+    assert fatal is True
+    assert "quota_period_months" in msg
+    assert cpu_user_resource.quota_period_months is None
+    assert cpu_user_resource.quota_period_start_at is None
+
+
+def test_set_quota_period_accepts_period_start_with_existing_cadence(user0, session):
+    """Test setting a period start works once the user has a cadence."""
+    cpu_user_resource = next(
+        resource
+        for resource in user0.resources
+        if resource.resource.type_ == ResourceType.cpu
+    )
+    cpu_user_resource.quota_period_months = 3
+    cpu_user_resource.quota_period_start_at = None
+    session.commit()
+
+    new_period_start = datetime(2026, 7, 1, 0, 0, 0)
+    msg, status_code, fatal = _set_quota_period(
+        resource_type=ResourceType.cpu.name,
+        email=user0.email,
+        quota_period_start_at=new_period_start,
+    )
+
+    session.refresh(cpu_user_resource)
+    assert msg is None
+    assert status_code == 200
+    assert fatal is False
+    assert cpu_user_resource.quota_period_months == 3
+    assert cpu_user_resource.quota_period_start_at == new_period_start
+
+
+def test_set_quota_period_disabling_cadence_clears_period_start(user0, session):
+    """Test disabling periodic quota cadence clears the stored period start."""
+    cpu_user_resource = next(
+        resource
+        for resource in user0.resources
+        if resource.resource.type_ == ResourceType.cpu
+    )
+    cpu_user_resource.quota_period_months = 3
+    cpu_user_resource.quota_period_start_at = datetime(2026, 7, 1, 0, 0, 0)
+    session.commit()
+
+    msg, status_code, fatal = _set_quota_period(
+        resource_type=ResourceType.cpu.name,
+        email=user0.email,
+        quota_period_months=None,
+    )
+
+    session.refresh(cpu_user_resource)
+    assert msg is None
+    assert status_code == 200
+    assert fatal is False
+    assert cpu_user_resource.quota_period_months is None
+    assert cpu_user_resource.quota_period_start_at is None
