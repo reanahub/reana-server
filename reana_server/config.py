@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import re
+from datetime import timedelta
 from typing import Optional
 
 from distutils.util import strtobool
@@ -279,6 +280,15 @@ CORS_SUPPORTS_CREDENTIALS = False
 #: It should be changed before deploying.
 SECRET_KEY = os.getenv("REANA_SECRET_KEY", "CHANGE_ME")
 """Secret key used for the application user sessions."""
+
+#: Maximum lifetime of a user web session, in hours. Flask-KVSession uses this
+#: value as the Redis TTL for server-side session keys. Since flask-kvsession
+#: only saves on session.modified (which only happens at login), this is
+#: effectively an absolute timeout from login.
+PERMANENT_SESSION_LIFETIME = timedelta(
+    hours=int(os.getenv("PERMANENT_SESSION_LIFETIME", 744))
+)
+"""Maximum session lifetime from login, in hours."""
 
 #: Sets cookie with the secure flag by default
 SESSION_COOKIE_SECURE = True
