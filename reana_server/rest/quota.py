@@ -16,7 +16,6 @@ from marshmallow import fields, Schema
 from reana_db.models import ResourceType, UserResource
 from reana_db.utils import get_default_quota_resource
 
-
 from reana_server.config import REANA_QUOTA_MANAGEMENT_SECRET
 from reana_server.utils import _set_quota_limit, _set_quota_period, _get_users
 
@@ -39,7 +38,6 @@ class PatchQuotaBodySchema(Schema):
     email = fields.Str()
     resource_type = fields.Str(required=True)
     quota_period_months = fields.Int(allow_none=True)
-    quota_period_anchor_at = fields.DateTime(allow_none=True)
     quota_period_start_at = fields.DateTime(allow_none=True)
 
 
@@ -68,10 +66,14 @@ def _get_quota_period(
         return None, "User not found.", 404
 
     if resource_type not in ResourceType._member_names_:
-        return None, (
-            f"Resource type '{resource_type}' is not one of the valid types: "
-            f"{', '.join(ResourceType._member_names_)}"
-        ), 400
+        return (
+            None,
+            (
+                f"Resource type '{resource_type}' is not one of the valid types: "
+                f"{', '.join(ResourceType._member_names_)}"
+            ),
+            400,
+        )
 
     resource = get_default_quota_resource(resource_type)
     user_resource = UserResource.query.filter_by(
@@ -82,19 +84,18 @@ def _get_quota_period(
     if not user_resource:
         return None, "User resource not found.", 404
 
-    return {
-        "quota_period_months": user_resource.quota_period_months,
-        "quota_period_anchor_at": (
-            user_resource.quota_period_anchor_at.isoformat()
-            if user_resource.quota_period_anchor_at
-            else None
-        ),
-        "quota_period_start_at": (
-            user_resource.quota_period_start_at.isoformat()
-            if user_resource.quota_period_start_at
-            else None
-        ),
-    }, None, 200
+    return (
+        {
+            "quota_period_months": user_resource.quota_period_months,
+            "quota_period_start_at": (
+                user_resource.quota_period_start_at.isoformat()
+                if user_resource.quota_period_start_at
+                else None
+            ),
+        },
+        None,
+        200,
+    )
 
 
 def _get_quota(
@@ -311,12 +312,15 @@ def get_quota_usage():  # noqa
         return jsonify(message="Resource usage is not available."), 500
 
     if limit is None:
-        return jsonify(
-            limit=-1,
-            usage = usage,
-            message = "Resource limit is not set.",
-            ** period,
-        ), 200
+        return (
+            jsonify(
+                limit=-1,
+                usage=usage,
+                message="Resource limit is not set.",
+                **period,
+            ),
+            200,
+        )
 
     return jsonify(limit=limit, usage=usage, message="OK", **period), 200
 
@@ -528,9 +532,6 @@ def patch_quota():  # noqa
                 type: string
               quota_period_months:
                 type: integer
-              quota_period_anchor_at:
-                type: string
-                format: date-time
               quota_period_start_at:
                 type: string
                 format: date-time
@@ -572,16 +573,22 @@ def patch_quota():  # noqa
     period_kwargs = {}
     if "quota_period_months" in json_body:
         period_kwargs["quota_period_months"] = json_body.get("quota_period_months")
-    if "quota_period_anchor_at" in json_body:
-        period_kwargs["quota_period_anchor_at"] = json_body.get("quota_period_anchor_at")
     if "quota_period_start_at" in json_body:
         period_kwargs["quota_period_start_at"] = json_body.get("quota_period_start_at")
 
+    if not period_kwargs:
+        return (
+            jsonify(
+                message="At least one of `quota_period_months` or `quota_period_start_at` must be provided.",
+            ),
+            400,
+        )
+
     msg, status_code, _ = _set_quota_period(
-        resource_type = resource_type,
-    user_id = user_id,
-    email = email,
-    ** period_kwargs,
+        resource_type=resource_type,
+        user_id=user_id,
+        email=email,
+        **period_kwargs,
     )
 
     if status_code != 200:
@@ -599,12 +606,14 @@ def patch_quota():  # noqa
         return jsonify(message="Resource usage is not available."), 500
 
     if limit is None:
-        return jsonify(
-            limit=-1,
-            usage=usage,
-            message="Resource limit is not set.",
-            **period,
-        ), 200
+        return (
+            jsonify(
+                limit=-1,
+                usage=usage,
+                message="Resource limit is not set.",
+                **period,
+            ),
+            200,
+        )
 
     return jsonify(limit=limit, usage=usage, message="OK", **period), 200
-

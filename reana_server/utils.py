@@ -15,11 +15,10 @@ import os
 import pathlib
 import secrets
 import shutil
-from typing import Dict, List, Optional, Tuple, Union
 import sys
 import traceback
 from datetime import datetime
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from uuid import UUID, uuid4
 
@@ -53,7 +52,10 @@ from reana_db.models import (
     AuditLogAction,
     Resource,
 )
-from reana_db.utils import get_default_quota_resource
+from reana_db.utils import (
+    get_current_quota_period_start_at_from_anchor,
+    get_default_quota_resource,
+)
 from sqlalchemy.exc import (
     IntegrityError,
     InvalidRequestError,
@@ -895,18 +897,20 @@ def _set_quota_limit(
         logging.debug(str(e))
         return "Error setting quota limit: \n{}".format(str(e)), 500, False
 
+
 _UNSET = object()
+
 
 def _set_quota_period(
     *,
     resource_type: str,
     quota_period_months: Optional[int] = _UNSET,
-    quota_period_anchor_at: Optional[datetime] = _UNSET,
     quota_period_start_at: Optional[datetime] = _UNSET,
     email: Optional[str] = None,
     user_id: Optional[str] = None,
 ) -> tuple[Optional[str], int, bool]:
     """Set periodic quota fields for one user.
+
     Only CPU resources are supported for now.
     """
     if resource_type != ResourceType.cpu.name:
@@ -920,10 +924,14 @@ def _set_quota_period(
         return "User not found.", 404, False
 
     cpu_resource = get_default_quota_resource(ResourceType.cpu.name)
-    user_resource = Session.query(UserResource).filter_by(
-        user_id=user.id_,
-        resource_id=cpu_resource.id_,
-    ).one_or_none()
+    user_resource = (
+        Session.query(UserResource)
+        .filter_by(
+            user_id=user.id_,
+            resource_id=cpu_resource.id_,
+        )
+        .one_or_none()
+    )
 
     if not user_resource:
         return "User CPU quota resource not found.", 404, False
@@ -935,10 +943,20 @@ def _set_quota_period(
     ):
         return "`quota_period_months` must be a positive integer.", 400, False
 
+    effective_quota_period_months = (
+        quota_period_months
+        if quota_period_months is not _UNSET
+        else user_resource.quota_period_months
+    )
+
     if quota_period_months is not _UNSET:
         user_resource.quota_period_months = quota_period_months
-    if quota_period_anchor_at is not _UNSET:
-        user_resource.quota_period_anchor_at = quota_period_anchor_at
+    if quota_period_start_at is _UNSET and not user_resource.quota_period_start_at:
+        quota_period_start_at = get_current_quota_period_start_at_from_anchor(
+            anchor_at=user.created,
+            quota_period_months=effective_quota_period_months,
+        )
+
     if quota_period_start_at is not _UNSET:
         user_resource.quota_period_start_at = quota_period_start_at
 

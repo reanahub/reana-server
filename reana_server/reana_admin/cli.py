@@ -19,6 +19,7 @@ from typing import List, Optional
 import click
 import requests
 import tablib
+from click.core import ParameterSource
 from flask.cli import with_appcontext
 from invenio_accounts.utils import register_user
 from kubernetes.client.rest import ApiException
@@ -62,6 +63,7 @@ from reana_server.utils import (
     _export_users,
     _get_user_by_criteria,
     _get_users,
+    _UNSET,
     _import_users,
     _set_quota_period,
     _validate_email,
@@ -75,6 +77,12 @@ from reana_server.utils import (
 @click.group()
 def reana_admin():
     """REANA administration commands."""
+
+
+def _unset_if_option_omitted(ctx, param, value):
+    if ctx.get_parameter_source(param.name) == ParameterSource.DEFAULT:
+        return _UNSET
+    return value
 
 
 @reana_admin.command("create-admin-user")
@@ -575,6 +583,7 @@ def set_quota_limit(
     if fatal:
         sys.exit(1)
 
+
 @reana_admin.command(
     "quota-set-period",
     help="Set periodic quota fields for a given user.",
@@ -592,18 +601,14 @@ def set_quota_limit(
     "--quota-period-months",
     type=int,
     default=None,
+    callback=_unset_if_option_omitted,
     help="Length of quota period in months.",
-)
-@click.option(
-    "--quota-period-anchor-at",
-    type=click.DateTime(formats=["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"]),
-    default=None,
-    help="Anchor datetime for the quota period.",
 )
 @click.option(
     "--quota-period-start-at",
     type=click.DateTime(formats=["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"]),
     default=None,
+    callback=_unset_if_option_omitted,
     help="Current active quota period start datetime.",
 )
 @admin_access_token_option
@@ -614,7 +619,6 @@ def set_quota_period(
     email,
     resource_type,
     quota_period_months,
-    quota_period_anchor_at,
     quota_period_start_at,
     admin_access_token,
 ):
@@ -630,7 +634,6 @@ def set_quota_period(
     msg, status_code, fatal = _set_quota_period(
         resource_type=resource_type,
         quota_period_months=quota_period_months,
-        quota_period_anchor_at=quota_period_anchor_at,
         quota_period_start_at=quota_period_start_at,
         user_id=user_id,
         email=email,

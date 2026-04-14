@@ -14,7 +14,7 @@ import traceback
 from bravado.exception import HTTPError
 from flask import Blueprint, jsonify
 from reana_db.database import Session
-from reana_db.models import AuditLogAction, User, UserWorkflow, Workflow
+from reana_db.models import AuditLogAction, ResourceType, User, UserWorkflow, Workflow
 from reana_commons.config import (
     REANA_COMPONENT_PREFIX,
     REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
@@ -28,6 +28,31 @@ from reana_server.decorators import signin_required
 from reana_server.utils import JinjaEnv
 
 blueprint = Blueprint("users", __name__)
+
+
+def _serialize_user_quota(user):
+    """Serialize user quota usage including periodic CPU metadata."""
+    quota = user.get_quota_usage()
+    cpu_quota = quota.get(ResourceType.cpu.name)
+    cpu_user_resource = next(
+        (
+            resource
+            for resource in user.resources
+            if resource.resource.type_ == ResourceType.cpu
+        ),
+        None,
+    )
+    if cpu_quota and cpu_user_resource:
+        quota[ResourceType.cpu.name] = {
+            **cpu_quota,
+            "quota_period_months": cpu_user_resource.quota_period_months,
+            "quota_period_start_at": (
+                cpu_user_resource.quota_period_start_at.isoformat()
+                if cpu_user_resource.quota_period_start_at
+                else None
+            ),
+        }
+    return quota
 
 
 @blueprint.route("/you", methods=["GET"])
@@ -112,6 +137,11 @@ def get_you(user):
                             type: string
                       health:
                         type: string
+                      quota_period_months:
+                        type: integer
+                      quota_period_start_at:
+                        type: string
+                        format: date-time
           examples:
             application/json:
               {
@@ -135,6 +165,8 @@ def get_you(user):
                       "human_readable": "1m 10s"
                     },
                     "health": "healthy"
+                    "quota_period_months": 3,
+                    "quota_period_start_at": "2026-04-01T13:06:32.992595"
                   },
                   "disk": {
                     "limit": {
@@ -208,7 +240,7 @@ def get_you(user):
                         },
                         "full_name": user.full_name,
                         "username": user.username,
-                        "quota": user.get_quota_usage(),
+                        "quota": _serialize_user_quota(user),
                     }
                 ),
                 200,
