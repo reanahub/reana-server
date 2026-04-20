@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022, 2024 CERN.
+# Copyright (C) 2019, 2020, 2021, 2022, 2024, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -97,6 +97,18 @@ class REANA(object):
 
         account_info_received.connect(_create_and_associate_oauth_user)
         user_registered.connect(_create_and_associate_local_user)
+
+        @app.after_request
+        def add_security_headers(response):
+            response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+            response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Permissions-Policy"] = (
+                "accelerometer=(), ambient-light-sensor=(), camera=(), "
+                "display-capture=(), geolocation=(), gyroscope=(), "
+                "magnetometer=(), microphone=(), payment=(), usb=()"
+            )
+            return response
 
         @app.teardown_appcontext
         def shutdown_reana_db_session(response_or_exc):
