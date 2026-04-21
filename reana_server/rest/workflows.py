@@ -40,6 +40,7 @@ from reana_server.utils import (
     _get_reana_yaml_from_gitlab,
     _load_and_save_yadage_spec,
     clone_workflow,
+    ensure_dask_service,
     get_quota_excess_message,
     get_workspace_retention_rules,
     is_uuid_v4,
@@ -1215,6 +1216,9 @@ def _start_workflow(workflow_id_or_name, user, **parameters):
         validate_workflow(
             workflow.reana_specification, input_parameters=input_parameters
         )
+
+        if ensure_dask_service(workflow):
+            Session.object_session(workflow).commit()
 
         # when starting the workflow, the scheduler will call RWC's `set_workflow_status`
         # with the given `parameters`
