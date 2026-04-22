@@ -3,6 +3,60 @@
 
 # Changelog
 
+## [0.9.5](https://github.com/reanahub/reana-server/compare/0.9.4...0.9.5) (2026-04-22)
+
+
+### Build
+
+* **docker:** pin setuptools 70 ([#724](https://github.com/reanahub/reana-server/issues/724)) ([bd3d24a](https://github.com/reanahub/reana-server/commit/bd3d24a5a5768d6ba9ef4aa9b2d31d8c91ce4a9c))
+* **docker:** pin setuptools 70 ([#724](https://github.com/reanahub/reana-server/issues/724)) ([26f511e](https://github.com/reanahub/reana-server/commit/26f511ed9795f851e46cb0ecdf3085ec12eff71c))
+* **python:** pin flask-security-invenio and invenio-accounts ([#762](https://github.com/reanahub/reana-server/issues/762)) ([ce0a905](https://github.com/reanahub/reana-server/commit/ce0a90516e3b07e52bac672220dc169ed09caa1f))
+* **python:** pin setuptools below 81 ([#761](https://github.com/reanahub/reana-server/issues/761)) ([8059515](https://github.com/reanahub/reana-server/commit/80595156802985af884933e64c73d2886ac30ea2))
+
+
+### Features
+
+* **config:** add EOSC EU Node AAI SSO login method ([#750](https://github.com/reanahub/reana-server/issues/750)) ([bed1ffa](https://github.com/reanahub/reana-server/commit/bed1ffa50d326076d243a25531f093cb7539d7fd))
+* **config:** allow automatic access token issuance ([#762](https://github.com/reanahub/reana-server/issues/762)) ([ce6fb3a](https://github.com/reanahub/reana-server/commit/ce6fb3a4150f89cb07bee96b7c5542ef483fc586))
+* **config:** allow custom session lifetime ([#765](https://github.com/reanahub/reana-server/issues/765)) ([05d7ba6](https://github.com/reanahub/reana-server/commit/05d7ba6a2266d8d3517fca93520f9a3f742e0619))
+* **config:** make number of threads configurable for Dask ([#719](https://github.com/reanahub/reana-server/issues/719)) ([5b82925](https://github.com/reanahub/reana-server/commit/5b8292541b10126823da8a288dbc3e87591724c0))
+* **rest:** add gitlab_host to info endpoint ([#740](https://github.com/reanahub/reana-server/issues/740)) ([db12634](https://github.com/reanahub/reana-server/commit/db126347293fae4cf77ffeb9ca9f7c0d4eabf844))
+* **rest:** add K8s resource requests & limits to info endpoint ([#724](https://github.com/reanahub/reana-server/issues/724)) ([bd3d24a](https://github.com/reanahub/reana-server/commit/bd3d24a5a5768d6ba9ef4aa9b2d31d8c91ce4a9c))
+* **rest:** add K8s resource requests & limits to info endpoint ([#724](https://github.com/reanahub/reana-server/issues/724)) ([ee2820e](https://github.com/reanahub/reana-server/commit/ee2820e3ac0c1c0263e9d119645a2c0b59fd3e1e))
+* **rest:** add quota management endpoint ([#748](https://github.com/reanahub/reana-server/issues/748)) ([37fe2b9](https://github.com/reanahub/reana-server/commit/37fe2b9a8f5ae63218265e779cb48d2087e74e53))
+
+
+### Bug fixes
+
+* **config:** set localhost default value for REANA_HOSTNAME ([#717](https://github.com/reanahub/reana-server/issues/717)) ([a24c810](https://github.com/reanahub/reana-server/commit/a24c810f018e5fd925d9ad01ce986537adad7ee8))
+* **rest:** add gitlab_host schema definition to info endpoint ([#759](https://github.com/reanahub/reana-server/issues/759)) ([464437d](https://github.com/reanahub/reana-server/commit/464437d1e324a464d31a598c1845ea3bdcbd1c7c))
+* **rest:** fix non-JSON errors when opening interactive sessions ([#738](https://github.com/reanahub/reana-server/issues/738)) ([3248aec](https://github.com/reanahub/reana-server/commit/3248aec408fbef148fcc4267c4378fca66575b26))
+* **rest:** sync workspace listing error docs ([#769](https://github.com/reanahub/reana-server/issues/769)) ([f8e8916](https://github.com/reanahub/reana-server/commit/f8e8916297f1230ff975a1e3f3eb31b2532a2992))
+
+
+### Code refactoring
+
+* **reana-admin:** harmonise `user-uuid` runtime pod label ([#754](https://github.com/reanahub/reana-server/issues/754)) ([5ae23c1](https://github.com/reanahub/reana-server/commit/5ae23c12086b17bb50414d8d22f40e7c639966cf))
+
+
+### Code style
+
+* **python:** adapt code base to the new black version ([#759](https://github.com/reanahub/reana-server/issues/759)) ([6c9e55e](https://github.com/reanahub/reana-server/commit/6c9e55ebddfb461f7bfe4123ecf2d52916655b4c))
+
+
+### Continuous integration
+
+* **commitlint:** fix local running of commit linter on macOS ([#736](https://github.com/reanahub/reana-server/issues/736)) ([40b5356](https://github.com/reanahub/reana-server/commit/40b535698c9200d61eb62cf53c29d5f918cc5c25))
+* **jsonlint:** add JSON linting ([#732](https://github.com/reanahub/reana-server/issues/732)) ([cc3753a](https://github.com/reanahub/reana-server/commit/cc3753a522b732ff3c6f3d5ae90262551577cdd6))
+* **markdownlint:** add Markdown linting ([#735](https://github.com/reanahub/reana-server/issues/735)) ([d05e5af](https://github.com/reanahub/reana-server/commit/d05e5affe0de3153d56183fb8d1ca83b17daad95))
+* **markdownlint:** less permissive global configuration ([#763](https://github.com/reanahub/reana-server/issues/763)) ([f0b4d72](https://github.com/reanahub/reana-server/commit/f0b4d72bb946007816192f43c9e401bb40cf95e7))
+* **prettier:** add Prettier code formatting checks ([#737](https://github.com/reanahub/reana-server/issues/737)) ([e04d1fd](https://github.com/reanahub/reana-server/commit/e04d1fdd679bc576e685ca0bab978594da775c35))
+* **run-tests:** add usage help and refactor options ([#763](https://github.com/reanahub/reana-server/issues/763)) ([40818a2](https://github.com/reanahub/reana-server/commit/40818a2e34eb797172e7037ffa61129e56e55c06))
+* **runners:** upgrade CI runners to Ubuntu 22.04 ([#726](https://github.com/reanahub/reana-server/issues/726)) ([bd3d24a](https://github.com/reanahub/reana-server/commit/bd3d24a5a5768d6ba9ef4aa9b2d31d8c91ce4a9c))
+* **runners:** upgrade CI runners to Ubuntu 22.04 ([#726](https://github.com/reanahub/reana-server/issues/726)) ([b5d4e54](https://github.com/reanahub/reana-server/commit/b5d4e541afaaa0e5240c51af324accd08873f2ee))
+* **shfmt:** add shfmt code formatting checks ([#734](https://github.com/reanahub/reana-server/issues/734)) ([1dcc563](https://github.com/reanahub/reana-server/commit/1dcc56380adc5987d2ba9becd2de643166542038))
+* **yamllint:** add YAML linting ([#733](https://github.com/reanahub/reana-server/issues/733)) ([c36c461](https://github.com/reanahub/reana-server/commit/c36c461352cb19ff3f8b9f2901d7520482065e12))
+
 ## [0.9.4](https://github.com/reanahub/reana-server/compare/0.9.3...0.9.4) (2024-11-29)
 
 ### Build
