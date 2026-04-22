@@ -5267,7 +5267,7 @@
             "type": "integer"
           },
           {
-            "description": "Filter workflow workspace files.",
+            "description": "Filter workflow workspace files by file name, size, or modification date.",
             "in": "query",
             "name": "search",
             "required": false,
@@ -5315,10 +5315,10 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming payload seems malformed.",
+            "description": "Request failed. The request parameters are invalid or the filtered result set exceeds the configured display limit.",
             "examples": {
               "application/json": {
-                "message": "Field 'size': Must be at least 1."
+                "message": "Too many files to display (e.g. limit=100000). Please use more specific filters to narrow the results. Available filters: file name, size, or last-modified."
               }
             },
             "schema": {

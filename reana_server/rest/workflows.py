@@ -2098,7 +2098,7 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
           type: integer
         - name: search
           in: query
-          description: Filter workflow workspace files.
+          description: Filter workflow workspace files by file name, size, or modification date.
           required: false
           type: string
       responses:
@@ -2128,7 +2128,8 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
                           type: string
         400:
           description: >-
-            Request failed. The incoming payload seems malformed.
+            Request failed. The request parameters are invalid or the filtered
+            result set exceeds the configured display limit.
           schema:
             type: object
             properties:
@@ -2137,7 +2138,10 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
           examples:
             application/json:
               {
-                "message": "Field 'size': Must be at least 1."
+                "message": "Too many files to display (e.g. limit=100000).
+                            Please use more specific filters to narrow the
+                            results. Available filters: file name, size, or
+                            last-modified."
               }
         403:
           description: >-
