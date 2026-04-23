@@ -31,6 +31,7 @@ from reana_server.config import (
     REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY,
     REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
     REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS,
+    REANA_VETTED_CONTAINER_IMAGES,
 )
 from reana_server import utils
 
@@ -119,6 +120,23 @@ def validate_inputs(reana_yaml: Dict) -> None:
             )
 
 
+def validate_images(reana_yaml: Dict) -> None:
+    """Check whether the images used in the workflow are allowed or not.
+
+    :param reana_yaml: REANA specification.
+    """
+    if not REANA_VETTED_CONTAINER_IMAGES["enabled"]:
+        return
+
+    allowed_images = REANA_VETTED_CONTAINER_IMAGES["allowlist"]
+    steps = reana_yaml["workflow"].get("specification", {}).get("steps", [])
+
+    for step in steps:
+        image = step.get("environment", None)
+        if image and image not in allowed_images:
+            raise REANAValidationError(f"Image not allowed: {image}")
+
+
 def validate_workflow(reana_yaml: Dict, input_parameters: Dict) -> Dict:
     """Validate REANA workflow specification by calling all the validation utilities.
 
@@ -137,6 +155,7 @@ def validate_workflow(reana_yaml: Dict, input_parameters: Dict) -> Dict:
     validate_compute_backends(reana_yaml)
     validate_workspace_path(reana_yaml)
     validate_inputs(reana_yaml)
+    validate_images(reana_yaml)
     return reana_yaml_warnings
 
 

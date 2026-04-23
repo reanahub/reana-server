@@ -33,6 +33,7 @@ from reana_server.config import (
     REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD,
     REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS,
     REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS_CUSTOM_ALLOWED,
+    REANA_VETTED_CONTAINER_IMAGES,
     DASK_ENABLED,
     DASK_AUTOSCALER_ENABLED,
     REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
@@ -201,6 +202,22 @@ def info(user, **kwargs):  # noqa
                     x-nullable: true
                 type: object
               workspaces_available:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              vetted_container_images_enabled:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: boolean
+                type: object
+              vetted_container_images_allowlist:
                 properties:
                   title:
                     type: string
@@ -405,6 +422,14 @@ def info(user, **kwargs):  # noqa
                     "title": "Whether users are allowed to spawn custom interactive session images",
                     "value": "False"
                 },
+                "vetted_container_images_enabled": {
+                    "title": "Whether container image vetting is enabled",
+                    "value": "False"
+                },
+                "vetted_container_images_allowlist": {
+                    "title": "List of container images allowed in user workflows",
+                    "value": []
+                },
                 "supported_workflow_engines": {
                     "title": "List of supported workflow engines",
                     "value": [
@@ -567,6 +592,14 @@ def info(user, **kwargs):  # noqa
                     ]
                 ],
             ),
+            vetted_container_images_enabled=dict(
+                title="Whether container image vetting is enabled",
+                value=REANA_VETTED_CONTAINER_IMAGES["enabled"],
+            ),
+            vetted_container_images_allowlist=dict(
+                title="List of container images allowed in user workflows",
+                value=REANA_VETTED_CONTAINER_IMAGES["allowlist"],
+            ),
             supported_workflow_engines=dict(
                 title="List of supported workflow engines",
                 value=["cwl", "serial", "snakemake", "yadage"],
@@ -653,6 +686,13 @@ class StringInfoValue(Schema):
     value = fields.String(allow_none=False)
 
 
+class BooleanInfoValue(Schema):
+    """Schema for a value represented by a string."""
+
+    title = fields.String()
+    value = fields.Boolean(allow_none=False)
+
+
 class StringNullableInfoValue(Schema):
     """Schema for a value represented by a nullable string."""
 
@@ -683,6 +723,8 @@ class InfoSchema(Schema):
     kubernetes_max_memory_limit = fields.Nested(StringInfoValue)
     interactive_session_recommended_jupyter_images = fields.Nested(ListStringInfoValue)
     interactive_sessions_custom_image_allowed = fields.Nested(StringInfoValue)
+    vetted_container_images_enabled = fields.Nested(BooleanInfoValue)
+    vetted_container_images_allowlist = fields.Nested(ListStringInfoValue)
     supported_workflow_engines = fields.Nested(ListStringInfoValue)
     cwl_engine_tool = fields.Nested(StringInfoValue)
     cwl_engine_version = fields.Nested(StringInfoValue)
