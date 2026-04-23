@@ -270,9 +270,13 @@ SECURITY_MSG_PASSWORD_INVALID_LENGTH = failed_signin_msg
 # CORS
 # ====
 REST_ENABLE_CORS = True
-# change this only while developing
-CORS_SEND_WILDCARD = True
+# See: https://flask-cors.readthedocs.io/en/latest/configuration.html
+# Echo the request's origin back only if it matches CORS_ORIGINS.
+# If True, it would send Access-Control-Allow-Origin: *
+# unconditionally, and let any website read API responses in the browser
+CORS_SEND_WILDCARD = False
 CORS_SUPPORTS_CREDENTIALS = False
+CORS_ORIGINS = [f"https://{REANA_HOSTNAME}"]
 
 # Flask configuration
 # ===================
@@ -311,7 +315,26 @@ if REANA_HOSTNAME:
 # ======================
 PROXYFIX_CONFIG = json.loads(os.getenv("PROXYFIX_CONFIG", '{"x_proto": 1}'))
 
-APP_DEFAULT_SECURE_HEADERS["content_security_policy"] = {}
+# See:
+# - Invenio docs: https://invenio-app.readthedocs.io/en/latest/configuration.html
+# - flask-talisman docs: https://github.com/GoogleCloudPlatform/flask-talisman
+APP_DEFAULT_SECURE_HEADERS["frame_options"] = "DENY"
+APP_DEFAULT_SECURE_HEADERS["strict_transport_security"] = True
+APP_DEFAULT_SECURE_HEADERS["strict_transport_security_max_age"] = 31536000
+APP_DEFAULT_SECURE_HEADERS["strict_transport_security_include_subdomains"] = True
+APP_DEFAULT_SECURE_HEADERS["referrer_policy"] = "strict-origin-when-cross-origin"
+# NOTE: keep in sync with reana-ui nginx/reana-ui.conf content security policy headers
+APP_DEFAULT_SECURE_HEADERS["content_security_policy"] = {
+    "default-src": "'self'",
+    "script-src": "'self'",
+    "style-src": ["'self'", "'unsafe-inline'"],
+    "img-src": ["'self'", "data:"],
+    "font-src": "'self'",
+    "connect-src": "'self'",
+    "frame-ancestors": "'none'",
+    "object-src": "'none'",
+    "base-uri": "'self'",
+}
 APP_DEFAULT_SECURE_HEADERS.update(
     json.loads(os.getenv("APP_DEFAULT_SECURE_HEADERS", "{}"))
 )
