@@ -361,12 +361,12 @@ def check_workspaces() -> List[CheckResult]:
 
         # find possible user/workflow owner
         try:
-            user = User.query.filter_by(id_=user_id).one_or_none()
+            user = Session.query(User).filter_by(id_=user_id).one_or_none()
         except StatementError:
             # user_id is not a valid UUID
             user = None
         try:
-            workflow = Workflow.query.filter_by(id_=workflow_id).one_or_none()
+            workflow = Session.query(Workflow).filter_by(id_=workflow_id).one_or_none()
         except StatementError:
             # workflow_id is not a valid UUID
             workflow = None

@@ -35,7 +35,7 @@ def base_app(tmp_shared_volume_path):
         "SERVER_NAME": "localhost:5000",
         "SECRET_KEY": "SECRET_KEY",
         "TESTING": True,
-        "FLASK_ENV": "development",
+        "DEBUG": True,
         "SHARED_VOLUME_PATH": tmp_shared_volume_path,
         "SQLALCHEMY_DATABASE_URI": os.getenv("REANA_SQLALCHEMY_DATABASE_URI"),
         "SQLALCHEMY_TRACK_MODIFICATIONS": False,

@@ -17,6 +17,7 @@ from reana_commons.errors import REANASecretAlreadyExists, REANASecretDoesNotExi
 from reana_commons.k8s.secrets import UserSecretsStore, Secret
 from webargs import fields
 from webargs.flaskparser import use_kwargs
+import marshmallow
 from marshmallow import Schema, validate
 
 from reana_server.decorators import signin_required
@@ -47,8 +48,10 @@ class AddSecretsBodySchema(Schema):
 @signin_required()
 @use_kwargs(
     {
-        "overwrite": fields.Bool(missing=False, location="query"),
-    }
+        "overwrite": fields.Bool(load_default=False),
+    },
+    location="query",
+    unknown=marshmallow.EXCLUDE,
 )
 def add_secrets(user, overwrite=False):
     r"""Endpoint to create user secrets.
@@ -150,7 +153,7 @@ def add_secrets(user, overwrite=False):
               }
     """
     json_body = request.json
-    AddSecretsBodySchema(strict=True).validate({"body": json_body})
+    AddSecretsBodySchema().validate({"body": json_body})
 
     try:
         secrets = [
@@ -366,7 +369,7 @@ def delete_secrets(user):  # noqa
               }
     """
     json_body = request.json
-    DeleteSecretsBodySchema(strict=True).validate({"body": json_body})
+    DeleteSecretsBodySchema().validate({"body": json_body})
     secrets = json_body
 
     try:

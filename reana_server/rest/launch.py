@@ -16,6 +16,7 @@ import traceback
 from bravado.exception import HTTPError
 from flask import Blueprint, jsonify
 from jsonschema import ValidationError
+import marshmallow
 from marshmallow import Schema
 from webargs import fields
 from webargs.flaskparser import use_kwargs
@@ -58,7 +59,9 @@ load_reana_spec_lock = threading.Lock()
         "name": fields.Str(),
         "parameters": fields.Str(),
         "specification": fields.Str(),
-    }
+    },
+    location="query",
+    unknown=marshmallow.EXCLUDE,
 )
 @signin_required()
 @check_quota

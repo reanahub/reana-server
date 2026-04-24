@@ -305,7 +305,7 @@ SESSION_COOKIE_SAMESITE = "Lax"
 #: In production use the following configuration plus adding  the hostname/ip
 #: of the reverse proxy in front of REANA-Server.
 if REANA_HOSTNAME:
-    APP_ALLOWED_HOSTS = [REANA_HOSTNAME]
+    TRUSTED_HOSTS = [REANA_HOSTNAME]
 
 # Security configuration
 # ======================

@@ -24,9 +24,10 @@ from flask import (
 )
 from flask_login.utils import _create_identifier
 from invenio_oauthclient.utils import get_safe_redirect_target
-from itsdangerous import BadData, TimedJSONWebSignatureSerializer
+from itsdangerous import BadData, URLSafeTimedSerializer
 from reana_commons.k8s.secrets import UserSecretsStore
 from werkzeug.local import LocalProxy
+import marshmallow
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
 
@@ -51,7 +52,7 @@ blueprint = Blueprint("gitlab", __name__)
 
 
 serializer = LocalProxy(
-    lambda: TimedJSONWebSignatureSerializer(current_app.config["SECRET_KEY"])
+    lambda: URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
 )
 
 
@@ -202,10 +203,12 @@ def gitlab_oauth(user):  # noqa
 @blueprint.route("/gitlab/projects", methods=["GET"])
 @use_kwargs(
     {
-        "search": fields.Str(location="query"),
-        "page": fields.Int(validate=validate.Range(min=1), location="query"),
-        "size": fields.Int(validate=validate.Range(min=1), location="query"),
-    }
+        "search": fields.Str(),
+        "page": fields.Int(validate=validate.Range(min=1)),
+        "size": fields.Int(validate=validate.Range(min=1)),
+    },
+    location="query",
+    unknown=marshmallow.EXCLUDE,
 )
 @signin_required()
 def gitlab_projects(

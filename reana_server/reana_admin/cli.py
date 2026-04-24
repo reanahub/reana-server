@@ -99,7 +99,7 @@ def users_create_default(email, password, id_):
         "email": email,
     }
     try:
-        user = User.query.filter_by(**reana_user_characteristics).first()
+        user = Session.query(User).filter_by(**reana_user_characteristics).first()
         if not user:
             reana_user_characteristics["access_token"] = secrets.token_urlsafe(16)
             user = User(**reana_user_characteristics)
@@ -239,7 +239,7 @@ def token_grant(admin_access_token, id_, email):
     """Grant a token to the selected user."""
     try:
         # token grant is committed before email is sent
-        admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
+        admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
         user = _get_user_by_criteria(id_, email)
         error_msg = None
         if not user:
@@ -294,7 +294,7 @@ def token_grant(admin_access_token, id_, email):
 def token_revoke(admin_access_token, id_, email):
     """Revoke selected user's token."""
     try:
-        admin = User.query.filter_by(id_=ADMIN_USER_ID).one_or_none()
+        admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
         user = _get_user_by_criteria(id_, email)
         error_msg = None
         if not user:
@@ -528,7 +528,7 @@ def list_quota_usage(
 def list_quota_resources(ctx):
     """List quota resources."""
     click.echo("Available resources are:")
-    for resource in Resource.query:
+    for resource in Session.query(Resource):
         click.echo(f"{resource.type_.name} ({resource.name})")
 
 
@@ -604,11 +604,11 @@ def set_default_quota_limit(ctx, admin_access_token: str):
         click.secho("There are no users without quota limits.", fg="green")
         sys.exit(0)
 
-    resources = Resource.query.all()
+    resources = Session.query(Resource).all()
 
     for user in users_without_quota_limits:
         for resource in resources:
-            user_resource = UserResource.query.filter_by(
+            user_resource = Session.query(UserResource).filter_by(
                 user_id=user.id_, resource_id=resource.id_
             ).first()
 
@@ -760,11 +760,11 @@ def retention_rules_apply(
         current_time = force_date
         click.echo(f"The current time is forced to be {current_time}")
 
-    candidate_rules = WorkspaceRetentionRule.query
+    candidate_rules = Session.query(WorkspaceRetentionRule)
     if workflow:
         candidate_rules = workflow.retention_rules
     elif user:
-        candidate_rules = WorkspaceRetentionRule.query.join(user.workflows.subquery())
+        candidate_rules = Session.query(WorkspaceRetentionRule).join(user.workflows.subquery())
 
     click.echo("Setting the status of all the rules that will be applied to `pending`")
     active_rules = candidate_rules.filter(
@@ -830,7 +830,7 @@ def retention_rules_extend(
 ) -> None:
     """Extend active retentions rules."""
     click.echo("Fetching all the active rules")
-    active_rules = WorkspaceRetentionRule.query.filter(
+    active_rules = Session.query(WorkspaceRetentionRule).filter(
         WorkspaceRetentionRule.status == WorkspaceRetentionRuleStatus.active,
         WorkspaceRetentionRule.workflow_id == workflow.id_,
     ).all()

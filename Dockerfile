@@ -44,30 +44,30 @@ RUN apt-get update -y && \
 WORKDIR /code
 COPY . /code
 
-# Are we debugging?
-ARG DEBUG=0
-RUN if [ "${DEBUG}" -gt 0 ]; then pip install --no-cache-dir -e ".[debug]"; else pip install --no-cache-dir .; fi;
-
 # Are we building with locally-checked-out shared modules?
+# Install shared modules before the main package so that pip resolves
+# dependencies against the local versions (e.g. reana-db with updated
+# SQLAlchemy pins) rather than pulling published versions from PyPI.
 # hadolint ignore=DL3013
-RUN if test -e modules/reana-commons; then \
-      if [ "${DEBUG}" -gt 0 ]; then \
-        pip install --no-cache-dir -e "modules/reana-commons[kubernetes,yadage,snakemake,cwl]" --upgrade; \
-      else \
-        pip install --no-cache-dir "modules/reana-commons[kubernetes,yadage,snakemake,cwl]" --upgrade; \
-      fi \
-    fi; \
-    if test -e modules/reana-db; then \
+ARG DEBUG=0
+RUN if test -e modules/reana-db; then \
       if [ "${DEBUG}" -gt 0 ]; then \
         pip install --no-cache-dir -e "modules/reana-db" --upgrade; \
       else \
         pip install --no-cache-dir "modules/reana-db" --upgrade; \
       fi \
+    fi; \
+    if test -e modules/reana-commons; then \
+      if [ "${DEBUG}" -gt 0 ]; then \
+        pip install --no-cache-dir -e "modules/reana-commons[kubernetes,yadage,snakemake,cwl]" --upgrade; \
+      else \
+        pip install --no-cache-dir "modules/reana-commons[kubernetes,yadage,snakemake,cwl]" --upgrade; \
+      fi \
     fi
 
-# Install custom invenio-oauthclient branch
+# Install the main package
 # hadolint ignore=DL3013
-RUN pip install --no-cache-dir --force-reinstall --no-deps "git+https://github.com/tiborsimko/invenio-oauthclient.git@reana-een-aai"
+RUN if [ "${DEBUG}" -gt 0 ]; then pip install --no-cache-dir -e ".[debug]"; else pip install --no-cache-dir .; fi;
 
 # A quick fix to allow eduGAIN and social login users that wouldn't otherwise match Invenio username rules
 # hadolint ignore=DL3059

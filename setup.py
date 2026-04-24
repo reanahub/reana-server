@@ -45,9 +45,9 @@ for key, reqs in extras_require.items():
     extras_require["all"].extend(reqs)
 
 install_requires = [
-    "Flask>=2.1.1,<2.3.0",  # same upper pin as invenio-base
+    "Flask>=3.0.0,<4.0.0",
     "gitpython>=3.1",
-    "marshmallow>2.13.0,<3.0.0",
+    "marshmallow>=3.5.0,<4.0.0",
     "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a14,<0.96.0",
     "reana-db>=0.95.0a6,<0.96.0",
     "requests>=2.25.0",
@@ -55,8 +55,7 @@ install_requires = [
     "uWSGI>=2.0.17",
     "uwsgi-tools>=1.1.1",
     "uwsgitop>=0.10",
-    "flask-security-invenio<4.0.0",
-    "wtforms<3.0.0",
+    "flask-security-invenio>=4.0.0,<5.0.0",
     # Yadage dependencies
     # Pinning adage/packtivity/yadage/yadage-schemas to make sure we use compatible versions.
     # See https://github.com/reanahub/reana-workflow-engine-yadage/pull/236#discussion_r992475484
@@ -65,26 +64,24 @@ install_requires = [
     "yadage==0.20.1",  # matches the version in r-w-e-yadage
     "yadage-schemas==0.10.6",  # matches the version in r-w-e-yadage
     # Invenio dependencies
-    "invenio-app>=1.5.0",  # 1.5 needed for Python 3.12 support
-    "flask-limiter>=2.3",  # dependency of invenio-app, 2.3 needed for Python 3.12 support
-    "invenio-base>=1.2.0",
-    "importlib-metadata<5.0.0",  # needed by `invenio instance migrate-secret-key`
-    "invenio-cache>=1.1.0",
-    "invenio-config>=1.0.3",
+    "invenio-app>=3.0.0,<4.0.0",
+    "flask-limiter>=2.3,<3",
+    "invenio-base>=2.3.0,<3.0.0",
+    "invenio-cache>=3.0.0,<4.0.0",
+    "invenio-config>=1.0.3,<2.0.0",
     # From base bundle
-    "invenio-logging>=1.3.0",
-    "invenio-mail>=1.0.2",
+    "invenio-logging>=4.0.0,<5.0.0",
+    "invenio-mail>=1.0.2,<3.0.0",
     # From auth bundle
-    "invenio-accounts>=2.0.0,<6.0.0",
-    "invenio-oauth2server>=1.3.0",
-    "invenio-oauthclient @ git+https://github.com/tiborsimko/invenio-oauthclient.git@reana-een-aai",
-    "invenio-userprofiles>=1.2.0",
-    "invenio-userprofiles>=1.2.0",
-    "invenio-theme>=1.4.7",
-    "invenio-i18n>=1.3.3",
-    "invenio-access>=2.0.0",
+    "invenio-accounts>=7.0.0,<8.0.0",
+    "invenio-oauth2server>=4.0.0,<5.0.0",
+    "invenio-oauthclient>=7.0.0,<8.0.0",
+    "invenio-userprofiles>=5.0.0,<6.0.0",
+    "invenio-theme>=4.0.0,<5.0.0",
+    "invenio-i18n>=3.0.0,<4.0.0",
+    "invenio-access>=5.0.0,<6.0.0",
     # Invenio database
-    "invenio-db[postgresql]>=1.0.5",
+    "invenio-db[postgresql]>=2.5.0,<3.0.0",
     "six>=1.12.0",  # required by Flask-Breadcrumbs
 ]
 

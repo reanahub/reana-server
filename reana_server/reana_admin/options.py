@@ -12,6 +12,7 @@ import os
 import sys
 
 import click
+from reana_db.database import Session
 from reana_db.models import Workflow
 
 from reana_server.utils import (
@@ -80,7 +81,7 @@ def add_workflow_option(**attrs):
                 if not is_uuid_v4(workflow_uuid):
                     click.secho("Invalid workflow UUID.", fg="red")
                     sys.exit(1)
-                workflow = Workflow.query.filter(Workflow.id_ == workflow_uuid).first()
+                workflow = Session.query(Workflow).filter(Workflow.id_ == workflow_uuid).first()
                 if not workflow:
                     click.secho("Workflow not found.", fg="red")
                     sys.exit(1)
