@@ -18,7 +18,9 @@ from reana_server.decorators import signin_required
 def test_signing_required_with_token(user0: User):
     """Test `signin_required` when user does not have a valid token."""
     # Delete user tokens
-    UserToken.query.filter(UserToken.user_id == user0.id_).delete()
+    from reana_db.database import Session
+
+    Session.query(UserToken).filter(UserToken.user_id == user0.id_).delete()
 
     mock_endpoint = Mock(return_value=(jsonify(message="Ok"), 200))
     mock_current_user = Mock()

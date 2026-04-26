@@ -52,6 +52,7 @@ from reana_server.validation import (
     validate_workspace_path,
     validate_dask_limits,
 )
+import marshmallow
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
 
@@ -68,13 +69,15 @@ blueprint = Blueprint("workflows", __name__)
     {
         "page": fields.Int(validate=validate.Range(min=1)),
         "size": fields.Int(validate=validate.Range(min=1)),
-        "include_progress": fields.Bool(location="query"),
-        "include_workspace_size": fields.Bool(location="query"),
+        "include_progress": fields.Bool(),
+        "include_workspace_size": fields.Bool(),
         "workflow_id_or_name": fields.Str(),
-        "shared": fields.Bool(location="query"),
-        "shared_by": fields.Str(location="query"),
-        "shared_with": fields.Str(location="query"),
-    }
+        "shared": fields.Bool(),
+        "shared_by": fields.Str(),
+        "shared_with": fields.Str(),
+    },
+    location="query",
+    unknown=marshmallow.EXCLUDE,
 )
 @signin_required(token_required=False)
 def get_workflows(user, **kwargs):  # noqa
@@ -826,7 +829,9 @@ def get_workflow_specification(workflow_id_or_name, user):  # noqa
     {
         "page": fields.Int(validate=validate.Range(min=1)),
         "size": fields.Int(validate=validate.Range(min=1)),
-    }
+    },
+    location="query",
+    unknown=marshmallow.EXCLUDE,
 )
 @signin_required()
 def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
@@ -1246,11 +1251,12 @@ def _start_workflow(workflow_id_or_name, user, **parameters):
 @signin_required()
 @use_kwargs(
     {
-        "operational_options": fields.Dict(location="json"),
-        "input_parameters": fields.Dict(location="json"),
-        "restart": fields.Boolean(location="json"),
-        "reana_specification": fields.Raw(location="json"),
-    }
+        "operational_options": fields.Dict(),
+        "input_parameters": fields.Dict(),
+        "restart": fields.Boolean(),
+        "reana_specification": fields.Raw(),
+    },
+    location="json",
 )
 @check_quota
 def start_workflow(workflow_id_or_name, user, **parameters):  # noqa
@@ -1419,17 +1425,18 @@ def start_workflow(workflow_id_or_name, user, **parameters):  # noqa
 
 @blueprint.route("/workflows/<workflow_id_or_name>/status", methods=["PUT"])
 @signin_required()
+@use_kwargs({"status": fields.Str(required=True)}, location="query", unknown=marshmallow.EXCLUDE)
 @use_kwargs(
     {
-        "status": fields.Str(required=True, location="query"),
         # parameters for "start"
-        "input_parameters": fields.Dict(location="json"),
-        "operational_options": fields.Dict(location="json"),
-        "restart": fields.Boolean(location="json"),
+        "input_parameters": fields.Dict(),
+        "operational_options": fields.Dict(),
+        "restart": fields.Boolean(),
         # parameters for "deleted"
-        "all_runs": fields.Boolean(location="json"),
-        "workspace": fields.Boolean(location="json"),
-    }
+        "all_runs": fields.Boolean(),
+        "workspace": fields.Boolean(),
+    },
+    location="json",
 )
 def set_workflow_status(workflow_id_or_name, user, status, **parameters):  # noqa
     r"""Set workflow status.
@@ -2055,7 +2062,9 @@ def delete_file(workflow_id_or_name, file_name, user):  # noqa
         "page": fields.Int(validate=validate.Range(min=1)),
         "size": fields.Int(validate=validate.Range(min=1)),
         "search": fields.String(),
-    }
+    },
+    location="query",
+    unknown=marshmallow.EXCLUDE,
 )
 @signin_required()
 def get_files(workflow_id_or_name, user, **kwargs):  # noqa
@@ -3237,7 +3246,9 @@ def get_workflow_retention_rules(workflow_id_or_name, user):
     {
         "include_inputs": fields.Boolean(),
         "include_outputs": fields.Boolean(),
-    }
+    },
+    location="json",
+    unknown=marshmallow.EXCLUDE,
 )
 @signin_required()
 def prune_workspace(
@@ -3389,10 +3400,11 @@ def prune_workspace(
 @signin_required()
 @use_kwargs(
     {
-        "user_email_to_share_with": fields.Str(required=True, location="json"),
-        "message": fields.Str(location="json"),
-        "valid_until": fields.Str(location="json"),
+        "user_email_to_share_with": fields.Str(required=True),
+        "message": fields.Str(),
+        "valid_until": fields.Str(),
     },
+    location="json",
 )
 def share_workflow(workflow_id_or_name, user, **kwargs):
     r"""Share a workflow with another user.
@@ -3549,7 +3561,9 @@ def share_workflow(workflow_id_or_name, user, **kwargs):
 @use_kwargs(
     {
         "user_email_to_unshare_with": fields.String(),
-    }
+    },
+    location="json",
+    unknown=marshmallow.EXCLUDE,
 )
 @signin_required()
 def unshare_workflow(workflow_id_or_name, user, user_email_to_unshare_with):

@@ -140,7 +140,7 @@ def prevent_disk_quota_excess(user, bytes_to_sum: Optional[int], action=Optional
     :param action: Optional action description used for custom error messages.
     """
     disk_resource = get_default_quota_resource(ResourceType.disk.name)
-    user_resource = UserResource.query.filter_by(
+    user_resource = Session.query(UserResource).filter_by(
         user_id=user.id_, resource_id=disk_resource.id_
     ).first()
 
@@ -235,7 +235,7 @@ def filter_input_files(workspace: Union[str, pathlib.Path], reana_spec: Dict) ->
 
 def get_user_from_token(access_token):
     """Validate that the token provided is valid."""
-    user_token = UserToken.query.filter_by(
+    user_token = Session.query(UserToken).filter_by(
         token=access_token, type_=UserTokenType.reana
     ).one_or_none()
     if not user_token:
@@ -401,7 +401,7 @@ def _export_users():
     """
     csv_file_obj = io.StringIO()
     csv_writer = csv.writer(csv_file_obj, dialect="unix")
-    for user in User.query.all():
+    for user in Session.query(User).all():
         csv_writer.writerow(
             [user.id_, user.email, user.access_token, user.username, user.full_name]
         )
@@ -741,7 +741,7 @@ def _get_user_by_criteria(id_: Optional[str], email: Optional[str]) -> Optional[
     if not criteria:
         return None
     try:
-        return User.query.filter_by(**criteria).one_or_none()
+        return Session.query(User).filter_by(**criteria).one_or_none()
     except StatementError as e:
         print(e)
         return None
@@ -838,9 +838,9 @@ def _set_quota_limit(
         # Get resource by name or type
         resource = None
         if resource_name:
-            resource = Resource.query.filter_by(name=resource_name).one_or_none()
+            resource = Session.query(Resource).filter_by(name=resource_name).one_or_none()
         elif resource_type in ResourceType._member_names_:
-            available_resources = Resource.query.filter_by(type_=resource_type).all()
+            available_resources = Session.query(Resource).filter_by(type_=resource_type).all()
             if len(available_resources) > 1:
                 return (
                     f"ERROR: There are more than one `{resource_type}` resource. Please provide resource name to specify the exact resource.",
@@ -854,7 +854,7 @@ def _set_quota_limit(
             # Resource was not found
             available_resources = [
                 (resource.type_.name if resource_type else resource.name)
-                for resource in Resource.query
+                for resource in Session.query(Resource)
             ]
 
             return (
@@ -864,7 +864,7 @@ def _set_quota_limit(
             )
 
         for user in users:
-            user_resource = UserResource.query.filter_by(
+            user_resource = Session.query(UserResource).filter_by(
                 user=user, resource=resource
             ).one_or_none()
 
