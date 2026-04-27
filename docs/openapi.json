@@ -1296,6 +1296,70 @@
         },
         "summary": "Get resource quota limits."
       },
+      "patch": {
+        "description": "This endpoint sets periodic quota accounting fields for a given user.",
+        "operationId": "patch_quota",
+        "parameters": [
+          {
+            "description": "REANA user quota management secret",
+            "in": "header",
+            "name": "X-Quota-Management-Secret",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Data required to patch periodic quota fields.",
+            "in": "body",
+            "name": "data",
+            "required": true,
+            "schema": {
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "quota_period_months": {
+                  "type": "integer"
+                },
+                "quota_period_start_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "resource_type": {
+                  "type": "string"
+                },
+                "user_id": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Resource quota period fields successfully updated."
+          },
+          "400": {
+            "description": "Invalid request."
+          },
+          "401": {
+            "description": "Unauthorized."
+          },
+          "403": {
+            "description": "Quota functionality is not enabled."
+          },
+          "404": {
+            "description": "User not found."
+          },
+          "500": {
+            "description": "Internal server error."
+          }
+        },
+        "summary": "Patch periodic quota fields."
+      },
       "post": {
         "consumes": [
           "application/json"
@@ -5754,6 +5818,8 @@
                       "human_readable": "3m 20s",
                       "raw": 200000
                     },
+                    "quota_period_months": 3,
+                    "quota_period_start_at": "2026-04-01T13:06:32.992595",
                     "usage": {
                       "human_readable": "1m 10s",
                       "raw": 70536
@@ -5802,6 +5868,13 @@
                             }
                           },
                           "type": "object"
+                        },
+                        "quota_period_months": {
+                          "type": "integer"
+                        },
+                        "quota_period_start_at": {
+                          "format": "date-time",
+                          "type": "string"
                         },
                         "usage": {
                           "properties": {
