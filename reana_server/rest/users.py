@@ -164,7 +164,7 @@ def get_you(user):
                       "raw": 70536,
                       "human_readable": "1m 10s"
                     },
-                    "health": "healthy"
+                    "health": "healthy",
                     "quota_period_months": 3,
                     "quota_period_start_at": "2026-04-01T13:06:32.992595"
                   },
