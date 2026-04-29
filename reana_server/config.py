@@ -313,7 +313,7 @@ CORS_SUPPORTS_CREDENTIALS = False
 
 #: Secret key - each installation (dev, production, ...) needs a separate key.
 #: It should be changed before deploying.
-SECRET_KEY = os.getenv("REANA_SECRET_KEY", "CHANGE_ME")
+SECRET_KEY = os.getenv("REANA_SECRET_KEY", "")
 """Secret key used for the application user sessions."""
 
 #: Maximum lifetime of a user web session, in hours. Flask-KVSession uses this
@@ -512,10 +512,10 @@ SECURITY_SEND_REGISTER_EMAIL = False
 
 # Gitlab Application configuration
 # ================================
-REANA_GITLAB_OAUTH_APP_ID = os.getenv("REANA_GITLAB_OAUTH_APP_ID", "CHANGE_ME")
-REANA_GITLAB_OAUTH_APP_SECRET = os.getenv("REANA_GITLAB_OAUTH_APP_SECRET", "CHANGE_ME")
-REANA_GITLAB_HOST = os.getenv("REANA_GITLAB_HOST", None)
-REANA_GITLAB_URL = "https://{}".format((REANA_GITLAB_HOST or "CHANGE ME"))
+REANA_GITLAB_OAUTH_APP_ID = os.getenv("REANA_GITLAB_OAUTH_APP_ID", "")
+REANA_GITLAB_OAUTH_APP_SECRET = os.getenv("REANA_GITLAB_OAUTH_APP_SECRET", "")
+REANA_GITLAB_HOST = os.getenv("REANA_GITLAB_HOST", "")
+REANA_GITLAB_URL = "https://{}".format(REANA_GITLAB_HOST) if REANA_GITLAB_HOST else ""
 
 # Workflow scheduler
 # ==================

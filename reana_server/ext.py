@@ -124,6 +124,14 @@ class REANA(object):
     @staticmethod
     def _validate_security_config(app):
         """Refuse unsafe combinations of security-related config."""
+        if not app.config.get("SECRET_KEY"):
+            raise ValueError(
+                "SECRET_KEY is unset. Provide a strong random value via "
+                "secrets.reana.REANA_SECRET_KEY in your Helm values, e.g. "
+                "`--set secrets.reana.REANA_SECRET_KEY=$(openssl rand -hex 32)`. "
+                "For existing clusters that need to rotate, see: "
+                "https://blog.reana.io/posts/2024/reana-0.9.4/"
+            )
         if app.config.get(
             "ACCESS_TOKEN_ISSUANCE_POLICY"
         ) == "auto" and not app.config.get("REANA_SSO_ENABLED"):
