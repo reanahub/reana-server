@@ -94,6 +94,7 @@ class REANA(object):
         """Flask application initialization."""
         self.init_config(app)
         self.init_error_handlers(app)
+        self._validate_security_config(app)
 
         account_info_received.connect(_create_and_associate_oauth_user)
         user_registered.connect(_create_and_associate_local_user)
@@ -119,3 +120,15 @@ class REANA(object):
         app.register_error_handler(RateLimitExceeded, handle_rate_limit_error)
         app.register_error_handler(UnprocessableEntity, handle_args_validation_error)
         app.register_error_handler(InvalidPaddingError, handle_invalid_padding_error)
+
+    @staticmethod
+    def _validate_security_config(app):
+        """Refuse unsafe combinations of security-related config."""
+        if app.config.get(
+            "ACCESS_TOKEN_ISSUANCE_POLICY"
+        ) == "auto" and not app.config.get("REANA_SSO_ENABLED"):
+            raise ValueError(
+                "REANA_ACCESS_TOKEN_ISSUANCE_POLICY='auto' is unsafe without SSO. "
+                "Either configure an SSO provider (CERN, EOSC, or Keycloak) "
+                "or set REANA_ACCESS_TOKEN_ISSUANCE_POLICY=manual."
+            )

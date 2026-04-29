@@ -643,3 +643,7 @@ if ACCESS_TOKEN_ISSUANCE_POLICY not in _ACCESS_TOKEN_ISSUANCE_POLICIES:
         sorted(_ACCESS_TOKEN_ISSUANCE_POLICIES),
     )
     ACCESS_TOKEN_ISSUANCE_POLICY = "manual"
+# The unsafe ``auto`` + no-SSO combination is refused at Flask app
+# initialization time (``REANA.init_app``) rather than here, so importers
+# that only read a few constants (e.g. the scheduler container) are not
+# forced to receive the SSO secrets just to satisfy a module-level check.
