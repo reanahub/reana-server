@@ -391,10 +391,21 @@ RATELIMIT_AUTHENTICATED_USER = _get_rate_limit(
     "REANA_RATELIMIT_AUTHENTICATED_USER", "20 per second"
 )
 REANA_RATELIMIT_SLOW = _get_rate_limit("REANA_RATELIMIT_SLOW", "1/5 second")
+REANA_RATELIMIT_SLOWER = _get_rate_limit("REANA_RATELIMIT_SLOWER", "30 per minute")
+REANA_RATELIMIT_SLOWEST = _get_rate_limit("REANA_RATELIMIT_SLOWEST", "5 per hour")
 
 RATELIMIT_PER_ENDPOINT = {
     "launch.launch": REANA_RATELIMIT_SLOW,
+    "users.request_token": REANA_RATELIMIT_SLOWEST,
 }
+
+# Invenio-accounts rate limits — only effective in deployments where local
+# accounts are allowed (i.e. ``REANA_SSO_ENABLED`` is false). Setting them
+# unconditionally is harmless: SSO-mode clusters have no local /signin POST
+# or local registration flow to throttle.
+ACCOUNTS_LOGIN_RATELIMIT = REANA_RATELIMIT_SLOWER
+ACCOUNTS_SEND_CONFIRMATION_RATELIMIT = REANA_RATELIMIT_SLOWEST
+ACCOUNTS_FORGOT_PASSWORD_EMAIL_RATELIMIT = REANA_RATELIMIT_SLOWEST
 
 # Flask-Breadcrumbs needs this variable set
 # =========================================
