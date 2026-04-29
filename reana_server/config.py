@@ -252,8 +252,10 @@ MAIL_SUPPRESS_SEND = True
 # Accounts
 # ========
 #: Redis URL
+REANA_CACHE_USER = os.getenv("REANA_CACHE_USER", "")
 REANA_CACHE_PASSWORD = os.getenv("REANA_CACHE_PASSWORD", "")
-ACCOUNTS_SESSION_REDIS_URL = "redis://:{password}@{host}:6379/1".format(
+ACCOUNTS_SESSION_REDIS_URL = "redis://{user}:{password}@{host}:6379/1".format(
+    user=REANA_CACHE_USER,
     password=REANA_CACHE_PASSWORD,
     host=REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES["cache"],
 )
