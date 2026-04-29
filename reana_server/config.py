@@ -46,8 +46,8 @@ REANA_HOSTNAME = os.getenv("REANA_HOSTNAME", "localhost")
 REANA_HOSTPORT = os.getenv("REANA_HOSTPORT", "30443")
 REANA_URL = compose_reana_url(REANA_HOSTNAME, REANA_HOSTPORT)
 
-REANA_SSO_CERN_CONSUMER_KEY = os.getenv("CERN_CONSUMER_KEY", "CHANGE_ME")
-REANA_SSO_CERN_CONSUMER_SECRET = os.getenv("CERN_CONSUMER_SECRET", "CHANGE_ME")
+REANA_SSO_CERN_CONSUMER_KEY = os.getenv("CERN_CONSUMER_KEY", "")
+REANA_SSO_CERN_CONSUMER_SECRET = os.getenv("CERN_CONSUMER_SECRET", "")
 REANA_SSO_CERN_BASE_URL = os.getenv(
     "CERN_BASE_URL", "https://auth.cern.ch/auth/realms/cern"
 )
@@ -64,8 +64,8 @@ REANA_SSO_CERN_USERINFO_URL = os.getenv(
     "https://auth.cern.ch/auth/realms/cern/protocol/openid-connect/userinfo",
 )
 
-REANA_SSO_EOSC_CONSUMER_KEY = os.getenv("EOSC_CONSUMER_KEY", "CHANGE_ME")
-REANA_SSO_EOSC_CONSUMER_SECRET = os.getenv("EOSC_CONSUMER_SECRET", "CHANGE_ME")
+REANA_SSO_EOSC_CONSUMER_KEY = os.getenv("EOSC_CONSUMER_KEY", "")
+REANA_SSO_EOSC_CONSUMER_SECRET = os.getenv("EOSC_CONSUMER_SECRET", "")
 REANA_SSO_EOSC_BASE_URL = os.getenv(
     "EOSC_BASE_URL", "https://proxy.testing.eosc-federation.eu"
 )
@@ -88,6 +88,18 @@ REANA_SSO_EOSC_USERINFO_URL = os.getenv(
 REANA_SSO_LOGIN_PROVIDERS = json.loads(os.getenv("LOGIN_PROVIDERS_CONFIGS", "[]"))
 REANA_SSO_LOGIN_PROVIDERS_SECRETS = json.loads(
     os.getenv("LOGIN_PROVIDERS_SECRETS", "{}")
+)
+
+#: Whether the deployment uses an external SSO provider (CERN, EOSC, or
+#: generic Keycloak). Derived from the presence of provider credentials: the
+#: REANA Helm chart only sets the corresponding env vars when real secrets
+#: are configured, so truthiness is a reliable signal. When enabled, local
+#: account registration and login are disabled: local accounts and external
+#: SSO are mutually exclusive.
+REANA_SSO_ENABLED = bool(
+    REANA_SSO_LOGIN_PROVIDERS
+    or REANA_SSO_CERN_CONSUMER_KEY
+    or REANA_SSO_EOSC_CONSUMER_KEY
 )
 
 DASK_ENABLED = strtobool(os.getenv("DASK_ENABLED", "true"))
@@ -273,6 +285,13 @@ if REANA_USER_EMAIL_CONFIRMATION:
 SECURITY_LOGIN_URL = "/signin"
 #: Disable password change by users.
 SECURITY_CHANGEABLE = False
+if REANA_SSO_ENABLED:
+    #: Disable local account registration when an external SSO provider is
+    #: configured. Local accounts and SSO are mutually exclusive.
+    SECURITY_REGISTERABLE = False
+    #: Disable local username/password login when an external SSO provider is
+    #: configured. Users must authenticate via the SSO flow.
+    ACCOUNTS_LOCAL_LOGIN_ENABLED = False
 #: Modify sign in validaiton error to avoid leaking extra information.
 failed_signin_msg = ("Signin failed. Invalid user or password.", "error")
 SECURITY_MSG_USER_DOES_NOT_EXIST = failed_signin_msg
