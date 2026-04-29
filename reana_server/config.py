@@ -15,6 +15,7 @@ import os
 import re
 from datetime import timedelta
 from typing import Optional
+from urllib.parse import quote as _urlquote
 
 from distutils.util import strtobool
 from limits.util import parse
@@ -254,9 +255,11 @@ MAIL_SUPPRESS_SEND = True
 #: Redis URL
 REANA_CACHE_USER = os.getenv("REANA_CACHE_USER", "")
 REANA_CACHE_PASSWORD = os.getenv("REANA_CACHE_PASSWORD", "")
+# Percent-encode credentials so any of @, :, /, ?, #, %, [, ], etc. in
+# operator-supplied passwords do not break URI parsing.
 ACCOUNTS_SESSION_REDIS_URL = "redis://{user}:{password}@{host}:6379/1".format(
-    user=REANA_CACHE_USER,
-    password=REANA_CACHE_PASSWORD,
+    user=_urlquote(REANA_CACHE_USER, safe=""),
+    password=_urlquote(REANA_CACHE_PASSWORD, safe=""),
     host=REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES["cache"],
 )
 #: Email address used as sender of account registration emails.
