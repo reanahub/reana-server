@@ -11,7 +11,7 @@
 import pytest
 from flask import url_for
 from mock import patch
-from pytest_reana.test_utils import make_mock_api_client
+from reana_commons.testing import make_mock_api_client
 
 
 def test_get_users_shared_with_you(app, user1):

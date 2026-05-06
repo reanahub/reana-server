@@ -17,7 +17,7 @@ from uuid import uuid4
 import pytest
 from flask import Flask, url_for
 from mock import Mock, patch
-from pytest_reana.test_utils import make_mock_api_client
+from reana_commons.testing import make_mock_api_client
 
 from reana_db.models import User, InteractiveSessionType, RunStatus
 from reana_commons.k8s.secrets import UserSecrets, Secret

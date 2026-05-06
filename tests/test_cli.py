@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from click.testing import CliRunner
-from pytest_reana.test_utils import make_mock_api_client
+from reana_commons.testing import make_mock_api_client
 from reana_db.models import (
     AuditLogAction,
     InteractiveSession,

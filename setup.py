@@ -34,7 +34,10 @@ extras_require = {
         "sphinx-click>=1.0.4",
     ],
     "tests": [
-        "pytest-reana>=0.95.0a9,<0.96.0",
+        "apispec[yaml]>=3.0",
+        "apispec-webframeworks",
+        "reana-commons[kubernetes,yadage,snakemake,cwl,tests]>=0.95.0a17,<0.96.0",
+        "reana-db[tests]>=0.95.0a9,<0.96.0",
     ],
 }
 
@@ -48,8 +51,8 @@ install_requires = [
     "Flask>=3.0.0,<4.0.0",
     "gitpython>=3.1",
     "marshmallow>=3.5.0,<4.0.0",
-    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a15,<0.96.0",
-    "reana-db>=0.95.0a7,<0.96.0",
+    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a17,<0.96.0",
+    "reana-db>=0.95.0a9,<0.96.0",
     "requests>=2.25.0",
     "tablib>=0.12.1",
     "uWSGI>=2.0.17",
