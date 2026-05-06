@@ -10,7 +10,7 @@
 
 import logging
 
-from flask import jsonify
+from flask import jsonify, request
 from flask_limiter.errors import RateLimitExceeded
 from marshmallow.exceptions import ValidationError
 from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
@@ -72,6 +72,44 @@ def handle_invalid_padding_error(error: InvalidPaddingError):
     ) from error
 
 
+def _block_local_login_in_sso_mode(app):
+    """Mask ``POST /api/login`` behind a generic credential error in SSO mode.
+
+    ``ACCOUNTS_LOCAL_LOGIN_ENABLED = False`` does block local login, but the
+    "Local login is disabled." message fires only after the user lookup
+    succeeds, leaking which emails correspond to registered REANA users.
+    Intercept the request earlier and return the same generic body that an
+    unknown email otherwise produces, so known and unknown emails are
+    indistinguishable.
+    """
+    if not app.config.get("REANA_SSO_ENABLED"):
+        return
+
+    generic_body = {
+        "status": 400,
+        "message": "Validation error.",
+        "errors": [
+            {
+                "field": "email",
+                "message": "Signin failed. Invalid user or password.",
+            }
+        ],
+    }
+
+    @app.before_request
+    def _reject_local_login():
+        if request.method != "POST":
+            return
+        # The API app is mounted at ``/api`` by ``invenio-app``, so requests
+        # to ``/api/login`` arrive here with ``request.path == "/login"``
+        # (the prefix is stripped by the WSGI dispatcher). Match both the
+        # mounted and unmounted forms so the hook works on the API app and
+        # also defends the UI app, where the prefix is not stripped.
+        path = request.path.rstrip("/")
+        if path in ("/login", "/api/login"):
+            return jsonify(generic_body), 400
+
+
 class REANA(object):
     """REANA Invenio app.
 
@@ -95,6 +133,7 @@ class REANA(object):
         self.init_config(app)
         self.init_error_handlers(app)
         self._validate_security_config(app)
+        _block_local_login_in_sso_mode(app)
 
         account_info_received.connect(_create_and_associate_oauth_user)
         user_registered.connect(_create_and_associate_local_user)
