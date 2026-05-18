@@ -55,9 +55,9 @@ install_requires = [
     "reana-db>=0.95.0a10,<0.96.0",
     "requests>=2.25.0",
     "tablib>=0.12.1",
-    "uWSGI>=2.0.17",
+    "uWSGI>=2.0.31",
     "uwsgi-tools>=1.1.1",
-    "uwsgitop>=0.10",
+    "uwsgitop>=0.12",
     "flask-security-invenio>=4.0.0,<5.0.0",
     # Yadage dependencies
     # Pinning adage/packtivity/yadage/yadage-schemas to make sure we use compatible versions.
