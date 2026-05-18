@@ -1998,6 +1998,156 @@
       }
     },
     "/api/token": {
+      "delete": {
+        "consumes": [
+          "application/json"
+        ],
+        "description": "This management resource revokes the currently active REANA access token of a selected user. The endpoint is disabled unless `REANA_TOKEN_MANAGEMENT_SECRET` is configured.",
+        "operationId": "delete_token",
+        "parameters": [
+          {
+            "description": "REANA user token management secret",
+            "in": "header",
+            "name": "X-Token-Management-Secret",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Data required to identify the target user (exactly one of `user_id` or `email` must be provided).",
+            "in": "body",
+            "name": "data",
+            "required": true,
+            "schema": {
+              "properties": {
+                "email": {
+                  "description": "Email of the target user (mutually exclusive with `user_id`)",
+                  "type": "string"
+                },
+                "user_id": {
+                  "description": "ID of the target user (mutually exclusive with `email`)",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Access token successfully revoked.",
+            "examples": {
+              "application/json": {
+                "email": "john.doe@example.org",
+                "id_": "aa37d63d-3186-45d5-aa40-5d221cb170bf",
+                "message": "Access token revoked.",
+                "reana_token": {
+                  "status": "revoked"
+                },
+                "status": 200
+              }
+            },
+            "schema": {
+              "properties": {
+                "email": {
+                  "type": "string"
+                },
+                "id_": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "reana_token": {
+                  "properties": {
+                    "status": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "status": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Invalid request.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Unauthorized.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Token management endpoint is not configured.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "No active token to revoke for the given user.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Revokes the active access token of the selected user."
+      },
       "put": {
         "description": "This resource allows the user to create an empty REANA access token and mark it as requested.",
         "operationId": "request_token",

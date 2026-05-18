@@ -312,8 +312,75 @@ def grant_access_token_to_user(
             # Token was granted successfully, attach canonical message so callers can still display it
             setattr(e, "log_msg", log_msg)
             raise
+        except Exception as e:
+            notification_error = REANAEmailNotificationError(str(e))
+            setattr(notification_error, "log_msg", log_msg)
+            raise notification_error from e
 
     return user_granted_token, log_msg
+
+
+def revoke_access_token_of_user(
+    user: User,
+    *,
+    revoked_by: Optional[User] = None,
+    send_notification_email: bool = True,
+    include_token_in_log: bool = True,
+    requested_via: str = "reana_server",
+) -> Tuple[str, str]:
+    """Revoke a REANA access token from a user and persist it.
+
+    Returns: (token_value, log_message)
+    """
+    active_token = user.active_token
+    if not active_token:
+        raise ValueError(
+            f"User {user.id_} ({user.email}) does not have an active access token."
+        )
+
+    revoked_token = active_token.token
+    active_token.status = UserTokenStatus.revoked
+    Session.commit()
+
+    if include_token_in_log:
+        log_msg = f"User token {revoked_token} ({user.email}) was successfully revoked."
+    else:
+        log_msg = f"User token for {user.email} was successfully revoked."
+
+    try:
+        if revoked_by:
+            revoked_by.log_action(
+                AuditLogAction.revoke_token,
+                {
+                    "source": requested_via,
+                    "user_id": str(user.id_),
+                    "user_email": user.email,
+                    "reana_admin": log_msg,
+                },
+            )
+    except Exception:
+        logging.exception("Could not write audit log for token revocation.")
+
+    if send_notification_email:
+        try:
+            email_subject = "REANA access token revoked"
+            email_body = JinjaEnv.render_template(
+                "emails/token_revoked.txt",
+                user_full_name=user.full_name,
+                reana_hostname=REANA_HOSTNAME,
+                ui_config=REANAConfig.load("ui"),
+                sender_email=REANA_EMAIL_SENDER,
+            )
+            send_email(user.email, email_subject, email_body)
+        except REANAEmailNotificationError as e:
+            setattr(e, "log_msg", log_msg)
+            raise
+        except Exception as e:
+            notification_error = REANAEmailNotificationError(str(e))
+            setattr(notification_error, "log_msg", log_msg)
+            raise notification_error from e
+
+    return revoked_token, log_msg
 
 
 def publish_workflow_submission(workflow, user_id, parameters):
@@ -372,9 +439,22 @@ def _load_and_save_yadage_spec(workflow: Workflow, operational_options: Dict):
     Session.commit()
 
 
+def _get_admin_user_or_raise(*, requested_via: str) -> User:
+    """Return the configured admin user or raise on server misconfiguration."""
+    admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
+    if not admin:
+        logging.error(
+            "ADMIN_USER_ID %s does not resolve to a known user; refusing %s.",
+            ADMIN_USER_ID,
+            requested_via,
+        )
+        raise RuntimeError("Server misconfiguration.")
+    return admin
+
+
 def _validate_admin_access_token(admin_access_token: str):
     """Validate admin access token."""
-    admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
+    admin = _get_admin_user_or_raise(requested_via="reana_admin.validate_admin_token")
     if admin_access_token != admin.access_token:
         raise ValueError("Admin access token invalid.")
 

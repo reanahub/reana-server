@@ -35,7 +35,7 @@ def admin_access_token_option(func):
     def wrapper(*args, **kwargs):
         try:
             _validate_admin_access_token(kwargs.get("admin_access_token"))
-        except ValueError as e:
+        except (RuntimeError, ValueError) as e:
             click.echo(
                 click.style(str(e), fg="red"),
                 err=True,

@@ -26,16 +26,14 @@ from kubernetes.client.rest import ApiException
 from reana_commons.config import (
     REANA_RESOURCE_HEALTH_COLORS,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
-    REANAConfig,
 )
-from reana_commons.email import REANA_EMAIL_SENDER, send_email
+from reana_commons.email import send_email
 from reana_commons.errors import REANAEmailNotificationError
 from reana_commons.k8s.api_client import current_k8s_corev1_api_client
 from reana_commons.utils import click_table_printer
 from reana_db.config import DEFAULT_QUOTA_LIMITS
 from reana_db.database import Session
 from reana_db.models import (
-    AuditLogAction,
     QuotaHealth,
     Resource,
     User,
@@ -58,7 +56,7 @@ from reana_server.reana_admin.options import (
 from reana_server.reana_admin.retention_rule_deleter import RetentionRuleDeleter
 from reana_server.status import STATUS_OBJECT_TYPES
 from reana_server.utils import (
-    JinjaEnv,
+    _get_admin_user_or_raise,
     _create_user,
     _export_users,
     _get_user_by_criteria,
@@ -70,6 +68,7 @@ from reana_server.utils import (
     _validate_password,
     create_user_workspace,
     grant_access_token_to_user,
+    revoke_access_token_of_user,
     _set_quota_limit,
 )
 
@@ -248,7 +247,7 @@ def token_grant(admin_access_token, id_, email):
     """Grant a token to the selected user."""
     try:
         # token grant is committed before email is sent
-        admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
+        admin = _get_admin_user_or_raise(requested_via="reana_admin.token-grant")
         user = _get_user_by_criteria(id_, email)
         error_msg = None
         if not user:
@@ -303,7 +302,7 @@ def token_grant(admin_access_token, id_, email):
 def token_revoke(admin_access_token, id_, email):
     """Revoke selected user's token."""
     try:
-        admin = Session.query(User).filter_by(id_=ADMIN_USER_ID).one_or_none()
+        admin = _get_admin_user_or_raise(requested_via="reana_admin.token-revoke")
         user = _get_user_by_criteria(id_, email)
         error_msg = None
         if not user:
@@ -317,26 +316,17 @@ def token_revoke(admin_access_token, id_, email):
             click.secho(f"ERROR: {error_msg}", fg="red")
             sys.exit(1)
 
-        revoked_token = user.access_token
-        user.active_token.status = UserTokenStatus.revoked
-        Session.commit()
-        log_msg = (
-            f"User token {revoked_token} ({user.email}) was" " successfully revoked."
+        _, log_msg = revoke_access_token_of_user(
+            user,
+            revoked_by=admin,
+            send_notification_email=True,
+            requested_via="reana_admin.token-revoke",
         )
         click.secho(log_msg, fg="green")
-        admin.log_action(AuditLogAction.revoke_token, {"reana_admin": log_msg})
-        # send notification to user by email
-        email_subject = "REANA access token revoked"
-        email_body = JinjaEnv.render_template(
-            "emails/token_revoked.txt",
-            user_full_name=user.full_name,
-            reana_hostname=REANA_HOSTNAME,
-            ui_config=REANAConfig.load("ui"),
-            sender_email=REANA_EMAIL_SENDER,
-        )
-        send_email(user.email, email_subject, email_body)
-
     except REANAEmailNotificationError as e:
+        log_msg = getattr(e, "log_msg", None)
+        if log_msg:
+            click.secho(log_msg, fg="green")
         click.secho(
             "Something went wrong while sending email:\n{}".format(e),
             fg="red",

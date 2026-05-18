@@ -18,6 +18,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from click.testing import CliRunner
+from reana_commons.errors import REANAEmailNotificationError
 from reana_commons.testing import make_mock_api_client
 from reana_db.models import (
     AuditLogAction,
@@ -256,6 +257,63 @@ def test_grant_token_auto_policy_still_sends_email_when_explicit_admin_grant(
     send_email_mock.assert_called()
 
 
+def test_grant_token_fails_when_admin_user_cannot_be_resolved(user0, session):
+    """Test grant access token refuses to proceed without an audit actor."""
+    runner = CliRunner()
+    user = User(email="grant.noadmin@example.org")
+    session.add(user)
+    session.commit()
+
+    with patch(
+        "reana_server.utils.ADMIN_USER_ID",
+        "99999999-9999-9999-9999-999999999999",
+    ):
+        result = runner.invoke(
+            reana_admin,
+            [
+                "token-grant",
+                "--admin-access-token",
+                user0.access_token,
+                "-e",
+                user.email,
+            ],
+            input="y\n",
+        )
+
+    assert "Server misconfiguration." in result.output
+    assert user.access_token is None
+
+
+def test_grant_token_reports_success_when_email_preparation_fails(user0, session):
+    """Test grant access token keeps success output if email rendering fails."""
+    runner = CliRunner()
+    user = User(email="grant.render@example.org")
+    session.add(user)
+    session.commit()
+
+    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "manual"), patch(
+        "reana_server.utils.REANAConfig.load",
+        side_effect=FileNotFoundError("/var/reana/config/ui-config.yaml"),
+    ):
+        result = runner.invoke(
+            reana_admin,
+            [
+                "token-grant",
+                "--admin-access-token",
+                user0.access_token,
+                "-e",
+                user.email,
+            ],
+            input="y\n",
+        )
+
+    assert f"Token for user {user.id_} ({user.email}) granted" in result.output
+    assert "Something went wrong while sending email" in result.output
+    assert "/var/reana/config/ui-config.yaml" in result.output
+    assert user.access_token
+    assert user0.audit_logs[-1].action is AuditLogAction.grant_token
+
+
 def test_auto_issue_token_for_existing_user_when_policy_flips_to_auto(user0, session):
     """
     User created under manual policy with no token should receive a token on next login
@@ -358,6 +416,7 @@ def test_revoke_token(user0, session):
     assert "was successfully revoked" in result.output
     assert user.access_token_status == UserTokenStatus.revoked.name
     assert user0.audit_logs[-1].action is AuditLogAction.revoke_token
+    assert "active_token" in user0.audit_logs[-1].details["reana_admin"]
 
     # try to revoke again
     result = runner.invoke(
@@ -371,6 +430,89 @@ def test_revoke_token(user0, session):
         ],
     )
     assert "does not have an active access token" in result.output
+
+
+def test_revoke_token_reports_success_when_email_fails(user0, session):
+    """Test revoke access token keeps success output if email sending fails."""
+    runner = CliRunner()
+    user = User(email="mail.failure@example.org", access_token="active_token")
+    session.add(user)
+    session.commit()
+
+    with patch("reana_server.utils.REANAConfig.load", return_value={}), patch(
+        "reana_server.utils.JinjaEnv.render_template", return_value="body"
+    ), patch(
+        "reana_server.utils.send_email",
+        side_effect=REANAEmailNotificationError("Email delivery failed."),
+    ):
+        result = runner.invoke(
+            reana_admin,
+            [
+                "token-revoke",
+                "--admin-access-token",
+                user0.access_token,
+                "-e",
+                user.email,
+            ],
+        )
+
+    assert "was successfully revoked" in result.output
+    assert "Something went wrong while sending email" in result.output
+    assert user.access_token_status == UserTokenStatus.revoked.name
+
+
+def test_revoke_token_reports_success_when_email_preparation_fails(user0, session):
+    """Test revoke access token keeps success output if email rendering fails."""
+    runner = CliRunner()
+    user = User(email="mail.render@example.org", access_token="active_token")
+    session.add(user)
+    session.commit()
+
+    with patch(
+        "reana_server.utils.REANAConfig.load",
+        side_effect=FileNotFoundError("/var/reana/config/ui-config.yaml"),
+    ):
+        result = runner.invoke(
+            reana_admin,
+            [
+                "token-revoke",
+                "--admin-access-token",
+                user0.access_token,
+                "-e",
+                user.email,
+            ],
+        )
+
+    assert "was successfully revoked" in result.output
+    assert "Something went wrong while sending email" in result.output
+    assert "/var/reana/config/ui-config.yaml" in result.output
+    assert user.access_token_status == UserTokenStatus.revoked.name
+
+
+def test_revoke_token_fails_when_admin_user_cannot_be_resolved(user0, session):
+    """Test revoke access token refuses to proceed without an audit actor."""
+    runner = CliRunner()
+    user = User(email="revoke.noadmin@example.org", access_token="active_token")
+    session.add(user)
+    session.commit()
+
+    with patch(
+        "reana_server.utils.ADMIN_USER_ID",
+        "99999999-9999-9999-9999-999999999999",
+    ):
+        result = runner.invoke(
+            reana_admin,
+            [
+                "token-revoke",
+                "--admin-access-token",
+                user0.access_token,
+                "-e",
+                user.email,
+            ],
+        )
+
+    assert "Server misconfiguration." in result.output
+    assert user.access_token_status == UserTokenStatus.active.name
 
 
 class TestMessageConsumer:
