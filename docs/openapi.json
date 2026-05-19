@@ -528,6 +528,10 @@
                   "title": "Default memory request for Kubernetes jobs",
                   "value": "1Gi"
                 },
+                "kubernetes_min_user_uid": {
+                  "title": "Minimum allowed user runtime container UID for Kubernetes jobs",
+                  "value": 100
+                },
                 "maximum_kubernetes_jobs_timeout": {
                   "title": "Maximum timeout for Kubernetes jobs",
                   "value": "1209600"
@@ -858,6 +862,17 @@
                     "value": {
                       "type": "string",
                       "x-nullable": true
+                    }
+                  },
+                  "type": "object"
+                },
+                "kubernetes_min_user_uid": {
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "integer"
                     }
                   },
                   "type": "object"

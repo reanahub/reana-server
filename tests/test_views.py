@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -219,6 +219,29 @@ def test_restart_workflow_validates_specification(
             data=json.dumps(body),
         )
         assert res.status_code == 400
+
+
+def test_info_surfaces_kubernetes_min_user_uid(app, user0, _get_user_mock):
+    """Test /info exposes the configured minimum Kubernetes user ID."""
+    with app.test_client() as client:
+        with patch(
+            "reana_server.rest.info.REANA_KUBERNETES_JOBS_MIN_USER_UID", 1234
+        ), patch(
+            "reana_server.rest.info.REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS",
+            {"jupyter": {"recommended": []}},
+        ):
+            res = client.get(
+                url_for("info.info"),
+                query_string={"access_token": user0.access_token},
+            )
+    assert res.status_code == 200
+    payload = res.json
+    assert "kubernetes_min_user_uid" in payload
+    assert payload["kubernetes_min_user_uid"]["value"] == 1234
+    assert (
+        payload["kubernetes_min_user_uid"]["title"]
+        == "Minimum allowed user runtime container UID for Kubernetes jobs"
+    )
 
 
 def test_patch_quota_rejects_invalid_json_body(app):

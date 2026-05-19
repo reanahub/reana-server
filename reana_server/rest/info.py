@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2021, 2022, 2024, 2025 CERN.
+# Copyright (C) 2021, 2022, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -30,6 +30,7 @@ from reana_server.config import (
     REANA_KUBERNETES_JOBS_MEMORY_LIMIT,
     REANA_KUBERNETES_JOBS_TIMEOUT_LIMIT,
     REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
+    REANA_KUBERNETES_JOBS_MIN_USER_UID,
     REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD,
     REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS,
     REANA_INTERACTIVE_SESSIONS_ENVIRONMENTS_CUSTOM_ALLOWED,
@@ -191,6 +192,13 @@ def info(user, **kwargs):  # noqa
                     type: string
                   value:
                     type: string
+                type: object
+              kubernetes_min_user_uid:
+                properties:
+                  title:
+                    type: string
+                  value:
+                    type: integer
                 type: object
               maximum_workspace_retention_period:
                 properties:
@@ -394,6 +402,10 @@ def info(user, **kwargs):  # noqa
                     "title": "Maximum timeout for Kubernetes jobs",
                     "value": "1209600"
                 },
+                "kubernetes_min_user_uid": {
+                    "title": "Minimum allowed user runtime container UID for Kubernetes jobs",
+                    "value": 100
+                },
                 "interactive_session_recommended_jupyter_images": {
                   "title": "Recommended Jupyter images for interactive sessions",
                   "value": [
@@ -550,6 +562,10 @@ def info(user, **kwargs):  # noqa
                 title="Maximum timeout for Kubernetes jobs",
                 value=REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT,
             ),
+            kubernetes_min_user_uid=dict(
+                title="Minimum allowed user runtime container UID for Kubernetes jobs",
+                value=REANA_KUBERNETES_JOBS_MIN_USER_UID,
+            ),
             maximum_interactive_session_inactivity_period=dict(
                 title="Maximum inactivity period in days before automatic closure of interactive sessions",
                 value=REANA_INTERACTIVE_SESSION_MAX_INACTIVITY_PERIOD,
@@ -660,6 +676,13 @@ class StringNullableInfoValue(Schema):
     value = fields.String(allow_none=True)
 
 
+class IntegerInfoValue(Schema):
+    """Schema for a value represented by an integer."""
+
+    title = fields.String()
+    value = fields.Integer(allow_none=False)
+
+
 class InfoSchema(Schema):
     """Marshmallow schema for ``info`` endpoint."""
 
@@ -677,6 +700,7 @@ class InfoSchema(Schema):
     maximum_workspace_retention_period = fields.Nested(StringNullableInfoValue)
     default_kubernetes_jobs_timeout = fields.Nested(StringInfoValue)
     maximum_kubernetes_jobs_timeout = fields.Nested(StringInfoValue)
+    kubernetes_min_user_uid = fields.Nested(IntegerInfoValue)
     maximum_interactive_session_inactivity_period = fields.Nested(
         StringNullableInfoValue
     )

@@ -349,6 +349,23 @@ def _get_rate_limit(env_variable: str, default: str) -> str:
         return default
 
 
+def _get_int_env_variable(env_variable: str, default: int) -> int:
+    """Return an integer environment variable value or fall back to default."""
+    env_value = os.getenv(env_variable)
+    if env_value is None:
+        return default
+    try:
+        return int(env_value)
+    except ValueError:
+        logging.warning(
+            "Invalid %s=%r; falling back to %s.",
+            env_variable,
+            env_value,
+            default,
+        )
+        return default
+
+
 # Note: users that are connecting via reana-client will be treated as guests by the Invenio framework
 RATELIMIT_GUEST_USER = _get_rate_limit("REANA_RATELIMIT_GUEST_USER", "20 per second")
 RATELIMIT_AUTHENTICATED_USER = _get_rate_limit(
@@ -580,6 +597,16 @@ REANA_KUBERNETES_JOBS_MAX_USER_TIMEOUT_LIMIT = os.getenv(
 
 Please see the following URL for more details
 https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-and-cleanup.
+"""
+
+REANA_KUBERNETES_JOBS_MIN_USER_UID = _get_int_env_variable(
+    "REANA_KUBERNETES_JOBS_MIN_USER_UID", 100
+)
+"""Minimum accepted user runtime container UID that users can assign to their job
+containers via ``kubernetes_uid`` in ``reana.yaml``. Jobs requesting a smaller
+UID are refused at submission time with a clear error message. Surfaced via
+the ``/info`` endpoint so that users and administrators can verify the
+configured value.
 """
 
 # Access token issuance policy:
