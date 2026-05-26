@@ -12,13 +12,12 @@ import json
 import logging
 from functools import partial
 from time import sleep
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from bravado.exception import HTTPBadGateway, HTTPNotFound, HTTPConflict, HTTPBadRequest
-from sqlalchemy import func, or_
 from sqlalchemy.exc import SQLAlchemyError
 
-from reana_commons.config import REANA_MAX_CONCURRENT_BATCH_WORKFLOWS
+from reana_commons.config import get_concurrent_workflows_cap
 from reana_commons.consumer import BaseConsumer
 from reana_commons.publisher import WorkflowStatusPublisher
 from reana_db.database import Session
@@ -61,44 +60,72 @@ def check_memory_availability(
     return error
 
 
-def check_concurrent_workflows_limit() -> Optional[str]:
-    """Check upper limit on running REANA batch workflows."""
-    error = None
+def check_concurrent_workflows_limit(
+    compute_backends: Optional[List[str]] = None, uses_dask: bool = False
+) -> Optional[str]:
+    """Check the per-resource upper limits on concurrent REANA batch workflows.
+
+    Concurrency is capped independently per compute backend and per Dask cluster.
+    A workflow is admitted only if it is below the cap of *every* resource it consumes.
+    So a hybrid Kubernetes+HTCondor workflow is checked against both backend caps,
+    and a Dask-on-HTCondor workflow against the HTCondor cap and the Dask cap.
+
+    :param compute_backends: compute backends the workflow's steps use, as stored
+        in ``Workflow.compute_backends`` (e.g. ``["htcondorcern"]``); defaults to
+        ``["kubernetes"]``.
+    :param uses_dask: whether the workflow requests a Dask cluster.
+    :return: an error string if any applicable cap is reached, else ``None``.
+    """
+    if compute_backends is None:
+        compute_backends = ["kubernetes"]
+
     try:
-        running_workflows = (
-            Session.query(func.count())
-            .filter(
-                or_(
-                    Workflow.status == RunStatus.pending,
-                    Workflow.status == RunStatus.running,
-                )
-            )
-            .scalar()
-        )
-        if running_workflows >= REANA_MAX_CONCURRENT_BATCH_WORKFLOWS:
-            error = (
-                f"there are already {running_workflows} running workflows "
-                f"whilst the allowed maximum is {REANA_MAX_CONCURRENT_BATCH_WORKFLOWS}."
-            )
+        running_counts = Workflow.count_active_per_backend()
     except SQLAlchemyError as e:
         error = "Something went wrong while querying for number of running workflows."
         logging.error(error)
         logging.error(e)
+        Session.commit()
+        return error
+
+    # Every backend the workflow uses is capped (plus the Dask cap if applicable).
+    resources = list(compute_backends)
+    if uses_dask:
+        resources.append("dask")
+
+    error = None
+    for resource in resources:
+        max_concurrent = get_concurrent_workflows_cap(resource)
+        num_running = running_counts.get(resource, 0)
+        if num_running >= max_concurrent:
+            error = (
+                f"there are already {num_running} running workflows using "
+                f"'{resource}' whilst the allowed maximum is {max_concurrent}."
+            )
+            break
+
     Session.commit()
     return error
 
 
-def reana_ready(workflow_min_job_memory: Optional[float]) -> Optional[str]:
+def reana_ready(
+    workflow_min_job_memory: Optional[float],
+    compute_backends: Optional[List[str]] = None,
+    uses_dask: bool = False,
+) -> Optional[str]:
     """Check if REANA can start new workflows."""
     check_memory = partial(check_memory_availability, workflow_min_job_memory)
+    check_concurrent = partial(
+        check_concurrent_workflows_limit, compute_backends, uses_dask
+    )
 
     conditions_map = {
         "no_checks": [],
-        "concurrent": [check_concurrent_workflows_limit],
+        "concurrent": [check_concurrent],
         "memory": [check_memory],
-        "all_checks": [check_concurrent_workflows_limit, check_memory],
+        "all_checks": [check_concurrent, check_memory],
     }
-    conditions = conditions_map.get(REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_VALUE)
+    conditions = conditions_map[REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_VALUE]
 
     for check_condition in conditions:
         error = check_condition()
@@ -170,6 +197,8 @@ class WorkflowExecutionScheduler(BaseConsumer):
                 parameters=workflow_submission["parameters"],
                 priority=workflow_submission["priority"],
                 min_job_memory=workflow_submission["min_job_memory"],
+                compute_backends=workflow_submission.get("compute_backends"),
+                uses_dask=workflow_submission.get("uses_dask", False),
                 retry_count=retry_count + 1,
             )
 
@@ -182,11 +211,13 @@ class WorkflowExecutionScheduler(BaseConsumer):
 
         workflow_id = workflow_submission["workflow_id_or_name"]
         workflow_min_job_memory = workflow_submission.pop("min_job_memory", 0)
+        compute_backends = workflow_submission.pop("compute_backends", None)
+        uses_dask = workflow_submission.pop("uses_dask", False)
 
         workflow_submission.pop("priority", None)
         workflow_submission.pop("retry_count", None)
 
-        error = reana_ready(workflow_min_job_memory)
+        error = reana_ready(workflow_min_job_memory, compute_backends, uses_dask)
         if not error:
             logging.info(f"Starting queued workflow: {workflow_id}")
             workflow_submission["status"] = "start"

@@ -71,6 +71,7 @@ from reana_server.complexity import (
     get_workflow_min_job_memory,
     estimate_complexity,
     validate_job_memory_limits,
+    workflow_compute_backends,
 )
 from reana_server.config import (
     ADMIN_USER_ID,
@@ -395,6 +396,15 @@ def publish_workflow_submission(workflow, user_id, parameters):
             'Workflow scheduling policy "{0}" is not valid.'.format(scheduling_policy)
         )
 
+    # Record the compute backends the workflow uses so that the scheduler can
+    # apply the per-backend concurrency caps
+    workflow.compute_backends = workflow_compute_backends(
+        workflow.type_, workflow.reana_specification
+    )
+    Session.commit()
+
+    uses_dask = workflow_uses_dask(workflow.reana_specification)
+
     # No need to estimate the complexity for "fifo" strategy
     if scheduling_policy == "fifo":
         workflow_priority = 0
@@ -405,12 +415,15 @@ def publish_workflow_submission(workflow, user_id, parameters):
         workflow_priority = workflow.get_priority(total_cluster_memory)
         workflow_min_job_memory = get_workflow_min_job_memory(complexity)
         validate_job_memory_limits(complexity)
+
     current_workflow_submission_publisher.publish_workflow_submission(
         user_id=str(user_id),
         workflow_id_or_name=str(workflow.id_),
         parameters=parameters,
         priority=workflow_priority,
         min_job_memory=workflow_min_job_memory,
+        compute_backends=workflow.compute_backends,
+        uses_dask=uses_dask,
     )
 
 
