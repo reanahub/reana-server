@@ -848,3 +848,25 @@ def test_login_rate_limit_key_ignores_client_supplied_flow_values():
         assert _rate_limit_key() == "ip:192.0.2.1:auth.oauth_callback"
     with app.test_request_context("/api/login", environ_base=shared_address):
         assert _rate_limit_key() == "ip:192.0.2.1:auth.login"
+
+
+@pytest.mark.parametrize(
+    "backends,caps,missing",
+    [
+        (["kubernetes"], {}, None),
+        (["kubernetes", "htcondorcern"], {"htcondorcern": 3}, None),
+        # An explicit 0 deliberately closes the backend and is accepted.
+        (["kubernetes", "htcondorcern"], {"htcondorcern": 0}, None),
+        (["kubernetes", "htcondorcern", "slurmcern"], {"htcondorcern": 3}, "slurmcern"),
+    ],
+)
+def test_enabled_backend_without_concurrency_limit(backends, caps, missing):
+    """An enabled external backend without a concurrency limit stops the start."""
+    with patch(
+        "reana_server.factory.REANA_MAX_CONCURRENT_BATCH_WORKFLOWS_PER_BACKEND", caps
+    ):
+        if missing is None:
+            _make_app({"SUPPORTED_COMPUTE_BACKENDS": backends})
+        else:
+            with pytest.raises(ValueError, match=missing):
+                _make_app({"SUPPORTED_COMPUTE_BACKENDS": backends})

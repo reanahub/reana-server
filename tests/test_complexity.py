@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2021 CERN.
+# Copyright (C) 2021, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -12,9 +12,13 @@ import mock
 import pytest
 from mock import patch
 
+from reana_commons.errors import REANAKubernetesMemoryLimitExceeded
+
 from reana_server.complexity import (
     get_workflow_min_job_memory,
     estimate_complexity,
+    validate_job_memory_limits,
+    workflow_compute_backends,
 )
 
 
@@ -25,6 +29,10 @@ from reana_server.complexity import (
         ([(1, 8589934592.0), (2, 4294967296.0)], 4294967296.0),
         ([(2, 10)], 10),
         ([], 0),
+        # External backend steps have jobs=0 and should not influence the result
+        ([(0, 268435456)], 0),
+        ([(0, 268435456), (0, 1073741824)], 0),
+        ([(0, 268435456), (1, 536870912)], 536870912),
     ],
 )
 def test_get_workflow_min_job_memory(complexity, min_job_memory):
@@ -86,3 +94,643 @@ def test_estimate_complexity_snakemake(
     assert estimate_complexity("snakemake", snakemake_workflow_spec_loaded) == [
         complexity
     ]
+
+
+@mock.patch("reana_server.complexity.REANA_KUBERNETES_JOBS_MEMORY_LIMIT", "4Gi")
+@pytest.mark.parametrize(
+    "backends,expected_complexity,expected_min_memory",
+    [
+        # All steps on an external backend: no Kubernetes jobs and no memory
+        # requirement, so the Kubernetes memory check is skipped.
+        (
+            {"scatterA": "htcondor", "scatterB": "htcondor", "gather": "htcondor"},
+            [(0, 0)],
+            0,
+        ),
+        # Mixed: scatters run externally, gather runs on Kubernetes. Only the
+        # Kubernetes step contributes to jobs and memory.
+        (
+            {"scatterA": "htcondor", "scatterB": "htcondor", "gather": "kubernetes"},
+            [(1, 4294967296.0)],
+            4294967296.0,
+        ),
+    ],
+)
+def test_estimate_complexity_snakemake_external_backend(
+    snakemake_workflow_spec_loaded,
+    backends,
+    expected_complexity,
+    expected_min_memory,
+):
+    """Test that external-backend Snakemake steps contribute 0 jobs."""
+    wf_steps = snakemake_workflow_spec_loaded["workflow"]["specification"]["steps"]
+    for step in wf_steps:
+        step["compute_backend"] = backends[step["name"]]
+    complexity = estimate_complexity("snakemake", snakemake_workflow_spec_loaded)
+    assert complexity == expected_complexity
+    assert get_workflow_min_job_memory(complexity) == expected_min_memory
+
+
+@pytest.mark.parametrize(
+    "complexity,should_raise",
+    [
+        # k8s step exceeds limit — raises
+        ([(1, 2000)], True),
+        # external-only step with high "memory" — no raise (not a k8s limit)
+        ([(0, 2000)], False),
+        # mix: external over-limit + k8s under-limit — no raise
+        ([(0, 2000), (1, 500)], False),
+        # mix: external under-limit + k8s over-limit — raises
+        ([(0, 500), (1, 2000)], True),
+        # empty — no raise
+        ([], False),
+    ],
+)
+@mock.patch(
+    "reana_server.complexity.REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT_IN_BYTES", 1000
+)
+@mock.patch(
+    "reana_server.complexity.REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT", "1Ki"
+)
+def test_validate_job_memory_limits(complexity, should_raise):
+    """Test that validate_job_memory_limits ignores external-backend steps."""
+    if should_raise:
+        with pytest.raises(REANAKubernetesMemoryLimitExceeded):
+            validate_job_memory_limits(complexity)
+    else:
+        validate_job_memory_limits(complexity)
+
+
+def _serial_spec(steps):
+    return {"workflow": {"specification": {"steps": steps}}}
+
+
+def _yadage_spec(stages):
+    return {"workflow": {"specification": {"stages": stages}}}
+
+
+def _cwl_spec(steps):
+    return {"workflow": {"specification": {"steps": steps}}}
+
+
+def _cwl_packed_spec(graph):
+    return {"workflow": {"specification": {"cwlVersion": "v1.0", "$graph": graph}}}
+
+
+_CWL_HTCONDOR_HINT = {"class": "reana", "compute_backend": "htcondorcern"}
+
+
+def _cwl_tool(hints=None):
+    tool = {"class": "CommandLineTool", "id": "#tool.cwl"}
+    if hints is not None:
+        tool["hints"] = hints
+    return tool
+
+
+def _cwl_workflow(id_, steps, hints=None):
+    workflow = {"class": "Workflow", "id": id_, "steps": steps}
+    if hints is not None:
+        workflow["hints"] = hints
+    return workflow
+
+
+def _cwl_step(id_, run, hints=None):
+    step = {"id": id_, "run": run}
+    if hints is not None:
+        step["hints"] = hints
+    return step
+
+
+def _snakemake_spec(steps):
+    return {"workflow": {"specification": {"steps": steps}}}
+
+
+def _yadage_stage(name, compute_backend=None, nested_stages=None):
+    resources = [{"compute_backend": compute_backend}] if compute_backend else []
+    stage = {
+        "name": name,
+        "scheduler": {
+            "step": {"environment": {"resources": resources}},
+        },
+    }
+    if nested_stages is not None:
+        stage["scheduler"]["workflow"] = {"stages": nested_stages}
+    return stage
+
+
+@pytest.mark.parametrize(
+    "workflow_type,spec,expected",
+    [
+        # --- serial ---
+        # default backend (no compute_backend key) → kubernetes
+        ("serial", _serial_spec([{"commands": ["echo hi"]}]), True),
+        # explicit kubernetes
+        (
+            "serial",
+            _serial_spec([{"commands": ["echo"], "compute_backend": "kubernetes"}]),
+            True,
+        ),
+        # external backend only
+        (
+            "serial",
+            _serial_spec([{"commands": ["echo"], "compute_backend": "htcondor"}]),
+            False,
+        ),
+        # mixed: one external + one k8s
+        (
+            "serial",
+            _serial_spec(
+                [
+                    {"commands": ["echo"], "compute_backend": "htcondor"},
+                    {"commands": ["echo"]},
+                ]
+            ),
+            True,
+        ),
+        # empty steps → conservative True
+        ("serial", _serial_spec([]), True),
+        # --- yadage ---
+        # default backend (no resources) → kubernetes
+        ("yadage", _yadage_spec([_yadage_stage("step1")]), True),
+        # external backend
+        (
+            "yadage",
+            _yadage_spec([_yadage_stage("step1", compute_backend="htcondor")]),
+            False,
+        ),
+        # external top-level, kubernetes nested stage
+        (
+            "yadage",
+            _yadage_spec(
+                [
+                    _yadage_stage(
+                        "step1",
+                        compute_backend="htcondor",
+                        nested_stages=[_yadage_stage("nested")],
+                    )
+                ]
+            ),
+            True,
+        ),
+        # all external including nested
+        (
+            "yadage",
+            _yadage_spec(
+                [
+                    _yadage_stage(
+                        "step1",
+                        compute_backend="htcondor",
+                        nested_stages=[
+                            _yadage_stage("nested", compute_backend="htcondor")
+                        ],
+                    )
+                ]
+            ),
+            False,
+        ),
+        # wrapper stage with default (k8s) backend but all-external nested stages:
+        # the wrapper delegates its complexity to its children, so this counts as
+        # external-only
+        (
+            "yadage",
+            _yadage_spec(
+                [
+                    _yadage_stage(
+                        "wrapper",
+                        nested_stages=[
+                            _yadage_stage("nested", compute_backend="htcondor")
+                        ],
+                    )
+                ]
+            ),
+            False,
+        ),
+        # empty stages → conservative True
+        ("yadage", _yadage_spec([]), True),
+        # --- snakemake ---
+        # default backend → kubernetes
+        ("snakemake", _snakemake_spec([{"name": "step1"}]), True),
+        # external backend
+        (
+            "snakemake",
+            _snakemake_spec([{"name": "step1", "compute_backend": "htcondor"}]),
+            False,
+        ),
+        # mixed
+        (
+            "snakemake",
+            _snakemake_spec(
+                [
+                    {"name": "step1", "compute_backend": "htcondor"},
+                    {"name": "step2"},
+                ]
+            ),
+            True,
+        ),
+        # empty → conservative True
+        ("snakemake", _snakemake_spec([]), True),
+        # --- cwl ---
+        # default backend (no hints) → kubernetes
+        ("cwl", _cwl_spec([{"id": "step1", "hints": []}]), True),
+        # external backend via hints
+        (
+            "cwl",
+            _cwl_spec([{"id": "step1", "hints": [{"compute_backend": "htcondor"}]}]),
+            False,
+        ),
+        # external hint on a subworkflow step is inherited by its nested step
+        (
+            "cwl",
+            _cwl_spec(
+                [
+                    {
+                        "id": "step1",
+                        "hints": [{"compute_backend": "htcondor"}],
+                        "run": {"steps": [{"id": "nested", "hints": []}]},
+                    }
+                ]
+            ),
+            False,
+        ),
+        # kubernetes step in a nested sub-workflow without hints
+        (
+            "cwl",
+            _cwl_spec(
+                [
+                    {
+                        "id": "step1",
+                        "run": {"steps": [{"id": "nested", "hints": []}]},
+                    }
+                ]
+            ),
+            True,
+        ),
+        # all external, including nested
+        (
+            "cwl",
+            _cwl_spec(
+                [
+                    {
+                        "id": "step1",
+                        "hints": [{"compute_backend": "htcondor"}],
+                        "run": {
+                            "steps": [
+                                {
+                                    "id": "nested",
+                                    "hints": [{"compute_backend": "htcondor"}],
+                                }
+                            ]
+                        },
+                    }
+                ]
+            ),
+            False,
+        ),
+        # empty steps → conservative True
+        ("cwl", _cwl_spec([]), True),
+    ],
+)
+def test_workflow_uses_kubernetes(workflow_type, spec, expected):
+    """Test Kubernetes detection for all workflow types and backend combinations."""
+    assert ("kubernetes" in workflow_compute_backends(workflow_type, spec)) == expected
+
+
+@pytest.mark.parametrize(
+    "workflow_type,spec,expected",
+    [
+        # single external backend is reported as such
+        (
+            "serial",
+            _serial_spec([{"commands": ["echo"], "compute_backend": "htcondor"}]),
+            ["htcondor"],
+        ),
+        # hybrid workflow reports every backend it uses, sorted
+        (
+            "serial",
+            _serial_spec(
+                [
+                    {"commands": ["echo"], "compute_backend": "htcondor"},
+                    {"commands": ["echo"]},
+                    {"commands": ["echo"], "compute_backend": "slurm"},
+                ]
+            ),
+            ["htcondor", "kubernetes", "slurm"],
+        ),
+        # default backend → kubernetes
+        ("serial", _serial_spec([{"commands": ["echo"]}]), ["kubernetes"]),
+        # empty → conservative kubernetes
+        ("serial", _serial_spec([]), ["kubernetes"]),
+        # snakemake mixed
+        (
+            "snakemake",
+            _snakemake_spec(
+                [
+                    {"name": "a", "compute_backend": "htcondor"},
+                    {"name": "b"},
+                ]
+            ),
+            ["htcondor", "kubernetes"],
+        ),
+    ],
+)
+def test_workflow_compute_backends(workflow_type, spec, expected):
+    """The classifier returns the sorted set of step-level compute backends."""
+    assert workflow_compute_backends(workflow_type, spec) == expected
+
+
+@pytest.mark.parametrize(
+    "workflow_type,spec,expected",
+    [
+        # CWL: the canonical ``class: reana`` hint carries the backend and is
+        # followed by another hint. Reading only the last hint would miss it and
+        # misclassify the step as Kubernetes.
+        (
+            "cwl",
+            _cwl_spec(
+                [
+                    {
+                        "id": "step1",
+                        "hints": [
+                            {"class": "reana", "compute_backend": "htcondorcern"},
+                            {"class": "ResourceRequirement", "ramMin": 4096},
+                        ],
+                    }
+                ]
+            ),
+            ["htcondorcern"],
+        ),
+        # CWL: the engine's ``_get_hint`` returns the first hint carrying the
+        # key, so a later duplicate declaration must not win.
+        (
+            "cwl",
+            _cwl_spec(
+                [
+                    {
+                        "id": "step1",
+                        "hints": [
+                            {"class": "reana", "compute_backend": "htcondorcern"},
+                            {"compute_backend": "slurmcern"},
+                        ],
+                    }
+                ]
+            ),
+            ["htcondorcern"],
+        ),
+        # CWL: a hint list with no backend at all still defaults to Kubernetes.
+        (
+            "cwl",
+            _cwl_spec([{"id": "step1", "hints": [{"class": "ResourceRequirement"}]}]),
+            ["kubernetes"],
+        ),
+        # Yadage: the engine's ``_get_resources`` iterates all resources with
+        # overwrite, so the last declaration is the one that runs.
+        (
+            "yadage",
+            _yadage_spec(
+                [
+                    {
+                        "name": "step1",
+                        "scheduler": {
+                            "step": {
+                                "environment": {
+                                    "resources": [
+                                        {"compute_backend": "htcondorcern"},
+                                        {"compute_backend": "kubernetes"},
+                                    ]
+                                }
+                            }
+                        },
+                    }
+                ]
+            ),
+            ["kubernetes"],
+        ),
+        # Yadage: mirror case, an external backend declared last wins.
+        (
+            "yadage",
+            _yadage_spec(
+                [
+                    {
+                        "name": "step1",
+                        "scheduler": {
+                            "step": {
+                                "environment": {
+                                    "resources": [
+                                        {"compute_backend": "kubernetes"},
+                                        {"compute_backend": "htcondorcern"},
+                                    ]
+                                }
+                            }
+                        },
+                    }
+                ]
+            ),
+            ["htcondorcern"],
+        ),
+        # Yadage: non-dict resources are ignored, as the engine ignores them.
+        (
+            "yadage",
+            _yadage_spec(
+                [
+                    {
+                        "name": "step1",
+                        "scheduler": {
+                            "step": {
+                                "environment": {
+                                    "resources": [
+                                        {"compute_backend": "htcondorcern"},
+                                        "kerberos",
+                                    ]
+                                }
+                            }
+                        },
+                    }
+                ]
+            ),
+            ["htcondorcern"],
+        ),
+        # Yadage: the engine skips null values, so a null declaration after an
+        # external one does not move the stage back to Kubernetes.
+        (
+            "yadage",
+            _yadage_spec(
+                [
+                    {
+                        "name": "step1",
+                        "scheduler": {
+                            "step": {
+                                "environment": {
+                                    "resources": [
+                                        {"compute_backend": "htcondorcern"},
+                                        {"compute_backend": None},
+                                    ]
+                                }
+                            }
+                        },
+                    }
+                ]
+            ),
+            ["htcondorcern"],
+        ),
+        # CWL: the steps of a subworkflow carry the hints. The step that runs
+        # the subworkflow submits no job and must not add Kubernetes.
+        (
+            "cwl",
+            _cwl_packed_spec(
+                [
+                    _cwl_workflow("#main", [_cwl_step("#main/analysis", "#sub")]),
+                    _cwl_workflow(
+                        "#sub",
+                        [
+                            _cwl_step("#sub/a", "#tool.cwl", [_CWL_HTCONDOR_HINT]),
+                            _cwl_step("#sub/b", "#tool.cwl", [_CWL_HTCONDOR_HINT]),
+                        ],
+                    ),
+                    _cwl_tool(),
+                ]
+            ),
+            ["htcondorcern"],
+        ),
+        # CWL: a hint on the subworkflow step is passed down to its steps.
+        (
+            "cwl",
+            _cwl_packed_spec(
+                [
+                    _cwl_workflow(
+                        "#main",
+                        [_cwl_step("#main/analysis", "#sub", [_CWL_HTCONDOR_HINT])],
+                    ),
+                    _cwl_workflow(
+                        "#sub",
+                        [
+                            _cwl_step("#sub/a", "#tool.cwl"),
+                            _cwl_step("#sub/b", "#tool.cwl"),
+                        ],
+                    ),
+                    _cwl_tool(),
+                ]
+            ),
+            ["htcondorcern"],
+        ),
+        # CWL: cwltool places the workflow hints before the step hints, and the
+        # engine takes the first match, so the workflow-level backend wins.
+        (
+            "cwl",
+            _cwl_packed_spec(
+                [
+                    _cwl_workflow(
+                        "#main",
+                        [_cwl_step("#main/a", "#tool.cwl", [_CWL_HTCONDOR_HINT])],
+                        hints=[{"class": "reana", "compute_backend": "kubernetes"}],
+                    ),
+                    _cwl_tool(),
+                ]
+            ),
+            ["kubernetes"],
+        ),
+        # CWL: a workflow-level hint applies to every step without its own hint.
+        (
+            "cwl",
+            _cwl_packed_spec(
+                [
+                    _cwl_workflow(
+                        "#main",
+                        [_cwl_step("#main/a", "#tool.cwl")],
+                        hints=[_CWL_HTCONDOR_HINT],
+                    ),
+                    _cwl_tool(),
+                ]
+            ),
+            ["htcondorcern"],
+        ),
+        # CWL: a backend declared only in the tool's own hints is used.
+        (
+            "cwl",
+            _cwl_packed_spec(
+                [
+                    _cwl_workflow("#main", [_cwl_step("#main/a", "#tool.cwl")]),
+                    _cwl_tool(hints=[_CWL_HTCONDOR_HINT]),
+                ]
+            ),
+            ["htcondorcern"],
+        ),
+        # CWL: an ExpressionTool step runs inside the workflow engine and does
+        # not add Kubernetes.
+        (
+            "cwl",
+            _cwl_packed_spec(
+                [
+                    _cwl_workflow(
+                        "#main",
+                        [
+                            _cwl_step("#main/name", "#expression.cwl"),
+                            _cwl_step("#main/a", "#tool.cwl", [_CWL_HTCONDOR_HINT]),
+                        ],
+                    ),
+                    {"class": "ExpressionTool", "id": "#expression.cwl"},
+                    _cwl_tool(),
+                ]
+            ),
+            ["htcondorcern"],
+        ),
+        # CWL: a specification that is a single tool is run directly, so its own
+        # hints select the backend.
+        (
+            "cwl",
+            {
+                "workflow": {
+                    "specification": {
+                        "cwlVersion": "v1.0",
+                        "class": "CommandLineTool",
+                        "id": "#main",
+                        "hints": [_CWL_HTCONDOR_HINT],
+                    }
+                }
+            },
+            ["htcondorcern"],
+        ),
+        # CWL: a single tool without hints runs on Kubernetes.
+        (
+            "cwl",
+            {
+                "workflow": {
+                    "specification": {
+                        "cwlVersion": "v1.0",
+                        "class": "CommandLineTool",
+                        "id": "#main",
+                    }
+                }
+            },
+            ["kubernetes"],
+        ),
+        # CWL: a packed specification whose ``#main`` is a tool.
+        (
+            "cwl",
+            _cwl_packed_spec(
+                [
+                    {
+                        "class": "CommandLineTool",
+                        "id": "#main",
+                        "hints": [_CWL_HTCONDOR_HINT],
+                    }
+                ]
+            ),
+            ["htcondorcern"],
+        ),
+        # CWL: a self-referencing specification does not recurse forever.
+        (
+            "cwl",
+            _cwl_packed_spec(
+                [_cwl_workflow("#main", [_cwl_step("#main/loop", "#main")])]
+            ),
+            ["kubernetes"],
+        ),
+    ],
+)
+def test_workflow_compute_backends_matches_execution(workflow_type, spec, expected):
+    """The classifier agrees with the backend the workflow engines resolve.
+
+    See ``ReanaPipeline._get_hint`` in reana-workflow-engine-cwl and
+    ``_get_resources`` in reana-workflow-engine-yadage.
+    """
+    assert workflow_compute_backends(workflow_type, spec) == expected

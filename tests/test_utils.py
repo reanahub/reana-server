@@ -15,10 +15,11 @@ import pytest
 from mock import patch
 from reana_commons.config import REANA_WORKFLOW_UMASK
 from reana_commons.errors import REANAValidationError
-from reana_db.models import ResourceType
+from reana_db.models import ResourceType, Service, ServiceStatus
 from reana_server.utils import (
     _set_quota_period,
     create_user_workspace,
+    ensure_dask_service,
     filter_input_files,
     initialise_workspace_umask,
     is_valid_email,
@@ -156,3 +157,49 @@ def test_set_quota_period_disabling_cadence_clears_period_start(user0, session):
     assert fatal is False
     assert cpu_user_resource.quota_period_months is None
     assert cpu_user_resource.quota_period_start_at is None
+
+
+def _with_dask(reana_specification, dask):
+    workflow = dict(reana_specification.get("workflow", {}))
+    resources = {"dask": {"image": "dask:latest"}} if dask else {}
+    workflow["resources"] = resources
+    return {**reana_specification, "workflow": workflow}
+
+
+def test_ensure_dask_service_follows_specification(
+    session, sample_yadage_workflow_in_db
+):
+    """The Dask service row is added and removed with the Dask request."""
+    workflow = sample_yadage_workflow_in_db
+    specification = workflow.reana_specification
+
+    workflow.reana_specification = _with_dask(specification, dask=True)
+    assert ensure_dask_service(workflow) is True
+    session.commit()
+    assert len(workflow.services) == 1
+    assert ensure_dask_service(workflow) is False
+
+    # Dask removed from reana.yaml before the workflow is started
+    workflow.reana_specification = _with_dask(specification, dask=False)
+    assert ensure_dask_service(workflow) is True
+    session.commit()
+    assert workflow.services == []
+    assert session.query(Service).count() == 0
+    assert ensure_dask_service(workflow) is False
+
+
+def test_ensure_dask_service_keeps_started_service(
+    session, sample_yadage_workflow_in_db
+):
+    """A Dask service that is no longer in the created state is kept."""
+    workflow = sample_yadage_workflow_in_db
+    specification = workflow.reana_specification
+
+    workflow.reana_specification = _with_dask(specification, dask=True)
+    ensure_dask_service(workflow)
+    workflow.services[0].status = ServiceStatus.running
+    session.commit()
+
+    workflow.reana_specification = _with_dask(specification, dask=False)
+    assert ensure_dask_service(workflow) is False
+    assert len(workflow.services) == 1
