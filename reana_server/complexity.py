@@ -26,9 +26,10 @@ def validate_job_memory_limits(complexity: List[Tuple[int, float]]) -> None:
     :param complexity: workflow complexity list which consists of number of initial jobs and the memory in bytes they require. (e.g. [(8, 1073741824), (5, 2147483648)])
     :raises REANAKubernetesMemoryLimitExceeded: If workflow job memory limits exceed the maximum memory limit that users can assign to their job containers.
     """
-    if not complexity:
+    k8s_memories = [mem for jobs, mem in complexity if jobs > 0]
+    if not k8s_memories:
         return None
-    max_job_memory = max(complexity, key=lambda x: x[1])[1]
+    max_job_memory = max(k8s_memories)
 
     if (
         REANA_KUBERNETES_JOBS_MAX_USER_MEMORY_LIMIT_IN_BYTES
@@ -41,14 +42,33 @@ def validate_job_memory_limits(complexity: List[Tuple[int, float]]) -> None:
 
 
 def get_workflow_min_job_memory(complexity):
-    """Return minimal job memory from workflow complexity.
+    """Return the smallest per-job memory requirement among initial Kubernetes steps.
 
-    :param complexity: workflow complexity list which consists of number of initial jobs and the memory in bytes they require. (e.g. [(8, 1073741824), (5, 2147483648)])
-    :return: minimal job memory (e.g. 1073741824)
+    :param complexity: list of (k8s_jobs, memory_bytes) tuples, one per initial
+        workflow step. k8s_jobs is 0 for steps that run on external backends
+        (HTCondor, Slurm) and >0 for steps that run on Kubernetes.
+    :return: minimum memory in bytes across initial Kubernetes steps, or 0 if
+        there are no initial Kubernetes steps (e.g. the workflow starts on an
+        external backend). A return value of 0 causes the Kubernetes node memory
+        check to be skipped entirely.
     """
-    if not complexity:
+    k8s_memories = [mem for jobs, mem in complexity if jobs > 0]
+    if not k8s_memories:
         return 0
-    return min(complexity, key=lambda x: x[1])[1]
+    return min(k8s_memories)
+
+
+def _build_estimator(workflow_type, reana_yaml):
+    if workflow_type == "serial":
+        return SerialComplexityEstimator(reana_yaml)
+    elif workflow_type == "yadage":
+        return YadageComplexityEstimator(reana_yaml)
+    elif workflow_type == "cwl":
+        return CWLComplexityEstimator(reana_yaml)
+    elif workflow_type == "snakemake":
+        return SnakemakeComplexityEstimator(reana_yaml)
+    else:
+        raise Exception("Workflow type '{0}' is not supported".format(workflow_type))
 
 
 def estimate_complexity(workflow_type, reana_yaml):
@@ -57,27 +77,25 @@ def estimate_complexity(workflow_type, reana_yaml):
     :param workflow_type: A supported workflow specification type.
     :param reana_yaml: REANA YAML specification.
     """
-
-    def build_estimator(workflow_type, reana_yaml):
-        if workflow_type == "serial":
-            return SerialComplexityEstimator(reana_yaml)
-        elif workflow_type == "yadage":
-            return YadageComplexityEstimator(reana_yaml)
-        elif workflow_type == "cwl":
-            return CWLComplexityEstimator(reana_yaml)
-        elif workflow_type == "snakemake":
-            return SnakemakeComplexityEstimator(reana_yaml)
-        else:
-            raise Exception(
-                "Workflow type '{0}' is not supported".format(workflow_type)
-            )
-
-    estimator = build_estimator(workflow_type, reana_yaml)
+    estimator = _build_estimator(workflow_type, reana_yaml)
     try:
         complexity = estimator.estimate_complexity()
     except Exception:
         return []
     return complexity
+
+
+def workflow_compute_backends(workflow_type: str, reana_yaml: dict) -> List[str]:
+    """Return the sorted set of step-level compute backends a workflow uses.
+
+    Scans all steps so that hybrid workflows are classified with every
+    backend they touch (e.g. ``["htcondor", "kubernetes"]``).
+    """
+    try:
+        backends = _build_estimator(workflow_type, reana_yaml).compute_backends()
+    except Exception:
+        return ["kubernetes"]
+    return sorted(backends) if backends else ["kubernetes"]
 
 
 class ComplexityEstimatorBase:
@@ -97,6 +115,10 @@ class ComplexityEstimatorBase:
         """Parse REANA workflow specification tree."""
         raise NotImplementedError
 
+    def compute_backends(self) -> set:
+        """Return the set of compute backends used across the whole workflow."""
+        raise NotImplementedError
+
     def estimate_complexity(self, initial_step="init"):
         """Estimate complexity in parsed REANA workflow tree."""
         steps = self.parse_specification(initial_step)
@@ -109,10 +131,13 @@ class ComplexityEstimatorBase:
             complexity += step["complexity"]
         return complexity
 
+    def _get_step_backend(self, step):
+        """Get the compute backend a step runs on, defaulting to Kubernetes."""
+        return step.get("compute_backend") or "kubernetes"
+
     def _get_number_of_jobs(self, step):
         """Get number of jobs based on compute backend."""
-        backend = step.get("compute_backend")
-        if backend and backend != "kubernetes":
+        if self._get_step_backend(step) != "kubernetes":
             return 0
         return 1
 
@@ -138,6 +163,13 @@ class SerialComplexityEstimator(ComplexityEstimatorBase):
             tree.append({name: {"complexity": complexity}})
         return tree
 
+    def compute_backends(self) -> set:
+        """Return the set of compute backends used across the workflow."""
+        steps = self.specification.get("steps", [])
+        if not steps:
+            return {"kubernetes"}
+        return {self._get_step_backend(step) for step in steps}
+
     def parse_specification(self, initial_step):
         """Parse and filter out serial workflow specification tree."""
         spec_steps = self.specification.get("steps", [])
@@ -149,6 +181,31 @@ class SerialComplexityEstimator(ComplexityEstimatorBase):
 
 class YadageComplexityEstimator(ComplexityEstimatorBase):
     """REANA Yadage workflow complexity estimation."""
+
+    @staticmethod
+    def _get_stage_resources(stage):
+        """Return the list of resources declared for a Yadage stage."""
+        return (
+            stage.get("scheduler", {})
+            .get("step", {})
+            .get("environment", {})
+            .get("resources", [])
+        )
+
+    def _get_stage_compute_backend(self, stage):
+        """Return the compute backend resource dict for a Yadage stage."""
+        return next(
+            filter(
+                lambda r: isinstance(r, dict) and "compute_backend" in r.keys(),
+                self._get_stage_resources(stage),
+            ),
+            {},
+        )
+
+    @staticmethod
+    def _get_nested_stages(stage):
+        """Return the nested stages of a Yadage stage (empty if none)."""
+        return stage.get("scheduler", {}).get("workflow", {}).get("stages", [])
 
     def _parse_steps(self, stages, initial_step):
         """Parse and filter out Yadage workflow tree."""
@@ -165,19 +222,8 @@ class YadageComplexityEstimator(ComplexityEstimatorBase):
             return False
 
         def _get_stage_complexity(stage):
-            resources = (
-                stage.get("scheduler", {})
-                .get("step", {})
-                .get("environment", {})
-                .get("resources", [])
-            )
-            compute_backend = next(
-                filter(
-                    lambda r: isinstance(r, dict) and "compute_backend" in r.keys(),
-                    resources,
-                ),
-                {},
-            )
+            resources = self._get_stage_resources(stage)
+            compute_backend = self._get_stage_compute_backend(stage)
             k8s_memory_limit = next(
                 filter(
                     lambda r: isinstance(r, dict)
@@ -275,6 +321,26 @@ class YadageComplexityEstimator(ComplexityEstimatorBase):
 
         return _parse_stages(stages)
 
+    def compute_backends(self) -> set:
+        """Return the set of compute backends used across the workflow."""
+
+        def _collect_stages(stages):
+            backends = set()
+            for stage in stages:
+                nested = self._get_nested_stages(stage)
+                # A wrapper stage delegates its complexity to its nested stages
+                # (see ``_populate_complexity``), so its own backend is only
+                # relevant when there are no nested stages.
+                if nested:
+                    backends |= _collect_stages(nested)
+                else:
+                    compute_backend = self._get_stage_compute_backend(stage)
+                    backends.add(self._get_step_backend(compute_backend))
+            return backends
+
+        stages = self.specification.get("stages", [])
+        return _collect_stages(stages) if stages else {"kubernetes"}
+
     def parse_specification(self, initial_step):
         """Parse Yadage workflow specification tree."""
         steps = self._parse_steps(self.specification["stages"], initial_step)
@@ -286,6 +352,14 @@ class YadageComplexityEstimator(ComplexityEstimatorBase):
 class CWLComplexityEstimator(ComplexityEstimatorBase):
     """REANA CWL workflow complexity estimation."""
 
+    @staticmethod
+    def _get_step_hints(step):
+        """Return the last hint of a CWL step, or an empty dict if none.
+
+        Robust to ``hints`` being absent, ``None`` or an empty list.
+        """
+        return (step.get("hints") or [{}])[-1]
+
     def _parse_steps(self, workflow):
         """Parse CWL workflow specification tree."""
         tree = {}
@@ -294,7 +368,7 @@ class CWLComplexityEstimator(ComplexityEstimatorBase):
         for step in steps:
             name = step.get("id")
             run = step.get("run")
-            hints = step.get("hints", [{}]).pop()
+            hints = self._get_step_hints(step)
             # Parse scatter params
             scatter = step.get("scatter")
             scatter_params = None
@@ -395,6 +469,28 @@ class CWLComplexityEstimator(ComplexityEstimatorBase):
 
         return tree
 
+    def compute_backends(self) -> set:
+        """Return the set of compute backends used across the workflow."""
+
+        def _collect_steps(steps):
+            backends = set()
+            for step in steps:
+                hints = self._get_step_hints(step)
+                backends.add(self._get_step_backend(hints))
+                run = step.get("run")
+                if isinstance(run, dict):
+                    nested = run.get("steps", [])
+                    if nested:
+                        backends |= _collect_steps(nested)
+            return backends
+
+        workflow = self.specification.get("$graph", self.specification)
+        workflows = [workflow] if isinstance(workflow, dict) else (workflow or [])
+        backends = set()
+        for wf in workflows:
+            backends |= _collect_steps(wf.get("steps", []))
+        return backends if backends else {"kubernetes"}
+
     def parse_specification(self, initial_step):
         """Parse and filter out CWL workflow specification tree."""
         workflow = self.specification.get("$graph", self.specification)
@@ -411,14 +507,22 @@ class SnakemakeComplexityEstimator(ComplexityEstimatorBase):
     def _calculate_complexity(
         self, job_dependencies: Dict[str, List[str]]
     ) -> List[Tuple[int, float]]:
-        """Calculate complexity of an array of job dependencies."""
+        """Calculate complexity of an array of job dependencies.
+
+        Steps that run on an external backend (e.g. HTCondor) contribute 0 jobs
+        and are excluded from the Kubernetes memory average, so external-only
+        groups yield ``(0, 0)`` and do not trigger the Kubernetes memory check.
+        """
         spec_steps = self.specification.get("steps", [])
-        jobs_count = len(job_dependencies)
+        jobs_count = 0
         memory_limit = 0
         for dep in job_dependencies:
             step = next(filter(lambda step: step["name"] == dep, spec_steps))
-            memory_limit += self._get_memory_limit(step)
-        memory_limit = memory_limit / jobs_count
+            jobs = self._get_number_of_jobs(step)
+            jobs_count += jobs
+            if jobs:
+                memory_limit += self._get_memory_limit(step)
+        memory_limit = memory_limit / jobs_count if jobs_count else 0
         return [(jobs_count, memory_limit)]
 
     def _get_max_complexity(
@@ -440,6 +544,13 @@ class SnakemakeComplexityEstimator(ComplexityEstimatorBase):
                 for subjob_dep in job_dependencies[job_dep]
             )
         return filtered_job_deps
+
+    def compute_backends(self) -> set:
+        """Return the set of compute backends used across the workflow."""
+        steps = self.specification.get("steps", [])
+        if not steps:
+            return {"kubernetes"}
+        return {self._get_step_backend(step) for step in steps}
 
     def estimate_complexity(self) -> List[Tuple[int, float]]:
         """Estimate complexity array in parsed Snakemake workflow tree."""
