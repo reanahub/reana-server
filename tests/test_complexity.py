@@ -25,6 +25,10 @@ from reana_server.complexity import (
         ([(1, 8589934592.0), (2, 4294967296.0)], 4294967296.0),
         ([(2, 10)], 10),
         ([], 0),
+        # External backend steps have jobs=0 and should not influence the result
+        ([(0, 268435456)], 0),
+        ([(0, 268435456), (0, 1073741824)], 0),
+        ([(0, 268435456), (1, 536870912)], 536870912),
     ],
 )
 def test_get_workflow_min_job_memory(complexity, min_job_memory):

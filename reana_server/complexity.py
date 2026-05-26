@@ -41,14 +41,20 @@ def validate_job_memory_limits(complexity: List[Tuple[int, float]]) -> None:
 
 
 def get_workflow_min_job_memory(complexity):
-    """Return minimal job memory from workflow complexity.
+    """Return the smallest per-job memory requirement among initial Kubernetes steps.
 
-    :param complexity: workflow complexity list which consists of number of initial jobs and the memory in bytes they require. (e.g. [(8, 1073741824), (5, 2147483648)])
-    :return: minimal job memory (e.g. 1073741824)
+    :param complexity: list of (k8s_jobs, memory_bytes) tuples, one per initial
+        workflow step. k8s_jobs is 0 for steps that run on external backends
+        (HTCondor, Slurm) and >0 for steps that run on Kubernetes.
+    :return: minimum memory in bytes across initial Kubernetes steps, or 0 if
+        there are no initial Kubernetes steps (e.g. the workflow starts on an
+        external backend). A return value of 0 causes the Kubernetes node memory
+        check to be skipped entirely.
     """
-    if not complexity:
+    k8s_memories = [mem for jobs, mem in complexity if jobs > 0]
+    if not k8s_memories:
         return 0
-    return min(complexity, key=lambda x: x[1])[1]
+    return min(k8s_memories)
 
 
 def estimate_complexity(workflow_type, reana_yaml):
