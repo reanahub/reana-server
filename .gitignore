@@ -72,3 +72,6 @@ target/
 
 # Visual Studio Code files
 .vscode
+
+# REANA modules for local development
+modules/
