@@ -60,7 +60,7 @@ load_reana_spec_lock = threading.Lock()
         "parameters": fields.Str(),
         "specification": fields.Str(),
     },
-    location="query",
+    location="json",
     unknown=marshmallow.EXCLUDE,
 )
 @signin_required()
