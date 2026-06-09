@@ -27,10 +27,16 @@ from sqlalchemy.orm import joinedload
 from werkzeug.exceptions import RequestEntityTooLarge
 from reana_commons import workspace
 from reana_commons.config import (
+    REANAConfig,
     REANA_WORKFLOW_ENGINES,
     SHARED_VOLUME_PATH,
     WORKFLOW_RUNTIME_USER_GID,
     WORKFLOW_RUNTIME_USER_UID,
+)
+from reana_commons.email import (
+    REANA_EMAIL_SENDER,
+    REANA_NOTIFICATIONS_ENABLED,
+    send_email,
 )
 from reana_commons.errors import (
     REANAMissingWorkspaceError,
@@ -78,6 +84,7 @@ from reana_server.config import (
     REANA_HOSTNAME,
     REANA_SPEC_BUNDLE_MAX_BYTES,
     REANA_SPEC_BUNDLE_MAX_REQUEST_BYTES,
+    REANA_URL,
     RWC_MUTATION_CONNECT_TIMEOUT,
     RWC_MUTATION_READ_TIMEOUT,
 )
@@ -5200,6 +5207,36 @@ def prune_workspace(
         return jsonify({"message": str(e)}), 500
 
 
+def _workflow_shared_email_body(
+    sharer_email, workflow_name, workflow_id, message=None, valid_until=None
+):
+    """Compose the email telling a user that a workflow was shared with them."""
+    lines = [
+        "Dear REANA user,",
+        "",
+        f"{sharer_email} shared workflow {workflow_name} with you.",
+    ]
+    if message:
+        lines += ["", "Message:", message]
+    if valid_until:
+        lines += ["", f"This shared access expires on {valid_until}."]
+    lines += ["", "Open the workflow:", "", f"    {REANA_URL}/workflows/{workflow_id}"]
+
+    try:
+        ui_config = REANAConfig.load("ui") or {}
+    except Exception:
+        ui_config = {}
+    lines += ["", "If you need any assistance, please see our:"]
+    if ui_config.get("chat_url"):
+        lines.append(f"  - Chat channel: {ui_config['chat_url']}")
+    if ui_config.get("forum_url"):
+        lines.append(f"  - User forum: {ui_config['forum_url']}")
+    if REANA_EMAIL_SENDER:
+        lines.append(f"  - Email support: {REANA_EMAIL_SENDER}")
+    lines += ["", "Best regards,", "", "REANA notification system", ""]
+    return "\n".join(lines)
+
+
 @blueprint.route("/workflows/<workflow_id_or_name>/share", methods=["POST"])
 @signin_required()
 @use_kwargs(
@@ -5258,6 +5295,18 @@ def share_workflow(workflow_id_or_name, user, **kwargs):
                 type: string
               workflow_name:
                 type: string
+              warnings:
+                type: array
+                description: >-
+                  Present only when the workflow was shared but a follow-up
+                  action, such as sending the notification email, failed.
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                    message:
+                      type: string
           examples:
             application/json:
               {
@@ -5350,6 +5399,34 @@ def share_workflow(workflow_id_or_name, user, **kwargs):
             user=str(user.id_),
             share_details=kwargs,
         ).result()
+        response = dict(response)
+
+        if REANA_NOTIFICATIONS_ENABLED:
+            try:
+                send_email(
+                    kwargs["user_email_to_share_with"],
+                    f"[{REANA_HOSTNAME}] A workflow was shared with you",
+                    _workflow_shared_email_body(
+                        sharer_email=user.email,
+                        workflow_name=response["workflow_name"],
+                        workflow_id=response["workflow_id"],
+                        message=kwargs.get("message"),
+                        valid_until=kwargs.get("valid_until"),
+                    ),
+                )
+            except Exception as e:
+                logging.exception(
+                    "Could not send workflow sharing notification email: %s", e
+                )
+                response["warnings"] = [
+                    {
+                        "code": "email_notification_failed",
+                        "message": (
+                            "The workflow was shared, but the notification email "
+                            "could not be sent."
+                        ),
+                    }
+                ]
 
         return jsonify(response), 200
     except HTTPError as e:

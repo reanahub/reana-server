@@ -38,6 +38,7 @@ from reana_commons.errors import REANAMissingWorkspaceError
 from reana_db.models import (
     InteractiveSession,
     InteractiveSessionType,
+    Notification,
     RunStatus,
     User,
     UserWorkflow,
@@ -148,6 +149,224 @@ def test_first_time_roleless_identity_is_rejected_without_userinfo(app, make_tok
     assert res.status_code == 403
     assert res.json["code"] == "access_not_granted"
     fetch_userinfo.assert_not_called()
+
+
+def test_notifications_api(app, session, user0, user1, auth_headers):
+    """Test listing and reading persistent notifications."""
+    old_notification = Notification(
+        user_id=user0.id_,
+        type_="workflow_shared",
+        payload={"workflow_id": str(uuid4()), "workflow_name": "old.1"},
+        created=datetime.utcnow() - timedelta(days=1),
+    )
+    new_notification = Notification(
+        user_id=user0.id_,
+        type_="workflow_shared",
+        payload={"workflow_id": str(uuid4()), "workflow_name": "new.1"},
+    )
+    other_user_notification = Notification(
+        user_id=user1.id_,
+        type_="workflow_shared",
+        payload={"workflow_id": str(uuid4()), "workflow_name": "private.1"},
+    )
+    session.add_all([old_notification, new_notification, other_user_notification])
+    session.commit()
+    headers = auth_headers(user0)
+
+    with app.test_client() as client:
+        response = client.get(
+            "/api/notifications", query_string={"limit": 1}, headers=headers
+        )
+        assert response.status_code == 200
+        assert response.json["unread_count"] == 2
+        assert len(response.json["notifications"]) == 1
+        assert response.json["notifications"][0]["id"] == str(new_notification.id_)
+
+        response = client.patch(
+            f"/api/notifications/{new_notification.id_}",
+            json={"read": True},
+            headers=headers,
+        )
+        assert response.status_code == 200
+        assert response.json["notification"]["read_at"]
+
+        response = client.patch(
+            f"/api/notifications/{other_user_notification.id_}",
+            json={"read": True},
+            headers=headers,
+        )
+        assert response.status_code == 404
+
+        response = client.patch(
+            "/api/notifications/not-a-uuid", json={"read": True}, headers=headers
+        )
+        assert response.status_code == 404
+
+        response = client.post("/api/notifications/read-all", headers=headers)
+        assert response.status_code == 200
+        assert response.json["updated"] == 1
+
+        assert client.get("/api/notifications").status_code == 401
+
+    session.query(Notification).filter(
+        Notification.id_.in_(
+            [
+                old_notification.id_,
+                new_notification.id_,
+                other_user_notification.id_,
+            ]
+        )
+    ).delete(synchronize_session=False)
+    session.commit()
+
+
+def test_notifications_list_unread_first(app, session, user0, auth_headers):
+    """Test that older unread notifications are listed before read ones."""
+    now = datetime.utcnow()
+    old_unread = Notification(
+        user_id=user0.id_,
+        type_="workflow_shared",
+        payload={"workflow_name": "old-unread.1"},
+        created=now - timedelta(days=2),
+    )
+    new_read = [
+        Notification(
+            user_id=user0.id_,
+            type_="workflow_shared",
+            payload={"workflow_name": f"new-read.{i}"},
+            created=now,
+            read_at=now,
+        )
+        for i in range(2)
+    ]
+    session.add_all([old_unread, *new_read])
+    session.commit()
+
+    with app.test_client() as client:
+        response = client.get(
+            "/api/notifications",
+            query_string={"limit": 1},
+            headers=auth_headers(user0),
+        )
+        assert response.status_code == 200
+        assert response.json["unread_count"] == 1
+        assert [n["id"] for n in response.json["notifications"]] == [
+            str(old_unread.id_)
+        ]
+
+        # notifications with the same creation time keep a stable order
+        listings = [
+            [
+                n["id"]
+                for n in client.get(
+                    "/api/notifications", headers=auth_headers(user0)
+                ).json["notifications"]
+            ]
+            for _ in range(2)
+        ]
+        assert listings[0] == listings[1]
+        assert listings[0][0] == str(old_unread.id_)
+        assert sorted(listings[0][1:]) == sorted(str(n.id_) for n in new_read)
+
+    for notification in [old_unread, *new_read]:
+        session.delete(notification)
+    session.commit()
+
+
+def _share_workflow(app, headers, workflow_id, share_details):
+    """Share a workflow through the API with a mocked workflow controller."""
+    response = {
+        "message": "The workflow has been shared with the user.",
+        "workflow_id": workflow_id,
+        "workflow_name": "shared-workflow.1",
+    }
+    api_client = Mock()
+    api_client.api.share_workflow.return_value.result.return_value = (response, None)
+    with app.test_client() as client, patch(
+        "reana_server.rest.workflows.current_rwc_api_client", api_client
+    ):
+        return client.post(
+            f"/api/workflows/{workflow_id}/share", json=share_details, headers=headers
+        )
+
+
+def test_share_workflow_sends_email(app, user0, auth_headers):
+    """Test that the recipient is told by email about the shared workflow."""
+    workflow_id = str(uuid4())
+    with patch("reana_server.rest.workflows.REANA_NOTIFICATIONS_ENABLED", True), patch(
+        "reana_server.rest.workflows.send_email"
+    ) as send_email_mock:
+        result = _share_workflow(
+            app,
+            auth_headers(user0),
+            workflow_id,
+            {
+                "user_email_to_share_with": "recipient@reana.io",
+                "message": "Please have a look.",
+                "valid_until": "2999-12-31",
+            },
+        )
+
+    assert result.status_code == 200
+    assert "warnings" not in result.json
+    receiver, subject, body = send_email_mock.call_args.args
+    assert receiver == "recipient@reana.io"
+    assert "A workflow was shared with you" in subject
+    assert f"{user0.email} shared workflow shared-workflow.1 with you." in body
+    assert "Please have a look." in body
+    assert "expires on 2999-12-31" in body
+    assert f"/workflows/{workflow_id}" in body
+
+
+def test_share_workflow_skips_email_when_notifications_disabled(
+    app, user0, auth_headers
+):
+    """Test that no email is attempted when notifications are switched off."""
+    with patch("reana_server.rest.workflows.REANA_NOTIFICATIONS_ENABLED", False), patch(
+        "reana_server.rest.workflows.send_email"
+    ) as send_email_mock:
+        result = _share_workflow(
+            app,
+            auth_headers(user0),
+            str(uuid4()),
+            {"user_email_to_share_with": "recipient@reana.io"},
+        )
+
+    assert result.status_code == 200
+    assert "warnings" not in result.json
+    send_email_mock.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "email_error",
+    [RuntimeError("SMTP unavailable"), TimeoutError("SMTP server timed out")],
+)
+def test_share_workflow_email_failure_returns_warning(
+    app, user0, auth_headers, email_error
+):
+    """Test that email failures do not undo successful workflow sharing."""
+    with patch("reana_server.rest.workflows.REANA_NOTIFICATIONS_ENABLED", True), patch(
+        "reana_server.rest.workflows.send_email",
+        side_effect=email_error,
+    ) as send_email_mock:
+        result = _share_workflow(
+            app,
+            auth_headers(user0),
+            str(uuid4()),
+            {"user_email_to_share_with": "recipient@reana.io"},
+        )
+
+    assert result.status_code == 200
+    send_email_mock.assert_called_once()
+    assert result.json["message"] == "The workflow has been shared with the user."
+    assert result.json["warnings"] == [
+        {
+            "code": "email_notification_failed",
+            "message": (
+                "The workflow was shared, but the notification email could not be sent."
+            ),
+        }
+    ]
 
 
 def test_unshare_workflow_accepts_recipient_in_query(app, user0, auth_headers):
