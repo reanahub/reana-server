@@ -18,7 +18,8 @@ from bravado.exception import HTTPError
 from flask import Blueprint, Response, jsonify, request, stream_with_context
 from jsonschema.exceptions import ValidationError
 from reana_commons import workspace
-from reana_commons.config import REANA_WORKFLOW_ENGINES
+from reana_commons.config import REANAConfig, REANA_WORKFLOW_ENGINES
+from reana_commons.email import REANA_EMAIL_SENDER, send_email
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.specification import load_reana_spec
 from reana_commons.validation.operational_options import validate_operational_options
@@ -27,7 +28,7 @@ from reana_db.database import Session
 from reana_db.models import InteractiveSessionType, RunStatus
 from reana_db.utils import _get_workflow_with_uuid_or_name
 from reana_server.api_client import current_rwc_api_client
-from reana_server.config import REANA_HOSTNAME
+from reana_server.config import REANA_HOSTNAME, REANA_URL
 from reana_server.decorators import check_quota, signin_required
 from reana_server.deleter import Deleter, InOrOut
 from reana_server.gitlab_client import (
@@ -36,6 +37,7 @@ from reana_server.gitlab_client import (
 )
 from reana_server.utils import (
     RequestStreamWithLen,
+    JinjaEnv,
     _fail_gitlab_commit_build_status,
     _get_reana_yaml_from_gitlab,
     _load_and_save_yadage_spec,
@@ -3554,6 +3556,37 @@ def share_workflow(workflow_id_or_name, user, **kwargs):
             user=str(user.id_),
             share_details=kwargs,
         ).result()
+        response = dict(response)
+
+        try:
+            email_body = JinjaEnv.render_template(
+                "emails/workflow_shared.txt",
+                sharer_email=user.email,
+                workflow_name=response["workflow_name"],
+                message=kwargs.get("message"),
+                valid_until=kwargs.get("valid_until"),
+                workflow_url=f"{REANA_URL}/workflows/{response['workflow_id']}",
+                ui_config=REANAConfig.load("ui"),
+                sender_email=REANA_EMAIL_SENDER,
+            )
+            send_email(
+                kwargs["user_email_to_share_with"],
+                f"[{REANA_HOSTNAME}] A workflow was shared with you",
+                email_body,
+            )
+        except Exception as e:
+            logging.exception(
+                "Could not send workflow sharing notification email: %s", e
+            )
+            response["warnings"] = [
+                {
+                    "code": "email_notification_failed",
+                    "message": (
+                        "The workflow was shared, but the notification email "
+                        "could not be sent."
+                    ),
+                }
+            ]
 
         return jsonify(response), 200
     except HTTPError as e:
