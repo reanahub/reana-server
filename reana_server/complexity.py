@@ -504,14 +504,22 @@ class SnakemakeComplexityEstimator(ComplexityEstimatorBase):
     def _calculate_complexity(
         self, job_dependencies: Dict[str, List[str]]
     ) -> List[Tuple[int, float]]:
-        """Calculate complexity of an array of job dependencies."""
+        """Calculate complexity of an array of job dependencies.
+
+        Steps that run on an external backend (e.g. HTCondor) contribute 0 jobs
+        and are excluded from the Kubernetes memory average, so external-only
+        groups yield ``(0, 0)`` and do not trigger the Kubernetes memory check.
+        """
         spec_steps = self.specification.get("steps", [])
-        jobs_count = len(job_dependencies)
+        jobs_count = 0
         memory_limit = 0
         for dep in job_dependencies:
             step = next(filter(lambda step: step["name"] == dep, spec_steps))
-            memory_limit += self._get_memory_limit(step)
-        memory_limit = memory_limit / jobs_count
+            jobs = self._get_number_of_jobs(step)
+            jobs_count += jobs
+            if jobs:
+                memory_limit += self._get_memory_limit(step)
+        memory_limit = memory_limit / jobs_count if jobs_count else 0
         return [(jobs_count, memory_limit)]
 
     def _get_max_complexity(

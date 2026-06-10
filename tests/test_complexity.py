@@ -96,6 +96,41 @@ def test_estimate_complexity_snakemake(
     ]
 
 
+@mock.patch("reana_server.complexity.REANA_KUBERNETES_JOBS_MEMORY_LIMIT", "4Gi")
+@pytest.mark.parametrize(
+    "backends,expected_complexity,expected_min_memory",
+    [
+        # All steps on an external backend: no Kubernetes jobs and no memory
+        # requirement, so the Kubernetes memory check is skipped.
+        (
+            {"scatterA": "htcondor", "scatterB": "htcondor", "gather": "htcondor"},
+            [(0, 0)],
+            0,
+        ),
+        # Mixed: scatters run externally, gather runs on Kubernetes. Only the
+        # Kubernetes step contributes to jobs and memory.
+        (
+            {"scatterA": "htcondor", "scatterB": "htcondor", "gather": "kubernetes"},
+            [(1, 4294967296.0)],
+            4294967296.0,
+        ),
+    ],
+)
+def test_estimate_complexity_snakemake_external_backend(
+    snakemake_workflow_spec_loaded,
+    backends,
+    expected_complexity,
+    expected_min_memory,
+):
+    """Test that external-backend Snakemake steps contribute 0 jobs."""
+    wf_steps = snakemake_workflow_spec_loaded["workflow"]["specification"]["steps"]
+    for step in wf_steps:
+        step["compute_backend"] = backends[step["name"]]
+    complexity = estimate_complexity("snakemake", snakemake_workflow_spec_loaded)
+    assert complexity == expected_complexity
+    assert get_workflow_min_job_memory(complexity) == expected_min_memory
+
+
 @pytest.mark.parametrize(
     "complexity,should_raise",
     [
