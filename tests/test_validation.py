@@ -10,6 +10,7 @@ import pytest
 from unittest.mock import patch
 from contextlib import nullcontext as does_not_raise
 
+from reana_commons.config import REANA_DEFAULT_SNAKEMAKE_ENV_IMAGE
 from reana_commons.errors import REANAValidationError
 
 from reana_server.validation import (
@@ -97,16 +98,30 @@ def snakemake_workflow(*images):
             pytest.raises(REANAValidationError, match="not allowed"),
             id="snakemake-explicit-container-disallowed",
         ),
-        # Snakemake: rule without container directive produces "" from the loader;
-        # the runtime uses the admin-controlled default image, so it is not vetted.
+        # Snakemake: the runtime default must be explicitly allowlisted.
         pytest.param(
             {"enabled": True, "allowlist": []},
             snakemake_workflow(""),
-            does_not_raise(),
-            id="snakemake-no-container-uses-admin-default",
+            pytest.raises(REANAValidationError, match="not allowed"),
+            id="snakemake-no-container-empty-allowlist-rejected",
         ),
         pytest.param(
-            ALLOWLIST,
+            {
+                "enabled": True,
+                "allowlist": [REANA_DEFAULT_SNAKEMAKE_ENV_IMAGE],
+            },
+            snakemake_workflow(""),
+            does_not_raise(),
+            id="snakemake-no-container-default-allowlisted",
+        ),
+        pytest.param(
+            {
+                "enabled": True,
+                "allowlist": [
+                    ALLOWED_IMAGE,
+                    REANA_DEFAULT_SNAKEMAKE_ENV_IMAGE,
+                ],
+            },
             snakemake_workflow(ALLOWED_IMAGE, ""),
             does_not_raise(),
             id="snakemake-mixed-with-and-without-container",
