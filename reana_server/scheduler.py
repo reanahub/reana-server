@@ -15,7 +15,7 @@ from time import sleep
 from typing import Dict, Optional
 
 from bravado.exception import HTTPBadGateway, HTTPNotFound, HTTPConflict, HTTPBadRequest
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from reana_commons.config import REANA_MAX_CONCURRENT_BATCH_WORKFLOWS
@@ -61,8 +61,17 @@ def check_memory_availability(
     return error
 
 
-def check_concurrent_workflows_limit() -> Optional[str]:
-    """Check upper limit on running REANA batch workflows."""
+def check_concurrent_workflows_limit(uses_kubernetes: bool = True) -> Optional[str]:
+    """Check upper limit on running REANA batch workflows.
+
+    Workflows that run exclusively on external backends (HTCondor, Slurm) do not
+    consume Kubernetes resources, so they bypass this check entirely. When
+    counting already-running workflows, only those with at least one Kubernetes
+    step are counted, so external workflows already running do not prevent new
+    Kubernetes workflows from starting.
+    """
+    if not uses_kubernetes:
+        return None
     error = None
     try:
         running_workflows = (
@@ -71,7 +80,23 @@ def check_concurrent_workflows_limit() -> Optional[str]:
                 or_(
                     Workflow.status == RunStatus.pending,
                     Workflow.status == RunStatus.running,
-                )
+                ),
+                or_(
+                    # Empty/NULL complexity means the backend is unknown (e.g. a
+                    # workflow submitted before complexity was computed, or a parse
+                    # failure); count conservatively.
+                    func.array_length(Workflow.complexity, 1).is_(None),
+                    # Count only workflows that have at least one Kubernetes step.
+                    # ``complexity`` is a 2-D array of [job_count, memory] rows
+                    # (Postgres arrays are 1-indexed), so ``complexity[i][1]`` is
+                    # the job count of step ``i`` and is >0 for Kubernetes steps.
+                    text(
+                        "EXISTS ("
+                        "SELECT 1 FROM generate_series(1, array_length(complexity, 1)) AS i "
+                        "WHERE complexity[i][1] > 0"
+                        ")"
+                    ),
+                ),
             )
             .scalar()
         )
@@ -88,17 +113,20 @@ def check_concurrent_workflows_limit() -> Optional[str]:
     return error
 
 
-def reana_ready(workflow_min_job_memory: Optional[float]) -> Optional[str]:
+def reana_ready(
+    workflow_min_job_memory: Optional[float], uses_kubernetes: bool = True
+) -> Optional[str]:
     """Check if REANA can start new workflows."""
     check_memory = partial(check_memory_availability, workflow_min_job_memory)
+    check_concurrent = partial(check_concurrent_workflows_limit, uses_kubernetes)
 
     conditions_map = {
         "no_checks": [],
-        "concurrent": [check_concurrent_workflows_limit],
+        "concurrent": [check_concurrent],
         "memory": [check_memory],
-        "all_checks": [check_concurrent_workflows_limit, check_memory],
+        "all_checks": [check_concurrent, check_memory],
     }
-    conditions = conditions_map.get(REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_VALUE)
+    conditions = conditions_map[REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_VALUE]
 
     for check_condition in conditions:
         error = check_condition()
@@ -170,6 +198,7 @@ class WorkflowExecutionScheduler(BaseConsumer):
                 parameters=workflow_submission["parameters"],
                 priority=workflow_submission["priority"],
                 min_job_memory=workflow_submission["min_job_memory"],
+                uses_kubernetes=workflow_submission.get("uses_kubernetes", True),
                 retry_count=retry_count + 1,
             )
 
@@ -182,11 +211,12 @@ class WorkflowExecutionScheduler(BaseConsumer):
 
         workflow_id = workflow_submission["workflow_id_or_name"]
         workflow_min_job_memory = workflow_submission.pop("min_job_memory", 0)
+        uses_kubernetes = workflow_submission.pop("uses_kubernetes", True)
 
         workflow_submission.pop("priority", None)
         workflow_submission.pop("retry_count", None)
 
-        error = reana_ready(workflow_min_job_memory)
+        error = reana_ready(workflow_min_job_memory, uses_kubernetes)
         if not error:
             logging.info(f"Starting queued workflow: {workflow_id}")
             workflow_submission["status"] = "start"

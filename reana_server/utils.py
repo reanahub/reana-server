@@ -71,6 +71,7 @@ from reana_server.complexity import (
     get_workflow_min_job_memory,
     estimate_complexity,
     validate_job_memory_limits,
+    workflow_uses_kubernetes,
 )
 from reana_server.config import (
     ADMIN_USER_ID,
@@ -395,31 +396,37 @@ def publish_workflow_submission(workflow, user_id, parameters):
             'Workflow scheduling policy "{0}" is not valid.'.format(scheduling_policy)
         )
 
-    # No need to estimate the complexity for "fifo" strategy
+    # Calculate and store complexity for every workflow (including "fifo"): the
+    # concurrent-workflows check counts running workflows by inspecting their
+    # stored complexity, so it must always be populated.
+    complexity = estimate_complexity(workflow.type_, workflow.reana_specification)
+    workflow.complexity = complexity
+    Session.commit()
+
+    # ``complexity`` only reflects the initial steps, so it cannot tell us whether
+    # a later step runs on Kubernetes. ``workflow_uses_kubernetes`` scans all steps
+    # to correctly classify hybrid workflows (external first, Kubernetes later).
+    uses_kubernetes = workflow_uses_kubernetes(
+        workflow.type_, workflow.reana_specification
+    )
+
     if scheduling_policy == "fifo":
         workflow_priority = 0
         workflow_min_job_memory = 0
     else:
         total_cluster_memory = NodesStatus().get_total_memory()
-        complexity = _calculate_complexity(workflow)
         workflow_priority = workflow.get_priority(total_cluster_memory)
         workflow_min_job_memory = get_workflow_min_job_memory(complexity)
         validate_job_memory_limits(complexity)
+
     current_workflow_submission_publisher.publish_workflow_submission(
         user_id=str(user_id),
         workflow_id_or_name=str(workflow.id_),
         parameters=parameters,
         priority=workflow_priority,
         min_job_memory=workflow_min_job_memory,
+        uses_kubernetes=uses_kubernetes,
     )
-
-
-def _calculate_complexity(workflow):
-    """Place workflow in queue and calculate and set its complexity."""
-    complexity = estimate_complexity(workflow.type_, workflow.reana_specification)
-    workflow.complexity = complexity
-    Session.commit()
-    return complexity
 
 
 def serialize_utc_datetime(dt: Optional[datetime]) -> Optional[str]:

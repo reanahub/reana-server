@@ -10,13 +10,24 @@
 
 import base64
 import json
+from uuid import uuid4
 
 import pytest
 from bravado.exception import HTTPBadGateway, HTTPNotFound, HTTPConflict
 from mock import DEFAULT, Mock, patch
 
+from reana_db.models import RunStatus, Workflow
+
 from reana_server.api_client import WorkflowSubmissionPublisher
-from reana_server.scheduler import WorkflowExecutionScheduler
+from reana_server.scheduler import (
+    WorkflowExecutionScheduler,
+    check_concurrent_workflows_limit,
+)
+
+# Complexity rows are (job_count, memory_bytes); a job_count of 0 means the step
+# runs on an external backend (e.g. HTCondor) and >0 means it runs on Kubernetes.
+K8S_COMPLEXITY = [(1, 1024)]
+EXTERNAL_COMPLEXITY = [(0, 1024)]
 
 
 def test_scheduler_starts_workflows(
@@ -158,3 +169,66 @@ def test_scheduler_fail_after_too_many_retries(
             in_memory_queue_connection.channel().queues["workflow-submission"].empty()
         )
         assert not in_memory_queue_connection.channel().queues["jobs-status"].empty()
+
+
+def _add_workflow(session, owner_id, status, complexity):
+    """Persist a workflow with the given status and complexity."""
+    workflow = Workflow(
+        id_=uuid4(),
+        name="test_workflow",
+        owner_id=owner_id,
+        reana_specification={},
+        type_="serial",
+        status=status,
+        complexity=complexity,
+    )
+    session.add(workflow)
+    session.commit()
+    return workflow
+
+
+@pytest.mark.parametrize(
+    "workflows,max_concurrent,expect_error",
+    [
+        # Kubernetes workflows count towards the limit.
+        ([(RunStatus.running, K8S_COMPLEXITY)] * 2, 2, True),
+        ([(RunStatus.running, K8S_COMPLEXITY)], 2, False),
+        # Pending Kubernetes workflows count as well.
+        ([(RunStatus.pending, K8S_COMPLEXITY)], 1, True),
+        # External-only workflows do not count towards the limit.
+        ([(RunStatus.running, EXTERNAL_COMPLEXITY)] * 5, 1, False),
+        # Mixed: only the single Kubernetes workflow is counted.
+        (
+            [(RunStatus.running, EXTERNAL_COMPLEXITY)] * 3
+            + [(RunStatus.running, K8S_COMPLEXITY)],
+            2,
+            False,
+        ),
+        # Empty/unknown complexity is counted conservatively.
+        ([(RunStatus.running, [])], 1, True),
+        # Non-pending/running workflows are ignored regardless of complexity.
+        ([(RunStatus.finished, K8S_COMPLEXITY)] * 5, 1, False),
+    ],
+)
+def test_check_concurrent_workflows_limit_counts_only_kubernetes(
+    session, user0, workflows, max_concurrent, expect_error
+):
+    """Only pending/running workflows with a Kubernetes step are counted."""
+    for status, complexity in workflows:
+        _add_workflow(session, user0.id_, status, complexity)
+
+    with patch(
+        "reana_server.scheduler.REANA_MAX_CONCURRENT_BATCH_WORKFLOWS", max_concurrent
+    ):
+        error = check_concurrent_workflows_limit()
+
+    assert (error is not None) == expect_error
+
+
+def test_check_concurrent_workflows_limit_bypassed_for_external(session, user0):
+    """External-only submissions bypass the check without querying the DB."""
+    for _ in range(5):
+        _add_workflow(session, user0.id_, RunStatus.running, K8S_COMPLEXITY)
+
+    with patch("reana_server.scheduler.REANA_MAX_CONCURRENT_BATCH_WORKFLOWS", 1):
+        assert check_concurrent_workflows_limit(uses_kubernetes=False) is None
