@@ -1142,3 +1142,50 @@ def interactive_session_cleanup(
             click.echo(
                 f"Interactive session '{pod_name}' was updated {duration.days} days ago. Leaving opened."
             )
+
+
+@reana_admin.command(
+    "refresh-group-memberships",
+    help="Refresh group membership snapshots from the group backends.",
+)
+@click.option(
+    "-e",
+    "--email",
+    help="Refresh only the user with the given email.",
+)
+@with_appcontext
+def refresh_group_memberships(email):
+    """Refresh group membership snapshots of users with linked IdP identities.
+
+    Users who only use the CLI rarely trigger a login-time group sync, so
+    their membership snapshots would age past the configured maximum
+    (``REANA_GROUP_MEMBERSHIP_MAX_AGE``) and lose group-derived access.
+    This command (run periodically by the group-membership-refresh
+    CronJob) fetches memberships live from every configured group backend
+    and updates the snapshots.
+    """
+    from reana_server.groups.sync import sync_user_groups_live
+
+    query = Session.query(User).filter(User.idp_subject.isnot(None))
+    if email:
+        query = query.filter_by(email=email)
+    users = query.all()
+    if not users:
+        click.echo("No users with linked IdP identities found.")
+        return
+    failures = 0
+    for user in users:
+        try:
+            sync_user_groups_live(user)
+            click.echo(f"Refreshed group memberships of {user.email}.")
+        except Exception as error:
+            failures += 1
+            click.secho(
+                f"Failed to refresh group memberships of {user.email}: {error}",
+                fg="red",
+                err=True,
+            )
+            logging.debug(error, exc_info=True)
+    click.echo(f"Refreshed {len(users) - failures}/{len(users)} user(s).")
+    if failures:
+        sys.exit(1)

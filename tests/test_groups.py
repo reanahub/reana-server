@@ -220,8 +220,8 @@ class TestKeycloakBackend:
         with patch.object(backend, "_admin_get", return_value=None):
             assert backend.group_exists("/local/nope") is False
 
-    def test_fetch_memberships_paginates(self, backend, default_user):
-        default_user.idp_subject = "kc-user-id"
+    def test_fetch_memberships_paginates(self, backend):
+        user = Mock(idp_subject="kc-user-id", id_="user-id")
         page_one = [
             {"name": f"g{i}", "path": f"/g{i}"} for i in range(100)
         ]
@@ -229,6 +229,6 @@ class TestKeycloakBackend:
         with patch.object(
             backend, "_admin_get", side_effect=[page_one, page_two]
         ) as mocked:
-            refs = backend.fetch_memberships(default_user)
+            refs = backend.fetch_memberships(user)
         assert len(refs) == 101
         assert mocked.call_count == 2
