@@ -727,3 +727,21 @@ REANA_AUTH = {
     "http_timeout": int(os.getenv("REANA_AUTH_HTTP_TIMEOUT", "10")),
 }
 """OIDC/JWT authentication configuration (see AUTH_ARCHITECTURE.md)."""
+
+try:
+    REANA_GROUP_BACKENDS = json.loads(os.getenv("REANA_GROUP_BACKENDS", "[]"))
+except json.JSONDecodeError:
+    logging.error("REANA_GROUP_BACKENDS is not valid JSON, ignoring.")
+    REANA_GROUP_BACKENDS = []
+"""Group backend configuration.
+
+JSON list of backend definitions, e.g.::
+
+    [{"type": "keycloak", "provider": "keycloak",
+      "server_url": "https://auth.reana.example.org", "realm": "reana",
+      "groups_claim": "groups", "client_id": "reana-server-internal",
+      "client_secret_env": "REANA_GROUP_BACKEND_KEYCLOAK_CLIENT_SECRET"}]
+
+Each backend's service credentials are read from the environment variable
+named by ``client_secret_env``. See ``reana_server/groups``.
+"""
