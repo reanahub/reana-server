@@ -7,6 +7,58 @@
   "paths": {
     "/account/settings/linkedaccounts/": {},
     "/account/settings/linkedaccounts/static/{filename}": {},
+    "/api/.well-known/openid-configuration": {
+      "get": {
+        "description": "Relays the OIDC discovery document of the deployment's trusted issuer, extended with the public client id that reana-client must use for the device authorization grant. This lets clients discover the identity provider knowing only the REANA URL.",
+        "operationId": "get_openid_configuration",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The response contains the issuer's OpenID configuration and the REANA CLI client id.",
+            "schema": {
+              "properties": {
+                "authorization_endpoint": {
+                  "type": "string"
+                },
+                "device_authorization_endpoint": {
+                  "type": "string"
+                },
+                "issuer": {
+                  "type": "string"
+                },
+                "jwks_uri": {
+                  "type": "string"
+                },
+                "reana_client_id": {
+                  "type": "string"
+                },
+                "token_endpoint": {
+                  "type": "string"
+                },
+                "userinfo_endpoint": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "502": {
+            "description": "Request failed. The issuer's OpenID configuration could not be fetched.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get the trusted issuer's OpenID configuration."
+      }
+    },
     "/api/config": {
       "get": {
         "description": "This resource provides configuration needed by Reana-UI.",
@@ -398,6 +450,110 @@
           }
         },
         "summary": "Set a webhook on a user project from GitLab"
+      }
+    },
+    "/api/groups/search": {
+      "get": {
+        "description": "This resource searches the configured group backends for groups matching the given query, for use in workflow sharing. Group member lists are never exposed.",
+        "operationId": "search_groups",
+        "parameters": [
+          {
+            "description": "API access_token of the user.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Required. Search string (at least 3 characters).",
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Optional. Restrict the search to one group provider.",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The response contains matching groups.",
+            "examples": {
+              "application/json": {
+                "items": [
+                  {
+                    "display_name": "atlas",
+                    "external_id": "/local/atlas",
+                    "provider": "keycloak"
+                  }
+                ]
+              }
+            },
+            "schema": {
+              "properties": {
+                "items": {
+                  "items": {
+                    "properties": {
+                      "display_name": {
+                        "type": "string"
+                      },
+                      "external_id": {
+                        "type": "string"
+                      },
+                      "provider": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The query is too short or the provider unknown.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Request failed. User not signed in.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "503": {
+            "description": "Request failed. The group backend is currently unavailable.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Search shareable groups by name."
       }
     },
     "/api/info": {
@@ -3563,6 +3719,81 @@
         "summary": "Get disk usage of a workflow."
       }
     },
+    "/api/workflows/{workflow_id_or_name}/interactive-session-secret": {
+      "get": {
+        "description": "This resource returns the random per-session secret used as the notebook access token of the workflow's open interactive session. Only the workflow owner can retrieve it.",
+        "operationId": "get_interactive_session_secret",
+        "parameters": [
+          {
+            "description": "The API access_token of workflow owner.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Required. Workflow UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The response contains the session secret.",
+            "schema": {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "session_secret": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Request failed. User not signed in.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "Request failed. Credentials are invalid or the user is not the owner of the workflow.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Request failed. The workflow has no open interactive session.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get the access secret of the open interactive session."
+      }
+    },
     "/api/workflows/{workflow_id_or_name}/logs": {
       "get": {
         "description": "This resource reports the status of a workflow. Resource is expecting a workflow UUID.",
@@ -4275,12 +4506,20 @@
             "required": true,
             "schema": {
               "properties": {
+                "group_id": {
+                  "description": "Group identifier within the provider when sharing with a group. Must be given together with group_provider.",
+                  "type": "string"
+                },
+                "group_provider": {
+                  "description": "Group provider tag (e.g. keycloak) when sharing with a group. Must be given together with group_id.",
+                  "type": "string"
+                },
                 "message": {
                   "description": "Optional. Message to include when sharing the workflow.",
                   "type": "string"
                 },
                 "user_email_to_share_with": {
-                  "description": "User to share the workflow with.",
+                  "description": "User to share the workflow with. Mutually exclusive with the group target.",
                   "type": "string"
                 },
                 "valid_until": {
@@ -4288,9 +4527,6 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "user_email_to_share_with"
-              ],
               "type": "object"
             }
           }
