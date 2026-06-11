@@ -75,7 +75,10 @@ install_requires = [
     # From base bundle
     "invenio-logging>=4.0.0,<5.0.0",
     "invenio-mail>=1.0.2,<3.0.0",
-    # From auth bundle
+    # OIDC/JWT authentication (see AUTH_ARCHITECTURE.md)
+    "authlib>=1.6.0,<2.0.0",
+    # From auth bundle (removed at the JWT hard cutover, see
+    # AUTH_IMPLEMENTATION_PLAN.md PR RS-4)
     "invenio-accounts>=7.0.0,<8.0.0",
     "invenio-oauth2server>=4.0.0,<5.0.0",
     "invenio-oauthclient>=7.0.0,<8.0.0",

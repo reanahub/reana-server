@@ -695,3 +695,35 @@ if ACCESS_TOKEN_ISSUANCE_POLICY not in _ACCESS_TOKEN_ISSUANCE_POLICIES:
 # initialization time (``REANA.init_app``) rather than here, so importers
 # that only read a few constants (e.g. the scheduler container) are not
 # forced to receive the SSO secrets just to satisfy a module-level check.
+
+# OIDC/JWT authentication configuration
+# =====================================
+REANA_AUTH = {
+    # The single trusted OIDC issuer (the bundled Keycloak realm by
+    # default, any OIDC-compliant issuer otherwise), e.g.
+    # "https://auth.reana.example.org/realms/reana".
+    "issuer": os.getenv("REANA_AUTH_ISSUER", ""),
+    # Expected audience of access tokens. Empty string disables audience
+    # checking (needed for issuers whose audience cannot be configured).
+    "audience": os.getenv("REANA_AUTH_AUDIENCE", "reana"),
+    # Endpoint overrides; when empty, endpoints are resolved from the
+    # issuer's /.well-known/openid-configuration document.
+    "openid_config_url": os.getenv("REANA_AUTH_OPENID_CONFIG_URL", ""),
+    "jwks_url": os.getenv("REANA_AUTH_JWKS_URL", ""),
+    "userinfo_url": os.getenv("REANA_AUTH_USERINFO_URL", ""),
+    # Public client id used by reana-client for the device authorization
+    # grant; advertised through the openid-configuration proxy endpoint.
+    "cli_client_id": os.getenv("REANA_AUTH_CLIENT_ID", "reana-cli"),
+    # Claim carrying REANA roles, and the role required to use the API
+    # (replaces the legacy "user has an active token" gate). An empty
+    # required role disables the gate.
+    "roles_claim": os.getenv("REANA_AUTH_ROLES_CLAIM", "reana_roles"),
+    "required_role": os.getenv("REANA_AUTH_REQUIRED_ROLE", "reana:user"),
+    # Clock-skew leeway (seconds) for exp/nbf validation.
+    "leeway": int(os.getenv("REANA_AUTH_LEEWAY", "30")),
+    # TTL (seconds) of the in-process JWKS and discovery-document caches.
+    "jwks_ttl": int(os.getenv("REANA_AUTH_JWKS_TTL", "600")),
+    # Timeout (seconds) for HTTP calls to the issuer.
+    "http_timeout": int(os.getenv("REANA_AUTH_HTTP_TIMEOUT", "10")),
+}
+"""OIDC/JWT authentication configuration (see AUTH_ARCHITECTURE.md)."""
