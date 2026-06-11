@@ -11,6 +11,7 @@
 import copy
 import json
 import logging
+from datetime import datetime, timedelta
 from io import BytesIO
 from uuid import uuid4
 
@@ -19,13 +20,114 @@ from flask import Flask, url_for
 from mock import Mock, patch
 from reana_commons.testing import make_mock_api_client
 
-from reana_db.models import User, InteractiveSessionType, RunStatus
+from reana_db.models import Notification, User, InteractiveSessionType, RunStatus
 from reana_commons.k8s.secrets import UserSecrets, Secret
 
 from reana_server.utils import (
     _create_and_associate_local_user,
     _create_and_associate_oauth_user,
 )
+
+
+def test_notifications_api(app, session, user0, user1):
+    """Test listing and reading persistent notifications."""
+    old_notification = Notification(
+        user_id=user0.id_,
+        type_="workflow_shared",
+        payload={"workflow_id": str(uuid4()), "workflow_name": "old.1"},
+        created=datetime.utcnow() - timedelta(days=1),
+    )
+    new_notification = Notification(
+        user_id=user0.id_,
+        type_="workflow_shared",
+        payload={"workflow_id": str(uuid4()), "workflow_name": "new.1"},
+    )
+    other_user_notification = Notification(
+        user_id=user1.id_,
+        type_="workflow_shared",
+        payload={"workflow_id": str(uuid4()), "workflow_name": "private.1"},
+    )
+    session.add_all([old_notification, new_notification, other_user_notification])
+    session.commit()
+
+    with app.test_client() as client:
+        response = client.get(
+            "/api/notifications",
+            query_string={"access_token": user0.access_token, "limit": 1},
+        )
+        assert response.status_code == 200
+        assert response.json["unread_count"] == 2
+        assert len(response.json["notifications"]) == 1
+        assert response.json["notifications"][0]["id"] == str(new_notification.id_)
+
+        response = client.patch(
+            f"/api/notifications/{new_notification.id_}",
+            query_string={"access_token": user0.access_token},
+            json={"read": True},
+        )
+        assert response.status_code == 200
+        assert response.json["notification"]["read_at"]
+
+        response = client.patch(
+            f"/api/notifications/{other_user_notification.id_}",
+            query_string={"access_token": user0.access_token},
+            json={"read": True},
+        )
+        assert response.status_code == 404
+
+        response = client.post(
+            "/api/notifications/read-all",
+            query_string={"access_token": user0.access_token},
+        )
+        assert response.status_code == 200
+        assert response.json["updated"] == 1
+
+    session.query(Notification).filter(
+        Notification.id_.in_(
+            [
+                old_notification.id_,
+                new_notification.id_,
+                other_user_notification.id_,
+            ]
+        )
+    ).delete(synchronize_session=False)
+    session.commit()
+
+
+def test_share_workflow_email_failure_returns_warning(app, user0):
+    """Test that email failures do not undo successful workflow sharing."""
+    workflow_id = str(uuid4())
+    response = {
+        "message": "The workflow has been shared with the user.",
+        "workflow_id": workflow_id,
+        "workflow_name": "shared-workflow.1",
+    }
+    api_client = Mock()
+    api_client.api.share_workflow.return_value.result.return_value = (response, None)
+
+    with app.test_client() as client, patch(
+        "reana_server.rest.workflows.current_rwc_api_client", api_client
+    ), patch(
+        "reana_server.rest.workflows.send_email",
+        side_effect=RuntimeError("SMTP unavailable"),
+    ) as send_email_mock:
+        result = client.post(
+            f"/api/workflows/{workflow_id}/share",
+            query_string={"access_token": user0.access_token},
+            json={"user_email_to_share_with": "recipient@reana.io"},
+        )
+
+    assert result.status_code == 200
+    send_email_mock.assert_called_once()
+    assert result.json["message"] == response["message"]
+    assert result.json["warnings"] == [
+        {
+            "code": "email_notification_failed",
+            "message": (
+                "The workflow was shared, but the notification email could not be sent."
+            ),
+        }
+    ]
 
 
 def test_get_workflows(app, user0, _get_user_mock):
