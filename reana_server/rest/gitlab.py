@@ -9,6 +9,7 @@
 """Reana-Server GitLab integration Flask-Blueprint."""
 
 import logging
+import secrets
 import traceback
 from typing import Optional
 from urllib.parse import urljoin
@@ -16,17 +17,13 @@ from urllib.parse import urljoin
 import requests
 from flask import (
     Blueprint,
-    current_app,
     jsonify,
     redirect,
     request,
     url_for,
 )
-from flask_login.utils import _create_identifier
-from invenio_oauthclient.utils import get_safe_redirect_target
-from itsdangerous import BadData, URLSafeTimedSerializer
 from reana_commons.k8s.secrets import UserSecretsStore
-from werkzeug.local import LocalProxy
+from reana_db.database import Session
 import marshmallow
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
@@ -43,17 +40,19 @@ from reana_server.gitlab_client import (
     GitLabClientRequestError,
     GitLabClientInvalidToken,
 )
+from reana_server.oauth_state import (
+    InvalidOAuthState,
+    clear_state_cookie,
+    consume_state,
+    issue_state,
+    safe_next_url,
+)
 from reana_server.utils import (
     _format_gitlab_secrets,
     _get_gitlab_hook_id,
 )
 
 blueprint = Blueprint("gitlab", __name__)
-
-
-serializer = LocalProxy(
-    lambda: URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
-)
 
 
 @blueprint.route("/gitlab/connect")
@@ -74,25 +73,21 @@ def gitlab_connect(**kwargs):
             Redirection to GitLab site.
     """
     # Get redirect target in safe manner.
-    next_param = get_safe_redirect_target()
-    # Create a JSON Web Token
-    state_token = serializer.dumps(
-        {
-            "next": next_param,
-            "sid": _create_identifier(),
-        }
-    )
+    next_param = safe_next_url(request.args.get("next"))
+    response = redirect("placeholder")
+    state = issue_state(response, next=next_param)
 
     params = {
         "client_id": REANA_GITLAB_OAUTH_APP_ID,
         "redirect_uri": url_for(".gitlab_oauth", _external=True),
         "response_type": "code",
         "scope": "api",
-        "state": state_token,
+        "state": state,
     }
     req = requests.PreparedRequest()
     req.prepare_url(REANA_GITLAB_URL + "/oauth/authorize", params)
-    return redirect(req.url), 302
+    response.headers["Location"] = req.url
+    return response, 302
 
 
 @blueprint.route("/gitlab", methods=["GET"])
@@ -154,16 +149,10 @@ def gitlab_oauth(user):  # noqa
     """
     try:
         if "code" in request.args:
-            # Verifies state parameter and obtain next url
-            state_token = request.args.get("state")
-            assert state_token
-            # Checks authenticity and integrity of state and decodes the value.
-            state = serializer.loads(state_token)
-            # Verifies that state is for this session and that next parameter
-            # has not been modified.
-            assert state["sid"] == _create_identifier()
-            # Stores next URL
-            next_url = state["next"]
+            # Verifies state parameter (signed state cookie) and obtains
+            # the next url.
+            state = consume_state(request.args.get("state", ""))
+            next_url = safe_next_url(state.get("next"))
             gitlab_code = request.args.get("code")
             params = {
                 "client_id": REANA_GITLAB_OAUTH_APP_ID,
@@ -188,12 +177,13 @@ def gitlab_oauth(user):  # noqa
                 _format_gitlab_secrets(gitlab_user, access_token), overwrite=True
             )
             UserSecretsStore.update(user_secrets)
-            return redirect(next_url), 302
+            response = redirect(next_url)
+            return clear_state_cookie(response), 302
         else:
             return jsonify({"message": "OK"}), 200
     except ValueError:
         return jsonify({"message": "Token is not valid."}), 403
-    except (AssertionError, BadData):
+    except InvalidOAuthState:
         return jsonify({"message": "State param is invalid."}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
@@ -479,13 +469,18 @@ def gitlab_webhook(user):  # noqa
         gitlab_client = GitLabClient.from_k8s_secret(user.id_)
         parameters = request.json
         if request.method == "POST":
+            # Lazily create the per-user webhook secret used by GitLab to
+            # authenticate webhook deliveries (AUTH_ARCHITECTURE.md §5.6).
+            if not user.gitlab_webhook_secret:
+                user.gitlab_webhook_secret = secrets.token_urlsafe(32)
+                Session.commit()
             webhook_config = {
                 "url": url_for("workflows.create_workflow", _external=True),
                 "push_events": True,
                 "push_events_branch_filter": "master",
                 "merge_requests_events": True,
                 "enable_ssl_verification": False,
-                "token": user.access_token,
+                "token": user.gitlab_webhook_secret,
             }
             webhook = gitlab_client.create_webhook(
                 parameters["project_id"], webhook_config

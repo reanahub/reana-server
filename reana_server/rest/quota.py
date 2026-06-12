@@ -63,10 +63,9 @@ def _get_quota_period(
     resource_type: str,
     user_id: Optional[str] = None,
     email: Optional[str] = None,
-    user_access_token: Optional[str] = None,
 ) -> tuple[Optional[dict], Optional[str], int]:
     """Get periodic quota metadata for a given user and resource."""
-    users = _get_users(user_id, email, user_access_token) or None
+    users = _get_users(user_id, email) or None
     user = users[0] if users else None
     if not user:
         return None, "User not found.", 404
@@ -110,7 +109,6 @@ def _get_quota(
     resource_type: str,
     user_id: Optional[str] = None,
     email: Optional[str] = None,
-    user_access_token: Optional[str] = None,
 ) -> tuple[int | None, int | None, str | None, int]:
     """
     Get quota limit and usage for a given user and resource type.
@@ -118,10 +116,9 @@ def _get_quota(
     :param resource_type: Type of the resource.
     :param user_id: ID of the user.
     :param email: Email of the user.
-    :param user_access_token: Access token of the user.
     :return: Tuple with the limit, usage, the error message (or None if no error), and the status code.
     """
-    users = _get_users(user_id, email, user_access_token) or None
+    users = _get_users(user_id, email) or None
     user = users[0] if users else None
 
     if not user:
@@ -161,17 +158,12 @@ def get_quota_usage():  # noqa
           type: string
         - name: user_id
           in: query
-          description: Get the quota limit by user ID (mutually exclusive with `email` and `user_access_token`)
+          description: Get the quota limit by user ID (mutually exclusive with `email`)
           required: false
           type: string
         - name: email
           in: query
-          description: Get the quota limit by user email (mutually exclusive with `user_id` and `user_access_token`)
-          required: false
-          type: string
-        - name: user_access_token
-          in: query
-          description: Get the quota limit by user access token (mutually exclusive with `user_id` and `email`)
+          description: Get the quota limit by user email (mutually exclusive with `user_id`)
           required: false
           type: string
         - name: resource_type
@@ -276,18 +268,17 @@ def get_quota_usage():  # noqa
     # Get params from query string
     user_id = request.args.get("user_id")
     email = request.args.get("email")
-    user_access_token = request.args.get("user_access_token")
     resource_type = request.args.get("resource_type")
 
     # Check if at least one of the user criteria is provided
-    if not user_id and not email and not user_access_token:
+    if not user_id and not email:
         return jsonify(message="No user specified"), 400
 
     # Check if all user criteria are provided
-    if int(bool(user_id)) + int(bool(email)) + int(bool(user_access_token)) > 1:
+    if user_id and email:
         return (
             jsonify(
-                message="Exactly one of `user_id`, `email` or `user_access_token` must be provided.",
+                message="Exactly one of `user_id` or `email` must be provided.",
             ),
             400,
         )
@@ -304,14 +295,12 @@ def get_quota_usage():  # noqa
             400,
         )
 
-    limit, usage, error_msg, status = _get_quota(
-        resource_type, user_id, email, user_access_token
-    )
+    limit, usage, error_msg, status = _get_quota(resource_type, user_id, email)
     if error_msg:
         return jsonify(message=error_msg), status
 
     period, period_error, period_status = _get_quota_period(
-        resource_type, user_id, email, user_access_token
+        resource_type, user_id, email
     )
     if period_error:
         return jsonify(message=period_error), period_status

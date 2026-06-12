@@ -11,7 +11,6 @@
 import datetime
 import logging
 from pathlib import Path
-import secrets
 import sys
 import traceback
 from typing import List, Optional
@@ -21,7 +20,6 @@ import requests
 import tablib
 from click.core import ParameterSource
 from flask.cli import with_appcontext
-from invenio_accounts.utils import register_user
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (
     REANA_RESOURCE_HEALTH_COLORS,
@@ -38,7 +36,6 @@ from reana_db.models import (
     Resource,
     User,
     UserResource,
-    UserTokenStatus,
     Workflow,
     WorkspaceRetentionRule,
     WorkspaceRetentionRuleStatus,
@@ -51,7 +48,6 @@ from reana_server.reana_admin.check_workflows import check_workspaces
 from reana_server.reana_admin.options import (
     add_user_options,
     add_workflow_option,
-    admin_access_token_option,
 )
 from reana_server.reana_admin.retention_rule_deleter import RetentionRuleDeleter
 from reana_server.status import STATUS_OBJECT_TYPES
@@ -65,10 +61,7 @@ from reana_server.utils import (
     _import_users,
     _set_quota_period,
     _validate_email,
-    _validate_password,
     create_user_workspace,
-    grant_access_token_to_user,
-    revoke_access_token_of_user,
     _set_quota_limit,
 )
 
@@ -92,15 +85,15 @@ def _unset_if_option_omitted(ctx, param, value):
     required=True,
     help="The email of the admin user.",
 )
-@click.option("--password", "-p", callback=_validate_password, required=True)
 @click.option("-i", "--id", "id_", default=ADMIN_USER_ID)
 @with_appcontext
-def users_create_default(email, password, id_):
-    """Create default user.
+def users_create_default(email, id_):
+    """Create the default administrator user.
 
-    This user has the administrator role
-    and can retrieve other user information as well as create
-    new users.
+    Credentials are owned by the OIDC issuer (e.g. the bundled Keycloak);
+    this only creates the REANA user row with the fixed administrator UUID
+    and its workspace. The matching issuer account is linked on the
+    administrator's first login by the verified-email match.
     """
     reana_user_characteristics = {
         "id_": id_,
@@ -109,16 +102,11 @@ def users_create_default(email, password, id_):
     try:
         user = Session.query(User).filter_by(**reana_user_characteristics).first()
         if not user:
-            reana_user_characteristics["access_token"] = secrets.token_urlsafe(16)
             user = User(**reana_user_characteristics)
             create_user_workspace(user.get_user_workspace())
             Session.add(user)
             Session.commit()
-            # create invenio user, passing `confirmed_at` to mark it as confirmed
-            register_user(
-                email=email, password=password, confirmed_at=datetime.datetime.now()
-            )
-            click.echo(reana_user_characteristics["access_token"])
+        click.echo(str(user.id_))
     except Exception as e:
         click.echo("Something went wrong: {0}".format(e))
         sys.exit(1)
@@ -127,7 +115,6 @@ def users_create_default(email, password, id_):
 @reana_admin.command("user-list", help="List users according to the search criteria.")
 @click.option("--id", help="The id of the user.")
 @click.option("-e", "--email", help="The email of the user.")
-@click.option("--user-access-token", help="The access token of the user.")
 @click.option(
     "--json",
     "output_format",
@@ -135,21 +122,19 @@ def users_create_default(email, password, id_):
     default=None,
     help="Get output in JSON format.",
 )
-@admin_access_token_option
 @click.pass_context
-def list_users(ctx, id, email, user_access_token, admin_access_token, output_format):
+def list_users(ctx, id, email, output_format):
     """List users according to the search criteria."""
     try:
-        response = _get_users(id, email, user_access_token)
-        headers = ["id", "email", "access_token", "access_token_status"]
+        response = _get_users(id, email)
+        headers = ["id", "email", "idp_subject"]
         data = []
         for user in response:
             data.append(
                 (
                     str(user.id_),
                     user.email,
-                    str(user.access_token),
-                    str(user.access_token_status),
+                    str(user.idp_subject or ""),
                 )
             )
         if output_format:
@@ -179,15 +164,13 @@ def list_users(ctx, id, email, user_access_token, admin_access_token, output_for
     required=True,
     help="The email of the user.",
 )
-@click.option("--user-access-token", help="The access token of the user.")
-@admin_access_token_option
 @click.pass_context
-def create_user(ctx, email, user_access_token, admin_access_token):
-    """Create a new user. Requires the token of an administrator."""
+def create_user(ctx, email):
+    """Create a new user."""
     try:
-        response = _create_user(email, user_access_token)
-        headers = ["id", "email", "access_token"]
-        data = [(str(response.id_), response.email, response.access_token)]
+        response = _create_user(email)
+        headers = ["id", "email"]
+        data = [(str(response.id_), response.email)]
         click.echo(click.style("User was successfully created.", fg="green"))
         click_table_printer(headers, [], data)
 
@@ -201,9 +184,8 @@ def create_user(ctx, email, user_access_token, admin_access_token):
 
 
 @reana_admin.command("user-export")
-@admin_access_token_option
 @click.pass_context
-def export_users(ctx, admin_access_token):
+def export_users(ctx):
     """Export all users in current REANA cluster."""
     try:
         csv_file = _export_users()
@@ -217,7 +199,6 @@ def export_users(ctx, admin_access_token):
 
 
 @reana_admin.command("user-import")
-@admin_access_token_option
 @click.option(
     "-f",
     "--file",
@@ -226,7 +207,7 @@ def export_users(ctx, admin_access_token):
     type=click.File(),
 )
 @click.pass_context
-def import_users(ctx, admin_access_token, file_):
+def import_users(ctx, file_):
     """Import users from file."""
     try:
         _import_users(file_)
@@ -234,107 +215,6 @@ def import_users(ctx, admin_access_token, file_):
     except Exception as e:
         click.secho(
             "Something went wrong while importing users:\n{}".format(e),
-            fg="red",
-            err=True,
-        )
-
-
-@reana_admin.command("token-grant", help="Grant a token to the selected user.")
-@admin_access_token_option
-@click.option("--id", "id_", help="The id of the user.")
-@click.option("-e", "--email", help="The email of the user.")
-def token_grant(admin_access_token, id_, email):
-    """Grant a token to the selected user."""
-    try:
-        # token grant is committed before email is sent
-        admin = _get_admin_user_or_raise(requested_via="reana_admin.token-grant")
-        user = _get_user_by_criteria(id_, email)
-        error_msg = None
-        if not user:
-            error_msg = f"User {id_ or email} does not exist."
-        elif user.access_token:
-            error_msg = (
-                f"User {user.id_} ({user.email}) has already an active access token."
-            )
-        if error_msg:
-            click.secho(f"ERROR: {error_msg}", fg="red")
-            sys.exit(1)
-        if user.access_token_status in [UserTokenStatus.revoked.name, None]:
-            click.confirm(
-                f"User {user.id_} ({user.email}) access token status"
-                f" is {user.access_token_status}, do you want to"
-                " proceed?",
-                abort=True,
-            )
-        _, log_msg = grant_access_token_to_user(
-            user,
-            granted_by=admin,
-            send_notification_email=True,
-            include_token_in_log=True,  # will only send if REANA_ACCESS_TOKEN_ISSUANCE_POLICY == "manual"
-            requested_via="reana_admin.token-grant",
-        )
-        click.secho(log_msg, fg="green")
-
-    except click.exceptions.Abort:
-        click.echo("Grant token aborted.")
-    except REANAEmailNotificationError as e:
-        # Email dispatch failed, but token was granted. Still show the canonical success message.
-        log_msg = getattr(e, "log_msg", None)
-        if log_msg:
-            click.secho(log_msg, fg="green")
-        click.secho(
-            "Something went wrong while sending email:\n{}".format(e),
-            fg="red",
-            err=True,
-        )
-    except Exception as e:
-        click.secho(
-            "Something went wrong while granting token:\n{}".format(e),
-            fg="red",
-            err=True,
-        )
-
-
-@reana_admin.command("token-revoke", help="Revoke selected user's token.")
-@admin_access_token_option
-@click.option("--id", "id_", help="The id of the user.")
-@click.option("-e", "--email", help="The email of the user.")
-def token_revoke(admin_access_token, id_, email):
-    """Revoke selected user's token."""
-    try:
-        admin = _get_admin_user_or_raise(requested_via="reana_admin.token-revoke")
-        user = _get_user_by_criteria(id_, email)
-        error_msg = None
-        if not user:
-            error_msg = f"User {id_ or email} does not exist."
-        elif not user.access_token:
-            error_msg = (
-                f"User {user.id_} ({user.email}) does not have an"
-                " active access token."
-            )
-        if error_msg:
-            click.secho(f"ERROR: {error_msg}", fg="red")
-            sys.exit(1)
-
-        _, log_msg = revoke_access_token_of_user(
-            user,
-            revoked_by=admin,
-            send_notification_email=True,
-            requested_via="reana_admin.token-revoke",
-        )
-        click.secho(log_msg, fg="green")
-    except REANAEmailNotificationError as e:
-        log_msg = getattr(e, "log_msg", None)
-        if log_msg:
-            click.secho(log_msg, fg="green")
-        click.secho(
-            "Something went wrong while sending email:\n{}".format(e),
-            fg="red",
-            err=True,
-        )
-    except Exception as e:
-        click.secho(
-            "Something went wrong while revoking token:\n{}".format(e),
             fg="red",
             err=True,
         )
@@ -355,8 +235,7 @@ def token_revoke(admin_access_token, id_, email):
     default=None,
     help="Send the status by email to the configured receiver.",
 )
-@admin_access_token_option
-def status_report(types, email, admin_access_token):
+def status_report(types, email):
     """Retrieve a status report summary of the REANA system."""
 
     def _print_row(data, column_widths):
@@ -451,10 +330,9 @@ def status_report(types, email, admin_access_token):
     callback=lambda ctx, param, value: "human_readable" if value else "raw",
     help="Show quota usage values in human readable format.",
 )
-@admin_access_token_option
 @click.pass_context
 def list_quota_usage(
-    ctx, id, email, user_access_token, admin_access_token, output_format, human_readable
+    ctx, id, email, user_access_token, output_format, human_readable
 ):
     """List quota usage of users."""
     try:
@@ -552,11 +430,8 @@ def list_quota_resources(ctx):
 @click.option(
     "--limit", "-l", help="New limit in canonical unit.", required=True, type=int
 )
-@admin_access_token_option
 @click.pass_context
-def set_quota_limit(
-    ctx, emails, resource_type, resource_name, limit, admin_access_token
-):
+def set_quota_limit(ctx, emails, resource_type, resource_name, limit):
     """Set quota limits to the given users per resource."""
     msg, status_code, fatal = _set_quota_limit(
         limit=limit,
@@ -601,7 +476,6 @@ def set_quota_limit(
     callback=_unset_if_option_omitted,
     help="Current active quota period start datetime.",
 )
-@admin_access_token_option
 @click.pass_context
 def set_quota_period(
     ctx,
@@ -610,7 +484,6 @@ def set_quota_period(
     resource_type,
     quota_period_months,
     quota_period_start_at,
-    admin_access_token,
 ):
     """Set periodic quota fields for one user."""
     if int(bool(user_id)) + int(bool(email)) != 1:
@@ -648,9 +521,8 @@ def set_quota_period(
     custom settings, will be kept during the upgrade, and won't be automatically
     updated to match the new default limit value.""",
 )
-@admin_access_token_option
 @click.pass_context
-def set_default_quota_limit(ctx, admin_access_token: str):
+def set_default_quota_limit(ctx):
     """Set default quota limits for users who do not have any custom limits defined."""
     users_without_quota_limits = (
         Session.query(User)
@@ -688,7 +560,6 @@ def set_default_quota_limit(ctx, admin_access_token: str):
                         resource_name=resource.name,
                         resource_type=resource.type_.name,
                         limit=default_limit,
-                        admin_access_token=admin_access_token,
                     )
 
 
@@ -719,13 +590,11 @@ def set_default_quota_limit(ctx, admin_access_token: str):
     default=False,
     help="Manually decide which messages to remove from the queue.",
 )
-@admin_access_token_option
 def queue_consume(
     queue_name: str,
     key: Optional[str],
     values_to_delete: List[str],
     interactive: bool,
-    admin_access_token: str,
 ):
     """Start consuming specified queue and remove selected messages.
 
@@ -789,14 +658,12 @@ def queue_consume(
 )
 @add_user_options
 @add_workflow_option()
-@admin_access_token_option
 def retention_rules_apply(
     dry_run: bool,
     force_date: Optional[datetime.datetime],
     yes_i_am_sure: bool,
     user: Optional[User],
     workflow: Optional[Workflow],
-    admin_access_token: str,
 ) -> None:
     """Apply pending retentions rules."""
     if user and workflow and user.id_ != workflow.owner_id:
@@ -892,10 +759,7 @@ def retention_rules_apply(
     required=True,
     type=click.IntRange(min=0),
 )
-@admin_access_token_option
-def retention_rules_extend(
-    workflow: Optional[Workflow], days: int, admin_access_token: str
-) -> None:
+def retention_rules_extend(workflow: Optional[Workflow], days: int) -> None:
     """Extend active retentions rules."""
     click.echo("Fetching all the active rules")
     active_rules = (
@@ -943,12 +807,10 @@ def retention_rules_extend(
     is_flag=True,
     help="Show all workflows/sessions/workspaces, even if in-sync.",
 )
-@admin_access_token_option
 def check_workflows(
     date_start: datetime.datetime,
     date_end: Optional[datetime.datetime],
     show_all: bool,
-    admin_access_token: str,
 ) -> None:
     """Check consistency of selected workflow run statuses between database, message queue and Kubernetes."""
     from .check_workflows import (
@@ -1059,10 +921,7 @@ def check_workflows(
     default=False,
     help="Show which interactive sessions would be closed, without closing them. [default=False]",
 )
-@admin_access_token_option
-def interactive_session_cleanup(
-    days: int, dry_run: bool, admin_access_token: str
-) -> None:
+def interactive_session_cleanup(days: int, dry_run: bool) -> None:
     """Close inactive interactive sessions."""
     click.echo(
         f"Starting to close interactive sessions running longer than {days} days.."

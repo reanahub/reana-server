@@ -59,7 +59,6 @@ install_requires = [
     "uWSGI>=2.0.31",
     "uwsgi-tools>=1.1.1",
     "uwsgitop>=0.12",
-    "flask-security-invenio>=4.0.0,<5.0.0",
     # Yadage dependencies
     # Pinning adage/packtivity/yadage/yadage-schemas to make sure we use compatible versions.
     # See https://github.com/reanahub/reana-workflow-engine-yadage/pull/236#discussion_r992475484
@@ -67,30 +66,12 @@ install_requires = [
     "packtivity==0.16.2",  # matches the version in r-w-e-yadage
     "yadage==0.20.1",  # matches the version in r-w-e-yadage
     "yadage-schemas==0.10.6",  # matches the version in r-w-e-yadage
-    # Invenio dependencies
-    "invenio-app>=3.0.0,<4.0.0",
-    "flask-limiter>=2.3,<3",
-    "invenio-base>=2.3.0,<3.0.0",
-    "invenio-cache>=3.0.0,<4.0.0",
-    "invenio-config>=1.0.3,<2.0.0",
-    # From base bundle
-    "invenio-logging>=4.0.0,<5.0.0",
-    "invenio-mail>=1.0.2,<3.0.0",
     # OIDC/JWT authentication (see AUTH_ARCHITECTURE.md)
     "authlib>=1.6.0,<2.0.0",
     "redis>=5.0.0",
-    # From auth bundle (removed at the JWT hard cutover, see
-    # AUTH_IMPLEMENTATION_PLAN.md PR RS-4)
-    "invenio-accounts>=7.0.0,<8.0.0",
-    "invenio-oauth2server>=4.0.0,<5.0.0",
-    "invenio-oauthclient>=7.0.0,<8.0.0",
-    "invenio-userprofiles>=5.0.0,<6.0.0",
-    "invenio-theme>=4.0.0,<5.0.0",
-    "invenio-i18n>=3.0.0,<4.0.0",
-    "invenio-access>=5.0.0,<6.0.0",
-    # Invenio database
-    "invenio-db[postgresql]>=2.5.0,<3.0.0",
-    "six>=1.12.0",  # required by Flask-Breadcrumbs
+    # Web framework extensions
+    "flask-cors>=4.0.0",
+    "flask-limiter>=2.3,<3",
 ]
 
 packages = find_packages()
@@ -117,25 +98,6 @@ setup(
         "flask.commands": [
             "reana-admin = reana_server.reana_admin:reana_admin",
             "start-scheduler = reana_server.cli:start_scheduler",
-        ],
-        "invenio_base.apps": ["reana = reana_server.ext:REANA"],
-        "invenio_base.api_apps": ["reana = reana_server.ext:REANA"],
-        "invenio_config.module": [
-            "reana_server = reana_server.config",
-        ],
-        "invenio_base.api_blueprints": [
-            "reana_server_ping = reana_server.rest.ping:blueprint",
-            "reana_server_workflows = reana_server.rest.workflows:blueprint",
-            "reana_server_users = reana_server.rest.users:blueprint",
-            "reana_server_secrets = reana_server.rest.secrets:blueprint",
-            "reana_server_gitlab = reana_server.rest.gitlab:blueprint",
-            "reana_server_config = reana_server.rest.config:blueprint",
-            "reana_server_status = reana_server.rest.status:blueprint",
-            "reana_server_info = reana_server.rest.info:blueprint",
-            "reana_server_launch = reana_server.rest.launch:blueprint",
-            "reana_server_quota = reana_server.rest.quota:blueprint",
-            "reana_server_auth = reana_server.rest.auth:blueprint",
-            "reana_server_groups = reana_server.rest.groups:blueprint",
         ],
     },
     include_package_data=True,
