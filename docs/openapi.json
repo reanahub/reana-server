@@ -1316,6 +1316,100 @@
         "summary": "Launch workflow from a remote REANA specification file."
       }
     },
+    "/api/login": {
+      "get": {
+        "description": "Redirects the browser to the trusted issuer's authorization endpoint (authorization code flow with PKCE). On completion the issuer redirects back to the OAuth callback, which establishes the cookie-based session. Returns 404 when the BFF login is disabled.",
+        "operationId": "bff_login",
+        "parameters": [
+          {
+            "description": "Relative URL to return to after login.",
+            "in": "query",
+            "name": "next",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to the issuer's authorization endpoint."
+          },
+          "404": {
+            "description": "BFF login is not enabled on this deployment."
+          },
+          "502": {
+            "description": "The issuer's endpoints could not be resolved."
+          }
+        },
+        "summary": "Start the browser login flow."
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "description": "Deletes the server-side session (refresh token), clears the authentication cookies and returns the issuer's RP-initiated logout URL for the web application to navigate to.",
+        "operationId": "bff_logout",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Session ended. The response contains the issuer logout URL.",
+            "schema": {
+              "properties": {
+                "logout_url": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "No session cookie present."
+          },
+          "403": {
+            "description": "CSRF validation failed."
+          }
+        },
+        "summary": "End the browser session."
+      }
+    },
+    "/api/oauth/callback": {
+      "get": {
+        "description": "Handles the issuer's redirect: validates the OAuth state, exchanges the authorization code for tokens, provisions/links the REANA user, synchronizes group memberships, stores the refresh token server-side and sets the authentication cookies.",
+        "operationId": "bff_oauth_callback",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect back to the web application."
+          },
+          "403": {
+            "description": "OAuth state validation failed."
+          },
+          "502": {
+            "description": "Token exchange with the issuer failed."
+          }
+        },
+        "summary": "Complete the browser login flow."
+      }
+    },
     "/api/ping": {
       "get": {
         "description": "Ping the server.",

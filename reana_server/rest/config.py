@@ -14,6 +14,8 @@ import traceback
 from flask import Blueprint, jsonify
 from reana_commons.config import REANAConfig
 
+from reana_server.config import REANA_AUTH
+
 blueprint = Blueprint("config", __name__)
 
 
@@ -70,8 +72,17 @@ def get_config():
               }
     """
     try:
+        ui_config = dict(REANAConfig.load("ui") or {})
+        # Auth discovery for the web UI (AUTH_ARCHITECTURE.md §5.1).
+        ui_config["auth"] = {
+            "bff_enabled": bool(
+                REANA_AUTH["bff_enabled"] and REANA_AUTH["issuer"]
+            ),
+            "login_url": "/api/login",
+            "logout_url": "/api/logout",
+        }
         return (
-            jsonify(REANAConfig.load("ui")),
+            jsonify(ui_config),
             200,
         )
     except Exception as e:

@@ -37,6 +37,7 @@ extras_require = {
         "apispec[yaml]>=3.0",
         "apispec-webframeworks",
         "reana-commons[kubernetes,yadage,snakemake,cwl,tests]>=0.95.0a21,<0.96.0",
+        "fakeredis>=2.0.0",
         "reana-db[tests]>=0.95.0a10,<0.96.0",
     ],
 }
@@ -77,6 +78,7 @@ install_requires = [
     "invenio-mail>=1.0.2,<3.0.0",
     # OIDC/JWT authentication (see AUTH_ARCHITECTURE.md)
     "authlib>=1.6.0,<2.0.0",
+    "redis>=5.0.0",
     # From auth bundle (removed at the JWT hard cutover, see
     # AUTH_IMPLEMENTATION_PLAN.md PR RS-4)
     "invenio-accounts>=7.0.0,<8.0.0",
@@ -132,6 +134,8 @@ setup(
             "reana_server_info = reana_server.rest.info:blueprint",
             "reana_server_launch = reana_server.rest.launch:blueprint",
             "reana_server_quota = reana_server.rest.quota:blueprint",
+            "reana_server_auth = reana_server.rest.auth:blueprint",
+            "reana_server_groups = reana_server.rest.groups:blueprint",
         ],
     },
     include_package_data=True,

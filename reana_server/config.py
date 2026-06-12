@@ -725,6 +725,35 @@ REANA_AUTH = {
     "jwks_ttl": int(os.getenv("REANA_AUTH_JWKS_TTL", "600")),
     # Timeout (seconds) for HTTP calls to the issuer.
     "http_timeout": int(os.getenv("REANA_AUTH_HTTP_TIMEOUT", "10")),
+    # BFF (backend-for-frontend) browser login: when enabled (and an issuer
+    # is configured), reana-server runs the authorization code flow and
+    # gives browsers httpOnly-cookie transport for the access JWT
+    # (AUTH_ARCHITECTURE.md §5.1). Platform-embedded deployments that bring
+    # their own tokens (e.g. the ESCAPE VRE) disable it.
+    "bff_enabled": bool(strtobool(os.getenv("REANA_AUTH_BFF_ENABLED", "true"))),
+    # Confidential web client used by the BFF code flow.
+    "web_client_id": os.getenv("REANA_AUTH_WEB_CLIENT_ID", "reana-server"),
+    "web_client_secret": os.getenv("REANA_AUTH_WEB_CLIENT_SECRET", ""),
+    "scopes": os.getenv("REANA_AUTH_SCOPES", "openid profile email"),
+    # Server-side lifetime (seconds) of a BFF session (refresh-token
+    # storage in Redis); the issuer's session policy is the real authority.
+    "session_ttl": int(os.getenv("REANA_AUTH_SESSION_TTL", "604800")),
+    # Redis storage for BFF refresh tokens. Credentials are percent-quoted
+    # so operator-supplied passwords cannot break URI parsing.
+    "redis_url": os.getenv("REANA_AUTH_REDIS_URL", "")
+    or "redis://{user}:{password}@{host}:6379/1".format(
+        user=_urlquote(os.getenv("REANA_CACHE_USER", ""), safe=""),
+        password=_urlquote(os.getenv("REANA_CACHE_PASSWORD", ""), safe=""),
+        host=REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES["cache"],
+    ),
+    # Optional endpoint overrides (resolved from the discovery document
+    # when empty, see reana_server.auth.discovery).
+    "authorization_url": os.getenv("REANA_AUTH_AUTHORIZATION_URL", ""),
+    "token_url": os.getenv("REANA_AUTH_TOKEN_URL", ""),
+    "end_session_url": os.getenv("REANA_AUTH_END_SESSION_URL", ""),
+    "device_authorization_url": os.getenv(
+        "REANA_AUTH_DEVICE_AUTHORIZATION_URL", ""
+    ),
 }
 """OIDC/JWT authentication configuration (see AUTH_ARCHITECTURE.md)."""
 
