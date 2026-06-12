@@ -71,6 +71,7 @@ from reana_server.complexity import (
     get_workflow_min_job_memory,
     estimate_complexity,
     validate_job_memory_limits,
+    workflow_uses_kubernetes,
 )
 from reana_server.config import (
     ADMIN_USER_ID,
@@ -395,6 +396,16 @@ def publish_workflow_submission(workflow, user_id, parameters):
             'Workflow scheduling policy "{0}" is not valid.'.format(scheduling_policy)
         )
 
+    # Workflows that run exclusively on external backends (HTCondor, Slurm)
+    # bypass the Kubernetes concurrency limit, while all others are counted
+    # towards it by the scheduler. Classification scans all steps, not only the
+    # initial ones, so that hybrid workflows that start on an external backend
+    # but run on Kubernetes later are counted as Kubernetes workflows.
+    workflow.uses_kubernetes = workflow_uses_kubernetes(
+        workflow.type_, workflow.reana_specification
+    )
+    Session.commit()
+
     # No need to estimate the complexity for "fifo" strategy
     if scheduling_policy == "fifo":
         workflow_priority = 0
@@ -405,12 +416,14 @@ def publish_workflow_submission(workflow, user_id, parameters):
         workflow_priority = workflow.get_priority(total_cluster_memory)
         workflow_min_job_memory = get_workflow_min_job_memory(complexity)
         validate_job_memory_limits(complexity)
+
     current_workflow_submission_publisher.publish_workflow_submission(
         user_id=str(user_id),
         workflow_id_or_name=str(workflow.id_),
         parameters=parameters,
         priority=workflow_priority,
         min_job_memory=workflow_min_job_memory,
+        uses_kubernetes=workflow.uses_kubernetes,
     )
 
 
