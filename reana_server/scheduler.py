@@ -90,6 +90,10 @@ def check_concurrent_workflows_limit(uses_kubernetes: bool = True) -> Optional[s
                     # ``complexity`` is a 2-D array of [job_count, memory] rows
                     # (Postgres arrays are 1-indexed), so ``complexity[i][1]`` is
                     # the job count of step ``i`` and is >0 for Kubernetes steps.
+                    # Hybrid workflows whose initial steps are all external store
+                    # a synthetic (1, 0) row (HYBRID_KUBERNETES_COMPLEXITY_MARKER
+                    # in reana_server.complexity), so they match this condition
+                    # too and keep consuming a concurrency slot while running.
                     text(
                         "EXISTS ("
                         "SELECT 1 FROM generate_series(1, array_length(complexity, 1)) AS i "

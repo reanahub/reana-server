@@ -99,6 +99,38 @@ def workflow_uses_kubernetes(workflow_type: str, reana_yaml: dict) -> bool:
         return True
 
 
+# Synthetic complexity row appended to the *stored* complexity of hybrid
+# workflows: workflows whose initial steps all run on external backends
+# (HTCondor, Slurm) but which run on Kubernetes in a later step. The scheduler's
+# concurrent-workflows query identifies Kubernetes workflows by looking for a
+# stored row with a positive job count, so without this marker a hybrid workflow
+# would stop consuming a concurrency slot as soon as it is queued. The values
+# (1 job, 0 memory) are neutral for every other reader of stored complexity:
+# workflow priority adds ``jobs * memory == 0`` and the min/max job memory
+# helpers see a 0-byte requirement, which skips the Kubernetes memory checks
+# exactly as an all-external initial complexity already does.
+HYBRID_KUBERNETES_COMPLEXITY_MARKER = (1, 0)
+
+
+def get_complexity_to_store(
+    complexity: List[Tuple[int, float]], uses_kubernetes: bool
+) -> List[Tuple[int, float]]:
+    """Return the complexity rows to persist in the database.
+
+    Appends ``HYBRID_KUBERNETES_COMPLEXITY_MARKER`` when the workflow uses
+    Kubernetes but none of its initial steps do, so that the scheduler's
+    concurrent-workflows query counts the workflow towards the Kubernetes
+    concurrency limit. An empty complexity (estimation failure) is left
+    untouched: the scheduler already counts it conservatively, and appending
+    the marker would turn the "unknown complexity" priority of 0 into the
+    maximum priority.
+    """
+    has_initial_k8s_step = any(jobs > 0 for jobs, _ in complexity)
+    if complexity and uses_kubernetes and not has_initial_k8s_step:
+        return complexity + [HYBRID_KUBERNETES_COMPLEXITY_MARKER]
+    return complexity
+
+
 class ComplexityEstimatorBase:
     """REANA workflow complexity estimator base class."""
 

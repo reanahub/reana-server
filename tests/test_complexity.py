@@ -15,6 +15,8 @@ from mock import patch
 from reana_commons.errors import REANAKubernetesMemoryLimitExceeded
 
 from reana_server.complexity import (
+    HYBRID_KUBERNETES_COMPLEXITY_MARKER,
+    get_complexity_to_store,
     get_workflow_min_job_memory,
     estimate_complexity,
     validate_job_memory_limits,
@@ -352,3 +354,60 @@ def _yadage_stage(name, compute_backend=None, nested_stages=None):
 def test_workflow_uses_kubernetes(workflow_type, spec, expected):
     """Test workflow_uses_kubernetes for all workflow types and backend combinations."""
     assert workflow_uses_kubernetes(workflow_type, spec) == expected
+
+
+@pytest.mark.parametrize(
+    "complexity,uses_kubernetes,expected",
+    [
+        # Hybrid: initial steps external, Kubernetes later — marker appended so
+        # the scheduler's concurrent-workflows query counts the workflow.
+        (
+            [(0, 268435456)],
+            True,
+            [(0, 268435456), HYBRID_KUBERNETES_COMPLEXITY_MARKER],
+        ),
+        # Initial Kubernetes step already present — no marker needed.
+        ([(1, 268435456)], True, [(1, 268435456)]),
+        ([(0, 268435456), (2, 536870912)], True, [(0, 268435456), (2, 536870912)]),
+        # External-only workflow — no marker, so it is not counted.
+        ([(0, 268435456)], False, [(0, 268435456)]),
+        # Empty complexity (estimation failure) is left untouched: the scheduler
+        # already counts it conservatively, and the marker would change the
+        # workflow priority.
+        ([], True, []),
+        ([], False, []),
+    ],
+)
+def test_get_complexity_to_store(complexity, uses_kubernetes, expected):
+    """Test that hybrid workflows get the Kubernetes marker row."""
+    assert get_complexity_to_store(complexity, uses_kubernetes) == expected
+
+
+@mock.patch("reana_server.complexity.REANA_KUBERNETES_JOBS_MEMORY_LIMIT", "4Gi")
+def test_get_complexity_to_store_hybrid_serial_workflow():
+    """Test the full hybrid classification chain on an external-first serial workflow.
+
+    The initial step runs on HTCondor, so the initial-step complexity contains
+    no Kubernetes jobs, yet a later step runs on Kubernetes. The stored
+    complexity must contain a positive job count so that the workflow keeps
+    consuming a concurrency slot once queued/running.
+    """
+    spec = _serial_spec(
+        [
+            {"commands": ["echo external"], "compute_backend": "htcondor"},
+            {"commands": ["echo kubernetes"]},
+        ]
+    )
+    complexity = estimate_complexity("serial", spec)
+    assert complexity and all(jobs == 0 for jobs, _ in complexity)
+    uses_kubernetes = workflow_uses_kubernetes("serial", spec)
+    assert uses_kubernetes is True
+    stored = get_complexity_to_store(complexity, uses_kubernetes)
+    assert any(jobs > 0 for jobs, _ in stored)
+    # The marker must not affect the memory checks or the priority.
+    assert get_workflow_min_job_memory(stored) == get_workflow_min_job_memory(
+        complexity
+    )
+    assert sum(jobs * mem for jobs, mem in stored) == sum(
+        jobs * mem for jobs, mem in complexity
+    )
