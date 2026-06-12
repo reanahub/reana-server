@@ -68,7 +68,6 @@ from sqlalchemy.exc import (
 
 from reana_server.api_client import current_workflow_submission_publisher
 from reana_server.complexity import (
-    get_complexity_to_store,
     get_workflow_min_job_memory,
     estimate_complexity,
     validate_job_memory_limits,
@@ -397,29 +396,23 @@ def publish_workflow_submission(workflow, user_id, parameters):
             'Workflow scheduling policy "{0}" is not valid.'.format(scheduling_policy)
         )
 
-    # Calculate and store complexity for every workflow (including "fifo"): the
-    # concurrent-workflows check counts running workflows by inspecting their
-    # stored complexity, so it must always be populated.
-    complexity = estimate_complexity(workflow.type_, workflow.reana_specification)
-
-    # ``complexity`` only reflects the initial steps, so it cannot tell us whether
-    # a later step runs on Kubernetes. ``workflow_uses_kubernetes`` scans all steps
-    # to correctly classify hybrid workflows (external first, Kubernetes later).
-    uses_kubernetes = workflow_uses_kubernetes(
+    # Workflows that run exclusively on external backends (HTCondor, Slurm)
+    # bypass the Kubernetes concurrency limit, while all others are counted
+    # towards it by the scheduler. Classification scans all steps, not only the
+    # initial ones, so that hybrid workflows that start on an external backend
+    # but run on Kubernetes later are counted as Kubernetes workflows.
+    workflow.uses_kubernetes = workflow_uses_kubernetes(
         workflow.type_, workflow.reana_specification
     )
-
-    # Persist a marker row for hybrid workflows (external initial steps,
-    # Kubernetes later) so that the concurrent-workflows check keeps counting
-    # them once they are queued/running; see ``get_complexity_to_store``.
-    workflow.complexity = get_complexity_to_store(complexity, uses_kubernetes)
     Session.commit()
 
+    # No need to estimate the complexity for "fifo" strategy
     if scheduling_policy == "fifo":
         workflow_priority = 0
         workflow_min_job_memory = 0
     else:
         total_cluster_memory = NodesStatus().get_total_memory()
+        complexity = _calculate_complexity(workflow)
         workflow_priority = workflow.get_priority(total_cluster_memory)
         workflow_min_job_memory = get_workflow_min_job_memory(complexity)
         validate_job_memory_limits(complexity)
@@ -430,8 +423,16 @@ def publish_workflow_submission(workflow, user_id, parameters):
         parameters=parameters,
         priority=workflow_priority,
         min_job_memory=workflow_min_job_memory,
-        uses_kubernetes=uses_kubernetes,
+        uses_kubernetes=workflow.uses_kubernetes,
     )
+
+
+def _calculate_complexity(workflow):
+    """Place workflow in queue and calculate and set its complexity."""
+    complexity = estimate_complexity(workflow.type_, workflow.reana_specification)
+    workflow.complexity = complexity
+    Session.commit()
+    return complexity
 
 
 def serialize_utc_datetime(dt: Optional[datetime]) -> Optional[str]:

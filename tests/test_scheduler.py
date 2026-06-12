@@ -19,21 +19,10 @@ from mock import DEFAULT, Mock, patch
 from reana_db.models import RunStatus, Workflow
 
 from reana_server.api_client import WorkflowSubmissionPublisher
-from reana_server.complexity import HYBRID_KUBERNETES_COMPLEXITY_MARKER
 from reana_server.scheduler import (
     WorkflowExecutionScheduler,
     check_concurrent_workflows_limit,
 )
-
-# Complexity rows are (job_count, memory_bytes); a job_count of 0 means the step
-# runs on an external backend (e.g. HTCondor) and >0 means it runs on Kubernetes.
-K8S_COMPLEXITY = [(1, 1024)]
-EXTERNAL_COMPLEXITY = [(0, 1024)]
-# Stored complexity of a hybrid workflow: the initial steps are all external, so
-# publish_workflow_submission appends HYBRID_KUBERNETES_COMPLEXITY_MARKER (see
-# reana_server.complexity.get_complexity_to_store) to record that a later step
-# runs on Kubernetes.
-HYBRID_COMPLEXITY = EXTERNAL_COMPLEXITY + [HYBRID_KUBERNETES_COMPLEXITY_MARKER]
 
 
 def test_scheduler_starts_workflows(
@@ -177,8 +166,8 @@ def test_scheduler_fail_after_too_many_retries(
         assert not in_memory_queue_connection.channel().queues["jobs-status"].empty()
 
 
-def _add_workflow(session, owner_id, status, complexity):
-    """Persist a workflow with the given status and complexity."""
+def _add_workflow(session, owner_id, status, uses_kubernetes):
+    """Persist a workflow with the given status and backend classification."""
     workflow = Workflow(
         id_=uuid4(),
         name="test_workflow",
@@ -186,7 +175,7 @@ def _add_workflow(session, owner_id, status, complexity):
         reana_specification={},
         type_="serial",
         status=status,
-        complexity=complexity,
+        uses_kubernetes=uses_kubernetes,
     )
     session.add(workflow)
     session.commit()
@@ -196,36 +185,27 @@ def _add_workflow(session, owner_id, status, complexity):
 @pytest.mark.parametrize(
     "workflows,max_concurrent,expect_error",
     [
-        # Kubernetes workflows count towards the limit.
-        ([(RunStatus.running, K8S_COMPLEXITY)] * 2, 2, True),
-        ([(RunStatus.running, K8S_COMPLEXITY)], 2, False),
+        # Kubernetes workflows count towards the limit. Hybrid workflows
+        # (external initial steps, Kubernetes later) are classified as
+        # uses_kubernetes=True at submission, so they are covered here too.
+        ([(RunStatus.running, True)] * 2, 2, True),
+        ([(RunStatus.running, True)], 2, False),
         # Pending Kubernetes workflows count as well.
-        ([(RunStatus.pending, K8S_COMPLEXITY)], 1, True),
+        ([(RunStatus.pending, True)], 1, True),
         # External-only workflows do not count towards the limit.
-        ([(RunStatus.running, EXTERNAL_COMPLEXITY)] * 5, 1, False),
-        # Hybrid workflows (external initial steps, Kubernetes later) keep
-        # consuming a slot thanks to the stored marker row.
-        ([(RunStatus.running, HYBRID_COMPLEXITY)] * 2, 2, True),
-        ([(RunStatus.pending, HYBRID_COMPLEXITY)], 1, True),
+        ([(RunStatus.running, False)] * 5, 1, False),
         # Mixed: only the single Kubernetes workflow is counted.
-        (
-            [(RunStatus.running, EXTERNAL_COMPLEXITY)] * 3
-            + [(RunStatus.running, K8S_COMPLEXITY)],
-            2,
-            False,
-        ),
-        # Empty/unknown complexity is counted conservatively.
-        ([(RunStatus.running, [])], 1, True),
-        # Non-pending/running workflows are ignored regardless of complexity.
-        ([(RunStatus.finished, K8S_COMPLEXITY)] * 5, 1, False),
+        ([(RunStatus.running, False)] * 3 + [(RunStatus.running, True)], 2, False),
+        # Non-pending/running workflows are ignored.
+        ([(RunStatus.finished, True)] * 5, 1, False),
     ],
 )
 def test_check_concurrent_workflows_limit_counts_only_kubernetes(
     session, user0, workflows, max_concurrent, expect_error
 ):
-    """Only pending/running workflows with a Kubernetes step are counted."""
-    for status, complexity in workflows:
-        _add_workflow(session, user0.id_, status, complexity)
+    """Only pending/running workflows that use Kubernetes are counted."""
+    for status, uses_kubernetes in workflows:
+        _add_workflow(session, user0.id_, status, uses_kubernetes)
 
     with patch(
         "reana_server.scheduler.REANA_MAX_CONCURRENT_BATCH_WORKFLOWS", max_concurrent
@@ -238,22 +218,21 @@ def test_check_concurrent_workflows_limit_counts_only_kubernetes(
 def test_check_concurrent_workflows_limit_bypassed_for_external(session, user0):
     """External-only submissions bypass the check without querying the DB."""
     for _ in range(5):
-        _add_workflow(session, user0.id_, RunStatus.running, K8S_COMPLEXITY)
+        _add_workflow(session, user0.id_, RunStatus.running, True)
 
     with patch("reana_server.scheduler.REANA_MAX_CONCURRENT_BATCH_WORKFLOWS", 1):
         assert check_concurrent_workflows_limit(uses_kubernetes=False) is None
 
 
-@patch("reana_server.complexity.REANA_KUBERNETES_JOBS_MEMORY_LIMIT", "4Gi")
 @patch("reana_server.utils.current_workflow_submission_publisher")
 def test_hybrid_workflow_submission_consumes_concurrency_slot(
     mock_publisher, session, user0
 ):
     """A hybrid workflow (external first, Kubernetes later) must keep a slot.
 
-    Its initial-step complexity contains no Kubernetes jobs, so the stored
-    complexity must carry the hybrid marker row for the concurrent-workflows
-    check to keep counting the workflow after submission.
+    Although its initial steps run on an external backend, the submission must
+    classify it as a Kubernetes workflow so that the concurrent-workflows check
+    keeps counting it after submission.
     """
     from reana_server.utils import publish_workflow_submission
 
@@ -279,11 +258,10 @@ def test_hybrid_workflow_submission_consumes_concurrency_slot(
 
     publish_workflow_submission(workflow, user0.id_, {})
 
-    # The submission message classifies the workflow as using Kubernetes and the
-    # stored complexity records it with a positive job count.
+    # The classification is persisted and sent along in the submission message.
+    assert workflow.uses_kubernetes is True
     _, kwargs = mock_publisher.publish_workflow_submission.call_args
     assert kwargs["uses_kubernetes"] is True
-    assert any(jobs > 0 for jobs, _ in workflow.complexity)
 
     # Once the workflow is pending/running, it consumes a concurrency slot.
     Workflow.update_workflow_status(session, workflow.id_, RunStatus.running)
