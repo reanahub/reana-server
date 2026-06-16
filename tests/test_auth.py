@@ -172,6 +172,7 @@ class TestJITProvisioning:
     @pytest.fixture
     def userinfo(self):
         return {
+            "sub": "subject-jit",
             "email": "jane.doe@example.org",
             "email_verified": True,
             "name": "Jane Doe",
@@ -182,6 +183,12 @@ class TestJITProvisioning:
     @pytest.fixture
     def claims(self):
         return {"iss": ISSUER, "sub": "subject-jit"}
+
+    @pytest.fixture
+    def enable_email_linking(self, monkeypatch):
+        monkeypatch.setitem(REANA_AUTH, "email_linking_enabled", True)
+        monkeypatch.setitem(REANA_AUTH, "email_linking_issuer_allowlist", [])
+        monkeypatch.setitem(REANA_AUTH, "email_linking_domain_allowlist", [])
 
     def test_creates_user_once(self, app, session, claims, userinfo):
         with patch(
@@ -200,7 +207,7 @@ class TestJITProvisioning:
             assert mocked_userinfo.call_count == 1
 
     def test_links_existing_unlinked_user_by_verified_email(
-        self, app, session, default_user, claims, userinfo
+        self, app, session, default_user, claims, userinfo, enable_email_linking
     ):
         userinfo["email"] = default_user.email
         with patch(
@@ -211,8 +218,33 @@ class TestJITProvisioning:
         assert user.id_ == default_user.id_
         assert user.idp_subject == "subject-jit"
 
-    def test_refuses_link_without_verified_email(
+    def test_refuses_link_when_linking_disabled(
         self, app, session, default_user, claims, userinfo
+    ):
+        # Linking is disabled by default: an existing-email account must fail
+        # closed for administrator resolution, not silently link or duplicate.
+        userinfo["email"] = default_user.email
+        with patch(
+            "reana_server.auth.provision.fetch_userinfo",
+            return_value=userinfo,
+        ):
+            with pytest.raises(ProvisioningError):
+                get_or_provision_user(claims, "token")
+        assert default_user.idp_subject is None
+
+    def test_rejects_userinfo_sub_mismatch(
+        self, app, session, claims, userinfo
+    ):
+        userinfo["sub"] = "a-different-subject"
+        with patch(
+            "reana_server.auth.provision.fetch_userinfo",
+            return_value=userinfo,
+        ):
+            with pytest.raises(ProvisioningError):
+                get_or_provision_user(claims, "token")
+
+    def test_refuses_link_without_verified_email(
+        self, app, session, default_user, claims, userinfo, enable_email_linking
     ):
         userinfo["email"] = default_user.email
         userinfo["email_verified"] = False
@@ -225,7 +257,7 @@ class TestJITProvisioning:
         assert default_user.idp_subject is None
 
     def test_refuses_link_to_already_linked_email(
-        self, app, session, default_user, claims, userinfo
+        self, app, session, default_user, claims, userinfo, enable_email_linking
     ):
         default_user.idp_issuer = ISSUER
         default_user.idp_subject = "someone-else"

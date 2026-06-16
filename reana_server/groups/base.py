@@ -10,7 +10,7 @@
 
 import abc
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 
 @dataclass(frozen=True)
@@ -19,12 +19,14 @@ class GroupRef:
 
     Mirrors the ``external_group`` table: ``provider`` namespaces the
     immutable ``external_id`` so that same-named groups from different
-    backends can never collide.
+    backends can never collide. ``path`` is the optional human-readable
+    location (e.g. Keycloak ``/local/atlas``) surfaced by group search.
     """
 
     provider: str
     external_id: str
     display_name: str
+    path: Optional[str] = None
 
 
 class GroupClaimError(Exception):

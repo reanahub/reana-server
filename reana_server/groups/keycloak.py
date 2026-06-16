@@ -85,6 +85,7 @@ class KeycloakGroupBackend(GroupBackend):
             provider=self.provider,
             external_id=path,
             display_name=display_name or path.rsplit("/", 1)[-1] or path,
+            path=path,
         )
 
     # -- Admin REST API ----------------------------------------------------

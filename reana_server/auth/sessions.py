@@ -23,7 +23,6 @@ import time
 
 import redis
 import requests
-from flask import request
 
 from reana_server.config import REANA_AUTH
 from reana_server.auth import tokens as _tokens
@@ -181,8 +180,28 @@ def refresh_session(sid):
         redis_client.delete(lock_key)
 
 
-def set_auth_cookies(response, access_token):
-    """Set the auth cookie (and the CSRF cookie when absent)."""
+def _flask_request_attrs():
+    """Return ``(headers, cookies)`` from the Flask request context.
+
+    Lazy fallback so the cookie/CSRF helpers keep working for the legacy
+    Flask callers while taking explicit mappings from FastAPI callers (whose
+    Starlette ``Response`` exposes a ``set_cookie``/``delete_cookie`` API
+    compatible with Flask's). Both frameworks are thus supported without this
+    module importing either.
+    """
+    from flask import request as flask_request
+
+    return flask_request.headers, flask_request.cookies
+
+
+def set_auth_cookies(response, access_token, existing_cookies=None):
+    """Set the auth cookie (and the CSRF cookie when absent).
+
+    :param existing_cookies: mapping of cookies already on the request, used
+        to avoid rotating the CSRF cookie. Falls back to the Flask request.
+    """
+    if existing_cookies is None:
+        _, existing_cookies = _flask_request_attrs()
     response.set_cookie(
         AUTH_COOKIE,
         access_token,
@@ -191,7 +210,7 @@ def set_auth_cookies(response, access_token):
         samesite="Lax",
         path="/api",
     )
-    if CSRF_COOKIE not in request.cookies:
+    if CSRF_COOKIE not in existing_cookies:
         response.set_cookie(
             CSRF_COOKIE,
             secrets.token_urlsafe(32),
@@ -209,9 +228,16 @@ def clear_auth_cookies(response):
     return response
 
 
-def csrf_ok():
-    """Check the CSRF double-submit header against the cookie."""
-    return hmac.compare_digest(
-        request.headers.get(CSRF_HEADER, ""),
-        request.cookies.get(CSRF_COOKIE, ""),
-    )
+def csrf_ok(headers=None, cookies=None):
+    """Check the CSRF double-submit header against the cookie.
+
+    ``headers``/``cookies`` are explicit mappings (FastAPI); when omitted they
+    fall back to the Flask request context.
+    """
+    if headers is None or cookies is None:
+        headers, cookies = _flask_request_attrs()
+    header_value = headers.get(CSRF_HEADER, "")
+    cookie_value = cookies.get(CSRF_COOKIE, "")
+    # A missing token must fail closed: ``compare_digest("", "")`` is True, so
+    # require a non-empty header that matches the cookie.
+    return bool(header_value) and hmac.compare_digest(header_value, cookie_value)

@@ -49,7 +49,10 @@ for key, reqs in extras_require.items():
     extras_require["all"].extend(reqs)
 
 install_requires = [
-    "Flask>=3.0.0,<4.0.0",
+    "Flask>=3.0.0,<4.0.0",  # transitional: still serves the un-ported blueprints
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+    "pydantic>=2.6.0,<3.0.0",
     "gitpython>=3.1",
     "marshmallow>=3.5.0,<4.0.0",
     "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a21,<0.96.0",

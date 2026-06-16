@@ -24,6 +24,50 @@ from sqlalchemy.exc import IntegrityError, InvalidRequestError
 from reana_server.auth.errors import ProvisioningError
 from reana_server.auth.tokens import require_role
 from reana_server.auth.userinfo import fetch_userinfo
+from reana_server.config import REANA_AUTH
+
+
+def verify_userinfo_subject(claims, userinfo):
+    """Verify the userinfo ``sub`` matches the validated token ``sub``.
+
+    UserInfo is fetched with the user's access token, but a confused-deputy
+    or misconfigured issuer could return a response for a different subject;
+    binding it to the token ``sub`` before any provisioning, linking, role
+    check or group sync is a non-negotiable invariant
+    (``auth_contract_freeze.md`` §2 and the provisioning contract).
+
+    :raises ProvisioningError: when ``sub`` is missing or mismatched.
+    """
+    userinfo_sub = userinfo.get("sub")
+    if not userinfo_sub:
+        raise ProvisioningError("UserInfo response is missing 'sub'.")
+    if userinfo_sub != claims.get("sub"):
+        raise ProvisioningError(
+            "UserInfo 'sub' does not match the access token 'sub'."
+        )
+
+
+def email_linking_allowed(iss, email, userinfo):
+    """Return whether a new identity may be auto-linked to an account by email.
+
+    Disabled by default; enabling it still requires a verified email and,
+    when configured, the issuer and the email domain to be on their
+    allow-lists (``auth_contract_freeze.md`` provisioning contract). An empty
+    allow-list skips that particular check.
+    """
+    if not REANA_AUTH["email_linking_enabled"]:
+        return False
+    if userinfo.get("email_verified") is not True:
+        return False
+    issuer_allowlist = REANA_AUTH["email_linking_issuer_allowlist"]
+    if issuer_allowlist and iss not in issuer_allowlist:
+        return False
+    domain_allowlist = REANA_AUTH["email_linking_domain_allowlist"]
+    if domain_allowlist:
+        domain = email.rsplit("@", 1)[-1].lower() if "@" in email else ""
+        if domain not in domain_allowlist:
+            return False
+    return True
 
 
 def get_user_by_idp_identity(sub, iss):
@@ -79,14 +123,26 @@ def get_or_provision_user(claims, token):
         return user
 
     # First sight of this identity: one userinfo round-trip, then link or
-    # create. The role gate runs before any database write so that
-    # arbitrary issuer accounts cannot fill the user table.
+    # create. UserInfo is bound to the token subject, and the role gate runs
+    # before any database write so that arbitrary issuer accounts cannot fill
+    # the user table.
     userinfo = fetch_userinfo(token)
+    verify_userinfo_subject(claims, userinfo)
     require_role(claims, userinfo)
     email = userinfo["email"]
     try:
         existing = Session.query(User).filter_by(email=email).one_or_none()
         if existing is not None:
+            if not email_linking_allowed(iss, email, userinfo):
+                # Fail closed: a REANA account already uses this email but
+                # automatic linking is disabled or not permitted for this
+                # issuer/domain. An administrator must resolve it (or enable
+                # linking via the allow-lists).
+                raise ProvisioningError(
+                    f"An account already exists for '{email}', but automatic "
+                    "email linking is disabled or not permitted for this "
+                    "issuer/domain. Please contact the administrators."
+                )
             user = _link_existing_user(existing, sub, iss, userinfo)
         else:
             user = User(

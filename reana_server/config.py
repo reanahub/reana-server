@@ -467,6 +467,30 @@ REANA_AUTH = {
     "device_authorization_url": os.getenv(
         "REANA_AUTH_DEVICE_AUTHORIZATION_URL", ""
     ),
+    # Automatic linking of a freshly-seen IdP identity to a pre-existing
+    # REANA account that has the same verified email (migration aid). It is
+    # an account-takeover vector when the issuer does not truly verify
+    # emails, so it is DISABLED by default and gated by explicit allow-lists
+    # (auth_contract_freeze.md, "User Provisioning Contract"). With an empty
+    # allow-list the corresponding check is skipped, so enabling linking
+    # without any allow-list trusts every configured issuer/domain.
+    "email_linking_enabled": bool(
+        strtobool(os.getenv("REANA_AUTH_EMAIL_LINKING_ENABLED", "false"))
+    ),
+    "email_linking_issuer_allowlist": [
+        value.strip()
+        for value in os.getenv(
+            "REANA_AUTH_EMAIL_LINKING_ISSUER_ALLOWLIST", ""
+        ).split(",")
+        if value.strip()
+    ],
+    "email_linking_domain_allowlist": [
+        value.strip().lower()
+        for value in os.getenv(
+            "REANA_AUTH_EMAIL_LINKING_DOMAIN_ALLOWLIST", ""
+        ).split(",")
+        if value.strip()
+    ],
 }
 """OIDC/JWT authentication configuration (see AUTH_ARCHITECTURE.md)."""
 
