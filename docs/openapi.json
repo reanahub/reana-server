@@ -486,11 +486,12 @@
             "examples": {
               "application/json": {
                 "items": [
-                  {
-                    "display_name": "atlas",
-                    "external_id": "/local/atlas",
-                    "provider": "keycloak"
-                  }
+	                  {
+	                    "display_name": "atlas",
+	                    "external_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+	                    "path": "/local/atlas",
+	                    "provider": "keycloak"
+	                  }
                 ]
               }
             },
@@ -502,10 +503,13 @@
                       "display_name": {
                         "type": "string"
                       },
-                      "external_id": {
-                        "type": "string"
-                      },
-                      "provider": {
+	                      "external_id": {
+	                        "type": "string"
+	                      },
+	                      "path": {
+	                        "type": "string"
+	                      },
+	                      "provider": {
                         "type": "string"
                       }
                     },

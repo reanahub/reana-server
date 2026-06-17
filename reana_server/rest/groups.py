@@ -86,8 +86,9 @@ def search_groups(user, query, provider=None):
                 "items": [
                   {
                     "provider": "keycloak",
-                    "external_id": "/local/atlas",
-                    "display_name": "atlas"
+                    "external_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                    "display_name": "atlas",
+                    "path": "/local/atlas"
                   }
                 ]
               }
@@ -147,6 +148,7 @@ def search_groups(user, query, provider=None):
                         "provider": ref.provider,
                         "external_id": ref.external_id,
                         "display_name": ref.display_name,
+                        "path": ref.path,
                     }
                 )
     except GroupBackendError as error:

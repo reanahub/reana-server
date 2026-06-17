@@ -11,9 +11,9 @@
 No database or Kubernetes is required: the JWT is validated for real against
 a locally-served JWKS (same pattern as ``test_auth.py``), and the single
 DB-touching step (``get_or_provision_user``) is stubbed, so this suite
-exercises the framework integration — routing, the OAuth2 scheme, the
-SecurityScopes role gate and the 401/403 mapping — without the heavy app
-fixture.
+exercises the framework integration — routing, the OAuth2 scheme, workflow
+controller proxying, the SecurityScopes role gate and the 401/403 mapping —
+without the heavy app fixture.
 """
 
 import time
@@ -101,8 +101,14 @@ def test_openapi_advertises_oauth2(client):
     schemes = schema["components"]["securitySchemes"]
     assert "OAuth2AuthorizationCodeBearer" in schemes
     assert schemes["OAuth2AuthorizationCodeBearer"]["type"] == "oauth2"
-    # The role-gated route carries the reana:user scope requirement.
+    # Listing is role-optional like the legacy endpoint.
     assert schema["paths"]["/api/workflows"]["get"]["security"] == [
+        {"OAuth2AuthorizationCodeBearer": []}
+    ]
+    # Per-workflow reads remain role-gated.
+    assert schema["paths"]["/api/workflows/{workflow_id_or_name}/status"]["get"][
+        "security"
+    ] == [
         {"OAuth2AuthorizationCodeBearer": ["reana:user"]}
     ]
 
@@ -131,16 +137,47 @@ def test_you_with_valid_token_is_200(client, auth_env):
     assert body["username"] == "jdoe"
 
 
-def test_workflows_without_required_role_is_403(client, auth_env):
-    # Valid token, but no reana_roles claim -> role gate rejects with 403.
+class _FakeWorkflowControllerApi:
+    def __init__(self, response=None, status_code=200):
+        self.calls = []
+        self._response = response or {"items": [], "total": 0}
+        self._status_code = status_code
+
+    def get_workflows(self, **kwargs):
+        self.calls.append(kwargs)
+        return SimpleNamespace(
+            result=lambda: (
+                self._response,
+                SimpleNamespace(status_code=self._status_code),
+            )
+        )
+
+
+def test_workflows_without_required_role_is_200(client, auth_env, monkeypatch):
+    import reana_server.fastapi_rest.workflows as workflows_mod
+
+    api = _FakeWorkflowControllerApi()
+    monkeypatch.setattr(
+        workflows_mod, "current_rwc_api_client", SimpleNamespace(api=api)
+    )
+    # Valid token, but no reana_roles claim. The list endpoint is role-optional
+    # and delegates user scoping to the workflow-controller.
     token = _make_token(auth_env)
     response = client.get(
         "/api/workflows", headers={"Authorization": f"Bearer {token}"}
     )
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0}
+    assert api.calls[0]["user"] == "11111111-1111-1111-1111-111111111111"
 
 
-def test_workflows_with_required_role_is_200(client, auth_env):
+def test_workflows_with_required_role_is_200(client, auth_env, monkeypatch):
+    import reana_server.fastapi_rest.workflows as workflows_mod
+
+    api = _FakeWorkflowControllerApi()
+    monkeypatch.setattr(
+        workflows_mod, "current_rwc_api_client", SimpleNamespace(api=api)
+    )
     token = _make_token(auth_env, reana_roles=["reana:user"])
     response = client.get(
         "/api/workflows", headers={"Authorization": f"Bearer {token}"}
@@ -210,7 +247,14 @@ def test_groups_search_returns_items(client, auth_env, monkeypatch):
     import reana_server.fastapi_rest.groups as groups_mod
 
     backend = _FakeBackend(
-        refs=[GroupRef("keycloak", "/local/atlas", "atlas", "/local/atlas")]
+        refs=[
+            GroupRef(
+                "keycloak",
+                "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "atlas",
+                "/local/atlas",
+            )
+        ]
     )
     monkeypatch.setattr(
         groups_mod, "get_group_backends", lambda: {"keycloak": backend}
@@ -223,7 +267,7 @@ def test_groups_search_returns_items(client, auth_env, monkeypatch):
     item = response.json()["items"][0]
     assert item == {
         "provider": "keycloak",
-        "external_id": "/local/atlas",
+        "external_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
         "display_name": "atlas",
         "path": "/local/atlas",
     }

@@ -8,11 +8,12 @@
 
 """Keycloak group backend (local Keycloak groups, topology A).
 
-Memberships arrive in the ``groups`` userinfo claim (Keycloak's group
-membership mapper with full group paths, attached to a userinfo-only client
-scope). Search, existence checks and live membership fetches use the
-Keycloak Admin REST API with a least-privilege service-account client
-(realm-management roles ``view-users``/``query-groups``).
+``GroupRef.external_id`` is always the immutable Keycloak group UUID. Human
+readable paths such as ``/local/atlas`` are carried separately as display
+metadata so that moving or renaming a group does not invalidate workflow
+shares. Search, existence checks and live membership fetches use the Keycloak
+Admin REST API with a least-privilege service-account client (realm-management
+roles ``view-users``/``query-groups``).
 """
 
 import logging
@@ -60,10 +61,17 @@ class KeycloakGroupBackend(GroupBackend):
         self._admin_token = None
         self._admin_token_expires_at = 0.0
 
-    # -- claim parsing (no I/O) -------------------------------------------
+    # -- claim parsing -----------------------------------------------------
 
     def extract_memberships(self, userinfo: dict) -> List[GroupRef]:
-        """Parse Keycloak group paths from the userinfo groups claim."""
+        """Parse Keycloak group memberships from the userinfo groups claim.
+
+        Keycloak's built-in group-membership mapper commonly emits full group
+        paths, not UUIDs. Path values are resolved through the Admin API before
+        syncing so that the database only stores stable group UUIDs. Deployments
+        with a custom mapper may emit UUID strings directly, or objects with
+        ``id``/``name``/``path`` fields.
+        """
         if self.groups_claim not in userinfo:
             raise GroupClaimError(
                 f"Userinfo response has no '{self.groups_claim}' claim."
@@ -73,20 +81,55 @@ class KeycloakGroupBackend(GroupBackend):
             raise GroupClaimError(
                 f"Userinfo claim '{self.groups_claim}' is not a list."
             )
-        return [
-            self._group_ref(path)
-            for path in raw_groups
-            if isinstance(path, str)
-        ]
+        refs = []
+        for raw_group in raw_groups:
+            if isinstance(raw_group, dict):
+                ref = self._group_ref_from_representation(raw_group)
+            elif isinstance(raw_group, str):
+                ref = self._group_ref_from_claim_value(raw_group)
+            else:
+                continue
+            if ref is not None:
+                refs.append(ref)
+        return refs
 
-    def _group_ref(self, path, display_name=None):
-        path = path.strip()
+    def _group_ref(self, external_id, display_name=None, path=None):
+        external_id = external_id.strip()
+        path = path.strip() if isinstance(path, str) else path
+        display_name = display_name or (path.rsplit("/", 1)[-1] if path else "")
         return GroupRef(
             provider=self.provider,
-            external_id=path,
-            display_name=display_name or path.rsplit("/", 1)[-1] or path,
+            external_id=external_id,
+            display_name=display_name or external_id,
             path=path,
         )
+
+    def _group_ref_from_representation(self, group):
+        external_id = (group.get("id") or "").strip()
+        if not external_id:
+            logging.warning(
+                "Skipping Keycloak group without immutable id: %r.", group
+            )
+            return None
+        return self._group_ref(
+            external_id,
+            display_name=group.get("name"),
+            path=group.get("path"),
+        )
+
+    def _group_ref_from_claim_value(self, value):
+        value = value.strip()
+        if not value:
+            return None
+        if value.startswith("/"):
+            group = self._get_group_by_path(value)
+            if group is None:
+                raise GroupBackendError(
+                    f"Keycloak group path '{value}' from userinfo does not exist."
+                )
+            return self._group_ref_from_representation(group)
+        # Custom mappers may emit the Keycloak group UUID directly.
+        return self._group_ref(value)
 
     # -- Admin REST API ----------------------------------------------------
 
@@ -155,6 +198,9 @@ class KeycloakGroupBackend(GroupBackend):
                 f"Keycloak Admin API returned invalid JSON: {error}"
             )
 
+    def _get_group_by_path(self, path):
+        return self._admin_get(f"/group-by-path/{quote(path.lstrip('/'), safe='/')}")
+
     def fetch_memberships(self, user) -> List[GroupRef]:
         """Fetch a user's groups via the Admin API (periodic refresh).
 
@@ -182,12 +228,9 @@ class KeycloakGroupBackend(GroupBackend):
                     f"Keycloak user {user.idp_subject} not found."
                 )
             for group in page:
-                refs.append(
-                    self._group_ref(
-                        group.get("path", group.get("name", "")),
-                        display_name=group.get("name"),
-                    )
-                )
+                ref = self._group_ref_from_representation(group)
+                if ref is not None:
+                    refs.append(ref)
             if len(page) < page_size:
                 return refs
             first += page_size
@@ -211,21 +254,17 @@ class KeycloakGroupBackend(GroupBackend):
             for group in groups:
                 if len(refs) >= limit:
                     return
-                path = group.get("path") or group.get("name", "")
-                if path:
-                    refs.append(
-                        self._group_ref(path, display_name=group.get("name"))
-                    )
+                ref = self._group_ref_from_representation(group)
+                if ref is not None:
+                    refs.append(ref)
                 _flatten(group.get("subGroups") or [])
 
         _flatten(tree)
         return refs
 
     def group_exists(self, external_id: str) -> bool:
-        """Check group existence by full path."""
-        result = self._admin_get(
-            f"/group-by-path/{quote(external_id.lstrip('/'), safe='/')}"
-        )
+        """Check group existence by immutable Keycloak group UUID."""
+        result = self._admin_get(f"/groups/{quote(external_id, safe='')}")
         if result is None:
             logging.info(
                 "Keycloak group %r does not exist (share-time validation).",

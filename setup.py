@@ -36,8 +36,9 @@ extras_require = {
     "tests": [
         "apispec[yaml]>=3.0",
         "apispec-webframeworks",
-        "reana-commons[kubernetes,yadage,snakemake,cwl,tests]>=0.95.0a21,<0.96.0",
         "fakeredis>=2.0.0",
+        "httpx>=0.24.0,<1.0.0",
+        "reana-commons[kubernetes,yadage,snakemake,cwl,tests]>=0.95.0a20,<0.96.0",
         "reana-db[tests]>=0.95.0a10,<0.96.0",
     ],
 }
@@ -55,7 +56,8 @@ install_requires = [
     "pydantic>=2.6.0,<3.0.0",
     "gitpython>=3.1",
     "marshmallow>=3.5.0,<4.0.0",
-    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a21,<0.96.0",
+    "webargs>=8.0.0,<9.0.0",
+    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a20,<0.96.0",
     "reana-db>=0.95.0a10,<0.96.0",
     "requests>=2.25.0",
     "tablib>=0.12.1",
@@ -95,7 +97,7 @@ setup(
     author="REANA",
     author_email="info@reana.io",
     url="https://github.com/reanahub/reana-server",
-    packages=["reana_server"],
+    packages=packages,
     zip_safe=False,
     entry_points={
         "flask.commands": [

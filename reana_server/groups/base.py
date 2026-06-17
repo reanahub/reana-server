@@ -61,7 +61,9 @@ class GroupBackend(abc.ABC):
     def extract_memberships(self, userinfo: dict) -> List[GroupRef]:
         """Parse the user's memberships out of a userinfo response.
 
-        Pure parsing, no I/O. Called at login/JIT provisioning.
+        Called at login/JIT provisioning. Backends may do provider lookups when
+        their claims contain mutable aliases that must be resolved to immutable
+        external IDs before syncing.
 
         :raises GroupClaimError: when the claim is absent or malformed
             (fail-closed in the sync engine).
