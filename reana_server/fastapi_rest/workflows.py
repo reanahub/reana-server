@@ -18,12 +18,16 @@ import logging
 import os
 import traceback
 from typing import List, Optional
+from urllib.parse import urljoin
 
+import requests
 from bravado.exception import HTTPError
-from fastapi import APIRouter, Body, Query, Security
+from fastapi import APIRouter, Body, Query, Request, Security
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from jsonschema.exceptions import ValidationError
+from starlette.concurrency import run_in_threadpool
+from reana_commons import workspace
 from reana_commons.config import REANA_WORKFLOW_ENGINES
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
 from reana_commons.specification import load_reana_spec
@@ -38,6 +42,7 @@ from reana_db.utils import _get_workflow_with_uuid_or_name
 from reana_server.api_client import current_rwc_api_client
 from reana_server.auth.deps import get_current_user
 from reana_server.config import REANA_HOSTNAME
+from reana_server.deleter import Deleter, InOrOut
 from reana_server.gitlab_client import (
     GitLabClientInvalidToken,
     GitLabClientRequestError,
@@ -60,6 +65,7 @@ from reana_server.utils import (
     get_quota_excess_message,
     get_workspace_retention_rules,
     is_uuid_v4,
+    prevent_disk_quota_excess,
     publish_workflow_submission,
 )
 from reana_server.validation import (
@@ -607,5 +613,166 @@ def get_workflow_share_status(workflow_id_or_name: str, user: User = _RoleUser):
         )
         response["shared_with_groups"] = get_group_shares_for_workflow(workflow)
         return JSONResponse(jsonable_encoder(response), 200)
+    except Exception as error:  # noqa: BLE001
+        return _rwc_error(error)
+
+
+@router.post(
+    "/workflows/{workflow_id_or_name}/workspace", summary="Upload a workspace file"
+)
+async def upload_file(
+    workflow_id_or_name: str,
+    request: Request,
+    file_name: Optional[str] = Query(None),
+    user: User = _RoleUser,
+):
+    """Upload a file (application/octet-stream) into the workspace."""
+    if user.has_exceeded_quota():
+        return JSONResponse({"message": get_quota_excess_message(user)}, 403)
+    try:
+        if not file_name:
+            return JSONResponse({"message": "No file_name provided"}, 400)
+        content_type = request.headers.get("content-type") or ""
+        if "application/octet-stream" not in content_type:
+            return JSONResponse(
+                {
+                    "message": f"Wrong Content-Type {content_type} use "
+                    "application/octet-stream"
+                },
+                400,
+            )
+        # NOTE: the body is buffered in memory (the Flask version streamed it);
+        # true streaming returns with the reana-commons httpx client (RC-1).
+        body = await request.body()
+        prevent_disk_quota_excess(
+            user, len(body), action=f"Uploading file {file_name}"
+        )
+        api_url = current_rwc_api_client.swagger_spec.__dict__.get("api_url")
+        endpoint = current_rwc_api_client.api.upload_file.operation.path_name.format(
+            workflow_id_or_name=workflow_id_or_name
+        )
+        http_response = await run_in_threadpool(
+            requests.post,
+            urljoin(api_url, endpoint),
+            data=body,
+            params={"user": str(user.id_), "file_name": file_name},
+            headers={"Content-Type": "application/octet-stream"},
+        )
+        return JSONResponse(http_response.json(), http_response.status_code)
+    except (REANAQuotaExceededError, ValueError) as error:
+        return JSONResponse({"message": str(error)}, 403)
+    except HTTPError as error:
+        return JSONResponse(error.response.json(), error.response.status_code)
+    except Exception as error:  # noqa: BLE001
+        logging.error(traceback.format_exc())
+        return JSONResponse({"message": str(error)}, 500)
+
+
+@router.get(
+    "/workflows/{workflow_id_or_name}/workspace/{file_name:path}",
+    summary="Download a workspace file",
+)
+def download_file(
+    workflow_id_or_name: str,
+    file_name: str,
+    preview: bool = Query(False),
+    user: User = _RoleUser,
+):
+    """Stream a workspace file from the controller back to the client."""
+    try:
+        api_url = current_rwc_api_client.swagger_spec.__dict__.get("api_url")
+        endpoint = current_rwc_api_client.api.download_file.operation.path_name.format(
+            workflow_id_or_name=workflow_id_or_name, file_name=file_name
+        )
+        upstream = requests.get(
+            urljoin(api_url, endpoint),
+            params={"preview": preview, "user": str(user.id_)},
+            stream=True,
+        )
+        headers = {}
+        if upstream.headers.get("Content-Disposition"):
+            headers["Content-Disposition"] = upstream.headers["Content-Disposition"]
+        return StreamingResponse(
+            upstream.iter_content(chunk_size=1024),
+            status_code=upstream.status_code,
+            media_type=upstream.headers.get("Content-Type"),
+            headers=headers,
+        )
+    except Exception as error:  # noqa: BLE001
+        return _rwc_error(error)
+
+
+@router.delete(
+    "/workflows/{workflow_id_or_name}/workspace/{file_name:path}",
+    summary="Delete a workspace file",
+)
+def delete_file(workflow_id_or_name: str, file_name: str, user: User = _RoleUser):
+    """Delete a workspace file (controller proxy)."""
+    try:
+        _, http_response = current_rwc_api_client.api.delete_file(
+            user=str(user.id_),
+            workflow_id_or_name=workflow_id_or_name,
+            file_name=file_name,
+        ).result()
+        return JSONResponse(http_response.json(), http_response.status_code)
+    except Exception as error:  # noqa: BLE001
+        return _rwc_error(error)
+
+
+@router.put(
+    "/workflows/move_files/{workflow_id_or_name}", summary="Move workspace files"
+)
+def move_files(
+    workflow_id_or_name: str,
+    source: str = Query(...),
+    target: str = Query(...),
+    user: User = _RoleUser,
+):
+    """Move files within a workspace (controller proxy)."""
+    try:
+        response, http_response = current_rwc_api_client.api.move_files(
+            user=str(user.id_),
+            workflow_id_or_name=workflow_id_or_name,
+            source=source,
+            target=target,
+        ).result()
+        return JSONResponse(
+            content=response, status_code=http_response.status_code
+        )
+    except Exception as error:  # noqa: BLE001
+        return _rwc_error(error)
+
+
+@router.post("/workflows/{workflow_id_or_name}/prune", summary="Prune workspace")
+def prune_workspace(
+    workflow_id_or_name: str,
+    payload: Optional[dict] = Body(None),
+    user: User = _RoleUser,
+):
+    """Delete workspace files that are neither inputs nor outputs."""
+    payload = payload or {}
+    include_inputs = bool(payload.get("include_inputs", False))
+    include_outputs = bool(payload.get("include_outputs", False))
+    try:
+        which_to_keep = InOrOut.INPUTS_OUTPUTS
+        if include_inputs:
+            which_to_keep = InOrOut.OUTPUTS
+        if include_outputs:
+            which_to_keep = InOrOut.INPUTS
+            if include_inputs:
+                which_to_keep = InOrOut.NONE
+        workflow = _get_workflow_with_uuid_or_name(
+            workflow_id_or_name, str(user.id_)
+        )
+        deleter = Deleter(workflow)
+        for file_or_dir in workspace.iterdir(deleter.workspace, ""):
+            deleter.delete_files(which_to_keep, file_or_dir)
+        return jsonable_encoder(
+            {
+                "message": "The workspace has been correctly pruned.",
+                "workflow_id": str(workflow.id_),
+                "workflow_name": workflow.name,
+            }
+        )
     except Exception as error:  # noqa: BLE001
         return _rwc_error(error)

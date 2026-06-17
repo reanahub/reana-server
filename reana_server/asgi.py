@@ -31,6 +31,8 @@ from reana_server.fastapi_rest import (
     groups,
     info,
     ping,
+    secrets,
+    status,
     users,
     workflows,
 )
@@ -79,6 +81,8 @@ def create_app() -> FastAPI:
     app.include_router(info.router, prefix="/api")
     app.include_router(users.router, prefix="/api")
     app.include_router(groups.router, prefix="/api")
+    app.include_router(status.router, prefix="/api")
+    app.include_router(secrets.router, prefix="/api")
     app.include_router(workflows.router, prefix="/api")
 
     return app
