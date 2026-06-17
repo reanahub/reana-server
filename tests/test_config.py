@@ -8,11 +8,24 @@
 
 """Test REANA-Server configuration helpers."""
 
+import importlib.util
+import json
 import logging
 
 import pytest
 
+import reana_server.config as config
 from reana_server.config import _get_int_env_variable
+
+
+def _load_config_module():
+    """Load a fresh copy of the config module using the current environment."""
+    spec = importlib.util.spec_from_file_location(
+        "reana_server_config_test", config.__file__
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 @pytest.mark.parametrize(
@@ -39,3 +52,34 @@ def test_get_int_env_variable(monkeypatch, caplog, env_value, expected):
         assert f"Invalid {env_variable}" in caplog.text
     else:
         assert f"Invalid {env_variable}" not in caplog.text
+
+
+def test_keycloak_user_info_endpoint_is_enabled(monkeypatch):
+    """Test that generic Keycloak SSO enables user info endpoint lookups."""
+    issuer_url = "https://auth.example.org/auth/realms/example"
+    login_providers_configs = [
+        {
+            "name": "test-1",
+            "type": "keycloak",
+            "config": {
+                "title": "Test Provider",
+                "base_url": issuer_url,
+                "realm_url": issuer_url,
+                "auth_url": f"{issuer_url}/protocol/openid-connect/auth",
+                "token_url": f"{issuer_url}/protocol/openid-connect/token",
+                "userinfo_url": f"{issuer_url}/protocol/openid-connect/userinfo",
+            },
+        }
+    ]
+    login_providers_secrets = {
+        "test-1": {
+            "consumer_key": "test-client-id",
+            "consumer_secret": "test-client-secret",
+        }
+    }
+    monkeypatch.setenv("LOGIN_PROVIDERS_CONFIGS", json.dumps(login_providers_configs))
+    monkeypatch.setenv("LOGIN_PROVIDERS_SECRETS", json.dumps(login_providers_secrets))
+
+    test_config = _load_config_module()
+
+    assert test_config.OAUTHCLIENT_KEYCLOAK_USER_INFO_FROM_ENDPOINT is True
