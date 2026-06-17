@@ -36,7 +36,7 @@ from reana_commons.validation.operational_options import (
 )
 from reana_commons.validation.utils import validate_workflow_name
 from reana_db.database import Session
-from reana_db.models import User
+from reana_db.models import InteractiveSessionType, RunStatus, User
 from reana_db.utils import _get_workflow_with_uuid_or_name
 
 from reana_server.api_client import current_rwc_api_client
@@ -85,9 +85,11 @@ _RoleUser = Security(get_current_user, scopes=["reana:user"])
 def _rwc_error(error: Exception) -> JSONResponse:
     """Translate a workflow-controller/bravado error to a JSON response."""
     if isinstance(error, HTTPError):
-        return JSONResponse(
-            content=error.response.json(), status_code=error.response.status_code
-        )
+        try:
+            content = error.response.json()
+        except Exception:  # noqa: BLE001 - controller returned a non-JSON body
+            content = {"message": str(error)}
+        return JSONResponse(content=content, status_code=error.response.status_code)
     if isinstance(error, ValueError):
         return JSONResponse(content={"message": str(error)}, status_code=403)
     logging.error(traceback.format_exc())
@@ -774,5 +776,96 @@ def prune_workspace(
                 "workflow_name": workflow.name,
             }
         )
+    except Exception as error:  # noqa: BLE001
+        return _rwc_error(error)
+
+
+@router.post(
+    "/workflows/{workflow_id_or_name}/open/{interactive_session_type}",
+    summary="Open an interactive session",
+)
+def open_interactive_session(
+    workflow_id_or_name: str,
+    interactive_session_type: str,
+    payload: Optional[dict] = Body(None),
+    user: User = _RoleUser,
+):
+    """Open an interactive session (e.g. Jupyter) in the workspace."""
+    if user.has_exceeded_quota():
+        return JSONResponse({"message": get_quota_excess_message(user)}, 403)
+    try:
+        if interactive_session_type not in InteractiveSessionType.__members__:
+            return JSONResponse(
+                {
+                    "message": "Interactive session type {0} not found, try "
+                    "with one of: {1}".format(
+                        interactive_session_type,
+                        [e.name for e in InteractiveSessionType],
+                    )
+                },
+                404,
+            )
+        response, http_response = (
+            current_rwc_api_client.api.open_interactive_session(
+                user=str(user.id_),
+                workflow_id_or_name=workflow_id_or_name,
+                interactive_session_type=interactive_session_type,
+                interactive_session_configuration=payload,
+            ).result()
+        )
+        return JSONResponse(
+            content=response, status_code=http_response.status_code
+        )
+    except Exception as error:  # noqa: BLE001
+        return _rwc_error(error)
+
+
+@router.post(
+    "/workflows/{workflow_id_or_name}/close/",
+    summary="Close an interactive session",
+)
+def close_interactive_session(workflow_id_or_name: str, user: User = _RoleUser):
+    """Close the workflow's open interactive session (controller proxy)."""
+    try:
+        response, http_response = (
+            current_rwc_api_client.api.close_interactive_session(
+                user=str(user.id_), workflow_id_or_name=workflow_id_or_name
+            ).result()
+        )
+        return JSONResponse(
+            content=response, status_code=http_response.status_code
+        )
+    except Exception as error:  # noqa: BLE001
+        return _rwc_error(error)
+
+
+@router.get(
+    "/workflows/{workflow_id_or_name}/interactive-session-secret",
+    summary="Interactive session secret (owner-only)",
+)
+def get_interactive_session_secret(
+    workflow_id_or_name: str, user: User = _RoleUser
+):
+    """Return the per-session notebook access secret for the owner."""
+    try:
+        workflow = _get_workflow_with_uuid_or_name(
+            workflow_id_or_name, str(user.id_)
+        )
+        open_session = next(
+            (
+                session
+                for session in workflow.sessions
+                if session.session_secret and session.status != RunStatus.deleted
+            ),
+            None,
+        )
+        if open_session is None:
+            return JSONResponse(
+                {"message": "The workflow has no open interactive session."}, 404
+            )
+        return {
+            "session_secret": open_session.session_secret,
+            "path": open_session.path,
+        }
     except Exception as error:  # noqa: BLE001
         return _rwc_error(error)
