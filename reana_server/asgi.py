@@ -28,6 +28,7 @@ from reana_server.config import REANA_AUTH
 from reana_server.fastapi_rest import (
     auth,
     config,
+    gitlab,
     groups,
     info,
     launch,
@@ -79,6 +80,7 @@ def create_app() -> FastAPI:
     app.include_router(ping.router, prefix="/api")
     app.include_router(auth.router, prefix="/api")
     app.include_router(config.router, prefix="/api")
+    app.include_router(gitlab.router, prefix="/api")
     app.include_router(info.router, prefix="/api")
     app.include_router(users.router, prefix="/api")
     app.include_router(groups.router, prefix="/api")
