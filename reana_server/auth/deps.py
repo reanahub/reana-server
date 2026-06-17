@@ -55,6 +55,7 @@ from reana_server.auth.sessions import (
 from reana_server.config import REANA_AUTH
 
 _SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+_REANA_USER_SCOPE = "reana:user"
 
 # The OAuth2 scheme is what makes the generated OpenAPI advertise the issuer's
 # authorization-code + PKCE flow (and renders the Swagger "Authorize" button).
@@ -88,11 +89,10 @@ async def get_current_user(
 ) -> User:
     """Resolve the request's bearer token to a REANA :class:`User`.
 
-    The route's required scopes drive the role gate: when the configured
-    required role (``reana:user`` by default) is among the requested scopes,
-    it is enforced on the token; otherwise any valid identity of the trusted
-    issuer is accepted (first-time identities are still role-gated inside
-    provisioning, mirroring ``decorators.py``).
+    The route's required scopes drive the role gate: when a route declares the
+    canonical ``reana:user`` permission, the configured required token role is
+    enforced. Otherwise any valid identity of the trusted issuer is accepted
+    (first-time identities are still role-gated inside provisioning).
 
     Error mapping matches the Flask decorator: invalid/expired/wrong-issuer
     token → 401; missing role or provisioning failure → 403.
@@ -139,7 +139,7 @@ async def get_current_user(
                 raise InvalidTokenError("Session expired, please log in again.")
             raw_token = refreshed_token
             claims = validate_access_token(raw_token)
-        if REANA_AUTH["required_role"] in security_scopes.scopes:
+        if _REANA_USER_SCOPE in security_scopes.scopes:
             require_role(claims)
         user = get_or_provision_user(claims, raw_token)
         # Expose the token roles (and claims) to endpoints that need them,

@@ -135,15 +135,64 @@ def validate_access_token(token):
     return claims
 
 
+def _get_claim_path(document, path):
+    """Return a nested claim value using dot-separated path syntax."""
+    value = document or {}
+    for part in (path or "").split("."):
+        if not part:
+            return None
+        if not isinstance(value, dict) or part not in value:
+            return None
+        value = value[part]
+    return value
+
+
+def _as_role_list(value):
+    """Normalize an issuer role claim value to a list of strings."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [role for role in value if isinstance(role, str)]
+    return []
+
+
+def _map_roles(roles, mapping):
+    """Map provider roles to REANA roles according to one role source."""
+    if not isinstance(mapping, dict):
+        return roles
+    mapped_roles = []
+    for role in roles:
+        mapped = mapping.get(role)
+        if mapped is None:
+            continue
+        mapped_roles.extend(_as_role_list(mapped))
+    return mapped_roles
+
+
 def extract_roles(claims, userinfo=None):
-    """Return the REANA roles found in token claims or userinfo."""
-    roles_claim = REANA_AUTH["roles_claim"]
-    roles = claims.get(roles_claim)
-    if roles is None and userinfo is not None:
-        roles = userinfo.get(roles_claim)
-    if isinstance(roles, str):
-        roles = [roles]
-    return list(roles or [])
+    """Return REANA roles found in configured token/userinfo sources."""
+    role_sources = REANA_AUTH.get("role_sources") or [
+        {"path": REANA_AUTH["roles_claim"]}
+    ]
+    roles = []
+    for source in role_sources:
+        if not isinstance(source, dict):
+            continue
+        path = source.get("path") or source.get("claim")
+        raw_roles = _get_claim_path(claims, path)
+        if raw_roles is None and userinfo is not None:
+            raw_roles = _get_claim_path(userinfo, path)
+        source_roles = _as_role_list(raw_roles)
+        roles.extend(_map_roles(source_roles, source.get("map")))
+
+    # Preserve order for predictable logs/tests while removing duplicates.
+    unique_roles = []
+    seen = set()
+    for role in roles:
+        if role not in seen:
+            unique_roles.append(role)
+            seen.add(role)
+    return unique_roles
 
 
 def require_role(claims, userinfo=None):

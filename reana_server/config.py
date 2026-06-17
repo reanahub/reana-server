@@ -242,6 +242,17 @@ def _get_int_env_variable(env_variable: str, default: int) -> int:
         return default
 
 
+def _get_json_env_variable(env_variable: str, default):
+    """Return a JSON environment variable value or fail with context."""
+    raw_value = os.getenv(env_variable)
+    if raw_value is None:
+        return default
+    try:
+        return json.loads(raw_value)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"{env_variable} is not valid JSON: {error}") from error
+
+
 # Note: users that are connecting via reana-client will be treated as guests by the Invenio framework
 RATELIMIT_GUEST_USER = _get_rate_limit("REANA_RATELIMIT_GUEST_USER", "20 per second")
 RATELIMIT_AUTHENTICATED_USER = _get_rate_limit(
@@ -399,10 +410,19 @@ REANA_AUTH = {
     # Public client id used by reana-client for the device authorization
     # grant; advertised through the openid-configuration proxy endpoint.
     "cli_client_id": os.getenv("REANA_AUTH_CLIENT_ID", "reana-cli"),
-    # Claim carrying REANA roles, and the role required to use the API
-    # (replaces the legacy "user has an active token" gate). An empty
-    # required role disables the gate.
+    # Claim carrying REANA roles, and optional provider-specific role sources
+    # that can map issuer claims to REANA roles without code changes. The
+    # source list is JSON, e.g.
+    # [{"path":"resource_access.reana.roles",
+    #   "map":{"user":"reana:user","admin":"reana:admin"}}].
+    # The flat roles claim remains the default source for bundled Keycloak.
     "roles_claim": os.getenv("REANA_AUTH_ROLES_CLAIM", "reana_roles"),
+    "role_sources": _get_json_env_variable(
+        "REANA_AUTH_ROLE_SOURCES",
+        [{"path": os.getenv("REANA_AUTH_ROLES_CLAIM", "reana_roles")}],
+    ),
+    # Role required to use protected API endpoints. An empty required role
+    # disables the gate.
     "required_role": os.getenv("REANA_AUTH_REQUIRED_ROLE", "reana:user"),
     # Clock-skew leeway (seconds) for exp/nbf validation.
     "leeway": int(os.getenv("REANA_AUTH_LEEWAY", "30")),

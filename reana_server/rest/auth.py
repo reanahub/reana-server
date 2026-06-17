@@ -82,6 +82,28 @@ def _callback_redirect_uri():
 def _require_bff():
     if not _bff_active():
         raise HTTPException(status_code=404, detail="Browser login is not enabled.")
+    missing = []
+    if not SECRET_KEY:
+        missing.append("REANA_SECRET_KEY")
+    if not REANA_AUTH["web_client_id"]:
+        missing.append("REANA_AUTH_WEB_CLIENT_ID")
+    if not REANA_AUTH["web_client_secret"]:
+        missing.append("REANA_AUTH_WEB_CLIENT_SECRET")
+    if missing:
+        raise HTTPException(
+            status_code=503,
+            detail="Browser login is misconfigured; missing "
+            + ", ".join(missing)
+            + ".",
+        )
+    try:
+        get_endpoint("authorization_url")
+        get_endpoint("token_url")
+    except AuthError as error:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Browser login is misconfigured: {error}",
+        )
 
 
 def _client_facing_endpoint_url(endpoint_url):

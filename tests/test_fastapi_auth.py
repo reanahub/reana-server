@@ -29,6 +29,7 @@ import reana_server.auth.sessions as sessions
 import reana_server.auth.tokens as tokens_module
 import reana_server.rest.auth as auth_rest
 from reana_server.asgi import app
+from reana_server.auth.errors import AuthError
 from reana_server.auth.deps import get_current_user
 from reana_server.auth.sessions import AUTH_COOKIE, store_session
 from reana_server.config import REANA_AUTH
@@ -86,8 +87,10 @@ def bff_env(monkeypatch, signing_key):
         "web_client_secret": "secret",
         "bff_enabled": True,
         "required_role": "reana:user",
+        "role_sources": [{"path": "reana_roles"}],
     }.items():
         monkeypatch.setitem(REANA_AUTH, key, value)
+    monkeypatch.setattr(auth_rest, "SECRET_KEY", "secret-key")
     monkeypatch.setattr(tokens_module, "_jwks_cache", None)
     monkeypatch.setattr(
         sessions, "_redis_client", fakeredis.FakeStrictRedis(decode_responses=True)
@@ -102,6 +105,29 @@ def bff_env(monkeypatch, signing_key):
 @pytest.fixture
 def client():
     return TestClient(app, base_url="https://testserver")
+
+
+def test_extract_roles_supports_provider_mapping(monkeypatch):
+    monkeypatch.setitem(
+        REANA_AUTH,
+        "role_sources",
+        [
+            {"path": "resource_access.reana.roles", "map": {"user": "reana:user"}},
+            {"path": "cern_roles", "map": {"admin": ["reana:admin"]}},
+        ],
+    )
+    claims = {
+        "resource_access": {"reana": {"roles": ["user"]}},
+        "cern_roles": ["admin", "ignored"],
+    }
+    assert tokens_module.extract_roles(claims) == ["reana:user", "reana:admin"]
+
+
+def test_extract_roles_falls_back_to_userinfo(monkeypatch):
+    monkeypatch.setitem(REANA_AUTH, "role_sources", [{"path": "reana_roles"}])
+    assert tokens_module.extract_roles({}, {"reana_roles": ["reana:user"]}) == [
+        "reana:user"
+    ]
 
 
 # -- BFF cookie authentication (via a minimal app over get_current_user) ----
@@ -145,6 +171,31 @@ def test_cookie_mutation_with_csrf_is_200(mini_client, bff_env):
     assert response.status_code == 200
 
 
+def test_configured_required_role_is_enforced_on_protected_routes(bff_env, monkeypatch):
+    mini = FastAPI()
+
+    @mini.get("/protected")
+    async def _protected(user=Security(get_current_user, scopes=["reana:user"])):
+        return {"email": user.email}
+
+    client = TestClient(mini, base_url="https://testserver")
+    monkeypatch.setitem(REANA_AUTH, "required_role", "reana-user")
+    monkeypatch.setitem(REANA_AUTH, "role_sources", [{"path": "cern_roles"}])
+
+    token = _make_token(bff_env, cern_roles=["user", "default-role"])
+    response = client.get(
+        "/protected", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 403
+    assert "reana-user" in response.json()["detail"]
+
+    token = _make_token(bff_env, cern_roles=["reana-user"])
+    response = client.get(
+        "/protected", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+
+
 def test_expired_cookie_is_transparently_refreshed(mini_client, bff_env):
     expired = _make_token(bff_env, exp=int(time.time()) - 3600)
     store_session("subject-1", "refresh-1")  # session the refresh will rotate
@@ -172,6 +223,25 @@ def test_login_redirects_to_issuer(client, bff_env):
     assert location.startswith(f"{ISSUER}/authorize")
     assert "code_challenge=" in location and "state=" in location
     assert "reana_oauth_state=" in response.headers.get("set-cookie", "")
+
+
+def test_login_reports_missing_bff_secret(client, bff_env, monkeypatch):
+    monkeypatch.setitem(REANA_AUTH, "web_client_secret", "")
+    response = client.get("/api/login", follow_redirects=False)
+    assert response.status_code == 503
+    assert "REANA_AUTH_WEB_CLIENT_SECRET" in response.json()["detail"]
+
+
+def test_login_reports_missing_discovery_metadata(client, bff_env, monkeypatch):
+    def _missing_endpoint(name):
+        raise AuthError(
+            "Issuer's OIDC discovery document does not advertise endpoint."
+        )
+
+    monkeypatch.setattr(auth_rest, "get_endpoint", _missing_endpoint)
+    response = client.get("/api/login", follow_redirects=False)
+    assert response.status_code == 503
+    assert "Browser login is misconfigured" in response.json()["detail"]
 
 
 def test_logout_without_cookie_is_401(client, bff_env):
