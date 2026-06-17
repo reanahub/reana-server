@@ -23,7 +23,6 @@ from uuid import UUID, uuid4
 
 import click
 import yaml
-from flask import url_for
 from marshmallow.exceptions import ValidationError
 from marshmallow.validate import Email
 from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK, SHARED_VOLUME_PATH
@@ -410,7 +409,7 @@ def _get_gitlab_hook_id(project_id, gitlab_client: GitLabClient):
     :param project_id: Project id on GitLab.
     :param gitlab_client: GitLab client.
     """
-    create_workflow_url = url_for("workflows.create_workflow", _external=True)
+    create_workflow_url = f"{REANA_URL}/api/workflows"
     try:
         for hook in gitlab_client.get_all_webhooks(project_id):
             if hook["url"] and hook["url"] == create_workflow_url:

@@ -80,8 +80,8 @@ ENV TERM=xterm \
 # Expose ports to clients
 EXPOSE 5000
 
-# Run server
-CMD ["uwsgi --ini uwsgi.ini"]
+# Run the FastAPI (ASGI) server (the Helm chart overrides this command)
+CMD ["uvicorn", "reana_server.asgi:app", "--host", "0.0.0.0", "--port", "5000", "--workers", "4"]
 
 # Set image labels
 LABEL org.opencontainers.image.authors="team@reanahub.io"

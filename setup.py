@@ -50,20 +50,18 @@ for key, reqs in extras_require.items():
     extras_require["all"].extend(reqs)
 
 install_requires = [
-    "Flask>=3.0.0,<4.0.0",  # transitional: still serves the un-ported blueprints
+    # FastAPI serves the HTTP API (reana_server.asgi); Flask remains only for
+    # the CLI app context (scheduler, reana-admin).
     "fastapi>=0.110.0",
     "uvicorn>=0.29.0",
     "pydantic>=2.6.0,<3.0.0",
+    "Flask>=3.0.0,<4.0.0",
     "gitpython>=3.1",
     "marshmallow>=3.5.0,<4.0.0",
-    "webargs>=8.0.0,<9.0.0",
     "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a20,<0.96.0",
     "reana-db>=0.95.0a10,<0.96.0",
     "requests>=2.25.0",
     "tablib>=0.12.1",
-    "uWSGI>=2.0.31",
-    "uwsgi-tools>=1.1.1",
-    "uwsgitop>=0.12",
     # Yadage dependencies
     # Pinning adage/packtivity/yadage/yadage-schemas to make sure we use compatible versions.
     # See https://github.com/reanahub/reana-workflow-engine-yadage/pull/236#discussion_r992475484
@@ -74,9 +72,6 @@ install_requires = [
     # OIDC/JWT authentication (see AUTH_ARCHITECTURE.md)
     "authlib>=1.6.0,<2.0.0",
     "redis>=5.0.0",
-    # Web framework extensions
-    "flask-cors>=4.0.0",
-    "flask-limiter>=2.3,<3",
 ]
 
 packages = find_packages()

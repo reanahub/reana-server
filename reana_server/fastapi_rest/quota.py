@@ -18,19 +18,92 @@ from typing import Optional
 
 from fastapi import APIRouter, Body, Header, Query
 from fastapi.responses import JSONResponse
-from marshmallow import ValidationError
-from reana_db.models import ResourceType
+from marshmallow import Schema, ValidationError, fields
+from reana_db.database import Session
+from reana_db.models import ResourceType, UserResource
+from reana_db.utils import get_default_quota_resource
 
 from reana_server.config import REANA_QUOTA_MANAGEMENT_SECRET
-from reana_server.rest.quota import (
-    PatchQuotaBodySchema,
-    SetQuotaLimitBodySchema,
-    _get_quota,
-    _get_quota_period,
+from reana_server.utils import (
+    _get_users,
+    _set_quota_limit,
+    _set_quota_period,
+    serialize_utc_datetime,
 )
-from reana_server.utils import _set_quota_limit, _set_quota_period
 
 router = APIRouter(tags=["quota"])
+
+
+class SetQuotaLimitBodySchema(Schema):
+    """Schema for the set_quota_limit endpoint body."""
+
+    user_id = fields.Str()
+    email = fields.Str()
+    resource_type = fields.Str(required=True)
+    limit = fields.Int(required=True)
+
+
+class PatchQuotaBodySchema(Schema):
+    """Schema for the patch_quota endpoint body."""
+
+    user_id = fields.Str()
+    email = fields.Str()
+    resource_type = fields.Str(required=True)
+    quota_period_months = fields.Int(allow_none=True, strict=True)
+    quota_period_start_at = fields.DateTime(allow_none=True)
+
+
+def _get_quota_period(resource_type, user_id=None, email=None):
+    """Periodic quota metadata; returns ``(dict|None, error|None, status)``."""
+    users = _get_users(user_id, email) or None
+    user = users[0] if users else None
+    if not user:
+        return None, "User not found.", 404
+    if resource_type not in ResourceType._member_names_:
+        return (
+            None,
+            f"Resource type '{resource_type}' is not one of the valid types: "
+            f"{', '.join(ResourceType._member_names_)}",
+            400,
+        )
+    resource = get_default_quota_resource(resource_type)
+    user_resource = (
+        Session.query(UserResource)
+        .filter_by(user_id=user.id_, resource_id=resource.id_)
+        .one_or_none()
+    )
+    if not user_resource:
+        return None, "User resource not found.", 404
+    return (
+        {
+            "quota_period_months": user_resource.quota_period_months,
+            "quota_period_start_at": serialize_utc_datetime(
+                user_resource.quota_period_start_at
+            ),
+        },
+        None,
+        200,
+    )
+
+
+def _get_quota(resource_type, user_id=None, email=None):
+    """Quota limit + usage; returns ``(limit|None, usage|None, error|None, status)``."""
+    users = _get_users(user_id, email) or None
+    user = users[0] if users else None
+    if not user:
+        return None, None, "User not found.", 404
+    if resource_type not in ResourceType._member_names_:
+        return (
+            None,
+            None,
+            f"Resource type '{resource_type}' is not one of the valid types: "
+            f"{', '.join(ResourceType._member_names_)}",
+            400,
+        )
+    quota_usage = user.get_quota_usage()
+    limit = quota_usage.get(resource_type, {}).get("limit", {}).get("raw")
+    usage = quota_usage.get(resource_type, {}).get("usage", {}).get("raw")
+    return limit, usage, None, 200
 
 
 def _check_secret(secret: Optional[str]):

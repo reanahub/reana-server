@@ -57,11 +57,12 @@ from reana_server.groups.shares import (
     share_workflow_with_group,
     unshare_workflow_with_group,
 )
-from reana_server.rest.workflows import _start_workflow  # shared queue-publish logic
 from reana_server.utils import (
     _fail_gitlab_commit_build_status,
     _get_reana_yaml_from_gitlab,
     _load_and_save_yadage_spec,
+    clone_workflow,
+    ensure_dask_service,
     get_quota_excess_message,
     get_workspace_retention_rules,
     is_uuid_v4,
@@ -72,8 +73,82 @@ from reana_server.validation import (
     validate_dask_limits,
     validate_images,
     validate_inputs,
+    validate_workflow,
     validate_workspace_path,
 )
+
+
+def _start_workflow(workflow_id_or_name, user, **parameters):
+    """Start a workflow by publishing it to the submission queue.
+
+    Shared by ``start_workflow`` and ``set_workflow_status`` (status=start).
+    Returns ``(response_dict, status_code)``.
+    """
+    operational_options = parameters.get("operational_options", {})
+    input_parameters = parameters.get("input_parameters", {})
+    restart = parameters.get("restart", False)
+    reana_specification = parameters.get("reana_specification")
+    try:
+        if not workflow_id_or_name:
+            raise ValueError("workflow_id_or_name is not supplied")
+        workflow = _get_workflow_with_uuid_or_name(
+            workflow_id_or_name, str(user.id_)
+        )
+        operational_options = validate_operational_options(
+            workflow.type_, operational_options
+        )
+        restart_type = None
+        if restart:
+            if workflow.status not in [RunStatus.finished, RunStatus.failed]:
+                raise ValueError(
+                    "Only finished or failed workflows can be restarted."
+                )
+            if workflow.workspace_has_pending_retention_rules():
+                raise ValueError(
+                    "The workflow cannot be restarted because some retention "
+                    "rules are currently being applied to the workspace. "
+                    "Please retry later."
+                )
+            if reana_specification:
+                restart_type = reana_specification.get("workflow", {}).get(
+                    "type", None
+                )
+            workflow = clone_workflow(workflow, reana_specification, restart_type)
+        elif workflow.status != RunStatus.created:
+            raise ValueError(
+                "Workflow {} is already {} and cannot be started again.".format(
+                    workflow.get_full_workflow_name(), workflow.status.name
+                )
+            )
+        if "yadage" in (workflow.type_, restart_type):
+            _load_and_save_yadage_spec(workflow, operational_options)
+        validate_workflow(
+            workflow.reana_specification, input_parameters=input_parameters
+        )
+        if ensure_dask_service(workflow):
+            Session.object_session(workflow).commit()
+        publish_workflow_submission(workflow, user.id_, parameters)
+        return (
+            {
+                "message": "Workflow submitted.",
+                "workflow_id": workflow.id_,
+                "workflow_name": workflow.name,
+                "status": RunStatus.queued.name,
+                "run_number": workflow.run_number,
+                "user": str(user.id_),
+            },
+            200,
+        )
+    except HTTPError as error:
+        logging.error(traceback.format_exc())
+        return error.response.json(), error.response.status_code
+    except (REANAValidationError, ValidationError) as error:
+        return {"message": str(error)}, 400
+    except ValueError as error:
+        return {"message": str(error)}, 403
+    except Exception as error:  # noqa: BLE001
+        logging.error(traceback.format_exc())
+        return {"message": str(error)}, 500
 
 router = APIRouter(tags=["workflows"])
 
