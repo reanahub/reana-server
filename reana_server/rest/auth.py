@@ -21,7 +21,7 @@ import hashlib
 import hmac
 import logging
 import secrets
-from urllib.parse import urlencode
+from urllib.parse import urlparse, urlunparse, urlencode
 
 import requests
 from fastapi import APIRouter, HTTPException, Request
@@ -84,6 +84,52 @@ def _require_bff():
         raise HTTPException(status_code=404, detail="Browser login is not enabled.")
 
 
+def _client_facing_endpoint_url(endpoint_url):
+    """Return endpoint URL rewritten to the public issuer host when possible."""
+    issuer = REANA_AUTH["issuer"]
+    if not issuer or not endpoint_url:
+        return endpoint_url
+    issuer_parts = urlparse(issuer)
+    endpoint_parts = urlparse(endpoint_url)
+    if not issuer_parts.scheme or not issuer_parts.netloc:
+        return endpoint_url
+    if not endpoint_parts.scheme or not endpoint_parts.netloc:
+        return endpoint_url
+    issuer_path = issuer_parts.path.rstrip("/")
+    if issuer_path and not endpoint_parts.path.startswith(issuer_path + "/"):
+        return endpoint_url
+    return urlunparse(
+        (
+            issuer_parts.scheme,
+            issuer_parts.netloc,
+            endpoint_parts.path,
+            endpoint_parts.params,
+            endpoint_parts.query,
+            endpoint_parts.fragment,
+        )
+    )
+
+
+def _client_facing_openid_configuration(document):
+    """Return discovery document suitable for host/browser-side clients."""
+    public_document = dict(document)
+    if REANA_AUTH["issuer"]:
+        public_document["issuer"] = REANA_AUTH["issuer"]
+    for field in (
+        "authorization_endpoint",
+        "token_endpoint",
+        "userinfo_endpoint",
+        "jwks_uri",
+        "end_session_endpoint",
+        "device_authorization_endpoint",
+    ):
+        if field in public_document:
+            public_document[field] = _client_facing_endpoint_url(
+                public_document[field]
+            )
+    return public_document
+
+
 def _consume_state(cookie_value, state_param):
     if not cookie_value or not state_param:
         raise HTTPException(status_code=403, detail="State param is invalid.")
@@ -103,7 +149,7 @@ def _consume_state(cookie_value, state_param):
 async def openid_configuration() -> JSONResponse:
     """Return the issuer discovery document plus the REANA CLI client id."""
     try:
-        document = dict(get_openid_configuration())
+        document = _client_facing_openid_configuration(get_openid_configuration())
     except AuthError as error:
         raise HTTPException(status_code=503, detail=str(error))
     document["reana_cli_client_id"] = REANA_AUTH["cli_client_id"]

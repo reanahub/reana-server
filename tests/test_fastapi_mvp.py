@@ -219,6 +219,50 @@ def test_openid_configuration_proxy(client, monkeypatch):
     assert body["reana_cli_client_id"] == "reana-cli"
 
 
+def test_openid_configuration_proxy_rewrites_backchannel_urls(client, monkeypatch):
+    import reana_server.rest.auth as auth_mod
+
+    issuer = "https://localhost:30443/keycloak/realms/reana"
+    monkeypatch.setitem(REANA_AUTH, "issuer", issuer)
+    document = {
+        "issuer": issuer,
+        "authorization_endpoint": f"{issuer}/protocol/openid-connect/auth",
+        "device_authorization_endpoint": (
+            "http://reana-keycloak:8080/keycloak/realms/reana/"
+            "protocol/openid-connect/auth/device"
+        ),
+        "token_endpoint": (
+            "http://reana-keycloak:8080/keycloak/realms/reana/"
+            "protocol/openid-connect/token"
+        ),
+        "jwks_uri": (
+            "http://reana-keycloak:8080/keycloak/realms/reana/"
+            "protocol/openid-connect/certs"
+        ),
+    }
+    monkeypatch.setattr(
+        auth_mod, "get_openid_configuration", lambda: document
+    )
+
+    response = client.get("/api/.well-known/openid-configuration")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["issuer"] == issuer
+    assert body["device_authorization_endpoint"] == (
+        "https://localhost:30443/keycloak/realms/reana/"
+        "protocol/openid-connect/auth/device"
+    )
+    assert body["token_endpoint"] == (
+        "https://localhost:30443/keycloak/realms/reana/"
+        "protocol/openid-connect/token"
+    )
+    assert body["jwks_uri"] == (
+        "https://localhost:30443/keycloak/realms/reana/"
+        "protocol/openid-connect/certs"
+    )
+
+
 class _FakeBackend:
     provider = "keycloak"
 
