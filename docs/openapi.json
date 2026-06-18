@@ -1160,6 +1160,294 @@
         "summary": "Launch workflow from a remote REANA specification file."
       }
     },
+    "/api/notifications": {
+      "get": {
+        "description": "Returns the authenticated user's latest notifications, ordered from newest to oldest, together with the total number of unread notifications.",
+        "operationId": "get_notifications",
+        "parameters": [
+          {
+            "description": "API access token of the notification recipient.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "default": 20,
+            "description": "Maximum number of notifications to return.",
+            "in": "query",
+            "maximum": 100,
+            "minimum": 1,
+            "name": "limit",
+            "required": false,
+            "type": "integer"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Notifications successfully retrieved.",
+            "examples": {
+              "application/json": {
+                "notifications": [
+                  {
+                    "created": "2026-06-09T10:00:00",
+                    "id": "d34c6438-6817-4f33-a09e-83a17ae17851",
+                    "payload": {
+                      "message": "Please review this workflow.",
+                      "sharer_email": "alice@example.org",
+                      "valid_until": null,
+                      "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
+                      "workflow_name": "my-analysis.1"
+                    },
+                    "read_at": null,
+                    "type": "workflow_shared"
+                  }
+                ],
+                "unread_count": 1
+              }
+            },
+            "schema": {
+              "properties": {
+                "notifications": {
+                  "items": {
+                    "properties": {
+                      "created": {
+                        "format": "date-time",
+                        "type": "string",
+                        "x-nullable": true
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "payload": {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      "read_at": {
+                        "format": "date-time",
+                        "type": "string",
+                        "x-nullable": true
+                      },
+                      "type": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "unread_count": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. Query parameters are malformed.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Request failed. User is not signed in.",
+            "examples": {
+              "application/json": {
+                "message": "User not signed in"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Get user notifications."
+      }
+    },
+    "/api/notifications/read-all": {
+      "post": {
+        "description": "Marks every unread notification belonging to the authenticated user as read.",
+        "operationId": "read_all_notifications",
+        "parameters": [
+          {
+            "description": "API access token of the notification recipient.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Notifications successfully marked as read.",
+            "examples": {
+              "application/json": {
+                "updated": 3
+              }
+            },
+            "schema": {
+              "properties": {
+                "updated": {
+                  "description": "Number of notifications marked as read.",
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Request failed. User is not signed in.",
+            "examples": {
+              "application/json": {
+                "message": "User not signed in"
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Mark all user notifications as read."
+      }
+    },
+    "/api/notifications/{notification_id}": {
+      "patch": {
+        "description": "Marks one of the authenticated user's notifications as read or unread. Notifications belonging to another user are not accessible.",
+        "operationId": "update_notification",
+        "parameters": [
+          {
+            "description": "API access token of the notification recipient.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Notification UUID.",
+            "in": "path",
+            "name": "notification_id",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Notification fields to update.",
+            "in": "body",
+            "name": "notification_update",
+            "required": true,
+            "schema": {
+              "properties": {
+                "read": {
+                  "description": "Whether the notification should be marked as read.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "read"
+              ],
+              "type": "object"
+            }
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification successfully updated.",
+            "schema": {
+              "properties": {
+                "notification": {
+                  "properties": {
+                    "created": {
+                      "format": "date-time",
+                      "type": "string",
+                      "x-nullable": true
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    "read_at": {
+                      "format": "date-time",
+                      "type": "string",
+                      "x-nullable": true
+                    },
+                    "type": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The request body is malformed.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Request failed. User is not signed in.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "Request failed. Notification does not exist.",
+            "examples": {
+              "application/json": {
+                "message": "Notification not found."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Update a user notification."
+      }
+    },
     "/api/ping": {
       "get": {
         "description": "Ping the server.",

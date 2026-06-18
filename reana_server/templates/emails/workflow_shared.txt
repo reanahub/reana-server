@@ -1,0 +1,22 @@
+Dear REANA user,
+
+{{ sharer_email }} shared workflow {{ workflow_name }} with you.
+{% if message %}
+
+Message:
+{{ message }}
+{% endif %}
+{% if valid_until %}
+
+This shared access expires on {{ valid_until }}.
+{% endif %}
+
+Open the workflow:
+
+    {{ workflow_url }}
+
+{% include 'emails/assistance_links.txt' %}
+
+Best regards,
+
+REANA notification system
