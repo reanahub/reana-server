@@ -218,7 +218,8 @@ REANA_WORKFLOW_SCHEDULING_READINESS_CHECK_LEVEL_VALUE_MAP = {
 }
 """REANA workflow scheduling readiness check level value map:
 - 0 = no readiness check; schedule new workflow as soon as they arrive;
-- 1 = check for maximum number of concurrently running workflows; schedule new workflows if not exceeded;
+- 1 = check concurrent-workflow limits; schedule a new workflow only if it is
+  below the cap of every resource it consumes.
 - 2 = check for available cluster memory size; schedule new workflow only if it fits;
 - 9 = perform all checks; satisfy all previous criteria.
 """
