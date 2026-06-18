@@ -34,6 +34,7 @@ from reana_server.auth import (
     get_or_provision_user,
     validate_access_token,
 )
+from reana_server.auth.tokens import validate_id_token
 from reana_server.auth.discovery import get_endpoint, get_openid_configuration
 from reana_server.auth.errors import AuthError, InvalidTokenError
 from reana_server.auth.sessions import (
@@ -197,8 +198,9 @@ async def login(request: Request, next: str = "/") -> RedirectResponse:
             status_code=502, detail="Could not reach the identity provider."
         )
     state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
     cookie_value = _serializer().dumps(
-        {"state": state, "verifier": verifier, "next": next_url}
+        {"state": state, "verifier": verifier, "next": next_url, "nonce": nonce}
     )
     location = authorization_url + "?" + urlencode(
         {
@@ -207,6 +209,7 @@ async def login(request: Request, next: str = "/") -> RedirectResponse:
             "redirect_uri": _callback_redirect_uri(),
             "scope": REANA_AUTH["scopes"],
             "state": state,
+            "nonce": nonce,
             "code_challenge": challenge,
             "code_challenge_method": "S256",
         }
@@ -275,8 +278,16 @@ async def oauth_callback(
         )
     try:
         claims = validate_access_token(access_token)
+        if token_body.get("id_token"):
+            id_claims = validate_id_token(
+                token_body["id_token"], nonce=state_data.get("nonce")
+            )
+            if id_claims["sub"] != claims["sub"]:
+                raise InvalidTokenError(
+                    "ID token subject does not match the access token subject."
+                )
     except InvalidTokenError as error:
-        logging.error("Issuer returned an invalid access token: %s", error)
+        logging.error("Issuer returned an invalid token: %s", error)
         raise HTTPException(
             status_code=502, detail="Token exchange with the issuer failed."
         )

@@ -29,6 +29,7 @@ webhook-secret path (both present in ``decorators.py``) are deliberately not
 wired here yet; they slot in at the marked place without changing callers.
 """
 
+import logging
 from typing import Optional
 
 from fastapi import HTTPException, Request, Response, Security, status
@@ -45,6 +46,9 @@ from reana_server.auth import (
     validate_access_token,
 )
 from reana_server.auth.tokens import extract_roles
+from reana_server.auth.tokens import role_sources_need_userinfo
+from reana_server.auth.userinfo import fetch_userinfo
+from reana_server.auth.provision import verify_userinfo_subject
 from reana_server.auth.sessions import (
     AUTH_COOKIE,
     csrf_ok,
@@ -53,6 +57,7 @@ from reana_server.auth.sessions import (
     set_auth_cookies,
 )
 from reana_server.config import REANA_AUTH
+from reana_server.groups.sync import sync_user_groups_from_userinfo
 
 _SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 _REANA_USER_SCOPE = "reana:user"
@@ -139,13 +144,26 @@ async def get_current_user(
                 raise InvalidTokenError("Session expired, please log in again.")
             raw_token = refreshed_token
             claims = validate_access_token(raw_token)
+        userinfo = None
         if _REANA_USER_SCOPE in security_scopes.scopes:
-            require_role(claims)
-        user, _ = get_or_provision_user(claims, raw_token)
+            if role_sources_need_userinfo(claims):
+                userinfo = fetch_userinfo(raw_token)
+                verify_userinfo_subject(claims, userinfo)
+                require_role(claims, userinfo)
+            else:
+                require_role(claims)
+        user, is_new = get_or_provision_user(claims, raw_token, userinfo=userinfo)
+        if userinfo is not None and not is_new:
+            try:
+                sync_user_groups_from_userinfo(user, userinfo)
+            except Exception:
+                logging.exception(
+                    "Group membership sync failed for user %s.", user.id_
+                )
         # Expose the token roles (and claims) to endpoints that need them,
         # e.g. ``/api/you`` reports the caller's roles without a second
         # token parse and without putting roles on the User row.
-        request.state.reana_roles = extract_roles(claims)
+        request.state.reana_roles = extract_roles(claims, userinfo)
         request.state.reana_claims = claims
     except InvalidTokenError as error:
         raise HTTPException(

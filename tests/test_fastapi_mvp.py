@@ -83,7 +83,11 @@ def auth_env(monkeypatch, signing_key):
         idp_issuer=ISSUER,
         idp_subject="subject-1",
     )
-    monkeypatch.setattr(deps, "get_or_provision_user", lambda claims, token: fake_user)
+    monkeypatch.setattr(
+        deps,
+        "get_or_provision_user",
+        lambda claims, token, userinfo=None: (fake_user, False),
+    )
     with patch.object(
         tokens_module.requests, "get", return_value=_jwks_response(signing_key)
     ):
@@ -265,6 +269,7 @@ def test_openid_configuration_proxy_rewrites_backchannel_urls(client, monkeypatc
 
 class _FakeBackend:
     provider = "keycloak"
+    supports_search = True
 
     def __init__(self, refs=None, error=None):
         self._refs = refs or []

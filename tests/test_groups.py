@@ -21,6 +21,7 @@ from reana_server.groups.base import (
     GroupRef,
 )
 from reana_server.groups.cern import CernGroupBackend
+from reana_server.groups.eosc import EoscGroupBackend
 from reana_server.groups.keycloak import KeycloakGroupBackend
 from reana_server.groups.sync import (
     _normalize_refs,
@@ -394,3 +395,80 @@ class TestCernBackend:
                 backend.search_groups("atlas")
             with pytest.raises(GroupBackendError):
                 backend.extract_memberships({"cern_upn": "jdoe"})
+
+
+class TestEoscBackend:
+    """EOSC AAI AARC-G069 entitlement parsing."""
+
+    @pytest.fixture
+    def backend(self):
+        return EoscGroupBackend({"provider": "eosc"})
+
+    def test_extract_memberships_prefers_entitlements_claim(self, backend):
+        refs = backend.extract_memberships(
+            {
+                "entitlements": [
+                    "urn:mace:egi.eu:group:vo.example.org:role=member#aai.egi.eu",
+                    "urn:mace:egi.eu:group:vo.example.org:analysis:role=member",
+                    "urn:mace:egi.eu:group:vo.example.org:role=admin",
+                    "not-a-urn",
+                    42,
+                ],
+                "eduperson_entitlement": [
+                    "urn:mace:egi.eu:group:legacy.example.org:role=member"
+                ],
+            }
+        )
+        assert [r.external_id for r in refs] == [
+            "vo.example.org",
+            "vo.example.org:analysis",
+        ]
+        assert all(r.provider == "eosc" for r in refs)
+
+    def test_extract_memberships_accepts_legacy_claim(self, backend):
+        refs = backend.extract_memberships(
+            {
+                "eduperson_entitlement": [
+                    "urn:mace:egi.eu:group:legacy.example.org:role=member#old"
+                ]
+            }
+        )
+        assert [r.external_id for r in refs] == ["legacy.example.org"]
+
+    def test_member_roles_are_configurable(self):
+        backend = EoscGroupBackend(
+            {"provider": "eosc", "member_roles": ["member", "manager"]}
+        )
+        refs = backend.extract_memberships(
+            {
+                "entitlements": [
+                    "urn:mace:egi.eu:group:vo.example.org:role=manager"
+                ]
+            }
+        )
+        assert [r.external_id for r in refs] == ["vo.example.org"]
+
+    def test_custom_entitlement_claim_is_backward_compatible(self):
+        backend = EoscGroupBackend(
+            {"provider": "eosc", "entitlement_claim": "eduperson_entitlement"}
+        )
+        with pytest.raises(GroupClaimError):
+            backend.extract_memberships({"entitlements": []})
+
+    def test_missing_or_malformed_claim_raises(self, backend):
+        with pytest.raises(GroupClaimError):
+            backend.extract_memberships({"email": "jane@example.org"})
+        with pytest.raises(GroupClaimError):
+            backend.extract_memberships({"entitlements": "not-a-list"})
+
+    def test_group_exists_uses_db_snapshot(self, app, session, backend):
+        session.add(
+            ExternalGroup(
+                provider="eosc",
+                external_id="vo.example.org",
+                display_name="vo.example.org",
+            )
+        )
+        session.commit()
+        assert backend.group_exists("vo.example.org") is True
+        assert backend.group_exists("unknown") is False

@@ -439,7 +439,37 @@ REANA_AUTH = {
     # Confidential web client used by the BFF code flow.
     "web_client_id": os.getenv("REANA_AUTH_WEB_CLIENT_ID", "reana-server"),
     "web_client_secret": os.getenv("REANA_AUTH_WEB_CLIENT_SECRET", ""),
+    # Scopes requested in the authorization code / device authorization flow.
+    # EOSC AAI 2025 deployments should use "openid profile email entitlements"
+    # so that the UserInfo response includes the AARC-G069 ``entitlements``
+    # claim used by the EOSC group backend and entitlement gate. Older
+    # EGI-compatible deployments may still release ``eduperson_entitlement``.
     "scopes": os.getenv("REANA_AUTH_SCOPES", "openid profile email"),
+    # Access-token validation mode. ``jwt`` validates locally against JWKS and
+    # remains the default. ``introspection`` validates opaque tokens at the
+    # issuer. ``auto`` tries JWT first, then falls back to introspection.
+    "token_validation": os.getenv("REANA_AUTH_TOKEN_VALIDATION", "jwt"),
+    "introspection_url": os.getenv("REANA_AUTH_INTROSPECTION_URL", ""),
+    "introspection_client_id": os.getenv(
+        "REANA_AUTH_INTROSPECTION_CLIENT_ID",
+        os.getenv("REANA_AUTH_WEB_CLIENT_ID", "reana-server"),
+    ),
+    "introspection_client_secret": os.getenv(
+        "REANA_AUTH_INTROSPECTION_CLIENT_SECRET",
+        os.getenv("REANA_AUTH_WEB_CLIENT_SECRET", ""),
+    ),
+    # EOSC AAI convenience gate: when set, any user whose
+    # ``entitlements``/``eduperson_entitlement`` list contains a URN that
+    # *starts with* this value is granted ``reana:user``.  The prefix match is
+    # authority-agnostic
+    # (strips ``#<authority>``), so the same value works across EOSC AAI proxy
+    # instances.  When ``REANA_AUTH_ROLE_SOURCES`` is explicitly set by the
+    # operator this key is ignored — configure the entitlement mapping
+    # directly in that JSON instead.
+    # Example: "urn:mace:egi.eu:group:vo.example.org:role=member"
+    "eosc_required_entitlement": os.getenv(
+        "REANA_AUTH_EOSC_REQUIRED_ENTITLEMENT", ""
+    ),
     # Server-side lifetime (seconds) of a BFF session (refresh-token
     # storage in Redis); the issuer's session policy is the real authority.
     "session_ttl": int(os.getenv("REANA_AUTH_SESSION_TTL", "604800")),
@@ -486,6 +516,30 @@ REANA_AUTH = {
 }
 """OIDC/JWT authentication configuration (see AUTH_ARCHITECTURE.md)."""
 
+
+def _eosc_entitlement_role_sources(entitlement):
+    """Return role-source mappings for the EOSC entitlement convenience gate."""
+    return [
+        {
+            "path": "entitlements",
+            "match": "startswith",
+            "map": {entitlement: "reana:user"},
+        },
+        {
+            "path": "eduperson_entitlement",
+            "match": "startswith",
+            "map": {entitlement: "reana:user"},
+        },
+    ]
+
+
+# Auto-inject EOSC entitlement gate into role_sources when the operator
+# configures REANA_AUTH_EOSC_REQUIRED_ENTITLEMENT but does not provide a
+# custom REANA_AUTH_ROLE_SOURCES list.
+_eosc_entitlement = REANA_AUTH["eosc_required_entitlement"]
+if _eosc_entitlement and not os.getenv("REANA_AUTH_ROLE_SOURCES"):
+    REANA_AUTH["role_sources"] = _eosc_entitlement_role_sources(_eosc_entitlement)
+
 try:
     REANA_GROUP_BACKENDS = json.loads(os.getenv("REANA_GROUP_BACKENDS", "[]"))
 except json.JSONDecodeError:
@@ -500,7 +554,8 @@ JSON list of backend definitions, e.g.::
       "groups_claim": "groups", "client_id": "reana-server-internal",
       "client_secret_env": "REANA_GROUP_BACKEND_KEYCLOAK_CLIENT_SECRET"},
      {"type": "cern", "provider": "cern", "client_id": "reana-gms-reader",
-      "client_secret_env": "REANA_GROUP_BACKEND_CERN_CLIENT_SECRET"}]
+      "client_secret_env": "REANA_GROUP_BACKEND_CERN_CLIENT_SECRET"},
+     {"type": "eosc", "provider": "eosc"}]
 
 Each backend's service credentials are read from the environment variable
 named by ``client_secret_env``. See ``reana_server/groups``.
@@ -513,4 +568,13 @@ existence. It therefore requires a client-credentials API client
 permission — there is no claim-only mode. Override ``identity_claim``,
 ``identity_user_attr``, ``api_base_url``, ``audience`` or
 ``search_filter_template`` only when CERN's defaults do not apply.
+
+The ``eosc`` backend is claim-only: it parses group memberships from the
+``entitlements`` userinfo claim (EOSC AAI 2025 / AARC-G069) and the legacy
+``eduperson_entitlement`` claim, and requires no service credentials. Override
+``entitlement_claim``, ``entitlement_claims``, ``urn_namespace`` (default
+``urn:mace:egi.eu``) or ``member_roles`` (default ``["member"]``) to adapt to
+other EOSC-compatible federations. Group search is not supported (EOSC has no
+group search API); live refresh is not supported (entitlements are only
+available at login time via the user's own access token).
 """

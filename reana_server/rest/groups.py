@@ -67,6 +67,8 @@ async def search_groups(
 
     items: List[GroupSearchItem] = []
     for backend in backends:
+        if not backend.supports_search:
+            continue
         try:
             for ref in backend.search_groups(query, limit=_SEARCH_LIMIT):
                 items.append(

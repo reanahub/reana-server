@@ -16,6 +16,8 @@ import pytest
 
 import reana_server.config as config
 from reana_server.config import _get_int_env_variable
+from reana_server.config import _eosc_entitlement_role_sources, _get_int_env_variable
+from reana_server.groups.eosc import EoscGroupBackend
 
 
 def _load_config_module():
@@ -83,3 +85,17 @@ def test_keycloak_user_info_endpoint_is_enabled(monkeypatch):
     test_config = _load_config_module()
 
     assert test_config.OAUTHCLIENT_KEYCLOAK_USER_INFO_FROM_ENDPOINT is True
+def test_eosc_entitlement_gate_role_sources_cover_new_and_legacy_claims():
+    entitlement = "urn:mace:egi.eu:group:vo.example.org:role=member"
+    sources = _eosc_entitlement_role_sources(entitlement)
+    assert [source["path"] for source in sources] == [
+        "entitlements",
+        "eduperson_entitlement",
+    ]
+    assert all(source["match"] == "startswith" for source in sources)
+    assert all(source["map"] == {entitlement: "reana:user"} for source in sources)
+
+
+def test_eosc_backend_default_claim_aliases():
+    backend = EoscGroupBackend({"provider": "eosc"})
+    assert backend.entitlement_claims == ["entitlements", "eduperson_entitlement"]

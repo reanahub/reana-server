@@ -57,6 +57,15 @@ class GroupBackend(abc.ABC):
     #: Provider tag stamped on every GroupRef this backend emits.
     provider: str
 
+    #: Whether this backend implements group search for the sharing UI.
+    #: Claim-only backends (e.g. EOSC) have no external search API to call.
+    supports_search: bool = True
+
+    #: Whether this backend can refresh memberships without a fresh user token.
+    #: Claim-only backends can only refresh at login time, not via the periodic
+    #: refresh job which has no stored access token.
+    supports_live_refresh: bool = True
+
     @abc.abstractmethod
     def extract_memberships(self, userinfo: dict) -> List[GroupRef]:
         """Parse the user's memberships out of a userinfo response.

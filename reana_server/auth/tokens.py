@@ -96,7 +96,7 @@ def _claims_options():
     return options
 
 
-def validate_access_token(token):
+def _validate_access_token_jwt(token):
     """Validate a JWT access token and return its claims.
 
     Enforces: signature against the issuer's JWKS (cached, with one forced
@@ -135,6 +135,116 @@ def validate_access_token(token):
     return claims
 
 
+def _validate_access_token_introspection(token):
+    """Validate an access token via the issuer's introspection endpoint."""
+    try:
+        response = requests.post(
+            get_endpoint("introspection_url"),
+            data={"token": token},
+            auth=(
+                REANA_AUTH["introspection_client_id"],
+                REANA_AUTH["introspection_client_secret"],
+            ),
+            timeout=REANA_AUTH["http_timeout"],
+        )
+        response.raise_for_status()
+        claims = response.json()
+    except (requests.RequestException, ValueError) as error:
+        raise InvalidTokenError(f"Could not introspect access token: {error}")
+    if claims.get("active") is not True:
+        raise InvalidTokenError("Access token is not active.")
+    if claims.get("iss") and claims["iss"] != REANA_AUTH["issuer"]:
+        raise InvalidTokenError("Invalid access token issuer.")
+    if not claims.get("sub"):
+        raise InvalidTokenError(
+            "Access token introspection response is missing 'sub'."
+        )
+    audience = REANA_AUTH["audience"]
+    if audience:
+        aud = claims.get("aud")
+        aud = aud if isinstance(aud, list) else [aud]
+        if audience not in aud:
+            raise InvalidTokenError("Invalid access token audience.")
+    exp = claims.get("exp")
+    if exp is not None and int(exp) + REANA_AUTH["leeway"] < int(time.time()):
+        raise InvalidTokenError("Access token is expired.")
+    return claims
+
+
+def validate_access_token(token):
+    """Validate an access token and return its claims.
+
+    JWT/JWKS validation is the default. Operators can opt into issuer-side
+    introspection for opaque EOSC access tokens via
+    ``REANA_AUTH_TOKEN_VALIDATION=introspection`` or use ``auto`` to try JWT
+    validation first and fall back to introspection.
+
+    :raises InvalidTokenError: when the token fails validation.
+    """
+    mode = REANA_AUTH.get("token_validation", "jwt")
+    if mode == "jwt":
+        return _validate_access_token_jwt(token)
+    if mode == "introspection":
+        return _validate_access_token_introspection(token)
+    if mode == "auto":
+        try:
+            return _validate_access_token_jwt(token)
+        except InvalidTokenError as jwt_error:
+            logging.debug(
+                "JWT validation failed, trying introspection: %s", jwt_error
+            )
+            return _validate_access_token_introspection(token)
+    raise InvalidTokenError(f"Unsupported token validation mode: {mode!r}.")
+
+
+def validate_id_token(id_token, nonce=None):
+    """Validate an OIDC ID token returned by the BFF code flow.
+
+    The access token remains the authorization credential; the ID token is
+    validated to bind the browser authorization response to the login request
+    via ``nonce`` and to catch issuer/client mix-ups early.
+
+    :raises InvalidTokenError: when the token is absent or invalid.
+    """
+    if not id_token:
+        raise InvalidTokenError("Issuer did not return an ID token.")
+    if not REANA_AUTH["issuer"]:
+        raise InvalidTokenError(
+            "OIDC authentication is not configured (REANA_AUTH_ISSUER unset)."
+        )
+    claims_options = {
+        "iss": {"essential": True, "value": REANA_AUTH["issuer"]},
+        "exp": {"essential": True},
+        "sub": {"essential": True},
+    }
+    if REANA_AUTH["web_client_id"]:
+        claims_options["aud"] = {
+            "essential": True,
+            "value": REANA_AUTH["web_client_id"],
+        }
+    try:
+        try:
+            claims = _jwt.decode(
+                id_token,
+                _get_jwks_cache().get_key_set(),
+                claims_options=claims_options,
+            )
+        except (JoseError, ValueError):
+            claims = _jwt.decode(
+                id_token,
+                _get_jwks_cache().get_key_set(force=True),
+                claims_options=claims_options,
+            )
+        claims.validate(leeway=REANA_AUTH["leeway"])
+    except JoseError as error:
+        raise InvalidTokenError(f"Invalid ID token: {error}")
+    except ValueError as error:
+        raise InvalidTokenError(f"Invalid ID token: {error}")
+    if nonce is not None and claims.get("nonce") != nonce:
+        raise InvalidTokenError("Invalid ID token nonce.")
+    return claims
+
+
 def _get_claim_path(document, path):
     """Return a nested claim value using dot-separated path syntax."""
     value = document or {}
@@ -156,13 +266,25 @@ def _as_role_list(value):
     return []
 
 
-def _map_roles(roles, mapping):
-    """Map provider roles to REANA roles according to one role source."""
+def _map_roles(roles, mapping, match="exact"):
+    """Map provider roles to REANA roles according to one role source.
+
+    ``match`` controls how claim values are matched against ``mapping`` keys:
+    - ``"exact"`` (default): ``mapping[role]``
+    - ``"startswith"``: first mapping key that is a prefix of the role value
+      (useful for EOSC entitlement URNs where the ``#<authority>`` suffix
+      varies across EOSC AAI proxy instances)
+    """
     if not isinstance(mapping, dict):
         return roles
     mapped_roles = []
     for role in roles:
-        mapped = mapping.get(role)
+        if match == "startswith":
+            mapped = next(
+                (v for k, v in mapping.items() if role.startswith(k)), None
+            )
+        else:
+            mapped = mapping.get(role)
         if mapped is None:
             continue
         mapped_roles.extend(_as_role_list(mapped))
@@ -183,7 +305,9 @@ def extract_roles(claims, userinfo=None):
         if raw_roles is None and userinfo is not None:
             raw_roles = _get_claim_path(userinfo, path)
         source_roles = _as_role_list(raw_roles)
-        roles.extend(_map_roles(source_roles, source.get("map")))
+        roles.extend(
+            _map_roles(source_roles, source.get("map"), source.get("match", "exact"))
+        )
 
     # Preserve order for predictable logs/tests while removing duplicates.
     unique_roles = []
@@ -193,6 +317,23 @@ def extract_roles(claims, userinfo=None):
             unique_roles.append(role)
             seen.add(role)
     return unique_roles
+
+
+def role_sources_need_userinfo(claims):
+    """Return whether configured role sources may require UserInfo fallback."""
+    required = REANA_AUTH["required_role"]
+    if not required or required in extract_roles(claims):
+        return False
+    role_sources = REANA_AUTH.get("role_sources") or [
+        {"path": REANA_AUTH["roles_claim"]}
+    ]
+    for source in role_sources:
+        if not isinstance(source, dict):
+            continue
+        path = source.get("path") or source.get("claim")
+        if _get_claim_path(claims, path) is None:
+            return True
+    return False
 
 
 def require_role(claims, userinfo=None):

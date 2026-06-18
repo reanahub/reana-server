@@ -107,13 +107,15 @@ def _link_existing_user(user, sub, iss, userinfo):
     return user
 
 
-def get_or_provision_user(claims, token):
+def get_or_provision_user(claims, token, userinfo=None):
     """Return ``(user, is_new)`` for validated token claims, provisioning JIT.
 
     :param claims: validated JWT claims (``iss``/``sub`` guaranteed by
         :func:`reana_server.auth.tokens.validate_access_token`).
     :param token: the raw bearer token, used for the userinfo call on
-        first sight of an identity.
+        first sight of an identity when ``userinfo`` was not supplied.
+    :param userinfo: optional already-fetched userinfo response, reused for
+        role checks and group sync when EOSC entitlements live outside the JWT.
     :returns: ``(user, is_new)`` where ``is_new`` is ``True`` when the user
         was just provisioned (groups already synced); ``False`` for returning
         users (caller decides whether to re-sync).
@@ -123,13 +125,16 @@ def get_or_provision_user(claims, token):
     sub, iss = claims["sub"], claims["iss"]
     user = get_user_by_idp_identity(sub, iss)
     if user:
+        if userinfo is not None:
+            verify_userinfo_subject(claims, userinfo)
+            require_role(claims, userinfo)
         return user, False
 
     # First sight of this identity: one userinfo round-trip, then link or
     # create. UserInfo is bound to the token subject, and the role gate runs
     # before any database write so that arbitrary issuer accounts cannot fill
     # the user table.
-    userinfo = fetch_userinfo(token)
+    userinfo = userinfo or fetch_userinfo(token)
     verify_userinfo_subject(claims, userinfo)
     require_role(claims, userinfo)
     email = userinfo["email"]

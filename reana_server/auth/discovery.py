@@ -33,6 +33,7 @@ _ENDPOINT_KEYS = {
     "userinfo_url": "userinfo_endpoint",
     "authorization_url": "authorization_endpoint",
     "token_url": "token_endpoint",
+    "introspection_url": "introspection_endpoint",
     "device_authorization_url": "device_authorization_endpoint",
     "end_session_url": "end_session_endpoint",
 }

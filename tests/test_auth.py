@@ -22,7 +22,11 @@ from reana_server.auth.errors import (
     ProvisioningError,
 )
 from reana_server.auth.provision import get_or_provision_user
-from reana_server.auth.tokens import require_role, validate_access_token
+from reana_server.auth.tokens import (
+    require_role,
+    role_sources_need_userinfo,
+    validate_access_token,
+)
 from reana_server.config import REANA_AUTH
 
 ISSUER = "https://auth.example.org/realms/reana"
@@ -165,6 +169,25 @@ class TestRequireRole:
         monkeypatch.setitem(REANA_AUTH, "required_role", "")
         require_role({}, userinfo={})
 
+    def test_eosc_entitlement_in_userinfo_grants_role(self, monkeypatch):
+        entitlement = "urn:mace:egi.eu:group:vo.example.org:role=member"
+        monkeypatch.setitem(REANA_AUTH, "required_role", "reana:user")
+        monkeypatch.setitem(
+            REANA_AUTH,
+            "role_sources",
+            [
+                {
+                    "path": "entitlements",
+                    "match": "startswith",
+                    "map": {entitlement: "reana:user"},
+                }
+            ],
+        )
+        claims = {"sub": "subject-1"}
+        userinfo = {"entitlements": [entitlement + "#aai.egi.eu"]}
+        assert role_sources_need_userinfo(claims) is True
+        require_role(claims, userinfo)
+
 
 class TestJITProvisioning:
     """Just-in-time user provisioning from userinfo."""
@@ -277,6 +300,41 @@ class TestJITProvisioning:
 
         monkeypatch.setitem(REANA_AUTH, "required_role", "reana:user")
         userinfo["reana_roles"] = []
+        with patch(
+            "reana_server.auth.provision.fetch_userinfo",
+            return_value=userinfo,
+        ):
+            with pytest.raises(MissingRoleError):
+                get_or_provision_user(claims, "token")
+        assert (
+            session.query(User)
+            .filter_by(email="jane.doe@example.org")
+            .one_or_none()
+            is None
+        )
+
+    def test_eosc_entitlement_gate_blocks_before_any_write(
+        self, app, session, monkeypatch, claims, userinfo
+    ):
+        from reana_db.models import User
+
+        entitlement = "urn:mace:egi.eu:group:vo.example.org:role=member"
+        monkeypatch.setitem(REANA_AUTH, "required_role", "reana:user")
+        monkeypatch.setitem(
+            REANA_AUTH,
+            "role_sources",
+            [
+                {
+                    "path": "entitlements",
+                    "match": "startswith",
+                    "map": {entitlement: "reana:user"},
+                }
+            ],
+        )
+        userinfo.pop("reana_roles", None)
+        userinfo["entitlements"] = [
+            "urn:mace:egi.eu:group:other.example.org:role=member"
+        ]
         with patch(
             "reana_server.auth.provision.fetch_userinfo",
             return_value=userinfo,

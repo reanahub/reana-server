@@ -16,6 +16,7 @@ faked, and the single DB step (provisioning) is stubbed. HTTPS base URL so the
 import time
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+from urllib.parse import parse_qs, urlparse
 
 import fakeredis
 import pytest
@@ -95,7 +96,11 @@ def bff_env(monkeypatch, signing_key):
     monkeypatch.setattr(
         sessions, "_redis_client", fakeredis.FakeStrictRedis(decode_responses=True)
     )
-    monkeypatch.setattr(deps, "get_or_provision_user", lambda claims, token: FAKE_USER)
+    monkeypatch.setattr(
+        deps,
+        "get_or_provision_user",
+        lambda claims, token, userinfo=None: (FAKE_USER, False),
+    )
     with patch.object(
         tokens_module.requests, "get", return_value=_jwks_response(signing_key)
     ):
@@ -128,6 +133,24 @@ def test_extract_roles_falls_back_to_userinfo(monkeypatch):
     assert tokens_module.extract_roles({}, {"reana_roles": ["reana:user"]}) == [
         "reana:user"
     ]
+
+
+def test_extract_roles_supports_eosc_entitlements(monkeypatch):
+    entitlement = "urn:mace:egi.eu:group:vo.example.org:role=member"
+    monkeypatch.setitem(
+        REANA_AUTH,
+        "role_sources",
+        [
+            {
+                "path": "entitlements",
+                "match": "startswith",
+                "map": {entitlement: "reana:user"},
+            }
+        ],
+    )
+    assert tokens_module.extract_roles(
+        {}, {"entitlements": [entitlement + "#aai.egi.eu"]}
+    ) == ["reana:user"]
 
 
 # -- BFF cookie authentication (via a minimal app over get_current_user) ----
@@ -196,6 +219,56 @@ def test_configured_required_role_is_enforced_on_protected_routes(bff_env, monke
     assert response.status_code == 200
 
 
+def test_protected_route_uses_userinfo_entitlement_fallback(bff_env, monkeypatch):
+    mini = FastAPI()
+
+    @mini.get("/protected")
+    async def _protected(user=Security(get_current_user, scopes=["reana:user"])):
+        return {"email": user.email}
+
+    entitlement = "urn:mace:egi.eu:group:vo.example.org:role=member"
+    monkeypatch.setitem(REANA_AUTH, "required_role", "reana:user")
+    monkeypatch.setitem(
+        REANA_AUTH,
+        "role_sources",
+        [
+            {
+                "path": "entitlements",
+                "match": "startswith",
+                "map": {entitlement: "reana:user"},
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        deps,
+        "fetch_userinfo",
+        lambda token: {
+            "sub": "subject-1",
+            "email": "jane.doe@example.org",
+            "entitlements": [entitlement + "#aai.egi.eu"],
+        },
+    )
+    synced = []
+    monkeypatch.setattr(
+        deps,
+        "sync_user_groups_from_userinfo",
+        lambda user, userinfo: synced.append(userinfo),
+    )
+    monkeypatch.setattr(
+        deps,
+        "get_or_provision_user",
+        lambda claims, token, userinfo=None: (FAKE_USER, False),
+    )
+
+    client = TestClient(mini, base_url="https://testserver")
+    token = _make_token(bff_env)
+    response = client.get(
+        "/protected", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    assert synced and synced[0]["entitlements"] == [entitlement + "#aai.egi.eu"]
+
+
 def test_expired_cookie_is_transparently_refreshed(mini_client, bff_env):
     expired = _make_token(bff_env, exp=int(time.time()) - 3600)
     store_session("subject-1", "refresh-1")  # session the refresh will rotate
@@ -222,6 +295,7 @@ def test_login_redirects_to_issuer(client, bff_env):
     location = response.headers["location"]
     assert location.startswith(f"{ISSUER}/authorize")
     assert "code_challenge=" in location and "state=" in location
+    assert "nonce=" in location
     assert "reana_oauth_state=" in response.headers.get("set-cookie", "")
 
 
@@ -266,20 +340,23 @@ def test_callback_establishes_session(client, bff_env, monkeypatch):
     login = client.get(
         "/api/login", params={"next": "/dashboard"}, follow_redirects=False
     )
-    state = login.headers["location"].split("state=")[1].split("&")[0]
+    query = parse_qs(urlparse(login.headers["location"]).query)
+    state = query["state"][0]
+    nonce = query["nonce"][0]
 
     access_token = _make_token(bff_env)
+    id_token = _make_token(bff_env, aud="reana-server", nonce=nonce)
     token_response = Mock()
     token_response.raise_for_status = Mock()
     token_response.json = Mock(
         return_value={
             "access_token": access_token,
             "refresh_token": "refresh-1",
-            "id_token": "idt",
+            "id_token": id_token,
         }
     )
     monkeypatch.setattr(
-        auth_rest, "get_or_provision_user", lambda claims, token: FAKE_USER
+        auth_rest, "get_or_provision_user", lambda claims, token: (FAKE_USER, False)
     )
     monkeypatch.setattr(
         auth_rest, "fetch_userinfo", lambda token: {"sub": "subject-1"}
@@ -297,3 +374,54 @@ def test_callback_establishes_session(client, bff_env, monkeypatch):
     assert response.headers["location"] == "/dashboard"
     assert AUTH_COOKIE in response.headers.get("set-cookie", "")
     assert sessions.get_session("subject-1") is not None
+
+
+def test_callback_rejects_id_token_nonce_mismatch(client, bff_env, monkeypatch):
+    login = client.get("/api/login", follow_redirects=False)
+    query = parse_qs(urlparse(login.headers["location"]).query)
+    state = query["state"][0]
+
+    access_token = _make_token(bff_env)
+    id_token = _make_token(bff_env, aud="reana-server", nonce="wrong")
+    token_response = Mock()
+    token_response.raise_for_status = Mock()
+    token_response.json = Mock(
+        return_value={"access_token": access_token, "id_token": id_token}
+    )
+    monkeypatch.setattr(
+        auth_rest, "get_or_provision_user", lambda claims, token: (FAKE_USER, False)
+    )
+    with patch.object(auth_rest.requests, "post", return_value=token_response):
+        response = client.get(
+            "/api/oauth/callback",
+            params={"code": "abc", "state": state},
+            follow_redirects=False,
+        )
+    assert response.status_code == 502
+
+
+def test_callback_rejects_id_token_subject_mismatch(client, bff_env, monkeypatch):
+    login = client.get("/api/login", follow_redirects=False)
+    query = parse_qs(urlparse(login.headers["location"]).query)
+    state = query["state"][0]
+    nonce = query["nonce"][0]
+
+    access_token = _make_token(bff_env)
+    id_token = _make_token(
+        bff_env, aud="reana-server", sub="other-subject", nonce=nonce
+    )
+    token_response = Mock()
+    token_response.raise_for_status = Mock()
+    token_response.json = Mock(
+        return_value={"access_token": access_token, "id_token": id_token}
+    )
+    monkeypatch.setattr(
+        auth_rest, "get_or_provision_user", lambda claims, token: (FAKE_USER, False)
+    )
+    with patch.object(auth_rest.requests, "post", return_value=token_response):
+        response = client.get(
+            "/api/oauth/callback",
+            params={"code": "abc", "state": state},
+            follow_redirects=False,
+        )
+    assert response.status_code == 502
