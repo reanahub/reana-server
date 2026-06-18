@@ -141,7 +141,7 @@ async def get_current_user(
             claims = validate_access_token(raw_token)
         if _REANA_USER_SCOPE in security_scopes.scopes:
             require_role(claims)
-        user = get_or_provision_user(claims, raw_token)
+        user, _ = get_or_provision_user(claims, raw_token)
         # Expose the token roles (and claims) to endpoints that need them,
         # e.g. ``/api/you`` reports the caller's roles without a second
         # token parse and without putting roles on the User row.

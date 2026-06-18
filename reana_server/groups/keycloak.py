@@ -117,6 +117,18 @@ class KeycloakGroupBackend(GroupBackend):
             path=group.get("path"),
         )
 
+    def extract_memberships_for_user(self, user, userinfo: dict) -> List[GroupRef]:
+        """Use the Admin API bulk endpoint when credentials are configured.
+
+        Replaces the N path-lookup calls that ``extract_memberships`` makes
+        (one ``GET /group-by-path/{path}`` per claim entry) with a single
+        paginated ``GET /users/{id}/groups`` call, eliminating the N+1 Admin
+        API round-trips on the login critical path.
+        """
+        if self.client_id and self.client_secret and user.idp_subject:
+            return self.fetch_memberships(user)
+        return self.extract_memberships(userinfo)
+
     def _group_ref_from_claim_value(self, value):
         value = value.strip()
         if not value:

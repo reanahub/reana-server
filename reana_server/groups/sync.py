@@ -178,7 +178,7 @@ def sync_user_groups_from_userinfo(user, userinfo: dict) -> None:
     """
     for provider, backend in get_group_backends().items():
         try:
-            refs = backend.extract_memberships(userinfo)
+            refs = backend.extract_memberships_for_user(user, userinfo)
         except GroupClaimError as error:
             logging.warning(
                 "Group claim missing/malformed for provider %r, clearing "

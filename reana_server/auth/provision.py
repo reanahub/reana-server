@@ -108,19 +108,22 @@ def _link_existing_user(user, sub, iss, userinfo):
 
 
 def get_or_provision_user(claims, token):
-    """Return the REANA user for validated token claims, provisioning JIT.
+    """Return ``(user, is_new)`` for validated token claims, provisioning JIT.
 
     :param claims: validated JWT claims (``iss``/``sub`` guaranteed by
         :func:`reana_server.auth.tokens.validate_access_token`).
     :param token: the raw bearer token, used for the userinfo call on
         first sight of an identity.
+    :returns: ``(user, is_new)`` where ``is_new`` is ``True`` when the user
+        was just provisioned (groups already synced); ``False`` for returning
+        users (caller decides whether to re-sync).
     :raises MissingRoleError: when the user lacks the required REANA role.
     :raises ProvisioningError: when the user cannot be linked or created.
     """
     sub, iss = claims["sub"], claims["iss"]
     user = get_user_by_idp_identity(sub, iss)
     if user:
-        return user
+        return user, False
 
     # First sight of this identity: one userinfo round-trip, then link or
     # create. UserInfo is bound to the token subject, and the role gate runs
@@ -160,7 +163,7 @@ def get_or_provision_user(claims, token):
         raise ProvisioningError(f"Could not provision user: {error}")
 
     _sync_groups(user, userinfo)
-    return user
+    return user, True
 
 
 def _sync_groups(user, userinfo):

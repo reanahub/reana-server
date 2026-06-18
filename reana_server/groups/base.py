@@ -73,6 +73,18 @@ class GroupBackend(abc.ABC):
             snapshot to age out, rather than clearing it).
         """
 
+    def extract_memberships_for_user(self, user, userinfo: dict) -> List[GroupRef]:
+        """Like :meth:`extract_memberships` but may use the provisioned user.
+
+        Backends that can fetch memberships more efficiently via a user
+        identity (e.g. Keycloak Admin API ``GET /users/{id}/groups``) should
+        override this. The default falls back to ``extract_memberships``.
+
+        :raises GroupClaimError: same semantics as :meth:`extract_memberships`.
+        :raises GroupBackendError: same semantics as :meth:`extract_memberships`.
+        """
+        return self.extract_memberships(userinfo)
+
     @abc.abstractmethod
     def fetch_memberships(self, user) -> List[GroupRef]:
         """Fetch the user's memberships live from the provider.

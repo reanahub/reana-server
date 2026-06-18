@@ -24,7 +24,7 @@ import secrets
 from urllib.parse import urlparse, urlunparse, urlencode
 
 import requests
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from itsdangerous import BadData, URLSafeTimedSerializer
 
@@ -224,9 +224,21 @@ async def login(request: Request, next: str = "/") -> RedirectResponse:
     return response
 
 
+def _sync_groups_bg(user, access_token: str) -> None:
+    """Sync group memberships after the login redirect has already been sent."""
+    try:
+        sync_user_groups_from_userinfo(user, fetch_userinfo(access_token))
+    except Exception:
+        logging.exception("Background group sync failed for user %s.", user.id_)
+
+
 @router.get("/oauth/callback", summary="Complete the browser login flow (BFF)")
 async def oauth_callback(
-    request: Request, code: str = "", state: str = "", error: str = ""
+    request: Request,
+    background_tasks: BackgroundTasks,
+    code: str = "",
+    state: str = "",
+    error: str = "",
 ) -> RedirectResponse:
     """Exchange the code, provision the user, sync groups, set the cookie."""
     _require_bff()
@@ -270,13 +282,12 @@ async def oauth_callback(
         )
 
     try:
-        user = get_or_provision_user(claims, access_token)
-        # Re-sync group memberships on every login (JIT syncs only on first
-        # sight); failures must not break login.
-        try:
-            sync_user_groups_from_userinfo(user, fetch_userinfo(access_token))
-        except Exception:
-            logging.exception("Group sync failed during login.")
+        user, is_new = get_or_provision_user(claims, access_token)
+        if not is_new:
+            # New users had groups synced synchronously inside provisioning.
+            # For returning users, re-sync after the redirect so login latency
+            # is not affected by the Admin API / userinfo round-trips.
+            background_tasks.add_task(_sync_groups_bg, user, access_token)
     except MissingRoleError:
         # Session is still established; /api/you answers 403 and the UI shows
         # the "access not granted" state.
