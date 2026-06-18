@@ -61,12 +61,16 @@ class GroupBackend(abc.ABC):
     def extract_memberships(self, userinfo: dict) -> List[GroupRef]:
         """Parse the user's memberships out of a userinfo response.
 
-        Called at login/JIT provisioning. Backends may do provider lookups when
-        their claims contain mutable aliases that must be resolved to immutable
-        external IDs before syncing.
+        Called at login/JIT provisioning. Backends may do provider lookups
+        when the userinfo carries only an identity/alias and the membership
+        list must be fetched from the provider (e.g. the CERN Authorization
+        Service resolving a UPN to its groups).
 
         :raises GroupClaimError: when the claim is absent or malformed
-            (fail-closed in the sync engine).
+            (fail-closed in the sync engine: the snapshot is cleared).
+        :raises GroupBackendError: when a provider lookup fails for
+            transport/identity reasons (the sync engine keeps the existing
+            snapshot to age out, rather than clearing it).
         """
 
     @abc.abstractmethod

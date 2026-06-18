@@ -16,9 +16,11 @@ from reana_db.models import ExternalGroup, UserGroupMembership
 import reana_server.groups.sync as sync_module
 from reana_server.groups.base import (
     GroupBackend,
+    GroupBackendError,
     GroupClaimError,
     GroupRef,
 )
+from reana_server.groups.cern import CernGroupBackend
 from reana_server.groups.keycloak import KeycloakGroupBackend
 from reana_server.groups.sync import (
     _normalize_refs,
@@ -26,7 +28,6 @@ from reana_server.groups.sync import (
     sync_user_groups,
     sync_user_groups_from_userinfo,
 )
-
 
 KC_GROUP_A = "11111111-1111-4111-8111-111111111111"
 KC_GROUP_B = "22222222-2222-4222-8222-222222222222"
@@ -94,15 +95,11 @@ class TestSyncEngine:
     """Diff-based snapshot updates owned by the sync engine."""
 
     def test_initial_sync_and_diff(self, app, session, user0):
-        sync_user_groups(
-            user0, "keycloak", _refs("keycloak", KC_GROUP_A, KC_GROUP_B)
-        )
+        sync_user_groups(user0, "keycloak", _refs("keycloak", KC_GROUP_A, KC_GROUP_B))
         first = _memberships(session, user0)
         assert set(first) == {KC_GROUP_A, KC_GROUP_B}
 
-        sync_user_groups(
-            user0, "keycloak", _refs("keycloak", KC_GROUP_B, KC_GROUP_C)
-        )
+        sync_user_groups(user0, "keycloak", _refs("keycloak", KC_GROUP_B, KC_GROUP_C))
         second = _memberships(session, user0)
         assert set(second) == {KC_GROUP_B, KC_GROUP_C}
         # The kept membership rows got a fresh synced_at.
@@ -116,9 +113,7 @@ class TestSyncEngine:
         memberships = _memberships(session, user0)
         assert set(memberships) == {"atlas"}
 
-    def test_group_upsert_updates_display_name(
-        self, app, session, user0
-    ):
+    def test_group_upsert_updates_display_name(self, app, session, user0):
         sync_user_groups(user0, "keycloak", _refs("keycloak", KC_GROUP_A))
         sync_user_groups(
             user0,
@@ -132,9 +127,7 @@ class TestSyncEngine:
         )
         assert group.display_name == "renamed"
 
-    def test_fail_closed_on_malformed_claim(
-        self, app, session, user0
-    ):
+    def test_fail_closed_on_malformed_claim(self, app, session, user0):
         class FailingBackend(GroupBackend):
             provider = "keycloak"
 
@@ -158,6 +151,34 @@ class TestSyncEngine:
         ):
             sync_user_groups_from_userinfo(user0, {})
         assert _memberships(session, user0) == {}
+
+    def test_keeps_snapshot_on_backend_error_at_login(self, app, session, user0):
+        # A backend that resolves memberships via a provider lookup (e.g. CERN)
+        # may raise GroupBackendError at login; the snapshot must be kept, not
+        # cleared, and other providers must still sync.
+        class LookupBackend(GroupBackend):
+            provider = "cern"
+
+            def extract_memberships(self, userinfo):
+                raise GroupBackendError("API down")
+
+            def fetch_memberships(self, user):
+                return []
+
+            def search_groups(self, query, limit=20):
+                return []
+
+            def group_exists(self, external_id):
+                return False
+
+        sync_user_groups(user0, "cern", _refs("cern", "atlas-active"))
+        with patch.object(
+            sync_module,
+            "get_group_backends",
+            return_value={"cern": LookupBackend()},
+        ):
+            sync_user_groups_from_userinfo(user0, {})
+        assert set(_memberships(session, user0)) == {"atlas-active"}
 
     def test_clear_user_groups(self, app, session, user0):
         sync_user_groups(user0, "keycloak", _refs("keycloak", KC_GROUP_A))
@@ -251,9 +272,7 @@ class TestKeycloakBackend:
         assert len(refs) == 5
 
     def test_group_exists(self, backend):
-        with patch.object(
-            backend, "_admin_get", return_value={"id": "abc"}
-        ) as mocked:
+        with patch.object(backend, "_admin_get", return_value={"id": "abc"}) as mocked:
             assert backend.group_exists(KC_GROUP_A) is True
         mocked.assert_called_with(f"/groups/{KC_GROUP_A}")
         with patch.object(backend, "_admin_get", return_value=None):
@@ -276,3 +295,102 @@ class TestKeycloakBackend:
             refs = backend.fetch_memberships(user)
         assert len(refs) == 101
         assert mocked.call_count == 2
+
+
+class TestCernBackend:
+    """CERN Authorization Service API access of the CERN backend."""
+
+    @pytest.fixture
+    def backend(self, monkeypatch):
+        """A CERN backend with API client credentials configured."""
+        monkeypatch.setenv("REANA_GROUP_BACKEND_CERN_CLIENT_SECRET", "s3cret")
+        return CernGroupBackend({"provider": "cern", "client_id": "reana-gms-reader"})
+
+    @staticmethod
+    def _envelope(*group_identifiers):
+        return {
+            "data": [
+                {"groupIdentifier": g, "displayName": g} for g in group_identifiers
+            ],
+            "pagination": {"total": len(group_identifiers)},
+        }
+
+    def test_requires_api_client(self):
+        unconfigured = CernGroupBackend({"provider": "cern"})
+        assert unconfigured.gms_enabled is False
+        with pytest.raises(GroupBackendError):
+            unconfigured.extract_memberships({"cern_upn": "jdoe"})
+        with pytest.raises(GroupBackendError):
+            unconfigured.search_groups("atlas")
+
+    def test_extract_memberships_uses_upn_and_recursive_route(self, backend):
+        with patch.object(
+            backend, "_gms_get", return_value=self._envelope("atlas-active", "cms")
+        ) as mocked:
+            refs = backend.extract_memberships({"cern_upn": "jdoe", "sub": "guid-1"})
+        assert [(r.external_id, r.provider) for r in refs] == [
+            ("atlas-active", "cern"),
+            ("cms", "cern"),
+        ]
+        path = mocked.call_args[0][0]
+        assert path == "Identity/jdoe/groups/recursive"
+
+    def test_extract_memberships_identity_fallbacks(self, backend):
+        with patch.object(
+            backend, "_gms_get", return_value=self._envelope("atlas-active")
+        ) as mocked:
+            backend.extract_memberships({"preferred_username": "jdoe", "sub": "g"})
+        assert mocked.call_args[0][0] == "Identity/jdoe/groups/recursive"
+
+    def test_extract_memberships_no_identity(self, backend):
+        with pytest.raises(GroupBackendError):
+            backend.extract_memberships({"email": "x@cern.ch"})
+
+    def test_extract_memberships_identity_not_found(self, backend):
+        with patch.object(backend, "_gms_get", return_value=None):
+            with pytest.raises(GroupBackendError):
+                backend.extract_memberships({"cern_upn": "ghost"})
+
+    def test_fetch_memberships_uses_stored_upn(self, backend):
+        user = Mock(username="jdoe", idp_subject="guid-1", id_="user-id")
+        with patch.object(
+            backend, "_gms_get", return_value=self._envelope("atlas-active")
+        ) as mocked:
+            refs = backend.fetch_memberships(user)
+        assert [r.external_id for r in refs] == ["atlas-active"]
+        assert mocked.call_args[0][0] == "Identity/jdoe/groups/recursive"
+
+    def test_membership_pagination(self, backend):
+        backend.page_size = 2
+        page1 = self._envelope("g0", "g1")
+        page2 = self._envelope("g2")
+        with patch.object(backend, "_gms_get", side_effect=[page1, page2]) as mocked:
+            refs = backend.extract_memberships({"cern_upn": "jdoe"})
+        assert [r.external_id for r in refs] == ["g0", "g1", "g2"]
+        assert mocked.call_count == 2
+        assert mocked.call_args_list[1].kwargs["params"]["offset"] == 2
+
+    def test_search_groups_via_api(self, backend):
+        with patch.object(
+            backend, "_gms_get", return_value=self._envelope("atlas-active", "atlas-rd")
+        ) as mocked:
+            refs = backend.search_groups("atlas", limit=5)
+        assert [r.external_id for r in refs] == ["atlas-active", "atlas-rd"]
+        path, kwargs = mocked.call_args
+        assert path[0] == "Group"
+        assert kwargs["params"]["filter"] == "groupIdentifier:contains:atlas"
+
+    def test_group_exists(self, backend):
+        with patch.object(backend, "_gms_get", return_value={"data": {"id": "x"}}):
+            assert backend.group_exists("atlas-active") is True
+        with patch.object(backend, "_gms_get", return_value=None):
+            assert backend.group_exists("ghost-group") is False
+
+    def test_api_failure_propagates(self, backend):
+        with patch.object(
+            backend, "_gms_get", side_effect=GroupBackendError("API down")
+        ):
+            with pytest.raises(GroupBackendError):
+                backend.search_groups("atlas")
+            with pytest.raises(GroupBackendError):
+                backend.extract_memberships({"cern_upn": "jdoe"})

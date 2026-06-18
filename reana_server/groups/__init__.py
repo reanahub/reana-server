@@ -26,10 +26,12 @@ from typing import Dict, Optional
 
 from reana_server.config import REANA_GROUP_BACKENDS
 from reana_server.groups.base import GroupBackend
+from reana_server.groups.cern import CernGroupBackend
 from reana_server.groups.keycloak import KeycloakGroupBackend
 
 _BACKEND_TYPES = {
     "keycloak": KeycloakGroupBackend,
+    "cern": CernGroupBackend,
 }
 
 _registry: Optional[Dict[str, GroupBackend]] = None

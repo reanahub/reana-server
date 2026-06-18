@@ -498,8 +498,19 @@ JSON list of backend definitions, e.g.::
     [{"type": "keycloak", "provider": "keycloak",
       "server_url": "https://auth.reana.example.org", "realm": "reana",
       "groups_claim": "groups", "client_id": "reana-server-internal",
-      "client_secret_env": "REANA_GROUP_BACKEND_KEYCLOAK_CLIENT_SECRET"}]
+      "client_secret_env": "REANA_GROUP_BACKEND_KEYCLOAK_CLIENT_SECRET"},
+     {"type": "cern", "provider": "cern", "client_id": "reana-gms-reader",
+      "client_secret_env": "REANA_GROUP_BACKEND_CERN_CLIENT_SECRET"}]
 
 Each backend's service credentials are read from the environment variable
 named by ``client_secret_env``. See ``reana_server/groups``.
+
+The ``cern`` backend sources memberships from the CERN Authorization Service
+API (``GET /Identity/{upn}/groups/recursive``), keyed on the ``cern_upn``
+userinfo claim; the same API serves sharing-UI search and share-time group
+existence. It therefore requires a client-credentials API client
+(``client_id`` + secret, audience ``authorization-service-api``) with read
+permission — there is no claim-only mode. Override ``identity_claim``,
+``identity_user_attr``, ``api_base_url``, ``audience`` or
+``search_filter_template`` only when CERN's defaults do not apply.
 """

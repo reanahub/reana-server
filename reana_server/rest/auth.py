@@ -252,6 +252,7 @@ async def oauth_callback(
             },
             timeout=REANA_AUTH["http_timeout"],
         )
+        logging.info(token_response.elapsed.total_seconds())
         token_response.raise_for_status()
         token_body = token_response.json()
         access_token = token_body["access_token"]

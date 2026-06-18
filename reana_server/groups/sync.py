@@ -95,9 +95,7 @@ def sync_user_groups(user, provider: str, refs: List[GroupRef]) -> None:
                 Session.query(ExternalGroup)
                 .filter(
                     ExternalGroup.provider == provider,
-                    ExternalGroup.external_id.in_(
-                        [ref.external_id for ref in refs]
-                    ),
+                    ExternalGroup.external_id.in_([ref.external_id for ref in refs]),
                 )
                 .all()
             )
@@ -121,9 +119,7 @@ def sync_user_groups(user, provider: str, refs: List[GroupRef]) -> None:
             Session.flush()
 
         # Diff memberships for this provider only.
-        desired_group_ids = {
-            group.id_ for group in groups_by_external_id.values()
-        }
+        desired_group_ids = {group.id_ for group in groups_by_external_id.values()}
         current_memberships = (
             Session.query(UserGroupMembership)
             .join(
@@ -146,9 +142,7 @@ def sync_user_groups(user, provider: str, refs: List[GroupRef]) -> None:
                 Session.delete(membership)
         for group_id in desired_group_ids:
             Session.add(
-                UserGroupMembership(
-                    user_id=user.id_, group_id=group_id, synced_at=now
-                )
+                UserGroupMembership(user_id=user.id_, group_id=group_id, synced_at=now)
             )
         Session.commit()
         logging.info(
@@ -174,8 +168,13 @@ def clear_user_groups(user, provider: str) -> None:
 def sync_user_groups_from_userinfo(user, userinfo: dict) -> None:
     """Sync all configured providers from a userinfo response.
 
-    Called at login/JIT provisioning. A missing or malformed claim is
-    authoritative for that provider and clears its memberships.
+    Called at login/JIT provisioning. A missing or malformed *claim* is
+    authoritative for that provider and clears its memberships (fail-closed).
+    A backend that resolves memberships via a provider lookup (e.g. the CERN
+    Authorization Service) may instead raise :class:`GroupBackendError` on a
+    transport/identity failure; that is *not* authoritative, so the existing
+    snapshot is kept and ages out via ``REANA_GROUP_MEMBERSHIP_MAX_AGE``.
+    Each provider is isolated: one provider failing never affects another.
     """
     for provider, backend in get_group_backends().items():
         try:
@@ -189,6 +188,15 @@ def sync_user_groups_from_userinfo(user, userinfo: dict) -> None:
                 error,
             )
             clear_user_groups(user, provider)
+            continue
+        except GroupBackendError as error:
+            logging.warning(
+                "Group lookup failed for provider %r, user %s; keeping "
+                "existing snapshot: %s",
+                provider,
+                user.id_,
+                error,
+            )
             continue
         sync_user_groups(user, provider, refs)
 
