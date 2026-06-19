@@ -24,7 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 
 from reana_server.auth.errors import AuthError, InvalidTokenError
-from reana_server.config import REANA_AUTH
+from reana_server.config import REANA_AUTH, REANA_URL
 from reana_server.rest import (
     auth,
     config,
@@ -40,6 +40,37 @@ from reana_server.rest import (
     workflows,
 )
 from reana_server.version import __version__
+
+
+#: HTTP response security headers, mirroring the hardening that PR #766
+#: ("restrict CORS and add HTTP security headers") added to the Flask app
+#: before it was retired. The Content-Security-Policy must be kept in sync
+#: with the reana-ui ``nginx/reana-ui.conf`` content security policy.
+SECURITY_HEADERS = {
+    "X-Frame-Options": "DENY",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Content-Type-Options": "nosniff",
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "object-src 'none'; "
+        "base-uri 'self'"
+    ),
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Cross-Origin-Resource-Policy": "same-origin",
+    "Cache-Control": "no-store",
+    "Permissions-Policy": (
+        "accelerometer=(), ambient-light-sensor=(), camera=(), "
+        "display-capture=(), geolocation=(), gyroscope=(), "
+        "magnetometer=(), microphone=(), payment=(), usb=()"
+    ),
+}
 
 
 def create_app() -> FastAPI:
@@ -60,13 +91,23 @@ def create_app() -> FastAPI:
         },
     )
 
+    # Restrict CORS to the REANA hostname instead of a wildcard, so other
+    # websites cannot read API responses from the browser (parity with #766).
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
+        allow_origins=[REANA_URL],
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def _add_security_headers(request, call_next):
+        """Set HTTP security headers on every response (parity with #766)."""
+        response = await call_next(request)
+        for header, value in SECURITY_HEADERS.items():
+            response.headers[header] = value
+        return response
 
     @app.exception_handler(AuthError)
     async def _auth_error_handler(request, exc: AuthError) -> JSONResponse:
