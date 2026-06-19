@@ -1,18 +1,24 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2020, 2021, 2025, 2026 CERN.
+# Copyright (C) 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 
-"""Reana-Server quota functionality Flask-Blueprint."""
+"""Quota management endpoints (authenticated by a management secret).
 
-import secrets
+These are administrative/service endpoints (not user-facing): the caller must
+present ``X-Quota-Management-Secret``. The user-facing quota is part of the
+``/api/you`` response.
+"""
+
+import secrets as _secrets
 from typing import Optional
 
-from flask import Blueprint, jsonify, request, Response
-from marshmallow import fields, Schema, ValidationError
+from fastapi import APIRouter, Body, Header, Query
+from fastapi.responses import JSONResponse
+from marshmallow import Schema, ValidationError, fields
 from reana_db.database import Session
 from reana_db.models import ResourceType, UserResource
 from reana_db.utils import get_default_quota_resource
@@ -25,11 +31,11 @@ from reana_server.utils import (
     serialize_utc_datetime,
 )
 
-blueprint = Blueprint("quota", __name__)
+router = APIRouter(tags=["quota"])
 
 
 class SetQuotaLimitBodySchema(Schema):
-    """Schema for set_quota_limit endpoint body."""
+    """Schema for the set_quota_limit endpoint body."""
 
     user_id = fields.Str()
     email = fields.Str()
@@ -38,7 +44,7 @@ class SetQuotaLimitBodySchema(Schema):
 
 
 class PatchQuotaBodySchema(Schema):
-    """Schema for patch_quota endpoint body."""
+    """Schema for the patch_quota endpoint body."""
 
     user_id = fields.Str()
     email = fields.Str()
@@ -47,53 +53,27 @@ class PatchQuotaBodySchema(Schema):
     quota_period_start_at = fields.DateTime(allow_none=True)
 
 
-def _check_quota_management_secret() -> tuple[Response, int] | None:
-    if not REANA_QUOTA_MANAGEMENT_SECRET:
-        return jsonify(message="Quota management endpoint is not configured."), 403
-
-    # Check if secret is provided and matches the one in the config
-    secret = request.headers.get("X-Quota-Management-Secret", "")
-    if not secrets.compare_digest(secret, REANA_QUOTA_MANAGEMENT_SECRET):
-        return jsonify(message="Unauthorized"), 401
-
-    return None
-
-
-def _get_quota_period(
-    resource_type: str,
-    user_id: Optional[str] = None,
-    email: Optional[str] = None,
-    user_access_token: Optional[str] = None,
-) -> tuple[Optional[dict], Optional[str], int]:
-    """Get periodic quota metadata for a given user and resource."""
-    users = _get_users(user_id, email, user_access_token) or None
+def _get_quota_period(resource_type, user_id=None, email=None):
+    """Periodic quota metadata; returns ``(dict|None, error|None, status)``."""
+    users = _get_users(user_id, email) or None
     user = users[0] if users else None
     if not user:
         return None, "User not found.", 404
-
     if resource_type not in ResourceType._member_names_:
         return (
             None,
-            (
-                f"Resource type '{resource_type}' is not one of the valid types: "
-                f"{', '.join(ResourceType._member_names_)}"
-            ),
+            f"Resource type '{resource_type}' is not one of the valid types: "
+            f"{', '.join(ResourceType._member_names_)}",
             400,
         )
-
     resource = get_default_quota_resource(resource_type)
     user_resource = (
         Session.query(UserResource)
-        .filter_by(
-            user_id=user.id_,
-            resource_id=resource.id_,
-        )
+        .filter_by(user_id=user.id_, resource_id=resource.id_)
         .one_or_none()
     )
-
     if not user_resource:
         return None, "User resource not found.", 404
-
     return (
         {
             "quota_period_months": user_resource.quota_period_months,
@@ -106,553 +86,201 @@ def _get_quota_period(
     )
 
 
-def _get_quota(
-    resource_type: str,
-    user_id: Optional[str] = None,
-    email: Optional[str] = None,
-    user_access_token: Optional[str] = None,
-) -> tuple[int | None, int | None, str | None, int]:
-    """
-    Get quota limit and usage for a given user and resource type.
-
-    :param resource_type: Type of the resource.
-    :param user_id: ID of the user.
-    :param email: Email of the user.
-    :param user_access_token: Access token of the user.
-    :return: Tuple with the limit, usage, the error message (or None if no error), and the status code.
-    """
-    users = _get_users(user_id, email, user_access_token) or None
+def _get_quota(resource_type, user_id=None, email=None):
+    """Quota limit + usage; returns ``(limit|None, usage|None, error|None, status)``."""
+    users = _get_users(user_id, email) or None
     user = users[0] if users else None
-
     if not user:
         return None, None, "User not found.", 404
-
     if resource_type not in ResourceType._member_names_:
         return (
             None,
             None,
-            f"Resource type '{resource_type}' is not one of the valid types: {', '.join(ResourceType._member_names_)}",
+            f"Resource type '{resource_type}' is not one of the valid types: "
+            f"{', '.join(ResourceType._member_names_)}",
             400,
         )
-
     quota_usage = user.get_quota_usage()
-    limit: int | None = quota_usage.get(resource_type, {}).get("limit", {}).get("raw")
-    usage: int | None = quota_usage.get(resource_type, {}).get("usage", {}).get("raw")
+    limit = quota_usage.get(resource_type, {}).get("limit", {}).get("raw")
+    usage = quota_usage.get(resource_type, {}).get("usage", {}).get("raw")
     return limit, usage, None, 200
 
 
-@blueprint.route("/quota", methods=["GET"])
-def get_quota_usage():  # noqa
-    r"""Endpoint to get quota limits.
+def _check_secret(secret: Optional[str]):
+    if not REANA_QUOTA_MANAGEMENT_SECRET:
+        return JSONResponse(
+            {"message": "Quota management endpoint is not configured."}, 403
+        )
+    if not _secrets.compare_digest(secret or "", REANA_QUOTA_MANAGEMENT_SECRET):
+        return JSONResponse({"message": "Unauthorized"}, 401)
+    return None
 
-    ---
-    get:
-      summary: Get resource quota limits.
-      description: >-
-        This endpoint gets resource quota limits for a given user.
-      operationId: get_quota_usage
-      produces:
-        - application/json
-      parameters:
-        - name: X-Quota-Management-Secret
-          in: header
-          description: REANA user quota management secret
-          required: true
-          type: string
-        - name: user_id
-          in: query
-          description: Get the quota limit by user ID (mutually exclusive with `email` and `user_access_token`)
-          required: false
-          type: string
-        - name: email
-          in: query
-          description: Get the quota limit by user email (mutually exclusive with `user_id` and `user_access_token`)
-          required: false
-          type: string
-        - name: user_access_token
-          in: query
-          description: Get the quota limit by user access token (mutually exclusive with `user_id` and `email`)
-          required: false
-          type: string
-        - name: resource_type
-          in: query
-          description: The type of resource
-          required: true
-          type: string
-      responses:
-        200:
-          description: >-
-            Request succeeded. Raw resource quota limit is returned.
-          schema:
-            type: object
-            properties:
-              limit:
-                type: number
-              message:
-                type: string
-              usage:
-                type: number
-          examples:
-            application/json:
-              {
-                "limit": 1000000000,
-                "message": "OK",
-                "usage": 500000000,
-              }
-        400:
-          description: >-
-            Request failed. The incoming data specification seems malformed.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Resource type is required."
-              }
-            application/json:
-              {
-                "message": "No user specified."
-              }
-        401:
-          description: >-
-            Request failed. Unauthorized.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Unauthorized"
-              }
-        403:
-          description: >-
-            Request failed. Forbidden.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Quota management endpoint is not configured."
-              }
-        404:
-          description: >-
-            Request failed. User not found.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "User not found."
-              }
-        500:
-          description: >-
-            Request failed. Internal server error.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Internal server error."
-              }
-    """
-    response = _check_quota_management_secret()
-    if response:
-        return response
 
-    # Get params from query string
-    user_id = request.args.get("user_id")
-    email = request.args.get("email")
-    user_access_token = request.args.get("user_access_token")
-    resource_type = request.args.get("resource_type")
+def _exactly_one_user(user_id, email):
+    return int(bool(user_id)) + int(bool(email)) == 1
 
-    # Check if at least one of the user criteria is provided
-    if not user_id and not email and not user_access_token:
-        return jsonify(message="No user specified"), 400
 
-    # Check if all user criteria are provided
-    if int(bool(user_id)) + int(bool(email)) + int(bool(user_access_token)) > 1:
-        return (
-            jsonify(
-                message="Exactly one of `user_id`, `email` or `user_access_token` must be provided.",
-            ),
+@router.get("/quota", summary="Get quota usage (management secret)")
+def get_quota_usage(
+    resource_type: Optional[str] = Query(None),
+    user_id: Optional[str] = Query(None),
+    email: Optional[str] = Query(None),
+    x_quota_management_secret: Optional[str] = Header(None),
+):
+    """Return a user's quota limit/usage/period for a resource type."""
+    denied = _check_secret(x_quota_management_secret)
+    if denied:
+        return denied
+    if not user_id and not email:
+        return JSONResponse({"message": "No user specified"}, 400)
+    if user_id and email:
+        return JSONResponse(
+            {"message": "Exactly one of `user_id` or `email` must be provided."},
             400,
         )
-
-    # Validate resource type
     if not resource_type:
-        return jsonify(message="Resource type is required."), 400
-
+        return JSONResponse({"message": "Resource type is required."}, 400)
     if resource_type not in ResourceType._member_names_:
-        return (
-            jsonify(
-                message=f"Resource type '{resource_type}' does not exist. Available resource types are: {', '.join(ResourceType._member_names_)}"
-            ),
+        return JSONResponse(
+            {
+                "message": f"Resource type '{resource_type}' does not exist. "
+                f"Available resource types are: "
+                f"{', '.join(ResourceType._member_names_)}"
+            },
             400,
         )
-
-    limit, usage, error_msg, status = _get_quota(
-        resource_type, user_id, email, user_access_token
-    )
+    limit, usage, error_msg, status = _get_quota(resource_type, user_id, email)
     if error_msg:
-        return jsonify(message=error_msg), status
-
+        return JSONResponse({"message": error_msg}, status)
     period, period_error, period_status = _get_quota_period(
-        resource_type, user_id, email, user_access_token
+        resource_type, user_id, email
     )
     if period_error:
-        return jsonify(message=period_error), period_status
-
+        return JSONResponse({"message": period_error}, period_status)
     if usage is None:
-        return jsonify(message="Resource usage is not available."), 500
-
+        return JSONResponse({"message": "Resource usage is not available."}, 500)
     if limit is None:
-        return (
-            jsonify(
-                limit=-1,
-                usage=usage,
-                message="Resource limit is not set.",
-                **period,
-            ),
-            200,
-        )
-
-    return jsonify(limit=limit, usage=usage, message="OK", **period), 200
+        return {
+            "limit": -1,
+            "usage": usage,
+            "message": "Resource limit is not set.",
+            **period,
+        }
+    return {"limit": limit, "usage": usage, "message": "OK", **period}
 
 
-@blueprint.route("/quota", methods=["POST"])
-def set_quota_limit():  # noqa
-    r"""Endpoint to set quota limits.
-
-    ---
-    post:
-      summary: Set resource quota limits.
-      description: >-
-        This endpoint sets resource quota limits for a given user.
-      operationId: set_quota_limit
-      consumes:
-        - application/json
-      produces:
-        - application/json
-      parameters:
-        - name: X-Quota-Management-Secret
-          in: header
-          description: REANA user quota management secret
-          required: true
-          type: string
-        - name: data
-          in: body
-          description: Data required to set quota limits (exactly one of `user_id` or `email` must be provided).
-          required: true
-          schema:
-            type: object
-            properties:
-              user_id:
-                type: string
-                description: ID of the target user (mutually exclusive with `email`)
-              email:
-                type: string
-                description: Email of the target user (mutually exclusive with `user_id`)
-              resource_type:
-                type: string
-                description: Resource type to set
-              limit:
-                type: integer
-                description: Raw quota limit to set
-            required:
-              - resource_type
-              - limit
-      responses:
-        200:
-          description: >-
-            Resource quotas successfully set.
-          schema:
-            type: object
-            properties:
-              limit:
-                type: number
-              message:
-                type: string
-              usage:
-                type: number
-          examples:
-            application/json:
-              {
-                "limit": 1000000000,
-                "message": "OK",
-                "usage": 500000000,
-              }
-        400:
-          description: >-
-            Request failed. The incoming data specification seems malformed.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Invalid request."
-              }
-        401:
-          description: >-
-            Request failed. Unauthorized.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Unauthorized"
-              }
-        403:
-          description: >-
-            Request failed. Forbidden.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Quota management endpoint is not configured."
-              }
-        404:
-          description: >-
-            Request failed. User not found.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "User not found."
-              }
-        500:
-          description: >-
-            Request failed. Internal server error.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Quota could not be set: {error}"
-              }
-    """
-    response = _check_quota_management_secret()
-    if response:
-        return response
-
-    json_body = request.get_json(silent=True)
-    if not isinstance(json_body, dict):
-        return jsonify(message="Invalid request. Expected application/json body."), 400
-
-    errors = SetQuotaLimitBodySchema().validate(json_body)
+@router.post("/quota", summary="Set quota limit (management secret)")
+def set_quota_limit(
+    payload: dict = Body(...),
+    x_quota_management_secret: Optional[str] = Header(None),
+):
+    """Set a user's quota limit for a resource type."""
+    denied = _check_secret(x_quota_management_secret)
+    if denied:
+        return denied
+    errors = SetQuotaLimitBodySchema().validate(payload)
     if errors:
-        return jsonify(message=f"Invalid request. Errors: {errors}"), 400
-
-    limit = json_body.get("limit")
-    resource_type = json_body.get("resource_type")
-    user_id = json_body.get("user_id")
-    email = json_body.get("email")
-
-    if int(bool(user_id)) + int(bool(email)) != 1:
-        return (
-            jsonify(
-                message="Exactly one of `user_id` or `email` must be provided.",
-            ),
+        return JSONResponse({"message": f"Invalid request. Errors: {errors}"}, 400)
+    limit = payload.get("limit")
+    resource_type = payload.get("resource_type")
+    user_id = payload.get("user_id")
+    email = payload.get("email")
+    if not _exactly_one_user(user_id, email):
+        return JSONResponse(
+            {"message": "Exactly one of `user_id` or `email` must be provided."},
             400,
         )
-
     msg, status_code, _ = _set_quota_limit(
         limit,
         resource_type=resource_type,
         user_ids=[user_id] if user_id else None,
         emails=[email] if email else None,
     )
-
     if status_code != 200:
-        return jsonify(message=msg), status_code
-
+        return JSONResponse({"message": msg}, status_code)
     _, usage, error_msg, status_code = _get_quota(resource_type, user_id, email)
     if status_code != 200:
-        return jsonify(message=error_msg), status_code
-
-    period, error_msg, status_code = _get_quota_period(resource_type, user_id, email)
-    if status_code != 200:
-        return jsonify(message=error_msg), status_code
-
-    return jsonify(limit=limit, usage=usage, message="OK", **period), status_code
-
-
-@blueprint.route("/quota", methods=["PATCH"])
-def patch_quota():  # noqa
-    r"""Endpoint to patch quota period fields.
-
-    ---
-    patch:
-      summary: Patch periodic quota fields.
-      description: >-
-        This endpoint sets periodic quota accounting fields for a given user.
-      operationId: patch_quota
-      consumes:
-        - application/json
-      produces:
-        - application/json
-      parameters:
-        - name: X-Quota-Management-Secret
-          in: header
-          description: REANA user quota management secret
-          required: true
-          type: string
-        - name: data
-          in: body
-          description: Data required to patch periodic quota fields (exactly one of `user_id` or `email` must be provided).
-          required: true
-          schema:
-            type: object
-            required:
-              - resource_type
-            properties:
-              user_id:
-                type: string
-                description: ID of the target user (mutually exclusive with `email`)
-              email:
-                type: string
-                description: Email of the target user (mutually exclusive with `user_id`)
-              resource_type:
-                type: string
-                description: Resource whose periodic quota is being updated. Only `cpu` is currently supported.
-              quota_period_months:
-                type: integer
-                minimum: 1
-                x-nullable: true
-                description: Length of the accounting window in months. Pass `null` to disable periodic accounting.
-              quota_period_start_at:
-                type: string
-                format: date-time
-                x-nullable: true
-                description: Timestamp of the active quota window start. Requires a periodic quota cadence to be set for the user.
-      responses:
-        200:
-          description: Resource quota period fields successfully updated.
-        400:
-          description: Invalid request.
-        401:
-          description: Unauthorized.
-        403:
-          description: Quota functionality is not enabled.
-        404:
-          description: User not found.
-        500:
-          description: Internal server error.
-    """
-    response = _check_quota_management_secret()
-    if response:
-        return response
-
-    json_body = request.get_json(silent=True)
-    if not isinstance(json_body, dict):
-        return jsonify(message="Invalid request. Expected application/json body."), 400
-
-    if (
-        "quota_period_months" in json_body
-        and json_body["quota_period_months"] is not None
-        and type(json_body["quota_period_months"]) is not int
-    ):
-        return (
-            jsonify(
-                message=(
-                    "Invalid request. Errors: {'quota_period_months': "
-                    "['Not a valid integer.']}"
-                )
-            ),
-            400,
-        )
-
-    try:
-        json_body = PatchQuotaBodySchema().load(json_body)
-    except ValidationError as e:
-        return jsonify(message=f"Invalid request. Errors: {e.messages}"), 400
-
-    user_id = json_body.get("user_id")
-    email = json_body.get("email")
-    resource_type = json_body.get("resource_type")
-
-    if int(bool(user_id)) + int(bool(email)) != 1:
-        return (
-            jsonify(
-                message="Exactly one of `user_id` or `email` must be provided.",
-            ),
-            400,
-        )
-
-    period_kwargs = {}
-    if "quota_period_months" in json_body:
-        period_kwargs["quota_period_months"] = json_body.get("quota_period_months")
-    if "quota_period_start_at" in json_body:
-        period_kwargs["quota_period_start_at"] = json_body.get("quota_period_start_at")
-
-    if not period_kwargs:
-        return (
-            jsonify(
-                message="At least one of `quota_period_months` or `quota_period_start_at` must be provided.",
-            ),
-            400,
-        )
-
-    msg, status_code, _ = _set_quota_period(
-        resource_type=resource_type,
-        user_id=user_id,
-        email=email,
-        **period_kwargs,
+        return JSONResponse({"message": error_msg}, status_code)
+    period, error_msg, status_code = _get_quota_period(
+        resource_type, user_id, email
     )
-
     if status_code != 200:
-        return jsonify(message=msg), status_code
+        return JSONResponse({"message": error_msg}, status_code)
+    return {"limit": limit, "usage": usage, "message": "OK", **period}
 
-    limit, usage, error_msg, status_code = _get_quota(resource_type, user_id, email)
-    if status_code != 200:
-        return jsonify(message=error_msg), status_code
 
-    period, error_msg, status_code = _get_quota_period(resource_type, user_id, email)
-    if status_code != 200:
-        return jsonify(message=error_msg), status_code
-
-    if usage is None:
-        return jsonify(message="Resource usage is not available."), 500
-
-    if limit is None:
-        return (
-            jsonify(
-                limit=-1,
-                usage=usage,
-                message="Resource limit is not set.",
-                **period,
-            ),
-            200,
+@router.patch("/quota", summary="Patch quota period (management secret)")
+def patch_quota(
+    payload: dict = Body(...),
+    x_quota_management_secret: Optional[str] = Header(None),
+):
+    """Update a user's quota period (months and/or start date)."""
+    denied = _check_secret(x_quota_management_secret)
+    if denied:
+        return denied
+    if (
+        "quota_period_months" in payload
+        and payload["quota_period_months"] is not None
+        and type(payload["quota_period_months"]) is not int
+    ):
+        return JSONResponse(
+            {
+                "message": "Invalid request. Errors: {'quota_period_months': "
+                "['Not a valid integer.']}"
+            },
+            400,
         )
-
-    return jsonify(limit=limit, usage=usage, message="OK", **period), 200
+    try:
+        loaded = PatchQuotaBodySchema().load(payload)
+    except ValidationError as error:
+        return JSONResponse(
+            {"message": f"Invalid request. Errors: {error.messages}"}, 400
+        )
+    user_id = loaded.get("user_id")
+    email = loaded.get("email")
+    resource_type = loaded.get("resource_type")
+    if not _exactly_one_user(user_id, email):
+        return JSONResponse(
+            {"message": "Exactly one of `user_id` or `email` must be provided."},
+            400,
+        )
+    period_kwargs = {}
+    if "quota_period_months" in loaded:
+        period_kwargs["quota_period_months"] = loaded.get("quota_period_months")
+    if "quota_period_start_at" in loaded:
+        period_kwargs["quota_period_start_at"] = loaded.get(
+            "quota_period_start_at"
+        )
+    if not period_kwargs:
+        return JSONResponse(
+            {
+                "message": "At least one of `quota_period_months` or "
+                "`quota_period_start_at` must be provided."
+            },
+            400,
+        )
+    msg, status_code, _ = _set_quota_period(
+        resource_type=resource_type, user_id=user_id, email=email, **period_kwargs
+    )
+    if status_code != 200:
+        return JSONResponse({"message": msg}, status_code)
+    limit, usage, error_msg, status_code = _get_quota(
+        resource_type, user_id, email
+    )
+    if status_code != 200:
+        return JSONResponse({"message": error_msg}, status_code)
+    period, error_msg, status_code = _get_quota_period(
+        resource_type, user_id, email
+    )
+    if status_code != 200:
+        return JSONResponse({"message": error_msg}, status_code)
+    if usage is None:
+        return JSONResponse({"message": "Resource usage is not available."}, 500)
+    if limit is None:
+        return {
+            "limit": -1,
+            "usage": usage,
+            "message": "Resource limit is not set.",
+            **period,
+        }
+    return {"limit": limit, "usage": usage, "message": "OK", **period}

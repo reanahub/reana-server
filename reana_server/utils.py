@@ -13,7 +13,6 @@ import io
 import logging
 import os
 import pathlib
-import secrets
 import shutil
 import sys
 import traceback
@@ -24,17 +23,12 @@ from uuid import UUID, uuid4
 
 import click
 import yaml
-from flask import url_for
-from invenio_oauthclient.errors import OAuthClientUnAuthorized
-from jinja2 import Environment, PackageLoader, select_autoescape
 from marshmallow.exceptions import ValidationError
 from marshmallow.validate import Email
 from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK, SHARED_VOLUME_PATH
-from reana_commons.email import send_email, REANA_EMAIL_SENDER
 from reana_commons.errors import (
     REANAQuotaExceededError,
     REANAValidationError,
-    REANAEmailNotificationError,
 )
 from reana_commons.utils import get_dask_component_name, get_quota_resource_usage
 from reana_commons.yadage import yadage_load_from_workspace
@@ -48,11 +42,7 @@ from reana_db.models import (
     ServiceType,
     User,
     UserResource,
-    UserToken,
-    UserTokenStatus,
-    UserTokenType,
     Workflow,
-    AuditLogAction,
     Resource,
 )
 from reana_db.utils import (
@@ -76,14 +66,11 @@ from reana_server.config import (
     ADMIN_USER_ID,
     REANA_HOSTNAME,
     REANA_URL,
-    REANA_SSO_EOSC_REQUIRED_ENTITLEMENT,
-    REANA_USER_EMAIL_CONFIRMATION,
     REANA_WORKFLOW_SCHEDULING_POLICY,
     REANA_WORKFLOW_SCHEDULING_POLICIES,
     REANA_QUOTAS_DOCS_URL,
     WORKSPACE_RETENTION_PERIOD,
     DEFAULT_WORKSPACE_RETENTION_RULE,
-    ACCESS_TOKEN_ISSUANCE_POLICY,
 )
 from reana_server.gitlab_client import (
     GitLabClient,
@@ -243,146 +230,6 @@ def filter_input_files(workspace: Union[str, pathlib.Path], reana_spec: Dict) ->
     filtered.rmdir()
 
 
-def get_user_from_token(access_token):
-    """Validate that the token provided is valid."""
-    user_token = (
-        Session.query(UserToken)
-        .filter_by(token=access_token, type_=UserTokenType.reana)
-        .one_or_none()
-    )
-    if not user_token:
-        raise ValueError("Token not valid.")
-    if user_token.status == UserTokenStatus.revoked:
-        raise ValueError("User access token revoked.")
-    return user_token.user_
-
-
-def grant_access_token_to_user(
-    user: User,
-    *,
-    granted_by: Optional[User] = None,
-    send_notification_email: bool = True,
-    include_token_in_log: bool = True,
-    requested_via: str = "reana_server",
-) -> Tuple[str, str]:
-    """Grant a REANA access token to a user and persist it.
-
-    Returns: (token_value, log_message)
-    """
-    if user.access_token:
-        raise ValueError(
-            f"User {user.id_} ({user.email}) has already an active access token."
-        )
-
-    user_granted_token = secrets.token_urlsafe(16)
-    user.access_token = user_granted_token
-    Session.commit()
-
-    log_msg = f"Token for user {user.id_} ({user.email}) granted."
-    if include_token_in_log:
-        log_msg += f"\n\nToken: {user_granted_token}"
-
-    # for audit
-    try:
-        if granted_by:
-            granted_by.log_action(
-                AuditLogAction.grant_token,
-                {
-                    "source": requested_via,
-                    "user_id": str(user.id_),
-                    "user_email": user.email,
-                    "reana_admin": log_msg,
-                },
-            )
-    except Exception:
-        logging.exception("Could not write audit log for token grant.")
-
-    if send_notification_email:
-        try:
-            email_subject = "REANA access token granted"
-            email_body = JinjaEnv.render_template(
-                "emails/token_granted.txt",
-                user_full_name=user.full_name,
-                reana_hostname=REANA_HOSTNAME,
-                ui_config=REANAConfig.load("ui"),
-                sender_email=REANA_EMAIL_SENDER,
-            )
-            send_email(user.email, email_subject, email_body)
-        except REANAEmailNotificationError as e:
-            # Token was granted successfully, attach canonical message so callers can still display it
-            setattr(e, "log_msg", log_msg)
-            raise
-        except Exception as e:
-            notification_error = REANAEmailNotificationError(str(e))
-            setattr(notification_error, "log_msg", log_msg)
-            raise notification_error from e
-
-    return user_granted_token, log_msg
-
-
-def revoke_access_token_of_user(
-    user: User,
-    *,
-    revoked_by: Optional[User] = None,
-    send_notification_email: bool = True,
-    include_token_in_log: bool = True,
-    requested_via: str = "reana_server",
-) -> Tuple[str, str]:
-    """Revoke a REANA access token from a user and persist it.
-
-    Returns: (token_value, log_message)
-    """
-    active_token = user.active_token
-    if not active_token:
-        raise ValueError(
-            f"User {user.id_} ({user.email}) does not have an active access token."
-        )
-
-    revoked_token = active_token.token
-    active_token.status = UserTokenStatus.revoked
-    Session.commit()
-
-    if include_token_in_log:
-        log_msg = f"User token {revoked_token} ({user.email}) was successfully revoked."
-    else:
-        log_msg = f"User token for {user.email} was successfully revoked."
-
-    try:
-        if revoked_by:
-            revoked_by.log_action(
-                AuditLogAction.revoke_token,
-                {
-                    "source": requested_via,
-                    "user_id": str(user.id_),
-                    "user_email": user.email,
-                    "reana_admin": log_msg,
-                },
-            )
-    except Exception:
-        logging.exception("Could not write audit log for token revocation.")
-
-    if send_notification_email:
-        try:
-            email_subject = "REANA access token revoked"
-            email_body = JinjaEnv.render_template(
-                "emails/token_revoked.txt",
-                user_full_name=user.full_name,
-                reana_hostname=REANA_HOSTNAME,
-                ui_config=REANAConfig.load("ui"),
-                sender_email=REANA_EMAIL_SENDER,
-            )
-            send_email(user.email, email_subject, email_body)
-        except REANAEmailNotificationError as e:
-            setattr(e, "log_msg", log_msg)
-            raise
-        except Exception as e:
-            notification_error = REANAEmailNotificationError(str(e))
-            setattr(notification_error, "log_msg", log_msg)
-            raise notification_error from e
-
-    return revoked_token, log_msg
-
-
 def publish_workflow_submission(workflow, user_id, parameters):
     """Publish workflow submission."""
     from reana_server.status import NodesStatus
@@ -452,36 +299,20 @@ def _get_admin_user_or_raise(*, requested_via: str) -> User:
     return admin
 
 
-def _validate_admin_access_token(admin_access_token: str):
-    """Validate admin access token."""
-    admin = _get_admin_user_or_raise(requested_via="reana_admin.validate_admin_token")
-    if admin_access_token != admin.access_token:
-        raise ValueError("Admin access token invalid.")
-
-
-def _get_users(_id, email, user_access_token):
+def _get_users(_id, email):
     """Return all users matching search criteria."""
     search_criteria = dict()
     if _id:
         search_criteria["id_"] = _id
     if email:
         search_criteria["email"] = email
-    query = Session.query(User).filter_by(**search_criteria)
-    if user_access_token:
-        query = query.join(User.tokens).filter_by(
-            token=user_access_token, type_=UserTokenType.reana
-        )
-    return query.all()
+    return Session.query(User).filter_by(**search_criteria).all()
 
 
-def _create_user(email, user_access_token):
-    """Create user with provided credentials."""
+def _create_user(email):
+    """Create user with the provided email."""
     try:
-        if not user_access_token:
-            user_access_token = secrets.token_urlsafe(16)
-        user_parameters = dict(access_token=user_access_token)
-        user_parameters["email"] = email
-        user = User(**user_parameters)
+        user = User(email=email)
         Session.add(user)
         Session.commit()
     except (InvalidRequestError, IntegrityError):
@@ -491,16 +322,12 @@ def _create_user(email, user_access_token):
 
 
 def _export_users():
-    """Export all users in database as csv.
-
-    :param admin_access_token: Admin access token.
-    :type admin_access_token: str
-    """
+    """Export all users in database as csv."""
     csv_file_obj = io.StringIO()
     csv_writer = csv.writer(csv_file_obj, dialect="unix")
     for user in Session.query(User).all():
         csv_writer.writerow(
-            [user.id_, user.email, user.access_token, user.username, user.full_name]
+            [user.id_, user.email, user.username, user.full_name]
         )
     return csv_file_obj
 
@@ -508,8 +335,6 @@ def _export_users():
 def _import_users(users_csv_file):
     """Import list of users to database.
 
-    :param admin_access_token: Admin access token.
-    :type admin_access_token: str
     :param users_csv_file: CSV file object containing a list of users.
     :type users_csv_file: _io.TextIOWrapper
     """
@@ -518,148 +343,12 @@ def _import_users(users_csv_file):
         user = User(
             id_=row[0],
             email=row[1],
-            access_token=row[2],
-            username=row[3],
-            full_name=row[4],
+            username=row[2],
+            full_name=row[3],
         )
         Session.add(user)
     Session.commit()
 
-
-def _create_and_associate_oauth_user(sender, account_info, **kwargs):
-    user_email = account_info["user"]["email"]
-    user_fullname = account_info["user"]["profile"]["full_name"]
-    if "username" in account_info["user"]["profile"]:
-        username = account_info["user"]["profile"]["username"]
-    else:
-        username = user_email  # external_id
-    if "entitlements" in kwargs.get("response", {}):
-        entitlements = kwargs["response"]["entitlements"]
-        if REANA_SSO_EOSC_REQUIRED_ENTITLEMENT:
-            if REANA_SSO_EOSC_REQUIRED_ENTITLEMENT not in entitlements:
-                logging.warning(
-                    f"User {user_email} does not have the required EOSC entitlement "
-                    f"'{REANA_SSO_EOSC_REQUIRED_ENTITLEMENT}'. Login denied."
-                )
-                raise OAuthClientUnAuthorized(
-                    "Access denied. You do not have the required entitlement to use this REANA instance."
-                )
-    return _create_and_associate_reana_user(user_email, user_fullname, username)
-
-
-def _send_confirmation_email(confirm_token, user):
-    """Compose and send sign-up confirmation email."""
-    email_body = JinjaEnv.render_template(
-        "emails/email_confirmation.txt",
-        user_full_name=user.full_name,
-        reana_hostname=REANA_HOSTNAME,
-        ui_config=REANAConfig.load("ui"),
-        sender_email=REANA_EMAIL_SENDER,
-        confirm_token=confirm_token,
-    )
-    send_email(user.email, "Confirm your REANA email address", email_body)
-
-
-def _create_and_associate_local_user(sender, user, **kwargs):
-    # TODO: Add fullname and username in sign up form eventually?
-    user_email = user.email
-    user_fullname = user.email
-    username = user.email
-    reana_user = _create_and_associate_reana_user(user_email, user_fullname, username)
-    if REANA_USER_EMAIL_CONFIRMATION:
-        try:
-            _send_confirmation_email(kwargs.get("confirm_token"), reana_user)
-        except REANAEmailNotificationError as e:
-            logging.error(
-                f"Something went wrong while sending the confirmation email! {e}"
-            )
-    return reana_user
-
-
-def _create_and_associate_reana_user(email, fullname, username):
-    try:
-        search_criteria = dict()
-        search_criteria["email"] = email
-        users = Session.query(User).filter_by(**search_criteria).all()
-        if users:
-            user = users[0]
-        else:
-            user_parameters = dict(email=email, full_name=fullname, username=username)
-            user = User(**user_parameters)
-            Session.add(user)
-            Session.commit()
-
-        _auto_issue_access_token(user, requested_via="auto_signup")
-
-    except (InvalidRequestError, IntegrityError):
-        Session.rollback()
-        raise ValueError("Could not create user, possible constraint violation")
-    except Exception:
-        raise ValueError("Could not create user")
-    return user
-
-
-def _auto_issue_access_token(user: User, *, requested_via: str) -> None:
-    """Issue an access token automatically when policy is auto and user needs one.
-
-    Under 'auto' policy, this will also re-issue a token for revoked users on next login.
-    """
-    if ACCESS_TOKEN_ISSUANCE_POLICY != "auto":
-        return
-    # If user has a token and is not revoked, nothing to do
-    if user.access_token and user.access_token_status != UserTokenStatus.revoked.name:
-        return
-    # If revoked but still has a token value, clear it so grant_access_token_to_user() won't reject it
-    # If issuance fails, restore the original token to avoid losing it
-    original_token = user.access_token
-    cleared_revoked_token = False
-    if user.access_token_status == UserTokenStatus.revoked.name and user.access_token:
-        user.access_token = None
-        cleared_revoked_token = True
-
-    try:
-        grant_access_token_to_user(
-            user,
-            granted_by=None,
-            send_notification_email=False,
-            include_token_in_log=False,
-            requested_via=requested_via,
-        )
-    except Exception:
-        if cleared_revoked_token:
-            user.access_token = original_token
-        # Do not block login if token issuance fails
-        logging.exception(
-            "Automatic token issuance failed for user %s (%s).",
-            user.id_,
-            user.email,
-        )
-
-
-def _get_user_from_invenio_user(id):
-    user = Session.query(User).filter_by(email=id).one_or_none()
-    if not user:
-        raise ValueError("No users registered with this id")
-
-    # Manual policy: show revoked page
-    if user.access_token_status == UserTokenStatus.revoked.name:
-        if ACCESS_TOKEN_ISSUANCE_POLICY != "auto":
-            raise ValueError("User access token revoked.")
-
-        # Auto policy: re-issue token on next login for revoked users
-        _auto_issue_access_token(user, requested_via="auto_login")
-        # If issuance failed for any reason, keep the revoked behavior
-        if (
-            user.access_token_status == UserTokenStatus.revoked.name
-            or not user.access_token
-        ):
-            raise ValueError("User access token revoked.")
-        # Token re-issued successfully, do not issue again below
-        return user
-
-    # Ensure when policy is 'auto' we issue a token here too
-    _auto_issue_access_token(user, requested_via="auto_login")
-    return user
 
 
 def _get_reana_yaml_from_gitlab(webhook_data, user_id):
@@ -720,7 +409,7 @@ def _get_gitlab_hook_id(project_id, gitlab_client: GitLabClient):
     :param project_id: Project id on GitLab.
     :param gitlab_client: GitLab client.
     """
-    create_workflow_url = url_for("workflows.create_workflow", _external=True)
+    create_workflow_url = f"{REANA_URL}/api/workflows"
     try:
         for hook in gitlab_client.get_all_webhooks(project_id):
             if hook["url"] and hook["url"] == create_workflow_url:
@@ -874,13 +563,6 @@ def _get_user_by_criteria(id_: Optional[str], email: Optional[str]) -> Optional[
     except StatementError as e:
         print(e)
         return None
-
-
-def _validate_password(ctx, param, value):
-    if len(value) < 6:
-        click.secho("ERROR: Password length must be at least 6 characters", fg="red")
-        sys.exit(1)
-    return value
 
 
 def is_valid_email(value: str) -> bool:  # noqa: D103
@@ -1112,24 +794,3 @@ def _set_quota_period(
         logging.debug(traceback.format_exc())
         logging.debug(str(e))
         return "Error setting quota period: \n{}".format(str(e)), 500, False
-
-
-class JinjaEnv:
-    """Jinja Environment singleton instance."""
-
-    _instance = None
-
-    @staticmethod
-    def _get():
-        if JinjaEnv._instance is None:
-            JinjaEnv._instance = Environment(
-                loader=PackageLoader("reana_server", "templates"),
-                autoescape=select_autoescape(["html", "xml"]),
-            )
-        return JinjaEnv._instance
-
-    @staticmethod
-    def render_template(template_path, **kwargs):
-        """Render template replacing kwargs appropriately."""
-        template = JinjaEnv._get().get_template(template_path)
-        return template.render(**kwargs)

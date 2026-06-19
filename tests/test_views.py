@@ -22,13 +22,7 @@ from reana_commons.testing import make_mock_api_client
 from reana_db.models import User, InteractiveSessionType, RunStatus
 from reana_commons.k8s.secrets import UserSecrets, Secret
 
-from reana_server.utils import (
-    _create_and_associate_local_user,
-    _create_and_associate_oauth_user,
-)
-
-
-def test_get_workflows(app, user0, _get_user_mock):
+def test_get_workflows(app, user0, auth_headers):
     """Test get_workflows view."""
     with app.test_client() as client:
         with patch(
@@ -43,14 +37,15 @@ def test_get_workflows(app, user0, _get_user_mock):
 
             res = client.get(
                 url_for("workflows.get_workflows"),
-                query_string={"access_token": "wrongtoken", "type": "batch"},
+                headers={"Authorization": "Bearer wrongtoken"},
+                query_string={ "type": "batch"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.get(
                 url_for("workflows.get_workflows"),
+                headers=auth_headers(user0),
                 query_string={
-                    "access_token": user0.access_token,
                     "type": "batch",
                 },
             )
@@ -58,7 +53,7 @@ def test_get_workflows(app, user0, _get_user_mock):
 
 
 def test_create_workflow(
-    app, session, user0, _get_user_mock, sample_serial_workflow_in_db
+    app, session, user0, auth_headers, sample_serial_workflow_in_db
 ):
     """Test create_workflow view."""
     with app.test_client() as client:
@@ -71,17 +66,15 @@ def test_create_workflow(
 
             res = client.post(
                 url_for("workflows.create_workflow"),
-                query_string={
-                    "access_token": "wrongtoken",
-                },
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             # remote repository given as spec, not implemented
             res = client.post(
                 url_for("workflows.create_workflow"),
+                headers=auth_headers(user0),
                 query_string={
-                    "access_token": user0.access_token,
                     "spec": "not_implemented",
                 },
             )
@@ -90,7 +83,7 @@ def test_create_workflow(
             # no specification provided
             res = client.post(
                 url_for("workflows.create_workflow"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
             assert res.status_code == 500
 
@@ -101,9 +94,8 @@ def test_create_workflow(
             workflow_specification["workflow"]["type"] = "unknown"
             res = client.post(
                 url_for("workflows.create_workflow"),
-                headers={"Content-Type": "application/json"},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 query_string={
-                    "access_token": user0.access_token,
                     "workflow_name": "test",
                 },
                 data=json.dumps(workflow_specification),
@@ -113,9 +105,8 @@ def test_create_workflow(
             # name cannot be valid uuid4
             res = client.post(
                 url_for("workflows.create_workflow"),
-                headers={"Content-Type": "application/json"},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 query_string={
-                    "access_token": user0.access_token,
                     "workflow_name": str(uuid4()),
                 },
                 data=json.dumps(sample_serial_workflow_in_db.reana_specification),
@@ -128,9 +119,8 @@ def test_create_workflow(
             }
             res = client.post(
                 url_for("workflows.create_workflow"),
-                headers={"Content-Type": "application/json"},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 query_string={
-                    "access_token": user0.access_token,
                     "workflow_name": "test",
                 },
                 data=json.dumps(workflow_specification),
@@ -143,9 +133,8 @@ def test_create_workflow(
             }
             res = client.post(
                 url_for("workflows.create_workflow"),
-                headers={"Content-Type": "application/json"},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 query_string={
-                    "access_token": user0.access_token,
                     "workflow_name": "test",
                 },
                 data=json.dumps(workflow_specification),
@@ -156,9 +145,8 @@ def test_create_workflow(
             workflow_specification = sample_serial_workflow_in_db.reana_specification
             res = client.post(
                 url_for("workflows.create_workflow"),
-                headers={"Content-Type": "application/json"},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 query_string={
-                    "access_token": user0.access_token,
                     "workflow_name": "test",
                 },
                 data=json.dumps(workflow_specification),
@@ -167,8 +155,7 @@ def test_create_workflow(
 
 
 def test_start_workflow_validates_specification(
-    app, session, user0, sample_serial_workflow_in_db
-):
+    app, session, user0, sample_serial_workflow_in_db, auth_headers):
     with app.test_client() as client:
         sample_serial_workflow_in_db.status = RunStatus.created
         sample_serial_workflow_in_db.name = "test"
@@ -184,18 +171,14 @@ def test_start_workflow_validates_specification(
                 "workflows.start_workflow",
                 workflow_id_or_name=str(sample_serial_workflow_in_db.id_),
             ),
-            headers={"Content-Type": "application/json"},
-            query_string={
-                "access_token": user0.access_token,
-            },
+            headers={**auth_headers(user0), "Content-Type": "application/json"},
             data=json.dumps({}),
         )
         assert res.status_code == 400
 
 
 def test_restart_workflow_validates_specification(
-    app, session, user0, sample_serial_workflow_in_db
-):
+    app, session, user0, sample_serial_workflow_in_db, auth_headers):
     with app.test_client() as client:
         sample_serial_workflow_in_db.status = RunStatus.finished
         sample_serial_workflow_in_db.name = "test"
@@ -212,16 +195,13 @@ def test_restart_workflow_validates_specification(
         }
         res = client.post(
             url_for("workflows.start_workflow", workflow_id_or_name="test"),
-            headers={"Content-Type": "application/json"},
-            query_string={
-                "access_token": user0.access_token,
-            },
+            headers={**auth_headers(user0), "Content-Type": "application/json"},
             data=json.dumps(body),
         )
         assert res.status_code == 400
 
 
-def test_info_surfaces_kubernetes_min_user_uid(app, user0, _get_user_mock):
+def test_info_surfaces_kubernetes_min_user_uid(app, user0, auth_headers):
     """Test /info exposes the configured minimum Kubernetes user ID."""
     with app.test_client() as client:
         with patch(
@@ -232,7 +212,7 @@ def test_info_surfaces_kubernetes_min_user_uid(app, user0, _get_user_mock):
         ):
             res = client.get(
                 url_for("info.info"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
     assert res.status_code == 200
     payload = res.json
@@ -288,7 +268,7 @@ def test_patch_quota_rejects_non_integer_quota_period_months(app):
 
 
 def test_get_workflow_specification(
-    app, user0, _get_user_mock, sample_yadage_workflow_in_db
+    app, user0, auth_headers, sample_yadage_workflow_in_db
 ):
     """Test get_workflow_specification view."""
     with app.test_client() as client:
@@ -305,17 +285,16 @@ def test_get_workflow_specification(
                 url_for(
                     "workflows.get_workflow_specification", workflow_id_or_name="1"
                 ),
-                query_string={"access_token": "wrongtoken"},
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.get(
                 url_for(
                     "workflows.get_workflow_specification",
                     workflow_id_or_name=sample_yadage_workflow_in_db.id_,
                 ),
-                headers={"Content-Type": "application/json"},
-                query_string={"access_token": user0.access_token},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 data=json.dumps(None),
             )
             parsed_res = json.loads(res.data)
@@ -334,7 +313,7 @@ def test_get_workflow_specification(
             )
 
 
-def test_get_workflow_logs(app, user0, _get_user_mock):
+def test_get_workflow_logs(app, user0, auth_headers):
     """Test get_workflow_logs view."""
     with app.test_client() as client:
         with patch(
@@ -348,20 +327,19 @@ def test_get_workflow_logs(app, user0, _get_user_mock):
 
             res = client.get(
                 url_for("workflows.get_workflow_logs", workflow_id_or_name="1"),
-                query_string={"access_token": "wrongtoken"},
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.get(
                 url_for("workflows.get_workflow_logs", workflow_id_or_name="1"),
-                headers={"Content-Type": "application/json"},
-                query_string={"access_token": user0.access_token},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 data=json.dumps(None),
             )
             assert res.status_code == 200
 
 
-def test_get_workflow_status(app, user0, _get_user_mock):
+def test_get_workflow_status(app, user0, auth_headers):
     """Test get_workflow_logs view."""
     with app.test_client() as client:
         with patch(
@@ -374,19 +352,18 @@ def test_get_workflow_status(app, user0, _get_user_mock):
             assert res.status_code == 401
             res = client.get(
                 url_for("workflows.get_workflow_status", workflow_id_or_name="1"),
-                query_string={"access_token": "wrongtoken"},
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.get(
                 url_for("workflows.get_workflow_status", workflow_id_or_name="1"),
-                headers={"Content-Type": "application/json"},
-                query_string={"access_token": user0.access_token},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
             )
             assert res.status_code == 200
 
 
-def test_set_workflow_status(app, user0, _get_user_mock):
+def test_set_workflow_status(app, user0, auth_headers):
     """Test set_workflow_status view."""
     with app.test_client() as client:
         with patch(
@@ -400,22 +377,20 @@ def test_set_workflow_status(app, user0, _get_user_mock):
 
             res = client.put(
                 url_for("workflows.set_workflow_status", workflow_id_or_name="1"),
-                query_string={"access_token": "wrongtoken"},
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.put(
                 url_for("workflows.set_workflow_status", workflow_id_or_name="1"),
-                headers={"Content-Type": "application/json"},
-                query_string={"access_token": user0.access_token},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
             )
             assert res.status_code == 422
 
             res = client.put(
                 url_for("workflows.set_workflow_status", workflow_id_or_name="1"),
-                headers={"Content-Type": "application/json"},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 query_string={
-                    "access_token": user0.access_token,
                     "status": "stop",
                 },
                 data=json.dumps({}),
@@ -423,7 +398,7 @@ def test_set_workflow_status(app, user0, _get_user_mock):
             assert res.status_code == 200
 
 
-def test_upload_file(app, user0, _get_user_mock):
+def test_upload_file(app, user0, auth_headers):
     """Test upload_file view."""
     with app.test_client() as client:
         with patch("reana_server.rest.workflows.requests"):
@@ -437,9 +412,9 @@ def test_upload_file(app, user0, _get_user_mock):
 
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
+                headers={"Authorization": "Bearer wrongtoken"},
                 query_string={
                     "file_name": "test_upload.txt",
-                    "access_token": "wrongtoken",
                 },
                 input_stream=BytesIO(file_content),
             )
@@ -449,10 +424,9 @@ def test_upload_file(app, user0, _get_user_mock):
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
                 query_string={
-                    "access_token": user0.access_token,
                     "file_name": "test_upload.txt",
                 },
-                headers={"Content-Type": "multipart/form-data"},
+                headers={**auth_headers(user0), "Content-Type": "multipart/form-data"},
                 input_stream=BytesIO(file_content),
             )
             assert res.status_code == 400
@@ -460,10 +434,9 @@ def test_upload_file(app, user0, _get_user_mock):
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
                 query_string={
-                    "access_token": user0.access_token,
                     "file_name": None,
                 },
-                headers={"Content-Type": "application/octet-stream"},
+                headers={**auth_headers(user0), "Content-Type": "application/octet-stream"},
                 input_stream=BytesIO(file_content),
             )
             assert res.status_code == 400
@@ -479,10 +452,9 @@ def test_upload_file(app, user0, _get_user_mock):
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
                 query_string={
-                    "access_token": user0.access_token,
                     "file_name": "test_upload.txt",
                 },
-                headers={"Content-Type": "application/octet-stream"},
+                headers={**auth_headers(user0), "Content-Type": "application/octet-stream"},
                 input_stream=BytesIO(file_content),
             )
             requests_client.post.assert_called_once()
@@ -494,10 +466,9 @@ def test_upload_file(app, user0, _get_user_mock):
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
                 query_string={
-                    "access_token": user0.access_token,
                     "file_name": "empty.txt",
                 },
-                headers={"Content-Type": "application/octet-stream"},
+                headers={**auth_headers(user0), "Content-Type": "application/octet-stream"},
                 input_stream=BytesIO(b""),
             )
             assert requests_client.post.call_count == 2
@@ -506,7 +477,7 @@ def test_upload_file(app, user0, _get_user_mock):
             assert not data.read()
 
 
-def test_download_file(app, user0, _get_user_mock):
+def test_download_file(app, user0, auth_headers):
     """Test download_file view."""
     with app.test_client() as client:
         with patch("reana_server.rest.workflows.requests"):
@@ -529,12 +500,12 @@ def test_download_file(app, user0, _get_user_mock):
                     workflow_id_or_name="1",
                     file_name="test_download",
                 ),
+                headers={"Authorization": "Bearer wrongtoken"},
                 query_string={
                     "file_name": "test_upload.txt",
-                    "access_token": "wrongtoken",
                 },
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
         requests_mock = Mock()
         requests_response_mock = Mock()
@@ -550,14 +521,14 @@ def test_download_file(app, user0, _get_user_mock):
                     workflow_id_or_name="1",
                     file_name="test_download",
                 ),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
 
             requests_client.get.assert_called_once()
             assert requests_client.get.return_value.status_code == 200
 
 
-def test_delete_file(app, user0, _get_user_mock):
+def test_delete_file(app, user0, auth_headers):
     """Test delete_file view."""
     mock_response = Mock()
     mock_response.headers = {"Content-Type": "multipart/form-data"}
@@ -585,11 +556,9 @@ def test_delete_file(app, user0, _get_user_mock):
                     workflow_id_or_name="1",
                     file_name="test_delete.txt",
                 ),
-                query_string={
-                    "access_token": "wrongtoken",
-                },
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.delete(
                 url_for(
@@ -597,12 +566,12 @@ def test_delete_file(app, user0, _get_user_mock):
                     workflow_id_or_name="1",
                     file_name="test_delete.txt",
                 ),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
             assert res.status_code == 200
 
 
-def test_get_files(app, user0, _get_user_mock):
+def test_get_files(app, user0, auth_headers):
     """Test get_files view."""
     with app.test_client() as client:
         with patch(
@@ -614,13 +583,13 @@ def test_get_files(app, user0, _get_user_mock):
 
             res = client.get(
                 url_for("workflows.get_files", workflow_id_or_name="1"),
-                query_string={"access_token": "wrongtoken"},
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.get(
                 url_for("workflows.get_files", workflow_id_or_name="1"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
             assert res.status_code == 500
 
@@ -635,12 +604,12 @@ def test_get_files(app, user0, _get_user_mock):
         ):
             res = client.get(
                 url_for("workflows.get_files", workflow_id_or_name="1"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
             assert res.status_code == 200
 
 
-def test_move_files(app, user0, _get_user_mock):
+def test_move_files(app, user0, auth_headers):
     """Test move_files view."""
     with app.test_client() as client:
         with patch(
@@ -659,11 +628,11 @@ def test_move_files(app, user0, _get_user_mock):
 
             res = client.put(
                 url_for("workflows.move_files", workflow_id_or_name="1"),
+                headers={"Authorization": "Bearer wrongtoken"},
                 query_string={
                     "user": user0.id_,
                     "source": "source.txt",
                     "target": "target.txt",
-                    "access_token": "wrongtoken",
                 },
             )
             assert res.status_code == 403
@@ -679,8 +648,8 @@ def test_move_files(app, user0, _get_user_mock):
             ):
                 res = client.put(
                     url_for("workflows.move_files", workflow_id_or_name="1"),
+                headers=auth_headers(user0),
                     query_string={
-                        "access_token": user0.access_token,
                         "source": "source.txt",
                         "target": "target.txt",
                     },
@@ -699,7 +668,7 @@ def test_open_interactive_session(
     sample_serial_workflow_in_db,
     interactive_session_type,
     expected_status_code,
-    _get_user_mock,
+    auth_headers,
 ):
     """Test open interactive session."""
     with app.test_client() as client:
@@ -713,7 +682,7 @@ def test_open_interactive_session(
                     workflow_id_or_name=sample_serial_workflow_in_db.id_,
                     interactive_session_type=interactive_session_type,
                 ),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
             assert res.status_code == expected_status_code
 
@@ -724,7 +693,7 @@ def test_close_interactive_session(
     user0,
     sample_serial_workflow_in_db,
     expected_status_code,
-    _get_user_mock,
+    auth_headers,
 ):
     """Test close an interactive session."""
     with app.test_client() as client:
@@ -737,48 +706,12 @@ def test_close_interactive_session(
                     "workflows.close_interactive_session",
                     workflow_id_or_name=sample_serial_workflow_in_db.id_,
                 ),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
             assert res.status_code == expected_status_code
 
 
-def test_create_and_associate_oauth_user(app, session):
-    user_email = "johndoe@reana.io"
-    user_fullname = "John Doe"
-    username = "johndoe"
-    account_info = {
-        "user": {
-            "email": user_email,
-            "profile": {"full_name": user_fullname, "username": username},
-        }
-    }
-    user = session.query(User).filter_by(email=user_email).one_or_none()
-    assert user is None
-    _create_and_associate_oauth_user(None, account_info=account_info)
-    user = session.query(User).filter_by(email=user_email).one_or_none()
-    assert user
-    assert user.email == user_email
-    assert user.full_name == user_fullname
-    assert user.username == username
-
-
-def test_create_and_associate_local_user(app, session):
-    mock_user = Mock(email="johndoe@reana.io")
-    user = session.query(User).filter_by(email=mock_user.email).one_or_none()
-    assert user is None
-    with patch(
-        "reana_server.utils._send_confirmation_email"
-    ) as send_confirmation_email:
-        _create_and_associate_local_user(None, user=mock_user)
-        send_confirmation_email.assert_called_once()
-    user = session.query(User).filter_by(email=mock_user.email).one_or_none()
-    assert user
-    assert user.email == mock_user.email
-    assert user.full_name == mock_user.email
-    assert user.username == mock_user.email
-
-
-def test_get_workflow_retention_rules(app, user0):
+def test_get_workflow_retention_rules(app, user0, auth_headers):
     """Test get_workflow_retention_rules."""
     endpoint_url = url_for(
         "workflows.get_workflow_retention_rules", workflow_id_or_name="workflow"
@@ -789,7 +722,7 @@ def test_get_workflow_retention_rules(app, user0):
         assert res.status_code == 401
 
         # Token not valid
-        res = client.get(endpoint_url, query_string={"access_token": "invalid_token"})
+        res = client.get(endpoint_url, headers={"Authorization": "Bearer invalid_token"})
         assert res.status_code == 403
 
         # Test that status code is propagated from r-w-controller
@@ -803,13 +736,13 @@ def test_get_workflow_retention_rules(app, user0):
             ),
         ):
             res = client.get(
-                endpoint_url, query_string={"access_token": user0.access_token}
-            )
+                endpoint_url, query_string={}
+            , headers=auth_headers(user0))
             assert res.status_code == status_code
             assert "message" in res.json
 
 
-def test_prune_workspace(app, user0, sample_serial_workflow_in_db):
+def test_prune_workspace(app, user0, sample_serial_workflow_in_db, auth_headers):
     """Test prune_workspace."""
     endpoint_url = url_for(
         "workflows.prune_workspace",
@@ -821,7 +754,7 @@ def test_prune_workspace(app, user0, sample_serial_workflow_in_db):
         assert res.status_code == 401
 
         # Test invalid token
-        res = client.post(endpoint_url, query_string={"access_token": "invalid_token"})
+        res = client.post(endpoint_url, headers={"Authorization": "Bearer invalid_token"})
         assert res.status_code == 403
 
         # Test invalid workflow name
@@ -830,31 +763,31 @@ def test_prune_workspace(app, user0, sample_serial_workflow_in_db):
                 "workflows.prune_workspace",
                 workflow_id_or_name="invalid_wf",
             ),
-            query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
         )
         assert res.status_code == 403
 
         # Test normal behaviour
         status_code = 200
         res = client.post(
-            endpoint_url, query_string={"access_token": user0.access_token}
-        )
+            endpoint_url, query_string={}
+        , headers=auth_headers(user0))
         assert res.status_code == status_code
         assert "The workspace has been correctly pruned." in res.json["message"]
 
         res = client.post(
             endpoint_url,
             query_string={
-                "access_token": user0.access_token,
                 "include_inputs": True,
                 "include_outputs": True,
             },
-        )
+        headers=auth_headers(user0),
+    )
         assert res.status_code == status_code
         assert "The workspace has been correctly pruned." in res.json["message"]
 
 
-def test_gitlab_projects(app: Flask, user0):
+def test_gitlab_projects(app: Flask, user0, auth_headers):
     """Test fetching of GitLab projects."""
     with app.test_client() as client:
         # token not provided
@@ -863,7 +796,7 @@ def test_gitlab_projects(app: Flask, user0):
 
         # invalid REANA token
         res = client.get(
-            "/api/gitlab/projects", query_string={"access_token": "invalid"}
+            "/api/gitlab/projects", headers={"Authorization": "Bearer invalid"}
         )
         assert res.status_code == 403
 
@@ -879,8 +812,8 @@ def test_gitlab_projects(app: Flask, user0):
         ):
             res = client.get(
                 "/api/gitlab/projects",
-                query_string={"access_token": user0.access_token},
-            )
+            headers=auth_headers(user0),
+        )
             assert res.status_code == 401
 
         # normal behaviour
@@ -934,8 +867,8 @@ def test_gitlab_projects(app: Flask, user0):
         ):
             res = client.get(
                 "/api/gitlab/projects",
-                query_string={"access_token": user0.access_token},
-            )
+            headers=auth_headers(user0),
+        )
 
         assert res.status_code == 200
         assert res.json["has_prev"]

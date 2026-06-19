@@ -36,7 +36,9 @@ extras_require = {
     "tests": [
         "apispec[yaml]>=3.0",
         "apispec-webframeworks",
-        "reana-commons[kubernetes,yadage,snakemake,cwl,tests]>=0.95.0a21,<0.96.0",
+        "fakeredis>=2.0.0",
+        "httpx>=0.24.0,<1.0.0",
+        "reana-commons[kubernetes,yadage,snakemake,cwl,tests]>=0.95.0a20,<0.96.0",
         "reana-db[tests]>=0.95.0a10,<0.96.0",
     ],
 }
@@ -48,17 +50,18 @@ for key, reqs in extras_require.items():
     extras_require["all"].extend(reqs)
 
 install_requires = [
+    # FastAPI serves the HTTP API (reana_server.asgi); Flask remains only for
+    # the CLI app context (scheduler, reana-admin).
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+    "pydantic>=2.6.0,<3.0.0",
     "Flask>=3.0.0,<4.0.0",
     "gitpython>=3.1",
     "marshmallow>=3.5.0,<4.0.0",
-    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a21,<0.96.0",
+    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a20,<0.96.0",
     "reana-db>=0.95.0a10,<0.96.0",
     "requests>=2.25.0",
     "tablib>=0.12.1",
-    "uWSGI>=2.0.31",
-    "uwsgi-tools>=1.1.1",
-    "uwsgitop>=0.12",
-    "flask-security-invenio>=4.0.0,<5.0.0",
     # Yadage dependencies
     # Pinning adage/packtivity/yadage/yadage-schemas to make sure we use compatible versions.
     # See https://github.com/reanahub/reana-workflow-engine-yadage/pull/236#discussion_r992475484
@@ -66,26 +69,9 @@ install_requires = [
     "packtivity==0.16.2",  # matches the version in r-w-e-yadage
     "yadage==0.20.1",  # matches the version in r-w-e-yadage
     "yadage-schemas==0.10.6",  # matches the version in r-w-e-yadage
-    # Invenio dependencies
-    "invenio-app>=3.0.0,<4.0.0",
-    "flask-limiter>=2.3,<3",
-    "invenio-base>=2.3.0,<3.0.0",
-    "invenio-cache>=3.0.0,<4.0.0",
-    "invenio-config>=1.0.3,<2.0.0",
-    # From base bundle
-    "invenio-logging>=4.0.0,<5.0.0",
-    "invenio-mail>=1.0.2,<3.0.0",
-    # From auth bundle
-    "invenio-accounts>=7.0.0,<8.0.0",
-    "invenio-oauth2server>=4.0.0,<5.0.0",
-    "invenio-oauthclient>=7.0.0,<8.0.0",
-    "invenio-userprofiles>=5.0.0,<6.0.0",
-    "invenio-theme>=4.0.0,<5.0.0",
-    "invenio-i18n>=3.0.0,<4.0.0",
-    "invenio-access>=5.0.0,<6.0.0",
-    # Invenio database
-    "invenio-db[postgresql]>=2.5.0,<3.0.0",
-    "six>=1.12.0",  # required by Flask-Breadcrumbs
+    # OIDC/JWT authentication (see AUTH_ARCHITECTURE.md)
+    "authlib>=1.6.0,<2.0.0",
+    "redis>=5.0.0",
 ]
 
 packages = find_packages()
@@ -106,29 +92,12 @@ setup(
     author="REANA",
     author_email="info@reana.io",
     url="https://github.com/reanahub/reana-server",
-    packages=["reana_server"],
+    packages=packages,
     zip_safe=False,
     entry_points={
         "flask.commands": [
             "reana-admin = reana_server.reana_admin:reana_admin",
             "start-scheduler = reana_server.cli:start_scheduler",
-        ],
-        "invenio_base.apps": ["reana = reana_server.ext:REANA"],
-        "invenio_base.api_apps": ["reana = reana_server.ext:REANA"],
-        "invenio_config.module": [
-            "reana_server = reana_server.config",
-        ],
-        "invenio_base.api_blueprints": [
-            "reana_server_ping = reana_server.rest.ping:blueprint",
-            "reana_server_workflows = reana_server.rest.workflows:blueprint",
-            "reana_server_users = reana_server.rest.users:blueprint",
-            "reana_server_secrets = reana_server.rest.secrets:blueprint",
-            "reana_server_gitlab = reana_server.rest.gitlab:blueprint",
-            "reana_server_config = reana_server.rest.config:blueprint",
-            "reana_server_status = reana_server.rest.status:blueprint",
-            "reana_server_info = reana_server.rest.info:blueprint",
-            "reana_server_launch = reana_server.rest.launch:blueprint",
-            "reana_server_quota = reana_server.rest.quota:blueprint",
         ],
     },
     include_package_data=True,

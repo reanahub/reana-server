@@ -1,386 +1,88 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2019, 2020, 2021, 2022, 2024, 2026 CERN.
+# Copyright (C) 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 
-"""Reana-Server User Endpoints."""
+"""User secrets endpoints (Kubernetes-backed user secret store)."""
 
-import json
 import logging
 import traceback
+from typing import List
 
-from flask import Blueprint, jsonify, request
+from fastapi import APIRouter, Body, Query, Security
+from fastapi.responses import JSONResponse
 from reana_commons.errors import REANASecretAlreadyExists, REANASecretDoesNotExist
-from reana_commons.k8s.secrets import UserSecretsStore, Secret
-from webargs import fields
-from webargs.flaskparser import use_kwargs
-import marshmallow
-from marshmallow import Schema, validate
+from reana_commons.k8s.secrets import Secret, UserSecretsStore
+from reana_db.models import User
 
-from reana_server.decorators import signin_required
+from reana_server.auth.deps import get_current_user
 
-blueprint = Blueprint("secrets", __name__)
+router = APIRouter(tags=["secrets"])
 
-
-class AddSecretsBodySchema(Schema):
-    """Schema for add_secrets endpoint body."""
-
-    body = (
-        fields.Dict(
-            keys=fields.Str(),
-            values=fields.Nested(
-                {
-                    "value": fields.Str(required=True),
-                    "type": fields.Str(
-                        validate=validate.OneOf(Secret.types), required=True
-                    ),
-                }
-            ),
-            required=True,
-        ),
-    )
+_RoleUser = Security(get_current_user, scopes=["reana:user"])
 
 
-@blueprint.route("/secrets/", methods=["POST"])
-@signin_required()
-@use_kwargs(
-    {
-        "overwrite": fields.Bool(load_default=False),
-    },
-    location="query",
-    unknown=marshmallow.EXCLUDE,
-)
-def add_secrets(user, overwrite=False):
-    r"""Endpoint to create user secrets.
-
-    ---
-    post:
-      summary: Add user secrets to REANA.
-      description: >-
-        This resource adds secrets for the authenticated user.
-      operationId: add_secrets
-      produces:
-        - application/json
-      parameters:
-        - name: access_token
-          in: query
-          description: Secrets owner access token.
-          required: false
-          type: string
-        - name: overwrite
-          in: query
-          description: Whether existing secret keys should be overwritten.
-          required: false
-          type: boolean
-        - name: secrets
-          in: body
-          description: >-
-            Optional. List of secrets to be added.
-          required: true
-          schema:
-            type: object
-            additionalProperties:
-              type: object
-              description: Secret definition.
-              properties:
-                value:
-                  type: string
-                  description: Secret value
-                type:
-                  type: string
-                  enum:
-                    - env
-                    - file
-                  description: >-
-                    How will be the secret assigned to the jobs, either
-                    exported as an environment variable or mounted as a file.
-      responses:
-        201:
-          description: >-
-            Secrets successfully added.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Secret(s) successfully added."
-              }
-        403:
-          description: >-
-            Request failed. Token is not valid.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Token is not valid"
-              }
-        409:
-          description: >-
-            Request failed. Secrets could not be added due to a conflict.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "The submitted secrets api_key, password,
-                            username already exist."
-              }
-        500:
-          description: >-
-            Request failed. Internal server error.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Internal server error."
-              }
-    """
-    json_body = request.json
-    AddSecretsBodySchema().validate({"body": json_body})
-
+@router.post("/secrets/", status_code=201, summary="Add user secrets")
+def add_secrets(
+    payload: dict = Body(...),
+    overwrite: bool = Query(False),
+    user: User = _RoleUser,
+):
+    """Add base64-encoded secrets ``{name: {value, type}}`` to the user store."""
     try:
         secrets = [
             Secret.from_base64(
-                name=secret_name,
-                value=secret["value"],
-                type_=secret["type"],
+                name=name, value=secret["value"], type_=secret["type"]
             )
-            for secret_name, secret in json_body.items()
+            for name, secret in payload.items()
         ]
-    except ValueError as e:
-        # value is not correctly base64-encoded
-        return jsonify({"message": str(e)}), 400
-
+    except (ValueError, KeyError, TypeError) as error:
+        return JSONResponse({"message": str(error)}, 400)
     try:
         user_secrets = UserSecretsStore.fetch(user.id_)
         user_secrets.add_secrets(secrets, overwrite=overwrite)
         UserSecretsStore.update(user_secrets)
-        return jsonify({"message": "Secret(s) successfully added."}), 201
-    except REANASecretAlreadyExists as e:
-        return jsonify({"message": str(e)}), 409
+        return JSONResponse({"message": "Secret(s) successfully added."}, 201)
+    except REANASecretAlreadyExists as error:
+        return JSONResponse({"message": str(error)}, 409)
     except ValueError:
-        return jsonify({"message": "Token is not valid."}), 403
-    except Exception as e:
+        return JSONResponse({"message": "Token is not valid."}, 403)
+    except Exception as error:  # noqa: BLE001
         logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 500
+        return JSONResponse({"message": str(error)}, 500)
 
 
-@blueprint.route("/secrets", methods=["GET"])
-@signin_required()
-def get_secrets(user):  # noqa
-    r"""Endpoint to retrieve user secrets.
-
-    ---
-    get:
-      summary: Get user secrets. Requires an user access token.
-      description: >-
-        Get user secrets.
-      operationId: get_secrets
-      produces:
-        - application/json
-      parameters:
-        - name: access_token
-          in: query
-          description: Secrets owner access token.
-          required: false
-          type: string
-      responses:
-        200:
-          description: >-
-            List of user secrets.
-          schema:
-            type: array
-            items:
-              properties:
-                name:
-                  type: string
-                  description: Secret name
-                type:
-                  type: string
-                  enum:
-                    - env
-                    - file
-                  description: >-
-                    How will be the secret assigned to
-                    the jobs, either exported as an environment
-                    variable or mounted as a file.
-          examples:
-            application/json:
-              [
-                {
-                  "name": ".keytab",
-                  "value": "SGVsbG8gUkVBTkEh",
-                },
-                {
-                  "name": "username",
-                  "value": "reanauser",
-                },
-              ]
-        403:
-          description: >-
-            Request failed. Token is not valid.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Token is not valid"
-              }
-        500:
-          description: >-
-            Request failed. Internal server error.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Error while querying."
-              }
-    """
+@router.get("/secrets", summary="List user secrets")
+def get_secrets(user: User = _RoleUser):
+    """List the user's secret names and types (never the values)."""
     try:
         user_secrets = UserSecretsStore.fetch(user.id_)
-        user_secrets_json = [
+        return [
             {"name": secret.name, "type": secret.type_}
             for secret in user_secrets.get_secrets()
         ]
-        return jsonify(user_secrets_json), 200
     except ValueError:
-        return jsonify({"message": "Token is not valid."}), 403
-    except Exception as e:
+        return JSONResponse({"message": "Token is not valid."}, 403)
+    except Exception as error:  # noqa: BLE001
         logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 500
+        return JSONResponse({"message": str(error)}, 500)
 
 
-class DeleteSecretsBodySchema(Schema):
-    """Schema for delete_secrets endpoint body."""
-
-    body = fields.List(fields.Str(), required=True)
-
-
-@blueprint.route("/secrets/", methods=["DELETE"])
-@signin_required()
-def delete_secrets(user):  # noqa
-    r"""Endpoint to delete user secrets.
-
-    ---
-    delete:
-      summary: Deletes the specified secret(s).
-      description: >-
-        This resource deletes the requested secrets.
-      operationId: delete_secrets
-      produces:
-        - application/json
-      parameters:
-        - name: access_token
-          in: query
-          description: API key of the admin.
-          required: false
-          type: string
-        - name: secrets
-          in: body
-          description: >-
-            Optional. List of secrets to be deleted.
-          required: true
-          schema:
-            type: array
-            description: List of secret names to be deleted.
-            items:
-              type: string
-              description: Secret name to be deleted.
-      responses:
-        200:
-          description: >-
-            Secrets successfully deleted.
-          schema:
-            type: array
-            description: List of secret names that have been deleted.
-            items:
-              type: string
-              description: Name of the secret that have been deleted.
-          examples:
-            application/json:
-              [
-                ".keytab",
-                "username",
-              ]
-        403:
-          description: >-
-            Request failed. Token is not valid.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Token is not valid"
-              }
-        404:
-          description: >-
-            Request failed. Secrets do not exist.
-          schema:
-            type: array
-            description: List of secret names that could not be deleted.
-            items:
-              type: string
-              description: Name of the secret which does not exist.
-          examples:
-            application/json:
-              [
-                "certificate.pem",
-                "PASSWORD",
-              ]
-        500:
-          description: >-
-            Request failed. Internal server error.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-          examples:
-            application/json:
-              {
-                "message": "Internal server error."
-              }
-    """
-    json_body = request.json
-    DeleteSecretsBodySchema().validate({"body": json_body})
-    secrets = json_body
-
+@router.delete("/secrets/", summary="Delete user secrets")
+def delete_secrets(payload: List[str] = Body(...), user: User = _RoleUser):
+    """Delete the named secrets from the user store."""
     try:
         user_secrets = UserSecretsStore.fetch(user.id_)
-        deleted_secrets_list = user_secrets.delete_secrets(secrets)
+        deleted = user_secrets.delete_secrets(payload)
         UserSecretsStore.update(user_secrets)
-        return jsonify(deleted_secrets_list), 200
-    except REANASecretDoesNotExist as e:
-        return jsonify(e.missing_secrets_list), 404
+        return deleted
+    except REANASecretDoesNotExist as error:
+        return JSONResponse(error.missing_secrets_list, 404)
     except ValueError:
-        return jsonify({"message": "Token is not valid."}), 403
-    except Exception as e:
+        return JSONResponse({"message": "Token is not valid."}, 403)
+    except Exception as error:  # noqa: BLE001
         logging.error(traceback.format_exc())
-        return jsonify({"message": str(e)}), 500
+        return JSONResponse({"message": str(error)}, 500)

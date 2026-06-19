@@ -1,0 +1,427 @@
+# -*- coding: utf-8 -*-
+#
+# This file is part of REANA.
+# Copyright (C) 2026 CERN.
+#
+# REANA is free software; you can redistribute it and/or modify it
+# under the terms of the MIT License; see LICENSE file for more details.
+
+"""Tests for the FastAPI authentication layer: BFF cookie auth + login flow.
+
+DB-free: the JWT is validated for real against a locally-served JWKS, Redis is
+faked, and the single DB step (provisioning) is stubbed. HTTPS base URL so the
+``Secure`` session cookies are honoured by the test client jar.
+"""
+
+import time
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+from urllib.parse import parse_qs, urlparse
+
+import fakeredis
+import pytest
+from authlib.jose import JsonWebKey
+from authlib.jose import jwt as jose_jwt
+from fastapi import FastAPI, Security
+from fastapi.testclient import TestClient
+
+import reana_server.auth.deps as deps
+import reana_server.auth.sessions as sessions
+import reana_server.auth.tokens as tokens_module
+import reana_server.rest.auth as auth_rest
+from reana_server.asgi import app
+from reana_server.auth.errors import AuthError
+from reana_server.auth.deps import get_current_user
+from reana_server.auth.sessions import AUTH_COOKIE, store_session
+from reana_server.config import REANA_AUTH
+
+ISSUER = "https://auth.example.org/realms/reana"
+FAKE_USER = SimpleNamespace(
+    id_="u1",
+    email="jane.doe@example.org",
+    full_name="Jane Doe",
+    username="jdoe",
+    idp_issuer=ISSUER,
+    idp_subject="subject-1",
+)
+
+
+def _make_token(key, **overrides):
+    now = int(time.time())
+    claims = {
+        "iss": ISSUER,
+        "aud": "reana",
+        "sub": "subject-1",
+        "iat": now,
+        "exp": now + 600,
+    }
+    claims.update(overrides)
+    claims = {k: v for k, v in claims.items() if v is not None}
+    header = {"alg": "RS256", "kid": key.as_dict(private=False).get("kid")}
+    return jose_jwt.encode(header, claims, key).decode()
+
+
+def _jwks_response(key):
+    response = Mock()
+    response.raise_for_status = Mock()
+    response.json = Mock(return_value={"keys": [key.as_dict(private=False)]})
+    return response
+
+
+@pytest.fixture
+def signing_key():
+    return JsonWebKey.generate_key("RSA", 2048, is_private=True)
+
+
+@pytest.fixture
+def bff_env(monkeypatch, signing_key):
+    """Configure a trusted issuer with explicit endpoints + fake Redis."""
+    for key, value in {
+        "issuer": ISSUER,
+        "audience": "reana",
+        "jwks_url": f"{ISSUER}/jwks",
+        "authorization_url": f"{ISSUER}/authorize",
+        "token_url": f"{ISSUER}/token",
+        "end_session_url": f"{ISSUER}/logout",
+        "userinfo_url": f"{ISSUER}/userinfo",
+        "web_client_id": "reana-server",
+        "web_client_secret": "secret",
+        "bff_enabled": True,
+        "required_role": "reana:user",
+        "role_sources": [{"path": "reana_roles"}],
+    }.items():
+        monkeypatch.setitem(REANA_AUTH, key, value)
+    monkeypatch.setattr(auth_rest, "SECRET_KEY", "secret-key")
+    monkeypatch.setattr(tokens_module, "_jwks_cache", None)
+    monkeypatch.setattr(
+        sessions, "_redis_client", fakeredis.FakeStrictRedis(decode_responses=True)
+    )
+    monkeypatch.setattr(
+        deps,
+        "get_or_provision_user",
+        lambda claims, token, userinfo=None: (FAKE_USER, False),
+    )
+    with patch.object(
+        tokens_module.requests, "get", return_value=_jwks_response(signing_key)
+    ):
+        yield signing_key
+
+
+@pytest.fixture
+def client():
+    return TestClient(app, base_url="https://testserver")
+
+
+def test_extract_roles_supports_provider_mapping(monkeypatch):
+    monkeypatch.setitem(
+        REANA_AUTH,
+        "role_sources",
+        [
+            {"path": "resource_access.reana.roles", "map": {"user": "reana:user"}},
+            {"path": "cern_roles", "map": {"admin": ["reana:admin"]}},
+        ],
+    )
+    claims = {
+        "resource_access": {"reana": {"roles": ["user"]}},
+        "cern_roles": ["admin", "ignored"],
+    }
+    assert tokens_module.extract_roles(claims) == ["reana:user", "reana:admin"]
+
+
+def test_extract_roles_falls_back_to_userinfo(monkeypatch):
+    monkeypatch.setitem(REANA_AUTH, "role_sources", [{"path": "reana_roles"}])
+    assert tokens_module.extract_roles({}, {"reana_roles": ["reana:user"]}) == [
+        "reana:user"
+    ]
+
+
+def test_extract_roles_supports_eosc_entitlements(monkeypatch):
+    entitlement = "urn:mace:egi.eu:group:vo.example.org:role=member"
+    monkeypatch.setitem(
+        REANA_AUTH,
+        "role_sources",
+        [
+            {
+                "path": "entitlements",
+                "match": "startswith",
+                "map": {entitlement: "reana:user"},
+            }
+        ],
+    )
+    assert tokens_module.extract_roles(
+        {}, {"entitlements": [entitlement + "#aai.egi.eu"]}
+    ) == ["reana:user"]
+
+
+# -- BFF cookie authentication (via a minimal app over get_current_user) ----
+
+
+@pytest.fixture
+def mini_client():
+    mini = FastAPI()
+
+    @mini.get("/g")
+    async def _g(user=Security(get_current_user, scopes=[])):
+        return {"email": user.email}
+
+    @mini.post("/m")
+    async def _m(user=Security(get_current_user, scopes=[])):
+        return {"ok": True}
+
+    return TestClient(mini, base_url="https://testserver")
+
+
+def test_cookie_get_is_authenticated(mini_client, bff_env):
+    token = _make_token(bff_env)
+    response = mini_client.get("/g", cookies={AUTH_COOKIE: token})
+    assert response.status_code == 200
+    assert response.json()["email"] == FAKE_USER.email
+
+
+def test_cookie_mutation_without_csrf_is_403(mini_client, bff_env):
+    token = _make_token(bff_env)
+    response = mini_client.post("/m", cookies={AUTH_COOKIE: token})
+    assert response.status_code == 403
+
+
+def test_cookie_mutation_with_csrf_is_200(mini_client, bff_env):
+    token = _make_token(bff_env)
+    response = mini_client.post(
+        "/m",
+        cookies={AUTH_COOKIE: token, "reana_csrf": "tok"},
+        headers={"X-REANA-CSRF": "tok"},
+    )
+    assert response.status_code == 200
+
+
+def test_configured_required_role_is_enforced_on_protected_routes(bff_env, monkeypatch):
+    mini = FastAPI()
+
+    @mini.get("/protected")
+    async def _protected(user=Security(get_current_user, scopes=["reana:user"])):
+        return {"email": user.email}
+
+    client = TestClient(mini, base_url="https://testserver")
+    monkeypatch.setitem(REANA_AUTH, "required_role", "reana-user")
+    monkeypatch.setitem(REANA_AUTH, "role_sources", [{"path": "cern_roles"}])
+
+    token = _make_token(bff_env, cern_roles=["user", "default-role"])
+    response = client.get(
+        "/protected", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 403
+    assert "reana-user" in response.json()["detail"]
+
+    token = _make_token(bff_env, cern_roles=["reana-user"])
+    response = client.get(
+        "/protected", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+
+
+def test_protected_route_uses_userinfo_entitlement_fallback(bff_env, monkeypatch):
+    mini = FastAPI()
+
+    @mini.get("/protected")
+    async def _protected(user=Security(get_current_user, scopes=["reana:user"])):
+        return {"email": user.email}
+
+    entitlement = "urn:mace:egi.eu:group:vo.example.org:role=member"
+    monkeypatch.setitem(REANA_AUTH, "required_role", "reana:user")
+    monkeypatch.setitem(
+        REANA_AUTH,
+        "role_sources",
+        [
+            {
+                "path": "entitlements",
+                "match": "startswith",
+                "map": {entitlement: "reana:user"},
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        deps,
+        "fetch_userinfo",
+        lambda token: {
+            "sub": "subject-1",
+            "email": "jane.doe@example.org",
+            "entitlements": [entitlement + "#aai.egi.eu"],
+        },
+    )
+    synced = []
+    monkeypatch.setattr(
+        deps,
+        "sync_user_groups_from_userinfo",
+        lambda user, userinfo: synced.append(userinfo),
+    )
+    monkeypatch.setattr(
+        deps,
+        "get_or_provision_user",
+        lambda claims, token, userinfo=None: (FAKE_USER, False),
+    )
+
+    client = TestClient(mini, base_url="https://testserver")
+    token = _make_token(bff_env)
+    response = client.get(
+        "/protected", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    assert synced and synced[0]["entitlements"] == [entitlement + "#aai.egi.eu"]
+
+
+def test_expired_cookie_is_transparently_refreshed(mini_client, bff_env):
+    expired = _make_token(bff_env, exp=int(time.time()) - 3600)
+    store_session("subject-1", "refresh-1")  # session the refresh will rotate
+    fresh = _make_token(bff_env)
+    refresh_response = Mock(status_code=200)
+    refresh_response.json = Mock(
+        return_value={"access_token": fresh, "refresh_token": "refresh-2"}
+    )
+    with patch.object(sessions.requests, "post", return_value=refresh_response):
+        response = mini_client.get("/g", cookies={AUTH_COOKIE: expired})
+    assert response.status_code == 200
+    # A fresh access cookie was re-issued.
+    assert AUTH_COOKIE in response.headers.get("set-cookie", "")
+
+
+# -- BFF login / logout / callback (via the real app) -----------------------
+
+
+def test_login_redirects_to_issuer(client, bff_env):
+    response = client.get(
+        "/api/login", params={"next": "/dashboard"}, follow_redirects=False
+    )
+    assert response.status_code == 302
+    location = response.headers["location"]
+    assert location.startswith(f"{ISSUER}/authorize")
+    assert "code_challenge=" in location and "state=" in location
+    assert "nonce=" in location
+    assert "reana_oauth_state=" in response.headers.get("set-cookie", "")
+
+
+def test_login_reports_missing_bff_secret(client, bff_env, monkeypatch):
+    monkeypatch.setitem(REANA_AUTH, "web_client_secret", "")
+    response = client.get("/api/login", follow_redirects=False)
+    assert response.status_code == 503
+    assert "REANA_AUTH_WEB_CLIENT_SECRET" in response.json()["detail"]
+
+
+def test_login_reports_missing_discovery_metadata(client, bff_env, monkeypatch):
+    def _missing_endpoint(name):
+        raise AuthError(
+            "Issuer's OIDC discovery document does not advertise endpoint."
+        )
+
+    monkeypatch.setattr(auth_rest, "get_endpoint", _missing_endpoint)
+    response = client.get("/api/login", follow_redirects=False)
+    assert response.status_code == 503
+    assert "Browser login is misconfigured" in response.json()["detail"]
+
+
+def test_logout_without_cookie_is_401(client, bff_env):
+    assert client.post("/api/logout").status_code == 401
+
+
+def test_logout_clears_session(client, bff_env):
+    token = _make_token(bff_env)
+    store_session("subject-1", "refresh-1", id_token="idt")
+    response = client.post(
+        "/api/logout",
+        cookies={AUTH_COOKIE: token, "reana_csrf": "tok"},
+        headers={"X-REANA-CSRF": "tok"},
+    )
+    assert response.status_code == 200
+    assert response.json()["logout_url"].startswith(f"{ISSUER}/logout")
+    assert sessions.get_session("subject-1") is None
+
+
+def test_callback_establishes_session(client, bff_env, monkeypatch):
+    # Drive a real /login to mint a matching state cookie + state param.
+    login = client.get(
+        "/api/login", params={"next": "/dashboard"}, follow_redirects=False
+    )
+    query = parse_qs(urlparse(login.headers["location"]).query)
+    state = query["state"][0]
+    nonce = query["nonce"][0]
+
+    access_token = _make_token(bff_env)
+    id_token = _make_token(bff_env, aud="reana-server", nonce=nonce)
+    token_response = Mock()
+    token_response.raise_for_status = Mock()
+    token_response.json = Mock(
+        return_value={
+            "access_token": access_token,
+            "refresh_token": "refresh-1",
+            "id_token": id_token,
+        }
+    )
+    monkeypatch.setattr(
+        auth_rest, "get_or_provision_user", lambda claims, token: (FAKE_USER, False)
+    )
+    monkeypatch.setattr(
+        auth_rest, "fetch_userinfo", lambda token: {"sub": "subject-1"}
+    )
+    monkeypatch.setattr(
+        auth_rest, "sync_user_groups_from_userinfo", lambda user, ui: None
+    )
+    with patch.object(auth_rest.requests, "post", return_value=token_response):
+        response = client.get(
+            "/api/oauth/callback",
+            params={"code": "abc", "state": state},
+            follow_redirects=False,
+        )
+    assert response.status_code == 302
+    assert response.headers["location"] == "/dashboard"
+    assert AUTH_COOKIE in response.headers.get("set-cookie", "")
+    assert sessions.get_session("subject-1") is not None
+
+
+def test_callback_rejects_id_token_nonce_mismatch(client, bff_env, monkeypatch):
+    login = client.get("/api/login", follow_redirects=False)
+    query = parse_qs(urlparse(login.headers["location"]).query)
+    state = query["state"][0]
+
+    access_token = _make_token(bff_env)
+    id_token = _make_token(bff_env, aud="reana-server", nonce="wrong")
+    token_response = Mock()
+    token_response.raise_for_status = Mock()
+    token_response.json = Mock(
+        return_value={"access_token": access_token, "id_token": id_token}
+    )
+    monkeypatch.setattr(
+        auth_rest, "get_or_provision_user", lambda claims, token: (FAKE_USER, False)
+    )
+    with patch.object(auth_rest.requests, "post", return_value=token_response):
+        response = client.get(
+            "/api/oauth/callback",
+            params={"code": "abc", "state": state},
+            follow_redirects=False,
+        )
+    assert response.status_code == 502
+
+
+def test_callback_rejects_id_token_subject_mismatch(client, bff_env, monkeypatch):
+    login = client.get("/api/login", follow_redirects=False)
+    query = parse_qs(urlparse(login.headers["location"]).query)
+    state = query["state"][0]
+    nonce = query["nonce"][0]
+
+    access_token = _make_token(bff_env)
+    id_token = _make_token(
+        bff_env, aud="reana-server", sub="other-subject", nonce=nonce
+    )
+    token_response = Mock()
+    token_response.raise_for_status = Mock()
+    token_response.json = Mock(
+        return_value={"access_token": access_token, "id_token": id_token}
+    )
+    monkeypatch.setattr(
+        auth_rest, "get_or_provision_user", lambda claims, token: (FAKE_USER, False)
+    )
+    with patch.object(auth_rest.requests, "post", return_value=token_response):
+        response = client.get(
+            "/api/oauth/callback",
+            params={"code": "abc", "state": state},
+            follow_redirects=False,
+        )
+    assert response.status_code == 502

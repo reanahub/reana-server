@@ -1,44 +1,27 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2020, 2021 CERN.
+# Copyright (C) 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 
-"""Reana-Server Ping-functionality Flask-Blueprint."""
+"""Liveness endpoint (unauthenticated)."""
 
-from flask import Blueprint, jsonify
+from fastapi import APIRouter
+from pydantic import BaseModel
 
-blueprint = Blueprint("ping", __name__)
+router = APIRouter(tags=["ping"])
 
 
-@blueprint.route("/ping", methods=["GET"])
-def ping():  # noqa
-    r"""Endpoint to ping the server. Responds with a pong.
-    ---
-    get:
-      summary: Ping the server (healthcheck)
-      operationId: ping
-      description: >-
-        Ping the server.
-      produces:
-       - application/json
-      responses:
-        200:
-          description: >-
-            Ping succeeded. Service is running and accessible.
-          schema:
-            type: object
-            properties:
-              message:
-                type: string
-              status:
-                type: string
-          examples:
-            application/json:
-              message: OK
-              status: 200
-    """
+class PingResponse(BaseModel):
+    """Liveness payload, matching the legacy ``/ping`` shape."""
 
-    return jsonify(message="OK", status="200"), 200
+    status: str
+    message: str
+
+
+@router.get("/ping", response_model=PingResponse, summary="Liveness probe")
+async def ping() -> PingResponse:
+    """Return a static OK payload; no authentication required."""
+    return PingResponse(status="200", message="OK")

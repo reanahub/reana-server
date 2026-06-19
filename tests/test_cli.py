@@ -38,10 +38,6 @@ from reana_server.reana_admin import reana_admin
 from reana_server.reana_admin.check_workflows import check_workspaces
 from reana_server.reana_admin.cli import RetentionRuleDeleter
 from reana_server.reana_admin.consumer import MessageConsumer
-from reana_server.utils import (
-    _create_and_associate_reana_user,
-    _get_user_from_invenio_user,
-)
 
 
 def test_export_users(user0):
@@ -53,14 +49,11 @@ def test_export_users(user0):
         [
             user0.id_,
             user0.email,
-            user0.access_token,
             user0.username,
             user0.full_name,
         ]
     )
-    result = runner.invoke(
-        reana_admin, ["user-export", "--admin-access-token", user0.access_token]
-    )
+    result = runner.invoke(reana_admin, ["user-export"])
     assert result.output == expected_csv_file.getvalue()
 
 
@@ -71,22 +64,19 @@ def test_import_users(app, session, user0):
     users_csv_file_name = "reana-users.csv"
     user_id = uuid.uuid4()
     user_email = "test@reana.io"
-    user_access_token = secrets.token_urlsafe(16)
     user_username = "jdoe"
     user_full_name = "John Doe"
     with runner.isolated_filesystem():
         with open(users_csv_file_name, "w") as f:
             csv_writer = csv.writer(f, dialect="unix")
             csv_writer.writerow(
-                [user_id, user_email, user_access_token, user_username, user_full_name]
+                [user_id, user_email, user_username, user_full_name]
             )
 
         result = runner.invoke(
             reana_admin,
             [
                 "user-import",
-                "--admin-access-token",
-                user0.access_token,
                 "--file",
                 users_csv_file_name,
             ],
@@ -95,493 +85,10 @@ def test_import_users(app, session, user0):
         user = session.query(User).filter_by(id_=user_id).first()
         assert user
         assert user.email == user_email
-        assert user.access_token == user_access_token
         assert user.username == user_username
         assert user.full_name == user_full_name
 
 
-def test_grant_token(user0, session):
-    """Test grant access token."""
-    runner = CliRunner()
-
-    # non-existing email user
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-grant",
-            "--admin-access-token",
-            user0.access_token,
-            "-e",
-            "nonexisting@example.org",
-        ],
-    )
-    assert "does not exist" in result.output
-
-    # non-existing id user
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-grant",
-            "--admin-access-token",
-            user0.access_token,
-            "--id",
-            "fake_id",
-        ],
-    )
-    assert "does not exist" in result.output
-
-    # non-requested-token user
-    user = User(email="johndoe@cern.ch")
-    session.add(user)
-    session.commit()
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-grant",
-            "--admin-access-token",
-            user0.access_token,
-            "-e",
-            user.email,
-        ],
-    )
-    assert "token status is None, do you want to proceed?" in result.output
-
-    # abort grant
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-grant",
-            "--admin-access-token",
-            user0.access_token,
-            "-e",
-            user.email,
-        ],
-        input="\n",
-    )
-    assert "Grant token aborted" in result.output
-
-    # confirm grant
-    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "manual"), patch(
-        "reana_server.utils.REANAConfig.load", return_value={}
-    ), patch("reana_server.utils.JinjaEnv.render_template", return_value="body"), patch(
-        "reana_server.utils.send_email"
-    ) as send_email_mock:
-        result = runner.invoke(
-            reana_admin,
-            [
-                "token-grant",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
-            input="y\n",
-        )
-    assert f"Token for user {user.id_} ({user.email}) granted" in result.output
-    assert user.access_token
-    assert user0.audit_logs[-1].action is AuditLogAction.grant_token
-    send_email_mock.assert_called()
-
-    # user with active token
-    active_user = User(email="active@cern.ch", access_token="valid_token")
-    session.add(active_user)
-    session.commit()
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-grant",
-            "--admin-access-token",
-            user0.access_token,
-            "--id",
-            str(active_user.id_),
-        ],
-    )
-    assert "has already an active access token" in result.output
-
-    # typical ui user workflow
-    ui_user = User(email="ui_user@cern.ch")
-    session.add(ui_user)
-    session.commit()
-    ui_user.request_access_token()
-    assert ui_user.access_token_status is UserTokenStatus.requested.name
-    assert ui_user.access_token is None
-    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "manual"), patch(
-        "reana_server.utils.REANAConfig.load", return_value={}
-    ), patch("reana_server.utils.JinjaEnv.render_template", return_value="body"), patch(
-        "reana_server.utils.send_email"
-    ):
-        result = runner.invoke(
-            reana_admin,
-            [
-                "token-grant",
-                "--admin-access-token",
-                user0.access_token,
-                "--id",
-                str(ui_user.id_),
-            ],
-        )
-    assert ui_user.access_token_status is UserTokenStatus.active.name
-    assert ui_user.access_token
-    assert user0.audit_logs[-1].action is AuditLogAction.grant_token
-
-
-def test_grant_token_auto_policy_still_sends_email_when_explicit_admin_grant(
-    user0, session
-):
-    runner = CliRunner()
-
-    user = User(email="auto@cern.ch")
-    session.add(user)
-    session.commit()
-
-    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "auto"), patch(
-        "reana_server.utils.REANAConfig.load", return_value={}
-    ), patch("reana_server.utils.JinjaEnv.render_template", return_value="body"), patch(
-        "reana_server.utils.send_email"
-    ) as send_email_mock:
-        result = runner.invoke(
-            reana_admin,
-            [
-                "token-grant",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
-            input="y\n",
-        )
-
-    assert f"Token for user {user.id_} ({user.email}) granted" in result.output
-    assert user.access_token
-    # Explicit admin grant should respect send_notification_email=True regardless of global policy
-    send_email_mock.assert_called()
-
-
-def test_grant_token_fails_when_admin_user_cannot_be_resolved(user0, session):
-    """Test grant access token refuses to proceed without an audit actor."""
-    runner = CliRunner()
-    user = User(email="grant.noadmin@example.org")
-    session.add(user)
-    session.commit()
-
-    with patch(
-        "reana_server.utils.ADMIN_USER_ID",
-        "99999999-9999-9999-9999-999999999999",
-    ):
-        result = runner.invoke(
-            reana_admin,
-            [
-                "token-grant",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
-            input="y\n",
-        )
-
-    assert "Server misconfiguration." in result.output
-    assert user.access_token is None
-
-
-def test_grant_token_reports_success_when_email_preparation_fails(user0, session):
-    """Test grant access token keeps success output if email rendering fails."""
-    runner = CliRunner()
-    user = User(email="grant.render@example.org")
-    session.add(user)
-    session.commit()
-
-    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "manual"), patch(
-        "reana_server.utils.REANAConfig.load",
-        side_effect=FileNotFoundError("/var/reana/config/ui-config.yaml"),
-    ):
-        result = runner.invoke(
-            reana_admin,
-            [
-                "token-grant",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
-            input="y\n",
-        )
-
-    assert f"Token for user {user.id_} ({user.email}) granted" in result.output
-    assert "Something went wrong while sending email" in result.output
-    assert "/var/reana/config/ui-config.yaml" in result.output
-    assert user.access_token
-    assert user0.audit_logs[-1].action is AuditLogAction.grant_token
-
-
-def test_auto_issue_token_for_existing_user_when_policy_flips_to_auto(user0, session):
-    """
-    User created under manual policy with no token should receive a token on next login
-    once ACCESS_TOKEN_ISSUANCE_POLICY becomes 'auto'.
-    """
-
-    user = User(
-        email="pending@cern.ch",
-        full_name="Pending User",
-        username="pending@cern.ch",
-    )
-    session.add(user)
-    session.commit()
-
-    assert user.access_token is None
-
-    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "auto"), patch(
-        "reana_server.utils.send_email"
-    ) as send_email_mock:
-        _create_and_associate_reana_user(user.email, user.full_name, user.username)
-
-    # Token is auto-issued but no email should be sent for automatic issuance
-    assert user.access_token is not None
-    send_email_mock.assert_not_called()
-
-
-def test_auto_issue_token_for_existing_local_user_on_login_resolution(user0, session):
-    """
-    Existing local user (created under manual policy) should receive a token
-    when policy is auto and the user is resolved via _get_user_from_invenio_user().
-    """
-    user = User(
-        email="test2@test.com",
-        full_name="Test Two",
-        username="test2@test.com",
-    )
-    session.add(user)
-    session.commit()
-    assert user.access_token is None
-
-    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "auto"), patch(
-        "reana_server.utils.send_email"
-    ) as send_email_mock:
-        resolved = _get_user_from_invenio_user(user.email)
-
-    assert resolved.id_ == user.id_
-    assert resolved.access_token is not None
-    send_email_mock.assert_not_called()
-
-
-def test_revoke_token(user0, session):
-    """Test revoke access token."""
-    runner = CliRunner()
-
-    # non-active-token user
-    user = User(email="janedoe@cern.ch")
-    session.add(user)
-    session.commit()
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-revoke",
-            "--admin-access-token",
-            user0.access_token,
-            "-e",
-            user.email,
-        ],
-    )
-    assert "does not have an active access token" in result.output
-
-    # user with requested token
-    user.request_access_token()
-    assert user.access_token_status == UserTokenStatus.requested.name
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-revoke",
-            "--admin-access-token",
-            user0.access_token,
-            "-e",
-            user.email,
-        ],
-    )
-    assert "does not have an active access token" in result.output
-
-    # user with active token
-    user.access_token = "active_token"
-    session.commit()
-    assert user.access_token
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-revoke",
-            "--admin-access-token",
-            user0.access_token,
-            "--id",
-            str(user.id_),
-        ],
-    )
-    assert "was successfully revoked" in result.output
-    assert user.access_token_status == UserTokenStatus.revoked.name
-    assert user0.audit_logs[-1].action is AuditLogAction.revoke_token
-    assert "active_token" in user0.audit_logs[-1].details["reana_admin"]
-
-    # try to revoke again
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-revoke",
-            "--admin-access-token",
-            user0.access_token,
-            "--id",
-            str(user.id_),
-        ],
-    )
-    assert "does not have an active access token" in result.output
-
-
-def test_revoke_token_reports_success_when_email_fails(user0, session):
-    """Test revoke access token keeps success output if email sending fails."""
-    runner = CliRunner()
-    user = User(email="mail.failure@example.org", access_token="active_token")
-    session.add(user)
-    session.commit()
-
-    with patch("reana_server.utils.REANAConfig.load", return_value={}), patch(
-        "reana_server.utils.JinjaEnv.render_template", return_value="body"
-    ), patch(
-        "reana_server.utils.send_email",
-        side_effect=REANAEmailNotificationError("Email delivery failed."),
-    ):
-        result = runner.invoke(
-            reana_admin,
-            [
-                "token-revoke",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
-        )
-
-    assert "was successfully revoked" in result.output
-    assert "Something went wrong while sending email" in result.output
-    assert user.access_token_status == UserTokenStatus.revoked.name
-
-
-def test_revoke_token_reports_success_when_email_preparation_fails(user0, session):
-    """Test revoke access token keeps success output if email rendering fails."""
-    runner = CliRunner()
-    user = User(email="mail.render@example.org", access_token="active_token")
-    session.add(user)
-    session.commit()
-
-    with patch(
-        "reana_server.utils.REANAConfig.load",
-        side_effect=FileNotFoundError("/var/reana/config/ui-config.yaml"),
-    ):
-        result = runner.invoke(
-            reana_admin,
-            [
-                "token-revoke",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
-        )
-
-    assert "was successfully revoked" in result.output
-    assert "Something went wrong while sending email" in result.output
-    assert "/var/reana/config/ui-config.yaml" in result.output
-    assert user.access_token_status == UserTokenStatus.revoked.name
-
-
-def test_revoke_token_fails_when_admin_user_cannot_be_resolved(user0, session):
-    """Test revoke access token refuses to proceed without an audit actor."""
-    runner = CliRunner()
-    user = User(email="revoke.noadmin@example.org", access_token="active_token")
-    session.add(user)
-    session.commit()
-
-    with patch(
-        "reana_server.utils.ADMIN_USER_ID",
-        "99999999-9999-9999-9999-999999999999",
-    ):
-        result = runner.invoke(
-            reana_admin,
-            [
-                "token-revoke",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
-        )
-
-    assert "Server misconfiguration." in result.output
-    assert user.access_token_status == UserTokenStatus.active.name
-
-
-class TestMessageConsumer:
-    def test_do_not_remove_message(
-        self,
-        in_memory_queue_connection,
-        default_in_memory_producer,
-        consume_queue,
-    ):
-        """Test if MessageConsumer ignores and re-queues not matching message."""
-        workflow_name = "workflow.1"
-        queue_name = "workflow-submission"
-        consumer = MessageConsumer(
-            connection=in_memory_queue_connection,
-            queue_name=queue_name,
-            key="workflow_id_or_name",
-            values_to_delete=["some_other_name"],
-        )
-        in_memory_wsp = WorkflowSubmissionPublisher(
-            connection=in_memory_queue_connection
-        )
-
-        in_memory_wsp.publish_workflow_submission("1", workflow_name, {})
-        consume_queue(consumer, limit=1)
-        assert not in_memory_queue_connection.channel().queues[queue_name].empty()
-        in_memory_queue_connection.channel().queues.clear()
-
-    def test_removes_message(
-        self,
-        in_memory_queue_connection,
-        default_in_memory_producer,
-        consume_queue,
-    ):
-        """Test if MessageConsumer correctly removes specified message."""
-        workflow_name = "workflow.1"
-        consumer = MessageConsumer(
-            connection=in_memory_queue_connection,
-            queue_name="workflow-submission",
-            key="workflow_id_or_name",
-            values_to_delete=[workflow_name],
-        )
-        in_memory_wsp = WorkflowSubmissionPublisher(
-            connection=in_memory_queue_connection
-        )
-
-        in_memory_wsp.publish_workflow_submission("1", workflow_name, {})
-        consume_queue(consumer, limit=1)
-        assert (
-            in_memory_queue_connection.channel().queues["workflow-submission"].empty()
-        )
-        in_memory_queue_connection.channel().queues.clear()
-
-
-@pytest.mark.parametrize(
-    "file_or_dir, expected_result",
-    [
-        ("in.txt", True),
-        ("in", True),
-        ("in/xyz.txt", True),
-        ("in/subdir/xyz.txt", True),
-        ("out.txt", True),
-        ("out", True),
-        ("out/xyz.txt", True),
-        ("out/subdir/xyz.txt", True),
-        ("xyz/in.txt", False),
-        ("xyz/out.txt", False),
-        ("abc.xyz", False),
-    ],
-)
 def test_is_input_or_output(file_or_dir, expected_result):
     """Test if inputs/outputs are correctly recognized."""
     workspace = pathlib.Path("/workspace")
@@ -675,8 +182,6 @@ def test_retention_rules_apply(
 
     command = [
         "retention-rules-apply",
-        "--admin-access-token",
-        user0.access_token,
     ]
     if time_delta is not None:
         forced_date = datetime.datetime.now() + time_delta
@@ -722,8 +227,6 @@ def test_retention_rules_apply_error(
         reana_admin,
         [
             "retention-rules-apply",
-            "--admin-access-token",
-            user0.access_token,
         ],
     )
 
@@ -747,8 +250,6 @@ def test_retention_rules_extend(workflow_with_retention_rules, user0):
             "-w non-valid-id",
             "-d",
             extend_days,
-            "--admin-access-token",
-            user0.access_token,
         ],
     )
     assert result.output == "Invalid workflow UUID.\n"
@@ -762,8 +263,6 @@ def test_retention_rules_extend(workflow_with_retention_rules, user0):
             workflow.id_,
             "-d",
             extend_days,
-            "--admin-access-token",
-            user0.access_token,
         ],
     )
     assert "Extending rule" in result.output
@@ -840,8 +339,6 @@ def test_interactive_session_cleanup(
                     "interactive-session-cleanup",
                     "-d",
                     days,
-                    "--admin-access-token",
-                    user0.access_token,
                 ],
             )
             assert output in result.output
@@ -1233,8 +730,6 @@ def test_quota_set_default_limits_for_user_with_custom_limits(user0, session):
         reana_admin,
         [
             "quota-set-default-limits",
-            "--admin-access-token",
-            user0.access_token,
         ],
     )
 

@@ -15,7 +15,6 @@ from reana_db.models import ResourceType, UserToken, UserTokenStatus, UserTokenT
 from reana_server.utils import (
     _set_quota_period,
     filter_input_files,
-    get_user_from_token,
     is_valid_email,
 )
 
@@ -53,40 +52,6 @@ def test_filter_input_files(tmp_path: pathlib.Path):
     assert (tmp_path / "x/w/c.txt").exists()
     assert not (tmp_path / "x/y/b.txt").exists()
     assert len(list(tmp_path.iterdir())) == 1
-
-
-def test_get_user_from_token(user0):
-    """Test getting user from his own token."""
-    assert user0.id_ == get_user_from_token(user0.access_token).id_
-
-
-def test_get_user_from_token_after_revocation(user0, session):
-    """Test getting user from revoked token."""
-    token = user0.active_token
-    token.status = UserTokenStatus.revoked
-    session.commit()
-    with pytest.raises(ValueError, match="revoked"):
-        get_user_from_token(token.token)
-
-
-def test_get_user_from_token_two_tokens(user0, session):
-    """Test getting user with multiple tokens."""
-    old_token = user0.active_token
-    old_token.status = UserTokenStatus.revoked
-    new_token = UserToken(
-        token="new_token",
-        user_id=user0.id_,
-        type_=UserTokenType.reana,
-        status=UserTokenStatus.active,
-    )
-    session.add(new_token)
-    session.commit()
-
-    # Check that new token works
-    assert user0.id_ == get_user_from_token(new_token.token).id_
-    # Check that old revoked token does not work
-    with pytest.raises(ValueError, match="revoked"):
-        get_user_from_token(old_token.token)
 
 
 def test_set_quota_period_rejects_period_start_without_cadence(user0, session):

@@ -69,10 +69,6 @@ RUN if test -e modules/reana-db; then \
 # hadolint ignore=DL3013
 RUN if [ "${DEBUG}" -gt 0 ]; then pip install --no-cache-dir -e ".[debug]"; else pip install --no-cache-dir .; fi;
 
-# A quick fix to allow eduGAIN and social login users that wouldn't otherwise match Invenio username rules
-# hadolint ignore=DL3059
-RUN sed -i 's|^username_regex = re.compile\(.*\)$|username_regex = re.compile("^\\S+$")|g' /usr/local/lib/python3.12/dist-packages/invenio_userprofiles/validators.py
-
 # Check for any broken Python dependencies
 # hadolint ignore=DL3059
 RUN pip check
@@ -84,8 +80,8 @@ ENV TERM=xterm \
 # Expose ports to clients
 EXPOSE 5000
 
-# Run server
-CMD ["uwsgi --ini uwsgi.ini"]
+# Run the FastAPI (ASGI) server (the Helm chart overrides this command)
+CMD ["uvicorn", "reana_server.asgi:app", "--host", "0.0.0.0", "--port", "5000", "--workers", "4"]
 
 # Set image labels
 LABEL org.opencontainers.image.authors="team@reanahub.io"

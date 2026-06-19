@@ -13,7 +13,6 @@ import logging
 import subprocess
 from datetime import datetime, timedelta
 
-from invenio_accounts.models import SessionActivity
 from kubernetes.client.rest import ApiException
 from marshmallow import Schema, fields
 from reana_commons.config import (
@@ -186,11 +185,17 @@ class UsersStatus(REANAStatus):
         super().__init__(from_=from_, until=until, user=user)
 
     def active_web_users(self):
-        """Get the number of active web users.
+        """Get the number of active web users (BFF sessions in Redis)."""
+        from reana_server.auth.sessions import count_sessions
+        from reana_server.config import REANA_AUTH
 
-        Depends on how long does a session last.
-        """
-        return Session.query(SessionActivity).count()
+        if not (REANA_AUTH["bff_enabled"] and REANA_AUTH["issuer"]):
+            return 0
+        try:
+            return count_sessions()
+        except Exception as error:
+            logging.warning("Could not count BFF sessions: %s", error)
+            return 0
 
     def get_status(self):
         """Get status summary for REANA users."""

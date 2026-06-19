@@ -8,9 +8,17 @@
 
 """Test factory app."""
 
-from reana_server.factory import create_minimal_app
+import pytest
+
+from reana_server.factory import create_app
 
 
 def test_create_app():
-    """Test create_minimal_app() method."""
-    create_minimal_app()
+    """Test create_app() method."""
+    create_app(config_mapping={"SECRET_KEY": "test-secret"})
+
+
+def test_create_app_requires_secret_key():
+    """The factory refuses to start without a session secret."""
+    with pytest.raises(ValueError, match="SECRET_KEY"):
+        create_app(config_mapping={"SECRET_KEY": ""})
