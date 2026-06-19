@@ -27,7 +27,7 @@ from reana_server.config import (
     REANA_GITLAB_URL,
     REANA_URL,
 )
-from reana_server.fastapi_rest._oauth_state import (
+from reana_server.rest._oauth_state import (
     STATE_COOKIE,
     clear_state_cookie,
     consume_state,

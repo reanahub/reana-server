@@ -25,7 +25,7 @@ from starlette.responses import JSONResponse
 
 from reana_server.auth.errors import AuthError, InvalidTokenError
 from reana_server.config import REANA_AUTH
-from reana_server.fastapi_rest import (
+from reana_server.rest import (
     auth,
     config,
     gitlab,

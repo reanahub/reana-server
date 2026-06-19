@@ -154,7 +154,7 @@ class _FakeWorkflowControllerApi:
 
 
 def test_workflows_without_required_role_is_200(client, auth_env, monkeypatch):
-    import reana_server.fastapi_rest.workflows as workflows_mod
+    import reana_server.rest.workflows as workflows_mod
 
     api = _FakeWorkflowControllerApi()
     monkeypatch.setattr(
@@ -172,7 +172,7 @@ def test_workflows_without_required_role_is_200(client, auth_env, monkeypatch):
 
 
 def test_workflows_with_required_role_is_200(client, auth_env, monkeypatch):
-    import reana_server.fastapi_rest.workflows as workflows_mod
+    import reana_server.rest.workflows as workflows_mod
 
     api = _FakeWorkflowControllerApi()
     monkeypatch.setattr(
@@ -202,7 +202,7 @@ def test_you_returns_contract_shape(client, auth_env):
 
 
 def test_openid_configuration_proxy(client, monkeypatch):
-    import reana_server.fastapi_rest.auth as auth_mod
+    import reana_server.rest.auth as auth_mod
 
     document = {
         "issuer": ISSUER,
@@ -244,7 +244,7 @@ def test_groups_search_min_length(client, auth_env):
 
 def test_groups_search_returns_items(client, auth_env, monkeypatch):
     from reana_server.groups.base import GroupRef
-    import reana_server.fastapi_rest.groups as groups_mod
+    import reana_server.rest.groups as groups_mod
 
     backend = _FakeBackend(
         refs=[
@@ -275,7 +275,7 @@ def test_groups_search_returns_items(client, auth_env, monkeypatch):
 
 def test_groups_search_backend_error_is_503(client, auth_env, monkeypatch):
     from reana_server.groups.base import GroupBackendError
-    import reana_server.fastapi_rest.groups as groups_mod
+    import reana_server.rest.groups as groups_mod
 
     backend = _FakeBackend(error=GroupBackendError("backend down"))
     monkeypatch.setattr(
@@ -289,7 +289,7 @@ def test_groups_search_backend_error_is_503(client, auth_env, monkeypatch):
 
 
 def test_groups_search_unknown_provider_is_404(client, auth_env, monkeypatch):
-    import reana_server.fastapi_rest.groups as groups_mod
+    import reana_server.rest.groups as groups_mod
 
     monkeypatch.setattr(groups_mod, "get_group_backend", lambda provider: None)
     token = _make_token(auth_env, reana_roles=["reana:user"])

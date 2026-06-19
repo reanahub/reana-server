@@ -27,7 +27,7 @@ from fastapi.testclient import TestClient
 import reana_server.auth.deps as deps
 import reana_server.auth.sessions as sessions
 import reana_server.auth.tokens as tokens_module
-import reana_server.fastapi_rest.auth as auth_rest
+import reana_server.rest.auth as auth_rest
 from reana_server.asgi import app
 from reana_server.auth.deps import get_current_user
 from reana_server.auth.sessions import AUTH_COOKIE, store_session
