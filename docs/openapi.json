@@ -1904,7 +1904,8 @@
                   "percentage": 38,
                   "running": 2,
                   "sort": 1,
-                  "total": 8
+                  "total": 8,
+                  "unavailable": 1
                 },
                 "node": {
                   "available": 8,
@@ -1916,7 +1917,8 @@
                 },
                 "session": {
                   "active": 3,
-                  "sort": 3
+                  "sort": 3,
+                  "unavailable": 1
                 },
                 "workflow": {
                   "available": 24,
@@ -1926,7 +1928,8 @@
                   "queued": 2,
                   "running": 4,
                   "sort": 2,
-                  "total": 30
+                  "total": 30,
+                  "unavailable": 6
                 }
               }
             },
@@ -1953,6 +1956,9 @@
                       "type": "number"
                     },
                     "total": {
+                      "type": "number"
+                    },
+                    "unavailable": {
                       "type": "number"
                     }
                   },
@@ -1988,6 +1994,9 @@
                     },
                     "sort": {
                       "type": "number"
+                    },
+                    "unavailable": {
+                      "type": "number"
                     }
                   },
                   "type": "object"
@@ -2016,6 +2025,9 @@
                       "type": "number"
                     },
                     "total": {
+                      "type": "number"
+                    },
+                    "unavailable": {
                       "type": "number"
                     }
                   },
