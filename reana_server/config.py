@@ -362,15 +362,15 @@ APP_DEFAULT_SECURE_HEADERS["strict_transport_security_include_subdomains"] = Tru
 APP_DEFAULT_SECURE_HEADERS["referrer_policy"] = "strict-origin-when-cross-origin"
 # NOTE: keep in sync with reana-ui nginx/reana-ui.conf content security policy headers
 APP_DEFAULT_SECURE_HEADERS["content_security_policy"] = {
-    "default-src": "'self'",
-    "script-src": "'self'",
+    "default-src": ["'self'"],
+    "script-src": ["'self'"],
     "style-src": ["'self'", "'unsafe-inline'"],
     "img-src": ["'self'", "data:"],
-    "font-src": "'self'",
-    "connect-src": "'self'",
-    "frame-ancestors": "'none'",
-    "object-src": "'none'",
-    "base-uri": "'self'",
+    "font-src": ["'self'"],
+    "connect-src": ["'self'"],
+    "frame-ancestors": ["'none'"],
+    "object-src": ["'none'"],
+    "base-uri": ["'self'"],
 }
 APP_DEFAULT_SECURE_HEADERS.update(
     json.loads(os.getenv("APP_DEFAULT_SECURE_HEADERS", "{}"))
