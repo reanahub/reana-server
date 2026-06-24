@@ -113,6 +113,7 @@ def test_fetcher_git(with_git_ref, spec, tmp_path):
         commits = []
         for file, content in files:
             file_path = os.path.join(repo_path, file)
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
             with open(file_path, "w") as f:
                 f.write(content)
             repository.index.add(file_path)
@@ -159,6 +160,238 @@ def test_fetcher_git(with_git_ref, spec, tmp_path):
     expected_path = os.path.join(output_dir, spec or "reana.yaml")
     assert expected_path == fetcher.workflow_spec_path()
     assert os.path.isfile(expected_path)
+
+
+@pytest.mark.parametrize(
+    "tree_path, expected_root, expected_workflow_name",
+    [
+        ("main/workflows/example", "workflows/example", "repo-main-workflows-example"),
+        (
+            "feature/with/slash/workflows/example",
+            "workflows/example",
+            "repo-feature-with-slash-workflows-example",
+        ),
+    ],
+)
+def test_fetcher_git_tree_path_with_workflow_directory(
+    tree_path, expected_root, expected_workflow_name, tmp_path
+):
+    """Test fetching workflows from repository folder URLs."""
+    repo_dir = os.path.join(tmp_path, "repo")
+    output_dir = os.path.join(tmp_path, "output")
+
+    repository = Repo.init(repo_dir, initial_branch="main")
+    files = {
+        "README.md": "# Test Git Repository",
+        "workflows/example/reana.yaml": (
+            "version: 0.9.0\nworkflow:\n  type: serial\n  specification:\n    steps: []\n"
+        ),
+        "workflows/example/helloworld.py": "print('hello')\n",
+    }
+    for file, content in files.items():
+        file_path = os.path.join(repo_dir, file)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "w") as f:
+            f.write(content)
+        repository.index.add(file_path)
+    repository.index.commit("Initial commit")
+    repository.create_head("feature/with/slash")
+
+    fetcher = WorkflowFetcherGit(
+        ParsedUrl(f"file://{repo_dir}"), output_dir, tree_path=tree_path
+    )
+    fetcher.fetch()
+
+    expected_root_path = os.path.join(output_dir, expected_root)
+    assert fetcher.workflow_root_path() == expected_root_path
+    assert fetcher.workflow_spec_path() == os.path.join(
+        expected_root_path, "reana.yaml"
+    )
+    assert fetcher.generate_workflow_name() == expected_workflow_name
+
+
+def test_fetcher_git_tree_path_with_commit_sha(tmp_path):
+    """Test fetching workflows from repository folder URLs using commit SHAs."""
+    repo_dir = os.path.join(tmp_path, "repo")
+    output_dir = os.path.join(tmp_path, "output")
+
+    repository = Repo.init(repo_dir, initial_branch="main")
+    workflow_dir = os.path.join(repo_dir, "workflows", "example")
+    os.makedirs(workflow_dir, exist_ok=True)
+
+    first_spec = os.path.join(workflow_dir, "reana.yaml")
+    with open(first_spec, "w") as f:
+        f.write(
+            "version: 0.9.0\n"
+            "workflow:\n"
+            "  type: serial\n"
+            "  specification:\n"
+            "    steps:\n"
+            "      - commands:\n"
+            "          - echo first\n"
+        )
+    repository.index.add(first_spec)
+    repository.index.commit("Initial commit")
+    first_commit_sha = repository.head.commit.hexsha
+
+    with open(first_spec, "w") as f:
+        f.write(
+            "version: 0.9.0\n"
+            "workflow:\n"
+            "  type: serial\n"
+            "  specification:\n"
+            "    steps:\n"
+            "      - commands:\n"
+            "          - echo second\n"
+        )
+    repository.index.add(first_spec)
+    repository.index.commit("Update workflow")
+
+    fetcher = WorkflowFetcherGit(
+        ParsedUrl(f"file://{repo_dir}"),
+        output_dir,
+        tree_path=f"{first_commit_sha}/workflows/example",
+    )
+    fetcher.fetch()
+
+    expected_root_path = os.path.join(output_dir, "workflows", "example")
+    expected_spec_path = os.path.join(expected_root_path, "reana.yaml")
+    assert fetcher.workflow_root_path() == expected_root_path
+    assert fetcher.workflow_spec_path() == expected_spec_path
+    with open(expected_spec_path) as f:
+        assert "echo first" in f.read()
+
+
+def test_fetcher_git_tree_path_with_unfetched_tag(tmp_path):
+    """Test fetching tree URLs for tags that are not present in shallow clones."""
+    repo_dir = os.path.join(tmp_path, "repo")
+    output_dir = os.path.join(tmp_path, "output")
+
+    repository = Repo.init(repo_dir, initial_branch="main")
+    spec_path = os.path.join(repo_dir, "reana.yaml")
+
+    with open(spec_path, "w") as f:
+        f.write(
+            "version: 0.9.0\n"
+            "workflow:\n"
+            "  type: serial\n"
+            "  specification:\n"
+            "    steps:\n"
+            "      - commands:\n"
+            "          - echo first\n"
+        )
+    repository.index.add(spec_path)
+    repository.index.commit("Initial commit")
+    repository.create_tag("v1.0.0")
+
+    with open(spec_path, "w") as f:
+        f.write(
+            "version: 0.9.0\n"
+            "workflow:\n"
+            "  type: serial\n"
+            "  specification:\n"
+            "    steps:\n"
+            "      - commands:\n"
+            "          - echo second\n"
+        )
+    repository.index.add(spec_path)
+    repository.index.commit("Update workflow")
+
+    fetcher = WorkflowFetcherGit(
+        ParsedUrl(f"file://{repo_dir}"), output_dir, tree_path="v1.0.0"
+    )
+    fetcher.fetch()
+
+    expected_spec_path = os.path.join(output_dir, "reana.yaml")
+    assert fetcher.workflow_spec_path() == expected_spec_path
+    with open(expected_spec_path) as f:
+        assert "echo first" in f.read()
+
+
+def test_fetcher_git_tree_path_with_explicit_spec_in_workflow_root(tmp_path):
+    """Test resolving explicit specification paths inside a selected workflow root."""
+    repo_dir = os.path.join(tmp_path, "repo")
+    output_dir = os.path.join(tmp_path, "output")
+
+    repository = Repo.init(repo_dir, initial_branch="main")
+    root_spec = os.path.join(repo_dir, "reana.yaml")
+    workflow_dir = os.path.join(repo_dir, "nested")
+    nested_spec = os.path.join(workflow_dir, "custom.yaml")
+    os.makedirs(workflow_dir, exist_ok=True)
+
+    with open(root_spec, "w") as f:
+        f.write("root spec\n")
+    with open(nested_spec, "w") as f:
+        f.write("nested spec\n")
+    repository.index.add([root_spec, nested_spec])
+    repository.index.commit("Initial commit")
+
+    fetcher = WorkflowFetcherGit(
+        ParsedUrl(f"file://{repo_dir}"),
+        output_dir,
+        tree_path="main/nested",
+        spec="custom.yaml",
+    )
+    fetcher.fetch()
+
+    assert fetcher.workflow_spec_path() == os.path.join(
+        output_dir, "nested", "custom.yaml"
+    )
+
+
+def test_fetcher_git_tree_path_does_not_fallback_to_repo_root_spec(tmp_path):
+    """Test folder URLs do not resolve explicit specifications outside the workflow root."""
+    repo_dir = os.path.join(tmp_path, "repo")
+    output_dir = os.path.join(tmp_path, "output")
+
+    repository = Repo.init(repo_dir, initial_branch="main")
+    root_spec = os.path.join(repo_dir, "reana.yaml")
+    workflow_dir = os.path.join(repo_dir, "nested")
+    os.makedirs(workflow_dir, exist_ok=True)
+    placeholder_file = os.path.join(workflow_dir, "README.md")
+
+    with open(root_spec, "w") as f:
+        f.write("root spec\n")
+    with open(placeholder_file, "w") as f:
+        f.write("nested placeholder\n")
+    repository.index.add([root_spec, placeholder_file])
+    repository.index.commit("Initial commit")
+
+    fetcher = WorkflowFetcherGit(
+        ParsedUrl(f"file://{repo_dir}"),
+        output_dir,
+        tree_path="main/nested",
+        spec="reana.yaml",
+    )
+    fetcher.fetch()
+
+    with pytest.raises(
+        REANAFetcherError, match="Cannot find the provided workflow specification"
+    ):
+        fetcher.workflow_spec_path()
+
+
+def test_fetcher_git_tree_path_rejects_path_traversal(tmp_path):
+    """Test folder URLs cannot select workflow roots outside the cloned repository."""
+    repo_dir = os.path.join(tmp_path, "repo")
+    output_dir = os.path.join(tmp_path, "output")
+
+    repository = Repo.init(repo_dir, initial_branch="main")
+    spec_path = os.path.join(repo_dir, "reana.yaml")
+
+    with open(spec_path, "w") as f:
+        f.write("root spec\n")
+    repository.index.add(spec_path)
+    repository.index.commit("Initial commit")
+
+    fetcher = WorkflowFetcherGit(
+        ParsedUrl(f"file://{repo_dir}"), output_dir, tree_path="main/../../etc"
+    )
+
+    with pytest.raises(
+        REANAFetcherError, match="Invalid path to the workflow directory"
+    ):
+        fetcher.fetch()
 
 
 @pytest.mark.parametrize(
@@ -262,7 +495,7 @@ def test_fetcher_zip(with_top_level_dir, spec, tmp_path):
 
 
 @pytest.mark.parametrize(
-    "url, username, repository, git_ref",
+    "url, username, repository, tree_path",
     [
         ("https://github.com/user/repo", "user", "repo", None),
         ("https://github.com/user/repo/", "user", "repo", None),
@@ -282,25 +515,27 @@ def test_fetcher_zip(with_top_level_dir, spec, tmp_path):
             "repo",
             "tag/with/slashes",
         ),
+        (
+            "https://github.com/user/repo/tree/main/workflows/example",
+            "user",
+            "repo",
+            "main/workflows/example",
+        ),
     ],
 )
-def test_github_fetcher(url, username, repository, git_ref, tmp_path):
+def test_github_fetcher(url, username, repository, tree_path, tmp_path):
     """Test creating a valid fetcher for GitHub URLs."""
     mock_git_fetcher = Mock()
     with patch("reana_server.fetcher.WorkflowFetcherGit", mock_git_fetcher):
         _get_github_fetcher(ParsedUrl(url), tmp_path)
         mock_git_fetcher.assert_called_once()
         expected_repo_url = f"https://github.com/{username}/{repository}.git"
-        (
-            call_parsed_url,
-            call_tmp_path,
-            call_git_ref,
-            call_spec,
-        ) = mock_git_fetcher.call_args.args
+        call_parsed_url, call_tmp_path = mock_git_fetcher.call_args.args
+        call_kwargs = mock_git_fetcher.call_args.kwargs
         assert call_parsed_url.original_url == expected_repo_url
         assert call_tmp_path == tmp_path
-        assert call_git_ref == git_ref
-        assert call_spec is None
+        assert call_kwargs.get("spec") is None
+        assert call_kwargs.get("tree_path") == tree_path
 
 
 @pytest.mark.parametrize(
@@ -346,7 +581,7 @@ def test_invalid_github_fetcher(url, tmp_path):
 
 
 @pytest.mark.parametrize(
-    "url, username, repository, git_ref",
+    "url, username, repository, tree_path",
     [
         ("https://gitlab.com/user/repo", "user", "repo", None),
         ("https://gitlab.cern.ch/user/repo", "user", "repo", None),
@@ -372,9 +607,15 @@ def test_invalid_github_fetcher(url, tmp_path):
             "repo",
             "tag/with/slashes",
         ),
+        (
+            "https://gitlab.com/group/user/repo/-/tree/main/workflows/example",
+            "group/user",
+            "repo",
+            "main/workflows/example",
+        ),
     ],
 )
-def test_gitlab_fetcher(url, username, repository, git_ref, tmp_path):
+def test_gitlab_fetcher(url, username, repository, tree_path, tmp_path):
     """Test creating a valid fetcher for GitLab URLs."""
     mock_git_fetcher = Mock()
     with patch("reana_server.fetcher.WorkflowFetcherGit", mock_git_fetcher):
@@ -382,16 +623,12 @@ def test_gitlab_fetcher(url, username, repository, git_ref, tmp_path):
         _get_gitlab_fetcher(ParsedUrl(url), tmp_path)
         mock_git_fetcher.assert_called_once()
         expected_repo_url = f"https://{parsed_url.hostname}/{username}/{repository}.git"
-        (
-            call_parsed_url,
-            call_tmp_path,
-            call_git_ref,
-            call_spec,
-        ) = mock_git_fetcher.call_args.args
+        call_parsed_url, call_tmp_path = mock_git_fetcher.call_args.args
+        call_kwargs = mock_git_fetcher.call_args.kwargs
         assert call_parsed_url.original_url == expected_repo_url
         assert call_tmp_path == tmp_path
-        assert call_git_ref == git_ref
-        assert call_spec is None
+        assert call_kwargs.get("spec") is None
+        assert call_kwargs.get("tree_path") == tree_path
 
 
 @pytest.mark.parametrize(
@@ -406,9 +643,17 @@ def test_gitlab_fetcher(url, username, repository, git_ref, tmp_path):
             GITHUB_REPO_URL + "/tree/tag/with/slashes/",
             "reana-demo-root6-roofit-tag-with-slashes",
         ),
+        (
+            GITHUB_REPO_URL + "/tree/main/workflows/example",
+            "reana-demo-root6-roofit-main-workflows-example",
+        ),
         (GITHUB_REPO_ZIP, "reana-demo-root6-roofit-master"),
         (GITLAB_REPO_URL, "repo"),
         (GITLAB_REPO_URL + "/-/tree/tag/with/slashes/", "repo-tag-with-slashes"),
+        (
+            GITLAB_REPO_URL + "/-/tree/main/workflows/example",
+            "repo-main-workflows-example",
+        ),
         (GITLAB_REPO_ZIP, "repo-master"),
         (ZENODO_URL, "circular-health-data-processing-master"),
         (YAML_URL, "reanahub-reana-demo-root6-roofit-master"),
