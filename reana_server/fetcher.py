@@ -10,6 +10,7 @@
 
 from abc import ABC, abstractmethod
 import os
+import re
 import shutil
 from typing import Any, List, Mapping, Optional, Sequence
 from urllib.parse import urlparse
@@ -75,6 +76,7 @@ class WorkflowFetcherBase(ABC):
         self._parsed_url = parsed_url
         self._output_dir = os.path.abspath(output_dir)
         self._spec = spec
+        self._workflow_path = None
 
     @abstractmethod
     def fetch(self) -> None:
@@ -182,18 +184,44 @@ class WorkflowFetcherBase(ABC):
         real_file_path = os.path.realpath(path)
         return os.path.commonpath([real_output_dir, real_file_path]) == real_output_dir
 
+    def workflow_root_path(self) -> str:
+        """Get the path of the selected workflow root directory.
+
+        The workflow root defaults to the fetcher's output directory, but can point to a
+        subdirectory when launching workflows from repository folder URLs.
+
+        :returns: Absolute path to the selected workflow root directory.
+        """
+        workflow_root = self._output_dir
+        if self._workflow_path:
+            workflow_root = os.path.abspath(
+                os.path.join(self._output_dir, self._workflow_path)
+            )
+            if not self._is_path_inside_output_dir(workflow_root):
+                raise REANAFetcherError("Invalid path to the workflow directory")
+            if not os.path.isdir(workflow_root):
+                raise REANAFetcherError("Cannot find the given workflow directory")
+        return workflow_root
+
     def workflow_spec_path(self) -> str:
         """Get the path of the workflow specification file.
 
         If the path to the specification file was provided, only that will be used to
-        find the workflow specification. Otherwise, the file will be searched in the
-        output directory. This method should be called after ``fetch``.
+        find the workflow specification inside the selected workflow root directory.
+        Otherwise, the file will be searched in the workflow root directory. This
+        method should be called after ``fetch``.
 
         :returns: Path of the workflow specification file.
         """
         if self._spec:
-            spec_path = os.path.abspath(os.path.join(self._output_dir, self._spec))
-            if not self._is_path_inside_output_dir(spec_path):
+            workflow_root = self.workflow_root_path()
+            spec_path = os.path.abspath(os.path.join(workflow_root, self._spec))
+            real_workflow_root = os.path.realpath(workflow_root)
+            real_spec_path = os.path.realpath(spec_path)
+            if (
+                os.path.commonpath([real_workflow_root, real_spec_path])
+                != real_workflow_root
+            ):
                 raise REANAFetcherError("Invalid path to the workflow specification")
             if not os.path.isfile(spec_path):
                 raise REANAFetcherError(
@@ -201,7 +229,10 @@ class WorkflowFetcherBase(ABC):
                 )
             return spec_path
 
-        specs = [os.path.abspath(path) for path in self._discover_workflow_specs()]
+        specs = [
+            os.path.abspath(path)
+            for path in self._discover_workflow_specs(self.workflow_root_path())
+        ]
         unique_specs = list(set(specs))
         if not unique_specs:
             raise REANAFetcherError("Workflow specification was not found")
@@ -219,6 +250,7 @@ class WorkflowFetcherGit(WorkflowFetcherBase):
         output_dir: str,
         git_ref: Optional[str] = None,
         spec: Optional[str] = None,
+        tree_path: Optional[str] = None,
     ):
         """Initialize the workflow specification fetcher.
 
@@ -229,6 +261,63 @@ class WorkflowFetcherGit(WorkflowFetcherBase):
         """
         super().__init__(parsed_url, output_dir, spec)
         self._git_ref = git_ref
+        self._tree_path = tree_path
+
+    @staticmethod
+    def _git_ref_exists(repository: Repo, git_ref: str) -> bool:
+        """Check whether the given git ref exists in the repository."""
+        remote_name = repository.remote().name
+        ref_candidates = [
+            f"refs/remotes/{remote_name}/{git_ref}",
+            f"refs/tags/{git_ref}",
+        ]
+        for ref_candidate in ref_candidates:
+            try:
+                repository.git.rev_parse("--verify", ref_candidate)
+                return True
+            except Exception:
+                continue
+
+        if re.fullmatch(r"[0-9a-f]{7,40}", git_ref):
+            try:
+                repository.commit(git_ref)
+                return True
+            except Exception:
+                pass
+
+        return False
+
+    @staticmethod
+    def _looks_like_git_sha(git_ref: str) -> bool:
+        """Check whether the given git ref looks like a commit SHA."""
+        return bool(re.fullmatch(r"[0-9a-f]{7,40}", git_ref))
+
+    @classmethod
+    def _resolve_tree_path(
+        cls, repository: Repo, tree_path: str
+    ) -> tuple[str, Optional[str]]:
+        """Resolve a GitHub/GitLab tree path into git ref and workflow subdirectory.
+
+        Tree URLs have the form ``tree/<git_ref>[/path/to/workflow]``. Since Git refs can
+        themselves contain slashes, choose the longest path prefix that resolves to a
+        known git ref and treat the remaining suffix as a workflow subdirectory.
+        """
+        path_parts = tree_path.strip("/").split("/")
+        for idx in range(len(path_parts), 0, -1):
+            git_ref = "/".join(path_parts[:idx])
+            workflow_path = "/".join(path_parts[idx:]) or None
+            if cls._git_ref_exists(repository, git_ref):
+                return git_ref, workflow_path
+
+        # Commit-SHA tree URLs may point to commits outside the initial shallow clone.
+        # Preserve the previous behavior and let the later fetch/checkout path resolve
+        # the SHA against the remote.
+        if path_parts and cls._looks_like_git_sha(path_parts[0]):
+            return path_parts[0], "/".join(path_parts[1:]) or None
+
+        raise REANAFetcherError(
+            f'Cannot checkout the given Git reference "{tree_path}"'
+        )
 
     def fetch(self) -> None:
         """Fetch workflow specification from a Git repository."""
@@ -246,6 +335,11 @@ class WorkflowFetcherGit(WorkflowFetcherBase):
                 "URL is correct and that the repository is publicly accessible."
             )
 
+        if self._tree_path:
+            self._git_ref, self._workflow_path = self._resolve_tree_path(
+                repository, self._tree_path
+            )
+
         if self._git_ref:
             try:
                 repository.remote().fetch(self._git_ref, depth=1)
@@ -255,6 +349,8 @@ class WorkflowFetcherGit(WorkflowFetcherBase):
                     f'Cannot checkout the given Git reference "{self._git_ref}"'
                 )
 
+        # Validate the selected workflow root after checkout.
+        self.workflow_root_path()
         shutil.rmtree(os.path.join(self._output_dir, ".git"))
 
     def generate_workflow_name(self) -> str:
@@ -266,8 +362,9 @@ class WorkflowFetcherGit(WorkflowFetcherBase):
         :returns: Generated workflow name.
         """
         repository_name = self._parsed_url.basename_without_extension
-        if self._git_ref:
-            workflow_name = f"{repository_name}-{self._git_ref}"
+        git_selector = self._tree_path or self._git_ref
+        if git_selector:
+            workflow_name = f"{repository_name}-{git_selector}"
         else:
             workflow_name = repository_name
         return self._clean_workflow_name(workflow_name)
@@ -417,7 +514,7 @@ def _get_github_fetcher(
 
     username = components["username"]
     repository = components["repository"]
-    git_ref = components.get("git_ref")
+    tree_path = components.get("git_ref")
     zip_path = components.get("zip_path")
 
     if zip_path:
@@ -427,7 +524,11 @@ def _get_github_fetcher(
         return WorkflowFetcherZip(parsed_url, output_dir, spec, workflow_name)
     else:
         repository_url = ParsedUrl(f"https://github.com/{username}/{repository}.git")
-        return WorkflowFetcherGit(repository_url, output_dir, git_ref, spec)
+        if tree_path:
+            return WorkflowFetcherGit(
+                repository_url, output_dir, spec=spec, tree_path=tree_path
+            )
+        return WorkflowFetcherGit(repository_url, output_dir, spec=spec)
 
 
 def _get_gitlab_fetcher(
@@ -458,7 +559,7 @@ def _get_gitlab_fetcher(
 
     username = components["username"]
     repository = components["repository"]
-    git_ref = components.get("git_ref")
+    tree_path = components.get("git_ref")
     zip_path = components.get("zip_path")
 
     if zip_path:
@@ -470,7 +571,11 @@ def _get_gitlab_fetcher(
         repository_url = ParsedUrl(
             f"https://{parsed_url.hostname}/{username}/{repository}.git"
         )
-        return WorkflowFetcherGit(repository_url, output_dir, git_ref, spec)
+        if tree_path:
+            return WorkflowFetcherGit(
+                repository_url, output_dir, spec=spec, tree_path=tree_path
+            )
+        return WorkflowFetcherGit(repository_url, output_dir, spec=spec)
 
 
 def get_fetcher(

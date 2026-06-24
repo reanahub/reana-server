@@ -168,6 +168,7 @@ def launch(user, url, name="", parameters="{}", specification=None):
         # Fetch the workflow spec
         fetcher = get_fetcher(url, tmpdir, specification)
         fetcher.fetch()
+        workflow_root = fetcher.workflow_root_path()
 
         # Generate the workflow name
         workflow_name = name.replace(" ", "") or fetcher.generate_workflow_name()
@@ -194,15 +195,15 @@ def launch(user, url, name="", parameters="{}", specification=None):
         # FIXME: locking will not be needed when the loading and validation of
         # specifications will be done inside an external sandbox
         with load_reana_spec_lock:
-            reana_yaml = load_reana_spec(spec_path, workspace_path=tmpdir)
+            reana_yaml = load_reana_spec(spec_path, workspace_path=workflow_root)
         input_parameters = json.loads(parameters)
         validation_warnings = validate_workflow(reana_yaml, input_parameters)
 
         # Keep only files and directories listed as workflow's inputs
-        filter_input_files(tmpdir, reana_yaml)
+        filter_input_files(workflow_root, reana_yaml)
 
         # Check the user's disk quota
-        disk_usage = get_disk_usage_or_zero(tmpdir)
+        disk_usage = get_disk_usage_or_zero(workflow_root)
         prevent_disk_quota_excess(
             user, disk_usage, action=f"Launching the workflow {workflow_name}"
         )
@@ -225,7 +226,7 @@ def launch(user, url, name="", parameters="{}", specification=None):
         ).result()
 
         workflow = _get_workflow_with_uuid_or_name(response["workflow_id"], user_id)
-        mv_workflow_files(tmpdir, workflow.workspace_path)
+        mv_workflow_files(workflow_root, workflow.workspace_path)
 
         # Update the workflows's and user's disk usage
         store_workflow_disk_quota(workflow, bytes_to_sum=disk_usage)
