@@ -8,20 +8,31 @@
 
 """REANA Server validation utilities."""
 
-import itertools
-import pathlib
-from typing import Dict, List
+import logging
+import os
+from typing import Dict, List, Optional, Tuple
 
-from reana_commons.config import WORKSPACE_PATHS
-from reana_commons.validation.images import extract_images
+import requests
+import yaml
+
+from reana_commons.config import (
+    OPENAPI_SPECS,
+    SHARED_VOLUME_PATH,
+    WORKSPACE_PATHS,
+)
 from reana_commons.errors import REANAValidationError
-from reana_commons.validation.compute_backends import build_compute_backends_validator
-from reana_commons.validation.operational_options import validate_operational_options
-from reana_commons.validation.parameters import build_parameters_validator
-from reana_commons.validation.utils import validate_reana_yaml, validate_workspace
-from reana_commons.job_utils import kubernetes_memory_to_bytes
+from reana_commons.validation.environments import check_environments
+from reana_commons.validation.images import extract_images
+from reana_commons.validation.report import validate_serialized_spec
+from reana_commons.validation.utils import (
+    bound_error_message,
+    validate_retention_rule as _validate_retention_rule,
+)
 
 from reana_server.config import (
+    REANA_ENVIRONMENT_CHECK_REGISTRIES,
+    REANA_ENVIRONMENT_CHECK_TIMEOUT,
+    REANA_SPEC_VALIDATION_TIMEOUT,
     SUPPORTED_COMPUTE_BACKENDS,
     WORKSPACE_RETENTION_PERIOD,
     DASK_ENABLED,
@@ -34,43 +45,6 @@ from reana_server.config import (
     REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS,
     REANA_VETTED_CONTAINER_IMAGES,
 )
-
-
-def validate_parameters(reana_yaml: Dict) -> None:
-    """Validate the presence of input parameters in workflow step commands and viceversa.
-
-    :param reana_yaml: REANA YAML specification.
-
-    :raises REANAValidationError: Given there are parameter validation errors in REANA spec file.
-    """
-    validator = build_parameters_validator(reana_yaml)
-    validator.validate_parameters()
-
-
-def validate_workspace_path(reana_yaml: Dict) -> None:
-    """Validate workspace in REANA specification file.
-
-    :param reana_yaml: REANA YAML specification.
-
-    :raises REANAValidationError: Given workspace in REANA spec file does not validate against
-        allowed workspaces.
-    """
-    root_path = reana_yaml.get("workspace", {}).get("root_path")
-    if root_path:
-        available_paths = list(WORKSPACE_PATHS.values())
-        validate_workspace(root_path, available_paths)
-
-
-def validate_compute_backends(reana_yaml: Dict) -> None:
-    """Validate compute backends in REANA specification file according to workflow type.
-
-    :param reana_yaml: dictionary which represents REANA specification file.
-
-    :raises REANAValidationError: Given compute backend specified in REANA spec file does not validate against
-        supported compute backends.
-    """
-    validator = build_compute_backends_validator(reana_yaml, SUPPORTED_COMPUTE_BACKENDS)
-    validator.validate()
 
 
 def validate_input_parameters(
@@ -91,71 +65,27 @@ def validate_input_parameters(
     return input_parameters
 
 
-def validate_inputs(reana_yaml: Dict) -> None:
-    """Check whether the paths of the input files/directories are valid or not.
+def validate_loaded_spec(reana_spec: Dict) -> List[Dict]:
+    """Validate an already fully-loaded REANA specification.
 
-    :param reana_yaml: REANA specification.
+    This is the thin in-process counterpart to :func:`load_and_validate_spec`
+    for paths that already hold a *trusted*, fully-loaded specification (workflow
+    loaded + input parameters resolved) and therefore do not need to load any
+    untrusted bundle -- e.g. clone/restart from the stored specification. It runs
+    the single shared validator
+    (:func:`reana_commons.validation.report.validate_serialized_spec`) against the
+    cluster validation policy.
+
+    :param reana_spec: A fully-loaded REANA specification dictionary.
+    :returns: The list of advisory validation warnings.
+    :raises reana_commons.errors.REANAValidationError: if the specification is
+        invalid.
     """
-    inputs = reana_yaml.get("inputs", {})
-    files = inputs.get("files", [])
-    directories = inputs.get("directories", [])
-    paths = [pathlib.Path(path) for path in files + directories]
-
-    unique_paths = set()
-    for path in paths:
-        if path.is_absolute():
-            raise REANAValidationError(f"Input path cannot be absolute: {path}")
-        if not path.parts:
-            raise REANAValidationError("Input path cannot be empty")
-        if ".." in path.parts:
-            raise REANAValidationError(f"Input path cannot contain '..': {path}")
-        if path in unique_paths:
-            raise REANAValidationError(f"Input path declared multiple times: {path}")
-        unique_paths.add(path)
-
-    from reana_server import utils
-
-    for x, y in itertools.permutations(paths, r=2):
-        if utils.is_relative_to(x, y):
-            raise REANAValidationError(
-                f"Duplicate input paths '{y}' and '{x}' found. Please deduplicate inputs first."
-            )
-
-
-def validate_images(reana_yaml: Dict) -> None:
-    """Check whether the images used in the workflow are allowed or not.
-
-    :param reana_yaml: REANA specification.
-    """
-    if not REANA_VETTED_CONTAINER_IMAGES["enabled"]:
-        return
-
-    allowed_images = REANA_VETTED_CONTAINER_IMAGES["allowlist"]
-    for image in extract_images(reana_yaml):
-        if image and image not in allowed_images:
-            raise REANAValidationError(f"Image not allowed: {image}")
-
-
-def validate_workflow(reana_yaml: Dict, input_parameters: Dict) -> Dict:
-    """Validate REANA workflow specification by calling all the validation utilities.
-
-    :param reana_yaml: dictionary which represents REANA specification file.
-    :param input_parameters: dictionary which represents additional workflow input parameters.
-
-    :raises REANAValidationError: Given there are validation errors in REANA spec file.
-    """
-    workflow_type = reana_yaml["workflow"]["type"]
-    operational_options = reana_yaml.get("inputs", {}).get("options", {})
-    original_parameters = reana_yaml.get("inputs", {}).get("parameters", {})
-
-    reana_yaml_warnings = validate_reana_yaml(reana_yaml)
-    validate_operational_options(workflow_type, operational_options)
-    validate_input_parameters(input_parameters, original_parameters)
-    validate_compute_backends(reana_yaml)
-    validate_workspace_path(reana_yaml)
-    validate_inputs(reana_yaml)
-    validate_images(reana_yaml)
-    return reana_yaml_warnings
+    report = validate_serialized_spec(reana_spec, build_validation_policy())
+    if not report["valid"]:
+        message = "; ".join(e.get("message", "") for e in report.get("errors", []))
+        raise REANAValidationError(message or "Invalid workflow specification.")
+    return report.get("warnings", [])
 
 
 def validate_retention_rule(rule: str, days: int) -> None:
@@ -169,71 +99,301 @@ def validate_retention_rule(rule: str, days: int) -> None:
 
     :raises reana_commons.errors.REANAValidationError: if rule is not valid
     """
-    rule_path = pathlib.Path(rule)
-    if rule_path.is_absolute():
-        raise REANAValidationError(f"Retention rule {rule} cannot be an absolute path")
-    if not rule_path.parts:
-        raise REANAValidationError(f"Retention rule {rule} cannot be empty")
-    if ".." in rule_path.parts:
-        raise REANAValidationError(f"Retention rule {rule} cannot contain '..'")
+    _validate_retention_rule(
+        rule, days, max_retention_period=WORKSPACE_RETENTION_PERIOD
+    )
 
-    default_retention_rules_are_not_disabled = WORKSPACE_RETENTION_PERIOD is not None
-    if default_retention_rules_are_not_disabled and days >= WORKSPACE_RETENTION_PERIOD:
-        raise REANAValidationError(
-            "Maximum workflow retention period was reached. "
-            f"Please use less than {WORKSPACE_RETENTION_PERIOD} days."
+
+def list_spec_images(reana_spec: Dict) -> List[str]:
+    """Return the distinct, non-empty runtime images of a loaded spec.
+
+    Returned to the client so it can run the deep (Docker) ``--pull`` checks
+    without having to load/parse the engine-specific specification itself.
+    """
+    try:
+        return sorted({image for image in extract_images(reana_spec) if image})
+    except Exception:
+        logging.warning("Could not extract images from the specification.")
+        return []
+
+
+def check_spec_environments(
+    reana_spec: Dict, check_existence: bool = True
+) -> List[Dict]:
+    """Cheap server-side image checks (existence + floating tag) for a loaded spec.
+
+    Returns advisory warning entries (``{code, message, path}``) ready to append
+    to a validation report's ``warnings``. It contacts only the configured
+    registries and downloads no image layers; the deeper UID/GID checks that
+    need a container runtime run client-side (``reana-client ... --pull``). When
+    ``check_existence`` is false (the client will pull locally) only the offline
+    floating-tag check runs and no registry is contacted.
+    """
+    try:
+        images = extract_images(reana_spec)
+    except Exception:
+        logging.warning("Could not extract images for environment check.")
+        return []
+    findings = check_environments(
+        images,
+        check_existence=check_existence,
+        allowed_registries=REANA_ENVIRONMENT_CHECK_REGISTRIES,
+        timeout=REANA_ENVIRONMENT_CHECK_TIMEOUT,
+    )
+    return [
+        {"code": f["code"], "message": f["message"], "path": f["image"]}
+        for f in findings
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Server-side spec loading + validation orchestration
+#
+# These power the "raw spec bundle" flow used by thin clients (e.g. the Go
+# client) that cannot run the workflow engines themselves. The bundle (raw
+# reana.yaml + referenced workflow/config files) is staged on the shared volume;
+# serial specs are loaded + validated in-process (loading serial is pure), while
+# Snakemake/CWL/Yadage specs -- whose loading executes untrusted code -- are sent
+# to reana-workflow-controller, which runs the sandboxed validator Job.
+# ---------------------------------------------------------------------------
+
+REANA_SPEC_FILENAMES = ("reana.yaml", "reana.yml")
+
+
+def build_validation_policy() -> Dict:
+    """Build the cluster validation policy passed to the shared validator.
+
+    The same dict shape is consumed by
+    :func:`reana_commons.validation.report.validate_serialized_spec` (in-process,
+    for serial) and injected into the sandbox Job (for non-serial).
+    """
+    return {
+        "vetted_images_enabled": REANA_VETTED_CONTAINER_IMAGES["enabled"],
+        "vetted_images_allowlist": list(REANA_VETTED_CONTAINER_IMAGES["allowlist"]),
+        "supported_backends": SUPPORTED_COMPUTE_BACKENDS,
+        "workspace_paths": list(WORKSPACE_PATHS.values()),
+        "dask_config": {
+            "enabled": DASK_ENABLED,
+            "max_memory_limit": REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT,
+            "default_number_of_workers": REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS,
+            "max_number_of_workers": REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS,
+            "default_single_worker_memory": REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY,
+            "max_single_worker_memory": REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY,
+            "default_single_worker_threads": REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
+            "max_single_worker_threads": REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS,
+        },
+        "max_retention_period": WORKSPACE_RETENTION_PERIOD,
+    }
+
+
+def _find_reana_yaml(bundle_dir: str) -> str:
+    """Return the path to the REANA specification file in a bundle directory."""
+    for name in REANA_SPEC_FILENAMES:
+        candidate = os.path.join(bundle_dir, name)
+        if os.path.isfile(candidate):
+            return candidate
+    raise REANAValidationError(
+        "No REANA specification file ({}) found in the uploaded bundle.".format(
+            " or ".join(REANA_SPEC_FILENAMES)
+        )
+    )
+
+
+def has_reana_spec_file(workspace_path: str) -> bool:
+    """Whether a workspace directory contains a ``reana.yaml``/``reana.yml``.
+
+    Used by the start gate to decide between re-loading the workspace
+    (workspace-authoritative) and falling back to the stored specification:
+    launched workflows have their spec file stripped by ``filter_input_files``
+    and legacy (pre-seeding) workflows never had one seeded.
+    """
+    return any(
+        os.path.isfile(os.path.join(workspace_path, name))
+        for name in REANA_SPEC_FILENAMES
+    )
+
+
+class SpecValidationServiceError(Exception):
+    """The validation *service* failed -- the validator could not run.
+
+    Distinct from an invalid specification: this means the sandbox/controller
+    could not do its job (controller unreachable, controller 5xx, or the sandbox
+    exited with the internal-error code 2), so it must surface as a server-side
+    error (HTTP 500), not a "bad specification" (HTTP 400).
+    """
+
+
+# Sandbox exit codes. Mirrors reana-workflow-validator: 0 loaded, 1 the spec
+# could not be loaded (a user-facing error), 2 internal/infrastructure error.
+_VALIDATOR_EXIT_LOAD_ERROR = 1
+_VALIDATOR_EXIT_INTERNAL_ERROR = 2
+
+
+def _call_rwc_validate(
+    bundle_rel_path: str, timeout: Optional[int] = None
+) -> Tuple[Optional[int], Dict]:
+    """Ask reana-workflow-controller to load a spec in the sandbox.
+
+    The sandbox is a pure loader and applies no policy, so none is sent; the
+    server validates the returned specification itself.
+
+    :param bundle_rel_path: Bundle path relative to the shared volume root.
+    :returns: ``(exit_code, report)`` from the sandbox, where ``report`` is
+        ``{reana_specification, error}``.
+    :raises SpecValidationServiceError: if the validation service itself fails
+        (controller unreachable or a non-OK controller response). This is a
+        service outage, not an invalid specification.
+    """
+    rwc_url = OPENAPI_SPECS["reana-workflow-controller"][0]
+    try:
+        response = requests.post(
+            "{}/api/workflows/validate".format(rwc_url),
+            json={
+                "bundle_path": bundle_rel_path,
+                "timeout": timeout,
+            },
+            # Safety net so a stuck controller cannot hang the request forever;
+            # the real bound is the sandbox Job's activeDeadlineSeconds. The read
+            # timeout is derived from REANA_SPEC_VALIDATION_TIMEOUT (the shared
+            # sandbox deadline) with a buffer above the controller's own
+            # ``timeout + 60`` wait, so the server never gives up first.
+            timeout=(10, REANA_SPEC_VALIDATION_TIMEOUT + 120),
+        )
+    except requests.exceptions.RequestException as e:
+        logging.error("Could not reach the spec validation service: %s", e)
+        raise SpecValidationServiceError(
+            "Could not reach the workflow specification validation service."
+        )
+    if not response.ok:
+        message = "Workflow specification validation service error."
+        try:
+            message = response.json().get("message", message)
+        except ValueError:
+            pass
+        raise SpecValidationServiceError(message)
+    payload = response.json()
+    return payload.get("exit_code"), payload["report"]
+
+
+def _load_error_report(message: str) -> Dict:
+    """Build the standard "specification could not be loaded" invalid report.
+
+    Shared by the in-process serial path and the sandbox path so a spec that
+    fails to load produces an identical structured (``code == "load"``) report --
+    and hence the same HTTP 400 + message -- regardless of engine.
+    """
+    return {
+        "valid": False,
+        "reana_specification": None,
+        "errors": [{"code": "load", "message": message, "path": ""}],
+        "warnings": [],
+    }
+
+
+def _authoritative_report(report: Dict, exit_code: Optional[int], policy: Dict) -> Dict:
+    """Decide valid/invalid server-side from a sandbox *loader* report.
+
+    The sandbox only loads (running untrusted code) and returns the serialized
+    ``reana_specification`` -- it computes no verdict, so there is nothing to
+    trust or forge. We run the *pure*, code-execution-free policy validator
+    (:func:`reana_commons.validation.report.validate_serialized_spec`) on that
+    candidate in-process; that in-process result is the authoritative decision.
+
+    The sandbox report is ``{reana_specification, error}`` and the exit code
+    classifies the loading outcome (0 loaded, 1 load error, 2 internal).
+
+    :raises SpecValidationServiceError: on an infrastructure failure (sandbox
+        exit code 2 or an ``internal``-coded error), which is not a spec problem.
+    """
+    error = report.get("error") or {}
+    if exit_code == _VALIDATOR_EXIT_INTERNAL_ERROR or error.get("code") == "internal":
+        raise SpecValidationServiceError(
+            error.get("message") or "internal validation error"
         )
 
+    candidate = report.get("reana_specification")
+    if not candidate or exit_code == _VALIDATOR_EXIT_LOAD_ERROR:
+        # The specification could not be loaded at all (e.g. a Snakefile that
+        # fails to parse). That is a user-facing validation error, not a service
+        # failure -- report it as invalid, surfacing the (bounded) loader message.
+        return _load_error_report(bound_error_message(error.get("message") or ""))
 
-def validate_dask_limits(reana_yaml: Dict) -> None:
-    """Validate Dask workflows are allowed in the cluster and memory limits are respected."""
-    # Validate Dask workflows are allowed in the cluster
-    dask_resources = reana_yaml["workflow"].get("resources", {}).get("dask", {})
-    if not DASK_ENABLED and dask_resources != {}:
-        raise REANAValidationError("Dask workflows are not allowed in this cluster.")
+    # Authoritative validation in-process (pure, no code execution).
+    authoritative = validate_serialized_spec(candidate, policy)
+    authoritative["reana_specification"] = candidate
+    return authoritative
 
-    # Validate Dask memory limit requested by the workflow
-    if dask_resources:
-        single_worker_memory = dask_resources.get(
-            "single_worker_memory", REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_MEMORY
-        )
-        if kubernetes_memory_to_bytes(
-            single_worker_memory
-        ) > kubernetes_memory_to_bytes(REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY):
-            raise REANAValidationError(
-                f'The "single_worker_memory" provided in the dask resources exceeds the limit ({REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_MEMORY}).'
+
+def validate_spec_bundle(
+    bundle_dir: str, bundle_rel_path: str, workflow_type: str
+) -> Dict:
+    """Load and validate a raw spec bundle, returning a structured report.
+
+    Loading is done in-process for serial specs (pure dictionary manipulation)
+    and in the sandboxed loader Job spawned by reana-workflow-controller for
+    Snakemake/CWL/Yadage (because it executes untrusted code). In *both* cases
+    the policy validation is applied in-process here -- the sandbox only loads;
+    see :func:`_authoritative_report`.
+
+    :param bundle_dir: Absolute path of the staged bundle on the shared volume.
+    :param bundle_rel_path: Bundle path relative to the shared volume root.
+    :param workflow_type: REANA workflow type.
+    :returns: Report dict ``{valid, reana_specification, errors, warnings}``.
+    :raises SpecValidationServiceError: if the validation service itself failed.
+    """
+    policy = build_validation_policy()
+
+    if workflow_type == "serial":
+        # Safe to do in-process: serial loading does not execute user code.
+        from reana_commons.specification import load_reana_spec
+
+        try:
+            reana_yaml = load_reana_spec(
+                _find_reana_yaml(bundle_dir), workspace_path=bundle_dir
             )
+        except Exception as e:
+            # A serial spec that fails to load is a user-facing validation error,
+            # not a service failure -- report it as invalid with the same bounded
+            # "load" message shape as the sandbox path (rather than letting it
+            # bubble up as a 500).
+            return _load_error_report(bound_error_message(e))
+        report = validate_serialized_spec(reana_yaml, policy)
+        report["reana_specification"] = reana_yaml
+        return report
 
-        number_of_workers = int(
-            dask_resources.get(
-                "number_of_workers", REANA_DASK_CLUSTER_DEFAULT_NUMBER_OF_WORKERS
-            )
-        )
+    exit_code, report = _call_rwc_validate(bundle_rel_path)
+    return _authoritative_report(report, exit_code, policy)
 
-        if number_of_workers > REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS:
-            raise REANAValidationError(
-                f"The number of requested Dask workers ({number_of_workers}) exceeds the maximum limit ({REANA_DASK_CLUSTER_MAX_NUMBER_OF_WORKERS})."
-            )
 
-        single_worker_threads = dask_resources.get(
-            "single_worker_threads",
-            REANA_DASK_CLUSTER_DEFAULT_SINGLE_WORKER_THREADS,
-        )
+def load_and_validate_spec(bundle_dir: str) -> Tuple[Dict, List[Dict]]:
+    """Load and validate a raw spec bundle, returning the authoritative spec.
 
-        if single_worker_threads > REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS:
-            raise REANAValidationError(
-                f'The "single_worker_threads" provided in the dask resources exceeds the limit ({REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS}).'
-            )
+    This is the single chokepoint for every server-side path that must load an
+    *untrusted* workflow specification (raw-bundle create, launch, GitLab).
+    Loading is done in-process for serial workflows and inside the sandboxed
+    validator Job for Snakemake/CWL/Yadage, so the API process never executes
+    untrusted workflow code. The valid/invalid decision is always made
+    server-side (the sandbox is only a loader). Invalid specs raise immediately
+    (fail early).
 
-        requested_dask_cluster_memory = (
-            kubernetes_memory_to_bytes(single_worker_memory) * number_of_workers
-        )
+    :param bundle_dir: Absolute path of the staged bundle on the shared volume.
+    :returns: ``(reana_specification, warnings)`` where ``reana_specification``
+        is the fully loaded spec (workflow loaded + input parameters resolved).
+    :raises REANAValidationError: if the bundle is missing a reana.yaml or the
+        specification is invalid.
+    :raises SpecValidationServiceError: if the validation service itself failed
+        (the validator could not run, as opposed to the spec being invalid).
+    """
+    reana_yaml_path = _find_reana_yaml(bundle_dir)
+    with open(reana_yaml_path) as f:
+        raw_yaml = yaml.safe_load(f) or {}
+    workflow_type = raw_yaml.get("workflow", {}).get("type")
 
-        if requested_dask_cluster_memory > kubernetes_memory_to_bytes(
-            REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT
-        ):
-            raise REANAValidationError(
-                f'The "memory" requested in the dask resources exceeds the limit ({REANA_DASK_CLUSTER_MAX_MEMORY_LIMIT}).\nDecrease the number of workers requested or amount of memory consumed by a single worker.'
-            )
+    bundle_rel_path = os.path.relpath(bundle_dir, SHARED_VOLUME_PATH)
+    report = validate_spec_bundle(bundle_dir, bundle_rel_path, workflow_type)
 
-    return None
+    if not report.get("valid"):
+        message = "; ".join(e.get("message", "") for e in report.get("errors", []))
+        raise REANAValidationError(message or "Invalid workflow specification.")
+
+    return report["reana_specification"], report.get("warnings", [])

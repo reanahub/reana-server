@@ -11,23 +11,40 @@
 import json
 import logging
 import os
+import shutil
 import traceback
+import uuid
 
 import requests
+import yaml
 from bravado.exception import HTTPError
 from flask import Blueprint, Response, jsonify, request, stream_with_context
 from jsonschema.exceptions import ValidationError
+from werkzeug.exceptions import RequestEntityTooLarge
 from reana_commons import workspace
-from reana_commons.config import REANA_WORKFLOW_ENGINES
+from reana_commons.config import (
+    REANA_WORKFLOW_ENGINES,
+    SHARED_VOLUME_PATH,
+    WORKFLOW_RUNTIME_USER_GID,
+    WORKFLOW_RUNTIME_USER_UID,
+)
 from reana_commons.errors import REANAQuotaExceededError, REANAValidationError
-from reana_commons.specification import load_reana_spec
 from reana_commons.validation.operational_options import validate_operational_options
 from reana_commons.validation.utils import validate_workflow_name
 from reana_db.database import Session
 from reana_db.models import InteractiveSessionType, RunStatus
-from reana_db.utils import _get_workflow_with_uuid_or_name
+from reana_db.utils import (
+    _get_workflow_with_uuid_or_name,
+    get_disk_usage_or_zero,
+    store_workflow_disk_quota,
+    update_users_disk_quota,
+)
 from reana_server.api_client import current_rwc_api_client
-from reana_server.config import REANA_HOSTNAME
+from reana_server.config import (
+    REANA_HOSTNAME,
+    REANA_SPEC_BUNDLE_MAX_BYTES,
+    REANA_SPEC_BUNDLE_MAX_FILES,
+)
 from reana_server.decorators import check_quota, signin_required
 from reana_server.deleter import Deleter, InOrOut
 from reana_server.gitlab_client import (
@@ -38,21 +55,24 @@ from reana_server.utils import (
     RequestStreamWithLen,
     _fail_gitlab_commit_build_status,
     _get_reana_yaml_from_gitlab,
-    _load_and_save_yadage_spec,
     clone_workflow,
     ensure_dask_service,
     get_quota_excess_message,
     get_workspace_retention_rules,
     is_uuid_v4,
+    mv_workflow_files,
     prevent_disk_quota_excess,
     publish_workflow_submission,
 )
 from reana_server.validation import (
-    validate_images,
-    validate_inputs,
-    validate_workflow,
-    validate_workspace_path,
-    validate_dask_limits,
+    REANA_SPEC_FILENAMES,
+    check_spec_environments,
+    has_reana_spec_file,
+    list_spec_images,
+    load_and_validate_spec,
+    validate_input_parameters,
+    validate_loaded_spec,
+    validate_spec_bundle,
 )
 import marshmallow
 from webargs import fields, validate
@@ -64,6 +84,246 @@ except ImportError:
     from urlparse import urlparse
 
 blueprint = Blueprint("workflows", __name__)
+
+VALIDATION_STAGING_SUBDIR = "validation-tmp"
+
+# Chunk size for streaming uploaded bundle members to disk while enforcing the
+# size cap (so an oversized member is rejected before it is fully written).
+_BUNDLE_CHUNK_SIZE = 1024 * 1024
+
+
+def _is_truthy_arg(value):
+    """Interpret a query-string flag (``?environments=true``) as a boolean."""
+    return str(value).lower() in ("1", "true", "yes", "on")
+
+
+def _validate_spec_bundle_request_size():
+    """Reject oversized bundle requests before multipart parsing starts."""
+    if (
+        request.content_length is not None
+        and request.content_length > REANA_SPEC_BUNDLE_MAX_BYTES
+    ):
+        raise REANAValidationError(
+            "Specification bundle is too large (maximum is {} bytes).".format(
+                REANA_SPEC_BUNDLE_MAX_BYTES
+            )
+        )
+
+
+def _save_member_within_limit(storage, dest, already_written):
+    """Stream an uploaded bundle member to ``dest``, enforcing the size cap.
+
+    Werkzeug's ``FileStorage.save`` writes the whole member to disk before its
+    size can be checked, so a single very large member (or a chunked upload with
+    no ``Content-Length`` to reject up front) is fully written before the cap
+    fires. Streaming in bounded chunks and tracking the cumulative total across
+    all members lets us abort such an upload *before* it lands on disk.
+
+    :returns: the updated cumulative byte count.
+    :raises REANAValidationError: if the cumulative size exceeds the limit.
+    """
+    total = already_written
+    with open(dest, "wb") as out:
+        while True:
+            chunk = storage.stream.read(_BUNDLE_CHUNK_SIZE)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > REANA_SPEC_BUNDLE_MAX_BYTES:
+                raise REANAValidationError(
+                    "Specification bundle is too large (maximum is {} bytes).".format(
+                        REANA_SPEC_BUNDLE_MAX_BYTES
+                    )
+                )
+            out.write(chunk)
+    return total
+
+
+def _stage_validation_bundle(files):
+    """Stage an uploaded raw spec bundle under the shared volume.
+
+    Each multipart field name is the file path relative to the bundle root.
+
+    :param files: ``request.files`` mapping of relative-path -> uploaded file.
+    :returns: ``(abs_dir, rel_path, total_bytes)`` where ``rel_path`` is relative to
+        ``SHARED_VOLUME_PATH`` so reana-workflow-controller can mount it as a
+        read-only sub-path of the shared volume, and ``total_bytes`` is the
+        exact staged bundle size.
+    :raises REANAValidationError: on an unsafe (absolute / ``..``) member path,
+        too many files, or a bundle that exceeds the configured size limit.
+    """
+    if len(files) > REANA_SPEC_BUNDLE_MAX_FILES:
+        raise REANAValidationError(
+            "Specification bundle has too many files (maximum is {}).".format(
+                REANA_SPEC_BUNDLE_MAX_FILES
+            )
+        )
+    rel_path = os.path.join(VALIDATION_STAGING_SUBDIR, uuid.uuid4().hex)
+    abs_dir = os.path.join(SHARED_VOLUME_PATH, rel_path)
+    os.makedirs(abs_dir, exist_ok=True)
+    base = os.path.realpath(abs_dir)
+    total_bytes = 0
+    try:
+        for member, storage in files.items():
+            if os.path.isabs(member) or ".." in member.replace("\\", "/").split("/"):
+                raise REANAValidationError("Unsafe bundle path: {}".format(member))
+            dest = os.path.realpath(os.path.join(abs_dir, member))
+            if dest != base and not dest.startswith(base + os.sep):
+                raise REANAValidationError("Unsafe bundle path: {}".format(member))
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            # Enforce the size cap while streaming (covers chunked uploads with no
+            # Content-Length, which bypass the up-front request-size check).
+            total_bytes = _save_member_within_limit(storage, dest, total_bytes)
+    except Exception:
+        # Never leave a partial bundle behind if staging is rejected midway.
+        shutil.rmtree(abs_dir, ignore_errors=True)
+        raise
+    return abs_dir, rel_path, total_bytes
+
+
+@blueprint.route("/workflows/validate", methods=["POST"])
+@signin_required()
+def validate_workflow_specification(user):  # noqa
+    r"""Validate a raw REANA workflow specification bundle.
+
+    ---
+    post:
+      summary: Validate a raw workflow specification bundle.
+      description: >-
+        Accepts a multipart upload of the raw specification bundle (the
+        ``reana.yaml`` plus any referenced workflow/config files, each form field
+        named by its path relative to the bundle root). Serial specs are loaded
+        and validated in-process; Snakemake/CWL/Yadage specs -- whose loading
+        executes user code -- are validated inside a sandboxed job spawned by
+        reana-workflow-controller. Returns a structured validation report.
+      operationId: validate_workflow_specification
+      consumes:
+        - multipart/form-data
+      produces:
+        - application/json
+      parameters:
+        - name: bundle
+          in: formData
+          description: Specification bundle files (reana.yaml plus referenced
+            files). Multiple file parts named by their bundle-relative path.
+          required: true
+          type: file
+        - name: access_token
+          in: query
+          required: false
+          type: string
+        - name: environments
+          in: query
+          description: If true, run the cheap (Docker-free) registry checks
+            (existence and tag) on the runtime-environment images and return the
+            loaded image list plus the cluster runtime UID/GID so the client can
+            run the deep checks locally.
+          required: false
+          type: boolean
+        - name: pull
+          in: query
+          description: Hint that the client will pull and inspect the images
+            locally; the server then skips the registry existence lookup (the
+            local pull is authoritative) and returns only the image list and
+            offline tag warnings.
+          required: false
+          type: boolean
+      responses:
+        200:
+          description: Validation ran; a structured report is returned.
+          schema:
+            type: object
+            properties:
+              valid:
+                type: boolean
+              reana_specification:
+                type: object
+              errors:
+                type: array
+                items:
+                  type: object
+              warnings:
+                type: array
+                items:
+                  type: object
+              images:
+                description: Distinct runtime images of the loaded spec (only
+                  when environments is requested), for client-side checks.
+                type: array
+                items:
+                  type: string
+              runtime_uid:
+                description: UID REANA runs workflow steps as.
+                type: integer
+              runtime_gid:
+                description: GID REANA runs workflow steps as.
+                type: integer
+        400:
+          description: The bundle was missing or malformed.
+        401:
+          description: Request malformed or missing access token.
+        403:
+          description: Request access forbidden.
+        500:
+          description: Internal error while validating the specification.
+    """
+    abs_dir = None
+    try:
+        _validate_spec_bundle_request_size()
+        if not request.files:
+            return (
+                jsonify({"message": "No specification bundle files were provided."}),
+                400,
+            )
+        abs_dir, rel_path, _bundle_bytes = _stage_validation_bundle(request.files)
+        reana_yaml_path = next(
+            (
+                os.path.join(abs_dir, name)
+                for name in REANA_SPEC_FILENAMES
+                if os.path.isfile(os.path.join(abs_dir, name))
+            ),
+            None,
+        )
+        if not reana_yaml_path:
+            return (
+                jsonify({"message": "No reana.yaml found in the uploaded bundle."}),
+                400,
+            )
+        with open(reana_yaml_path) as f:
+            raw_yaml = yaml.safe_load(f) or {}
+        workflow_type = raw_yaml.get("workflow", {}).get("type")
+        report = validate_spec_bundle(abs_dir, rel_path, workflow_type)
+        # Optional runtime-environment (container image) checks, requested by the
+        # client via ``--environments``/``--pull``. The server does the cheap,
+        # Docker-free part (existence + floating tag) and returns the loaded
+        # image list plus the cluster runtime UID/GID so the client can run the
+        # deep ``--pull`` checks (pull + inspect) locally. Advisory-only.
+        if _is_truthy_arg(request.args.get("environments")) and report.get(
+            "reana_specification"
+        ):
+            local_pull = _is_truthy_arg(request.args.get("pull"))
+            report["images"] = list_spec_images(report["reana_specification"])
+            report["runtime_uid"] = int(WORKFLOW_RUNTIME_USER_UID)
+            report["runtime_gid"] = int(WORKFLOW_RUNTIME_USER_GID)
+            # When the client pulls locally it is the authority on existence (and
+            # can see private images), so skip the server-side registry lookup
+            # and keep only the offline floating-tag warnings.
+            report.setdefault("warnings", []).extend(
+                check_spec_environments(
+                    report["reana_specification"], check_existence=not local_pull
+                )
+            )
+        return jsonify(report), 200
+    except REANAValidationError as e:
+        return jsonify({"message": str(e)}), 400
+    except RequestEntityTooLarge as e:
+        return jsonify({"message": str(e)}), 413
+    except Exception as e:
+        logging.error(traceback.format_exc())
+        return jsonify({"message": str(e)}), 500
+    finally:
+        if abs_dir:
+            shutil.rmtree(abs_dir, ignore_errors=True)
 
 
 @blueprint.route("/workflows", methods=["GET"])
@@ -408,11 +668,14 @@ def create_workflow(user):  # noqa
     post:
       summary: Creates a new workflow based on a REANA specification file.
       description: >-
-        This resource is expecting a REANA specification in JSON format with
-        all the necessary information to instantiate a workflow.
+        Creates a workflow from an uploaded specification bundle (multipart
+        form data). The bundle contains ``reana.yaml`` plus any referenced
+        workflow/parameter files, each form field named by its path relative to
+        the bundle root. The server loads and validates the specification
+        authoritatively (sandboxed for Snakemake/CWL/Yadage).
       operationId: create_workflow
       consumes:
-        - application/json
+        - multipart/form-data
       produces:
         - application/json
       parameters:
@@ -422,20 +685,12 @@ def create_workflow(user):  # noqa
             name will be generated.
           required: true
           type: string
-        # probably need to rename this to something more specific
-        - name: spec
-          in: query
-          description: Remote repository which contains a valid REANA
-            specification.
-          required: false
-          type: string
-        - name: reana_specification
-          in: body
-          description: REANA specification with necessary data to instantiate
-            a workflow.
-          required: false
-          schema:
-            type: object
+        - name: bundle
+          in: formData
+          description: Specification bundle files (reana.yaml plus referenced
+            files). Multiple file parts named by their bundle-relative path.
+          required: true
+          type: file
         - name: access_token
           in: query
           description: The API access_token of workflow owner.
@@ -520,16 +775,13 @@ def create_workflow(user):  # noqa
           description: >-
             Request failed. Not implemented.
     """
+    bundle_dir = None
     try:
         if request.args.get("spec"):
             return jsonify("Not implemented"), 501
 
-        if not request.is_json:
-            raise Exception(
-                "Either remote repository or REANA specification needs to be provided"
-            )
-
-        request_from_gitlab = "object_kind" in request.json
+        request_from_gitlab = request.is_json and "object_kind" in (request.json or {})
+        validation_warnings = []
         if request_from_gitlab:
             (
                 reana_spec_file,
@@ -544,17 +796,37 @@ def create_workflow(user):  # noqa
                 "git_commit_sha": git_commit_sha,
             }
         else:
+            # Raw-bundle create: the client uploads the specification bundle
+            # (reana.yaml + referenced workflow/parameter files) as multipart
+            # form data. The server loads and validates it authoritatively
+            # (in-process for serial, sandboxed for Snakemake/CWL/Yadage), so it
+            # never trusts a client-serialized specification.
             git_data = {}
-            reana_spec_file = request.json
             workflow_name = request.args.get("workflow_name", "")
+            # Reject an over-quota user *before* any expensive work (staging the
+            # bundle on the shared volume and spawning a sandbox validation Job).
+            if user.has_exceeded_quota():
+                raise REANAQuotaExceededError(get_quota_excess_message(user))
+            _validate_spec_bundle_request_size()
+            if not request.files:
+                raise REANAValidationError(
+                    "A workflow specification bundle must be uploaded."
+                )
+            # Stage the bundle and validate it (B3: create-time lint). Keep it
+            # afterwards so it can seed the workspace once the workflow exists
+            # (C1); it is removed in the outer ``finally``.
+            bundle_dir, _bundle_rel, bundle_bytes = _stage_validation_bundle(
+                request.files
+            )
+            reana_spec_file, validation_warnings = load_and_validate_spec(bundle_dir)
+            prevent_disk_quota_excess(
+                user, bundle_bytes, action=f"Creating the workflow {workflow_name}"
+            )
 
         if user.has_exceeded_quota() and request_from_gitlab:
             message = f"User quota exceeded. Please check {REANA_HOSTNAME}"
             _fail_gitlab_commit_build_status(user, git_url, git_commit_sha, message)
             return jsonify({"message": "Gitlab webhook was processed"}), 200
-        elif user.has_exceeded_quota():
-            message = get_quota_excess_message(user)
-            raise REANAQuotaExceededError(message)
 
         validate_workflow_name(workflow_name)
         if is_uuid_v4(workflow_name):
@@ -569,13 +841,9 @@ def create_workflow(user):  # noqa
         )
 
         workspace_root_path = reana_spec_file.get("workspace", {}).get("root_path")
-        validate_workspace_path(reana_spec_file)
-
-        validate_inputs(reana_spec_file)
-
-        validate_images(reana_spec_file)
-
-        validate_dask_limits(reana_spec_file)
+        # No per-check validation here: the raw-bundle path was already fully
+        # validated by load_and_validate_spec above, and GitLab specs are
+        # validated post-create from the populated workspace (below).
 
         retention_days = reana_spec_file.get("workspace", {}).get("retention_days")
         retention_rules = get_workspace_retention_rules(retention_days)
@@ -595,27 +863,62 @@ def create_workflow(user):  # noqa
             workspace_root_path=workspace_root_path,
         ).result()
 
+        if validation_warnings:
+            response["validation_warnings"] = validation_warnings
+
         if git_data:
             workflow = _get_workflow_with_uuid_or_name(
                 response["workflow_id"], str(user.id_)
             )
 
-            # This is necessary for GitLab integration
-            if workflow.type_ == "yadage":
-                _load_and_save_yadage_spec(
-                    workflow, workflow_dict["operational_options"]
+            # Load + validate the specification from the populated workspace.
+            # The workflow files are git-cloned into the workspace by the
+            # controller during create, so (unlike the raw-bundle path) the spec
+            # can only be loaded + validated here, post-create. Loading runs in
+            # the sandboxed validator for Snakemake/CWL/Yadage (never in-process),
+            # so GitLab-fetched specs cannot execute code in the API.
+            try:
+                workflow.reana_specification, gitlab_warnings = load_and_validate_spec(
+                    workflow.workspace_path
                 )
-            elif workflow.type_ in ["cwl", "snakemake"]:
-                reana_yaml_path = os.path.join(workflow.workspace_path, "reana.yaml")
-                workflow.reana_specification = load_reana_spec(
-                    reana_yaml_path, workflow.workspace_path
+                gitlab_disk_usage = get_disk_usage_or_zero(
+                    workflow.workspace_path, override_policy_checks=True
                 )
+                prevent_disk_quota_excess(
+                    user,
+                    gitlab_disk_usage,
+                    action=f"Creating the workflow {workflow_name}",
+                )
+            except Exception:
+                # The cloned specification is invalid, the validator service
+                # failed, or the cloned repository would exceed disk quota. Mark
+                # the just-created workflow deleted and remove its workspace so
+                # it does not linger as an unstartable/orphaned run consuming
+                # persistent storage.
+                workflow.status = RunStatus.deleted
                 Session.commit()
-
-            validate_images(workflow.reana_specification)
+                shutil.rmtree(workflow.workspace_path, ignore_errors=True)
+                raise
+            Session.commit()
+            if gitlab_warnings:
+                response["validation_warnings"] = gitlab_warnings
+            store_workflow_disk_quota(workflow, bytes_to_sum=gitlab_disk_usage)
+            update_users_disk_quota(user, bytes_to_sum=gitlab_disk_usage)
 
             parameters = request.json
             publish_workflow_submission(workflow, user.id_, parameters)
+        elif bundle_dir:
+            # C1: seed the freshly created (empty) workspace from the validated
+            # bundle, so the workspace -- not a separate client upload -- holds
+            # the authoritative specification. The bundle equals the spec loaded
+            # above, so no reload is needed here; the binding re-validation
+            # happens at start.
+            workflow = _get_workflow_with_uuid_or_name(
+                response["workflow_id"], str(user.id_)
+            )
+            mv_workflow_files(bundle_dir, workflow.workspace_path)
+            store_workflow_disk_quota(workflow, bytes_to_sum=bundle_bytes)
+            update_users_disk_quota(user, bytes_to_sum=bundle_bytes)
         return jsonify(response), http_response.status_code
     except GitLabClientInvalidToken as e:
         return jsonify({"message": str(e)}), 401
@@ -629,16 +932,24 @@ def create_workflow(user):  # noqa
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
     except REANAQuotaExceededError as e:
+        if "git_url" in locals() and "git_commit_sha" in locals():
+            _fail_gitlab_commit_build_status(user, git_url, git_commit_sha, str(e))
+            return jsonify({"message": "Gitlab webhook was processed"}), 200
         return jsonify({"message": e.message}), 403
     except (KeyError, REANAValidationError) as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 400
+    except RequestEntityTooLarge as e:
+        return jsonify({"message": str(e)}), 413
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 500
+    finally:
+        if bundle_dir:
+            shutil.rmtree(bundle_dir, ignore_errors=True)
 
 
 @blueprint.route("/workflows/<workflow_id_or_name>/specification", methods=["GET"])
@@ -1199,11 +1510,10 @@ def _start_workflow(workflow_id_or_name, user, **parameters):
             raise ValueError("workflow_id_or_name is not supplied")
 
         workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
-        operational_options = validate_operational_options(
-            workflow.type_, operational_options
-        )
+        validate_operational_options(workflow.type_, operational_options)
 
-        restart_type = None
+        validation_warnings = []
+        restart_spec_validated = False
         if restart:
             if workflow.status not in [RunStatus.finished, RunStatus.failed]:
                 raise ValueError("Only finished or failed workflows can be restarted.")
@@ -1214,26 +1524,85 @@ def _start_workflow(workflow_id_or_name, user, **parameters):
                 )
             if reana_specification:
                 restart_type = reana_specification.get("workflow", {}).get("type", None)
-            workflow = clone_workflow(workflow, reana_specification, restart_type)
+                if restart_type == "serial":
+                    # Serial specifications are already self-contained and can
+                    # be validated as the provided JSON payload. This preserves
+                    # the direct API replacement flow even when the old shared
+                    # restart workspace still has a reana.yaml.
+                    validation_warnings = validate_loaded_spec(reana_specification)
+                elif has_reana_spec_file(workflow.workspace_path):
+                    # The Python client uploads a replacement reana.yaml into the
+                    # shared restart workspace before calling /start. Reload that
+                    # workspace now, before cloning the restart row, so non-serial
+                    # replacement specs go through the sandboxed loader and the
+                    # cloned row stores the authoritative serialized spec.
+                    reana_specification, validation_warnings = load_and_validate_spec(
+                        workflow.workspace_path
+                    )
+                else:
+                    # Direct API users may still pass an already-serialized
+                    # replacement spec. There is no raw bundle to load in this
+                    # JSON-only endpoint, so validate the provided object as a
+                    # serialized specification.
+                    validation_warnings = validate_loaded_spec(reana_specification)
+                restart_spec_validated = True
+                workflow = clone_workflow(
+                    workflow, reana_specification, restart_type, validate_spec=False
+                )
+            else:
+                workflow = clone_workflow(workflow, None, None)
         elif workflow.status != RunStatus.created:
             raise ValueError(
                 "Workflow {} is already {} and cannot be started "
                 "again.".format(workflow.get_full_workflow_name(), workflow.status.name)
             )
-        if "yadage" in (workflow.type_, restart_type):
-            _load_and_save_yadage_spec(workflow, operational_options)
-
-        validate_workflow(
-            workflow.reana_specification, input_parameters=input_parameters
+        # Binding validation gate. The workspace is the source of truth (A1) and
+        # is mutable, so when it carries a reana.yaml we re-load + re-validate it
+        # *now* -- right before queueing -- and refresh the stored specification
+        # from the loaded result. Loading runs in the sandboxed validator for
+        # Snakemake/CWL/Yadage (never in-process) and in-process for serial. This
+        # binds what runs to what was validated; an invalid workspace fails the
+        # start and the workflow keeps its current status (nothing is queued).
+        #
+        # Two cases deliberately do NOT re-load from the workspace and instead
+        # validate the stored authoritative specification in-process (pure, no
+        # code execution -- safe and the only sound option, since an
+        # already-serialized spec cannot be round-tripped through the engine
+        # loaders):
+        #  * plain restart -- clone_workflow already validated the stored spec;
+        #    replacement restarts were handled above before cloning, from either
+        #    the uploaded workspace reana.yaml or a direct serialized payload; and
+        #  * a workspace with no reana.yaml -- launched workflows have it
+        #    stripped by filter_input_files and pre-seeding (legacy) workflows
+        #    never had it, yet the stored spec is a valid, vetted artifact.
+        # The (pure) policy validator is the authoritative check in every branch,
+        # and runtime per-job policy is independently re-enforced regardless.
+        if restart and restart_spec_validated:
+            pass
+        elif restart:
+            validation_warnings = validate_loaded_spec(workflow.reana_specification)
+        elif has_reana_spec_file(workflow.workspace_path):
+            workflow.reana_specification, validation_warnings = load_and_validate_spec(
+                workflow.workspace_path
+            )
+        else:
+            validation_warnings = validate_loaded_spec(workflow.reana_specification)
+        original_parameters = workflow.reana_specification.get("inputs", {}).get(
+            "parameters", {}
         )
+        validate_input_parameters(input_parameters, original_parameters)
+        Session.object_session(workflow).commit()
 
         # Backfill the Dask service row for legacy workflows created before this fix
         if ensure_dask_service(workflow):
             Session.object_session(workflow).commit()
 
-        # when starting the workflow, the scheduler will call RWC's `set_workflow_status`
-        # with the given `parameters`
-        publish_workflow_submission(workflow, user.id_, parameters)
+        # when starting the workflow, the scheduler will call RWC's
+        # `set_workflow_status` with this payload. Drop server-only fields that
+        # RWC does not accept in its start schema.
+        submission_parameters = dict(parameters)
+        submission_parameters.pop("reana_specification", None)
+        publish_workflow_submission(workflow, user.id_, submission_parameters)
         response = {
             "message": "Workflow submitted.",
             "workflow_id": workflow.id_,
@@ -1242,6 +1611,8 @@ def _start_workflow(workflow_id_or_name, user, **parameters):
             "run_number": workflow.run_number,
             "user": str(user.id_),
         }
+        if validation_warnings:
+            response["validation_warnings"] = validation_warnings
         return response, 200
     except HTTPError as e:
         logging.error(traceback.format_exc())
@@ -1277,6 +1648,15 @@ def start_workflow(workflow_id_or_name, user, **parameters):  # noqa
       description: >-
         This resource starts the workflow execution process.
         Resource is expecting a workflow UUID.
+
+
+        The workspace is the authoritative copy of the specification: before the
+        workflow is queued, the server re-loads and re-validates the
+        specification *from the current workspace* (in a sandbox for
+        Snakemake/CWL/Yadage, in-process for serial) and refreshes the stored
+        specification from it. A workspace that no longer loads or fails policy
+        is rejected with a 400 and the workflow keeps its current status. Any
+        non-blocking validation findings are returned in ``validation_warnings``.
       operationId: start_workflow
       consumes:
         - application/json
@@ -1335,6 +1715,13 @@ def start_workflow(workflow_id_or_name, user, **parameters):  # noqa
                 type: string
               user:
                 type: string
+              validation_warnings:
+                description: >-
+                  Non-blocking findings from re-validating the workspace
+                  specification at start.
+                type: array
+                items:
+                  type: object
           examples:
             application/json:
               {

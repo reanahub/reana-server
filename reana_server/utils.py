@@ -37,7 +37,6 @@ from reana_commons.errors import (
     REANAEmailNotificationError,
 )
 from reana_commons.utils import get_dask_component_name, get_quota_resource_usage
-from reana_commons.yadage import yadage_load_from_workspace
 from reana_db.database import Session
 from reana_db.models import (
     ResourceType,
@@ -89,7 +88,7 @@ from reana_server.gitlab_client import (
     GitLabClient,
     GitLabClientException,
 )
-from reana_server.validation import validate_retention_rule, validate_workflow
+from reana_server.validation import validate_retention_rule, validate_loaded_spec
 
 
 def is_uuid_v4(uuid_or_name):
@@ -425,18 +424,6 @@ def _calculate_complexity(workflow):
 def serialize_utc_datetime(dt: Optional[datetime]) -> Optional[str]:
     """Serialize a naive UTC datetime using an RFC 3339 UTC designator."""
     return dt.isoformat() + "Z" if dt else None
-
-
-def _load_and_save_yadage_spec(workflow: Workflow, operational_options: Dict):
-    """Load and save in DB the Yadage workflow specification."""
-    operational_options.update({"accept_metadir": True})
-    toplevel = operational_options.get("toplevel", "")
-    workflow.reana_specification = yadage_load_from_workspace(
-        workflow.workspace_path,
-        workflow.reana_specification,
-        toplevel,
-    )
-    Session.commit()
 
 
 def _get_admin_user_or_raise(*, requested_via: str) -> User:
@@ -827,10 +814,11 @@ def ensure_dask_service(workflow: Workflow) -> bool:
     return True
 
 
-def clone_workflow(workflow, reana_spec, restart_type):
+def clone_workflow(workflow, reana_spec, restart_type, validate_spec=True):
     """Create a copy of workflow in DB for restarting."""
     reana_specification = reana_spec or workflow.reana_specification
-    validate_workflow(reana_specification, input_parameters={})
+    if validate_spec:
+        validate_loaded_spec(reana_specification)
 
     retention_days = reana_specification.get("workspace", {}).get("retention_days")
     retention_rules = get_workspace_retention_rules(retention_days)

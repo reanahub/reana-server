@@ -11,6 +11,8 @@
 import copy
 import json
 import logging
+import os
+import yaml
 from io import BytesIO
 from uuid import uuid4
 
@@ -20,6 +22,7 @@ from mock import Mock, patch
 from reana_commons.testing import make_mock_api_client
 
 from reana_db.models import User, InteractiveSessionType, RunStatus
+from reana_commons.errors import REANAQuotaExceededError
 from reana_commons.k8s.secrets import UserSecrets, Secret
 
 from reana_server.utils import (
@@ -57,15 +60,73 @@ def test_get_workflows(app, user0, _get_user_mock):
             assert res.status_code == 200
 
 
+SERIAL_REANA_YAML = (
+    "workflow:\n"
+    "  type: serial\n"
+    "  specification:\n"
+    "    steps:\n"
+    "      - name: step1\n"
+    "        environment: 'docker.io/library/busybox:1.36'\n"
+    "        commands:\n"
+    "          - echo hello\n"
+    "inputs:\n"
+    "  parameters: {}\n"
+)
+
+
+def _serial_bundle():
+    """Build a fresh multipart spec bundle for a single request."""
+    return {"reana.yaml": (BytesIO(SERIAL_REANA_YAML.encode()), "reana.yaml")}
+
+
+def _quota_call_for_user(mock, user):
+    """Assert a quota helper was called once for ``user`` and return the call.
+
+    The request-scoped ``user`` the view passes is a different SQLAlchemy
+    instance from the test fixture (loaded in a separate session), so compare by
+    the stable ``id_`` rather than object identity.
+    """
+    mock.assert_called_once()
+    call = mock.call_args
+    assert call.args[0].id_ == user.id_
+    return call
+
+
 def test_create_workflow(
-    app, session, user0, _get_user_mock, sample_serial_workflow_in_db
+    app,
+    session,
+    user0,
+    _get_user_mock,
+    sample_serial_workflow_in_db,
+    monkeypatch,
+    tmp_path,
 ):
-    """Test create_workflow view."""
+    """Test create_workflow view (multipart specification bundle upload)."""
+    # The bundle is staged on the shared volume before being loaded/validated.
+    monkeypatch.setattr("reana_server.rest.workflows.SHARED_VOLUME_PATH", str(tmp_path))
+    # The server seeds the freshly created workspace from the uploaded bundle, so
+    # the mocked controller must return a real workflow whose workspace exists.
+    create_http_response = Mock()
+    create_http_response.status_code = 200
+    rwc_client = Mock()
+    rwc_client.api.create_workflow.return_value.result.return_value = (
+        {
+            "workflow_id": str(sample_serial_workflow_in_db.id_),
+            "workflow_name": sample_serial_workflow_in_db.name,
+        },
+        create_http_response,
+    )
     with app.test_client() as client:
         with patch(
             "reana_server.rest.workflows.current_rwc_api_client",
-            make_mock_api_client("reana-workflow-controller")(),
-        ):
+            rwc_client,
+        ), patch(
+            "reana_server.rest.workflows.prevent_disk_quota_excess"
+        ) as prevent_quota_mock, patch(
+            "reana_server.rest.workflows.store_workflow_disk_quota"
+        ) as store_workflow_quota_mock, patch(
+            "reana_server.rest.workflows.update_users_disk_quota"
+        ) as update_user_quota_mock:
             res = client.post(url_for("workflows.create_workflow"))
             assert res.status_code == 401
 
@@ -87,102 +148,325 @@ def test_create_workflow(
             )
             assert res.status_code == 501
 
-            # no specification provided
+            # no specification bundle provided
             res = client.post(
                 url_for("workflows.create_workflow"),
                 query_string={"access_token": user0.access_token},
             )
-            assert res.status_code == 500
-
-            # unknown workflow engine
-            workflow_specification = copy.deepcopy(
-                sample_serial_workflow_in_db.reana_specification
-            )
-            workflow_specification["workflow"]["type"] = "unknown"
-            res = client.post(
-                url_for("workflows.create_workflow"),
-                headers={"Content-Type": "application/json"},
-                query_string={
-                    "access_token": user0.access_token,
-                    "workflow_name": "test",
-                },
-                data=json.dumps(workflow_specification),
-            )
-            assert res.status_code == 500
+            assert res.status_code == 400
 
             # name cannot be valid uuid4
             res = client.post(
                 url_for("workflows.create_workflow"),
-                headers={"Content-Type": "application/json"},
                 query_string={
                     "access_token": user0.access_token,
                     "workflow_name": str(uuid4()),
                 },
-                data=json.dumps(sample_serial_workflow_in_db.reana_specification),
+                data=_serial_bundle(),
+                content_type="multipart/form-data",
             )
             assert res.status_code == 400
 
-            # wrong specification json
-            workflow_specification = {
-                "nonsense": {"specification": {}, "type": "unknown"}
-            }
+            # correct case: a serial bundle is loaded and validated in-process,
+            # then seeded into the created workspace (C1) and the staging dir is
+            # cleaned up. The uploaded bytes are pre-checked against disk quota and
+            # accounted after the workspace is seeded.
+            prevent_quota_mock.reset_mock()
+            store_workflow_quota_mock.reset_mock()
+            update_user_quota_mock.reset_mock()
             res = client.post(
                 url_for("workflows.create_workflow"),
-                headers={"Content-Type": "application/json"},
                 query_string={
                     "access_token": user0.access_token,
                     "workflow_name": "test",
                 },
-                data=json.dumps(workflow_specification),
-            )
-            assert res.status_code == 400
-
-            # not valid specification. but there is no validation
-            workflow_specification = {
-                "workflow": {"specification": {}, "type": "serial"},
-            }
-            res = client.post(
-                url_for("workflows.create_workflow"),
-                headers={"Content-Type": "application/json"},
-                query_string={
-                    "access_token": user0.access_token,
-                    "workflow_name": "test",
-                },
-                data=json.dumps(workflow_specification),
+                data=_serial_bundle(),
+                content_type="multipart/form-data",
             )
             assert res.status_code == 200
+            bundle_bytes = len(SERIAL_REANA_YAML.encode())
+            prevent_call = _quota_call_for_user(prevent_quota_mock, user0)
+            assert prevent_call.args[1] == bundle_bytes
+            assert prevent_call.kwargs == {"action": "Creating the workflow test"}
+            seeded = os.path.join(
+                sample_serial_workflow_in_db.workspace_path, "reana.yaml"
+            )
+            assert os.path.isfile(seeded)
+            store_workflow_quota_mock.assert_called_once_with(
+                sample_serial_workflow_in_db, bytes_to_sum=bundle_bytes
+            )
+            update_call = _quota_call_for_user(update_user_quota_mock, user0)
+            assert update_call.kwargs == {"bytes_to_sum": bundle_bytes}
+            # No staging bundle is left behind under the shared volume.
+            staging = os.path.join(str(tmp_path), "validation-tmp")
+            assert not os.path.isdir(staging) or not os.listdir(staging)
 
-            # correct case
-            workflow_specification = sample_serial_workflow_in_db.reana_specification
+
+def test_create_workflow_rejects_over_quota_user_before_staging(
+    app, session, user0, _get_user_mock, monkeypatch, tmp_path
+):
+    """An over-quota raw-bundle create is rejected before any expensive work.
+
+    The quota guard runs before staging the bundle or spawning a validator Job,
+    so nothing is staged/validated and no controller create (hence no orphan
+    workflow) happens.
+    """
+    monkeypatch.setattr("reana_server.rest.workflows.SHARED_VOLUME_PATH", str(tmp_path))
+    rwc_client = Mock()
+    with app.test_client() as client, patch(
+        "reana_server.rest.workflows.current_rwc_api_client", rwc_client
+    ), patch("reana_db.models.User.has_exceeded_quota", return_value=True), patch(
+        "reana_server.rest.workflows.get_quota_excess_message",
+        return_value="quota exceeded",
+    ), patch(
+        "reana_server.rest.workflows._stage_validation_bundle"
+    ) as stage_mock, patch(
+        "reana_server.rest.workflows.load_and_validate_spec"
+    ) as load_mock:
+        res = client.post(
+            url_for("workflows.create_workflow"),
+            query_string={
+                "access_token": user0.access_token,
+                "workflow_name": "over-quota",
+            },
+            data=_serial_bundle(),
+            content_type="multipart/form-data",
+        )
+    assert res.status_code == 403
+    stage_mock.assert_not_called()
+    load_mock.assert_not_called()
+    rwc_client.api.create_workflow.assert_not_called()
+
+
+def test_create_workflow_quota_excess_before_create_leaves_no_orphan(
+    app, session, user0, _get_user_mock, monkeypatch, tmp_path
+):
+    """A staged bundle that would exceed quota fails before the row is created.
+
+    ``prevent_disk_quota_excess`` runs after staging/validation but before the
+    controller create, so a rejection returns 403 with no orphan workflow and
+    the staging directory is cleaned up.
+    """
+    monkeypatch.setattr("reana_server.rest.workflows.SHARED_VOLUME_PATH", str(tmp_path))
+    rwc_client = Mock()
+    with app.test_client() as client, patch(
+        "reana_server.rest.workflows.current_rwc_api_client", rwc_client
+    ), patch(
+        "reana_server.rest.workflows.prevent_disk_quota_excess",
+        side_effect=REANAQuotaExceededError("disk quota exceeded"),
+    ):
+        res = client.post(
+            url_for("workflows.create_workflow"),
+            query_string={
+                "access_token": user0.access_token,
+                "workflow_name": "quota-excess",
+            },
+            data=_serial_bundle(),
+            content_type="multipart/form-data",
+        )
+    assert res.status_code == 403
+    rwc_client.api.create_workflow.assert_not_called()
+    staging = os.path.join(str(tmp_path), "validation-tmp")
+    assert not os.path.isdir(staging) or not os.listdir(staging)
+
+
+def _gitlab_create_patches(rwc_client):
+    """Common mocks for driving the GitLab branch of ``create_workflow``."""
+    spec = yaml.safe_load(SERIAL_REANA_YAML)
+    return spec, [
+        patch("reana_server.rest.workflows.current_rwc_api_client", rwc_client),
+        patch("reana_db.models.User.has_exceeded_quota", return_value=False),
+        patch(
+            "reana_server.rest.workflows._get_reana_yaml_from_gitlab",
+            return_value=(
+                spec,
+                "https://gitlab.example/x",
+                "gl-wf",
+                "main",
+                "deadbeef",
+            ),
+        ),
+        patch(
+            "reana_server.rest.workflows.load_and_validate_spec",
+            return_value=(spec, []),
+        ),
+        patch("reana_server.rest.workflows.get_disk_usage_or_zero", return_value=123),
+    ]
+
+
+def test_create_workflow_gitlab_accounts_disk_quota(
+    app, session, user0, _get_user_mock, sample_serial_workflow_in_db, monkeypatch
+):
+    """A successful GitLab create charges the cloned workspace to disk quota."""
+    rwc_client = Mock()
+    rwc_client.api.create_workflow.return_value.result.return_value = (
+        {
+            "workflow_id": str(sample_serial_workflow_in_db.id_),
+            "workflow_name": sample_serial_workflow_in_db.name,
+        },
+        Mock(status_code=200),
+    )
+    _spec, patches = _gitlab_create_patches(rwc_client)
+    with app.test_client() as client:
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patch(
+            "reana_server.rest.workflows.publish_workflow_submission"
+        ), patch(
+            "reana_server.rest.workflows.store_workflow_disk_quota"
+        ) as store_mock, patch(
+            "reana_server.rest.workflows.update_users_disk_quota"
+        ) as update_mock:
             res = client.post(
                 url_for("workflows.create_workflow"),
-                headers={"Content-Type": "application/json"},
-                query_string={
-                    "access_token": user0.access_token,
-                    "workflow_name": "test",
-                },
-                data=json.dumps(workflow_specification),
+                query_string={"access_token": user0.access_token},
+                data=json.dumps({"object_kind": "push"}),
+                content_type="application/json",
+            )
+    assert res.status_code == 200
+    store_mock.assert_called_once_with(sample_serial_workflow_in_db, bytes_to_sum=123)
+    update_call = _quota_call_for_user(update_mock, user0)
+    assert update_call.kwargs == {"bytes_to_sum": 123}
+
+
+def test_create_workflow_gitlab_quota_excess_rolls_back(
+    app, session, user0, _get_user_mock, sample_serial_workflow_in_db, monkeypatch
+):
+    """A GitLab create whose clone exceeds quota rolls the workflow back.
+
+    The just-created workflow is marked ``deleted`` (no orphan), the GitLab build
+    status is failed and the webhook is acknowledged, and nothing is accounted.
+    """
+    rwc_client = Mock()
+    rwc_client.api.create_workflow.return_value.result.return_value = (
+        {
+            "workflow_id": str(sample_serial_workflow_in_db.id_),
+            "workflow_name": sample_serial_workflow_in_db.name,
+        },
+        Mock(status_code=200),
+    )
+    _spec, patches = _gitlab_create_patches(rwc_client)
+    with app.test_client() as client:
+        with patches[0], patches[1], patches[2], patches[3], patches[4], patch(
+            "reana_server.rest.workflows.prevent_disk_quota_excess",
+            side_effect=REANAQuotaExceededError("disk quota exceeded"),
+        ), patch(
+            "reana_server.rest.workflows._fail_gitlab_commit_build_status"
+        ) as fail_build_mock, patch(
+            "reana_server.rest.workflows.store_workflow_disk_quota"
+        ) as store_mock, patch(
+            "reana_server.rest.workflows.update_users_disk_quota"
+        ) as update_mock:
+            res = client.post(
+                url_for("workflows.create_workflow"),
+                query_string={"access_token": user0.access_token},
+                data=json.dumps({"object_kind": "push"}),
+                content_type="application/json",
+            )
+    assert res.status_code == 200  # GitLab webhook acknowledged
+    session.refresh(sample_serial_workflow_in_db)
+    assert sample_serial_workflow_in_db.status == RunStatus.deleted
+    fail_build_mock.assert_called_once()
+    store_mock.assert_not_called()
+    update_mock.assert_not_called()
+
+
+def test_validate_workflow_specification_environment_check(
+    app, user0, _get_user_mock, monkeypatch, tmp_path
+):
+    """The ``environments`` flag drives the optional image check wiring.
+
+    The cheap registry check is exercised in reana-commons; here we assert the
+    endpoint wiring: it runs only when requested, appends the findings, returns
+    the image list + runtime UID/GID for the client's deep ``--pull`` checks,
+    and skips the registry existence lookup when the client will pull locally.
+    """
+    monkeypatch.setattr("reana_server.rest.workflows.SHARED_VOLUME_PATH", str(tmp_path))
+    finding = {"code": "image_tag", "message": "boom", "path": "img:1"}
+    with app.test_client() as client:
+        with patch(
+            "reana_server.rest.workflows.check_spec_environments",
+            return_value=[finding],
+        ) as env_mock:
+            # Without the flag the check is not run and no image data is added.
+            res = client.post(
+                url_for("workflows.validate_workflow_specification"),
+                query_string={"access_token": user0.access_token},
+                data=_serial_bundle(),
+                content_type="multipart/form-data",
             )
             assert res.status_code == 200
+            env_mock.assert_not_called()
+            assert "images" not in res.json
+
+            # --environments only: server checks existence + returns image data.
+            res = client.post(
+                url_for("workflows.validate_workflow_specification"),
+                query_string={
+                    "access_token": user0.access_token,
+                    "environments": "true",
+                },
+                data=_serial_bundle(),
+                content_type="multipart/form-data",
+            )
+            assert res.status_code == 200
+            assert env_mock.call_args.kwargs.get("check_existence") is True
+            assert finding in res.json["warnings"]
+            assert "images" in res.json
+            assert isinstance(res.json["runtime_uid"], int)
+            assert isinstance(res.json["runtime_gid"], int)
+
+            # --pull: the client is authoritative on existence, so the server
+            # skips the registry lookup (check_existence=False).
+            res = client.post(
+                url_for("workflows.validate_workflow_specification"),
+                query_string={
+                    "access_token": user0.access_token,
+                    "environments": "true",
+                    "pull": "true",
+                },
+                data=_serial_bundle(),
+                content_type="multipart/form-data",
+            )
+            assert res.status_code == 200
+            assert env_mock.call_args.kwargs.get("check_existence") is False
 
 
 def test_start_workflow_validates_specification(
     app, session, user0, sample_serial_workflow_in_db
 ):
+    """Start re-validates the (authoritative) workspace, not the stored spec.
+
+    The workspace is the source of truth and is mutable, so an invalid spec in
+    the workspace must block the start even when the stored (DB) specification is
+    still valid. A serial spec with a path-traversal input fails the in-process
+    validator deterministically.
+    """
+    workflow = sample_serial_workflow_in_db
+    workflow.status = RunStatus.created
+    workflow.name = "test"
+    session.add(workflow)
+    session.commit()
+
+    invalid_spec = (
+        "workflow:\n"
+        "  type: serial\n"
+        "  specification:\n"
+        "    steps:\n"
+        "      - name: step1\n"
+        "        environment: 'docker.io/library/busybox:1.36'\n"
+        "        commands:\n"
+        "          - echo hello\n"
+        "inputs:\n"
+        "  files:\n"
+        "    - ../escape.txt\n"
+    )
+    with open(os.path.join(workflow.workspace_path, "reana.yaml"), "w") as f:
+        f.write(invalid_spec)
+
     with app.test_client() as client:
-        sample_serial_workflow_in_db.status = RunStatus.created
-        sample_serial_workflow_in_db.name = "test"
-        workflow_specification = copy.deepcopy(
-            sample_serial_workflow_in_db.reana_specification
-        )
-        workflow_specification["workflow"]["type"] = "unknown"
-        sample_serial_workflow_in_db.reana_specification = workflow_specification
-        session.add(sample_serial_workflow_in_db)
-        session.commit()
         res = client.post(
             url_for(
                 "workflows.start_workflow",
-                workflow_id_or_name=str(sample_serial_workflow_in_db.id_),
+                workflow_id_or_name=str(workflow.id_),
             ),
             headers={"Content-Type": "application/json"},
             query_string={
@@ -191,6 +475,76 @@ def test_start_workflow_validates_specification(
             data=json.dumps({}),
         )
         assert res.status_code == 400
+
+
+def test_start_workflow_succeeds_with_valid_workspace(
+    app, session, user0, sample_serial_workflow_in_db
+):
+    """A valid workspace passes the binding gate and the workflow is queued."""
+    workflow = sample_serial_workflow_in_db
+    workflow.status = RunStatus.created
+    workflow.name = "test"
+    session.add(workflow)
+    session.commit()
+
+    with open(os.path.join(workflow.workspace_path, "reana.yaml"), "w") as f:
+        f.write(SERIAL_REANA_YAML)
+
+    with app.test_client() as client:
+        with patch("reana_server.rest.workflows.publish_workflow_submission"):
+            res = client.post(
+                url_for(
+                    "workflows.start_workflow",
+                    workflow_id_or_name=str(workflow.id_),
+                ),
+                headers={"Content-Type": "application/json"},
+                query_string={
+                    "access_token": user0.access_token,
+                },
+                data=json.dumps({}),
+            )
+    assert res.status_code == 200
+    assert res.json["status"] == RunStatus.queued.name
+
+
+def test_start_workflow_falls_back_to_stored_spec_without_workspace_reana_yaml(
+    app, session, user0, sample_serial_workflow_in_db
+):
+    """A workspace with no reana.yaml falls back to the stored spec (SNDBX-02).
+
+    Launched workflows have their reana.yaml stripped by ``filter_input_files``
+    and legacy (pre-seeding) workflows never had one. The binding gate must not
+    hard-fail those: it validates the stored authoritative specification
+    in-process instead of trying to re-load a non-existent workspace reana.yaml.
+    """
+    workflow = sample_serial_workflow_in_db
+    workflow.status = RunStatus.created
+    workflow.name = "test"
+    # A known-valid stored specification (the workspace deliberately has none).
+    workflow.reana_specification = yaml.safe_load(SERIAL_REANA_YAML)
+    session.add(workflow)
+    session.commit()
+
+    # Ensure the workspace exists but carries no reana.yaml/reana.yml.
+    os.makedirs(workflow.workspace_path, exist_ok=True)
+    for name in ("reana.yaml", "reana.yml"):
+        spec_path = os.path.join(workflow.workspace_path, name)
+        if os.path.exists(spec_path):
+            os.remove(spec_path)
+
+    with app.test_client() as client:
+        with patch("reana_server.rest.workflows.publish_workflow_submission"):
+            res = client.post(
+                url_for(
+                    "workflows.start_workflow",
+                    workflow_id_or_name=str(workflow.id_),
+                ),
+                headers={"Content-Type": "application/json"},
+                query_string={"access_token": user0.access_token},
+                data=json.dumps({}),
+            )
+    assert res.status_code == 200
+    assert res.json["status"] == RunStatus.queued.name
 
 
 def test_restart_workflow_validates_specification(
@@ -219,6 +573,36 @@ def test_restart_workflow_validates_specification(
             data=json.dumps(body),
         )
         assert res.status_code == 400
+
+
+def test_restart_workflow_does_not_publish_reana_specification(
+    app, session, user0, sample_serial_workflow_in_db
+):
+    """Replacement restart strips server-only spec payload before scheduling."""
+    with app.test_client() as client:
+        sample_serial_workflow_in_db.status = RunStatus.finished
+        sample_serial_workflow_in_db.name = "test"
+        session.add(sample_serial_workflow_in_db)
+        session.commit()
+
+        body = {
+            "reana_specification": copy.deepcopy(
+                sample_serial_workflow_in_db.reana_specification
+            ),
+            "restart": True,
+        }
+        with patch(
+            "reana_server.rest.workflows.publish_workflow_submission"
+        ) as publish_mock:
+            res = client.post(
+                url_for("workflows.start_workflow", workflow_id_or_name="test"),
+                headers={"Content-Type": "application/json"},
+                query_string={"access_token": user0.access_token},
+                data=json.dumps(body),
+            )
+
+    assert res.status_code == 200
+    assert publish_mock.call_args.args[2] == {"restart": True}
 
 
 def test_info_surfaces_kubernetes_min_user_uid(app, user0, _get_user_mock):

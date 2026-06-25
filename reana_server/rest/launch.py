@@ -8,9 +8,7 @@
 
 import json
 import logging
-import os
 import shutil
-import threading
 import traceback
 
 from bravado.exception import HTTPError
@@ -23,7 +21,6 @@ from webargs.flaskparser import use_kwargs
 import yaml
 
 from reana_commons.errors import REANAValidationError, REANAQuotaExceededError
-from reana_commons.specification import load_reana_spec
 from reana_commons.validation.utils import validate_workflow_name
 from reana_db.utils import (
     _get_workflow_with_uuid_or_name,
@@ -44,12 +41,9 @@ from reana_server.utils import (
     filter_input_files,
     get_workspace_retention_rules,
 )
-from reana_server.validation import validate_workflow
+from reana_server.validation import load_and_validate_spec, validate_input_parameters
 
 blueprint = Blueprint("launch", __name__)
-
-load_reana_spec_lock = threading.Lock()
-"""Lock used to make sure only one specification is loaded at a time."""
 
 
 @blueprint.route("/launch", methods=["POST"])
@@ -191,12 +185,14 @@ def launch(user, url, name="", parameters="{}", specification=None):
                     "more information."
                 )
 
-        # FIXME: locking will not be needed when the loading and validation of
-        # specifications will be done inside an external sandbox
-        with load_reana_spec_lock:
-            reana_yaml = load_reana_spec(spec_path, workspace_path=tmpdir)
+        # Load + validate the spec authoritatively. Loading runs in-process for
+        # serial workflows and inside the sandboxed validator Job for
+        # Snakemake/CWL/Yadage, so the API process never executes untrusted
+        # workflow code. Invalid specs are rejected here (fail early).
+        reana_yaml, validation_warnings = load_and_validate_spec(tmpdir)
         input_parameters = json.loads(parameters)
-        validation_warnings = validate_workflow(reana_yaml, input_parameters)
+        original_parameters = reana_yaml.get("inputs", {}).get("parameters", {})
+        validate_input_parameters(input_parameters, original_parameters)
 
         # Keep only files and directories listed as workflow's inputs
         filter_input_files(tmpdir, reana_yaml)
@@ -272,18 +268,11 @@ def launch(user, url, name="", parameters="{}", specification=None):
             500,
         )
     finally:
-        # FIXME: `load_reana_spec` is not thread-safe and it changes the cwd, so for the
-        # time being we can only delete the files inside the directory where the
-        # workflow is fetched.  Deleting the directory would result in a
-        # `FileNotFoundError` when calling `os.getcwd()`, due to the cwd not existing
-        # anymore.
-        #
-        # remove_fetched_workflows_dir(tmpdir)
-        for entry in os.scandir(tmpdir):
-            if entry.is_file() or entry.is_symlink():
-                os.remove(entry)
-            else:
-                shutil.rmtree(entry)
+        # Specification loading now happens in the sandboxed validator (or
+        # in-process for serial, which does not change the cwd), so the previous
+        # cwd/thread-safety limitation no longer applies and we can remove the
+        # whole fetch directory.
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 class LaunchSchema(Schema):
@@ -292,4 +281,4 @@ class LaunchSchema(Schema):
     workflow_id = fields.UUID()
     workflow_name = fields.Str()
     message = fields.Str()
-    validation_warnings = fields.Dict()
+    validation_warnings = fields.Raw()
