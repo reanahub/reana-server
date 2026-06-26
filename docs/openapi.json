@@ -3754,6 +3754,13 @@
                 "image": {
                   "description": "Replaces the default Docker image of an interactive session.",
                   "type": "string"
+                },
+                "secret_names": {
+                  "description": "Optional. Explicit allowlist of user secret names to expose to the interactive session. If omitted, the interactive session inherits workflow.resources.secret_names when present; otherwise, all user secrets remain available.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 }
               },
               "type": "object"

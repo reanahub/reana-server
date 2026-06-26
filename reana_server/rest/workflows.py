@@ -2559,6 +2559,15 @@ def open_interactive_session(
                 type: string
                 description: >-
                   Replaces the default Docker image of an interactive session.
+              secret_names:
+                type: array
+                items:
+                  type: string
+                description: >-
+                  Optional. Explicit allowlist of user secret names to expose
+                  to the interactive session. If omitted, the interactive
+                  session inherits workflow.resources.secret_names when
+                  present; otherwise, all user secrets remain available.
       responses:
         200:
           description: >-

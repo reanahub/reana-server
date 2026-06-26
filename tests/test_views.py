@@ -718,6 +718,24 @@ def test_open_interactive_session(
             assert res.status_code == expected_status_code
 
 
+def test_add_secrets_rejects_reserved_secret_name(app, user0):
+    """Reserved internal secret names should be rejected before storing secrets."""
+    reserved_secret = {
+        "REANA_USER_SECRETS_TYPES": {"value": "dXNlci1zZWNyZXQ=", "type": "env"}
+    }
+
+    with app.test_client() as client:
+        res = client.post(
+            "/api/secrets/",
+            query_string={"access_token": user0.access_token},
+            content_type="application/json",
+            data=json.dumps(reserved_secret),
+        )
+
+    assert res.status_code == 400
+    assert "reserved for internal use" in json.dumps(res.json["message"])
+
+
 @pytest.mark.parametrize(("expected_status_code"), [200])
 def test_close_interactive_session(
     app,
