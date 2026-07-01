@@ -2859,9 +2859,9 @@
       },
       "post": {
         "consumes": [
-          "application/json"
+          "multipart/form-data"
         ],
-        "description": "This resource is expecting a REANA specification in JSON format with all the necessary information to instantiate a workflow.",
+        "description": "Creates a workflow from an uploaded specification bundle (multipart form data). The bundle contains ``reana.yaml`` plus any referenced workflow/parameter files, each form field named by its path relative to the bundle root. The server loads and validates the specification authoritatively (sandboxed for Snakemake/CWL/Yadage).",
         "operationId": "create_workflow",
         "parameters": [
           {
@@ -2872,20 +2872,11 @@
             "type": "string"
           },
           {
-            "description": "Remote repository which contains a valid REANA specification.",
-            "in": "query",
-            "name": "spec",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "description": "REANA specification with necessary data to instantiate a workflow.",
-            "in": "body",
-            "name": "reana_specification",
-            "required": false,
-            "schema": {
-              "type": "object"
-            }
+            "description": "Specification bundle files (reana.yaml plus referenced files). Multiple file parts named by their bundle-relative path.",
+            "in": "formData",
+            "name": "bundle",
+            "required": true,
+            "type": "file"
           },
           {
             "description": "The API access_token of workflow owner.",
@@ -3141,6 +3132,103 @@
           }
         },
         "summary": "Move files within workspace."
+      }
+    },
+    "/api/workflows/validate": {
+      "post": {
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "description": "Accepts a multipart upload of the raw specification bundle (the ``reana.yaml`` plus any referenced workflow/config files, each form field named by its path relative to the bundle root). Serial specs are loaded and validated in-process; Snakemake/CWL/Yadage specs -- whose loading executes user code -- are validated inside a sandboxed job spawned by reana-workflow-controller. Returns a structured validation report.",
+        "operationId": "validate_workflow_specification",
+        "parameters": [
+          {
+            "description": "Specification bundle files (reana.yaml plus referenced files). Multiple file parts named by their bundle-relative path.",
+            "in": "formData",
+            "name": "bundle",
+            "required": true,
+            "type": "file"
+          },
+          {
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "If true, run the cheap (Docker-free) registry checks (existence and tag) on the runtime-environment images and return the loaded image list plus the cluster runtime UID/GID so the client can run the deep checks locally.",
+            "in": "query",
+            "name": "environments",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "Hint that the client will pull and inspect the images locally; the server then skips the registry existence lookup (the local pull is authoritative) and returns only the image list and offline tag warnings.",
+            "in": "query",
+            "name": "pull",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Validation ran; a structured report is returned.",
+            "schema": {
+              "properties": {
+                "errors": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "images": {
+                  "description": "Distinct runtime images of the loaded spec (only when environments is requested), for client-side checks.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "reana_specification": {
+                  "type": "object"
+                },
+                "runtime_gid": {
+                  "description": "GID REANA runs workflow steps as.",
+                  "type": "integer"
+                },
+                "runtime_uid": {
+                  "description": "UID REANA runs workflow steps as.",
+                  "type": "integer"
+                },
+                "valid": {
+                  "type": "boolean"
+                },
+                "warnings": {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "The bundle was missing or malformed."
+          },
+          "401": {
+            "description": "Request malformed or missing access token."
+          },
+          "403": {
+            "description": "Request access forbidden."
+          },
+          "500": {
+            "description": "Internal error while validating the specification."
+          }
+        },
+        "summary": "Validate a raw workflow specification bundle."
       }
     },
     "/api/workflows/{workflow_id_or_name_a}/diff/{workflow_id_or_name_b}": {
@@ -4752,7 +4840,7 @@
         "consumes": [
           "application/json"
         ],
-        "description": "This resource starts the workflow execution process. Resource is expecting a workflow UUID.",
+        "description": "This resource starts the workflow execution process. Resource is expecting a workflow UUID.\n\nThe workspace is the authoritative copy of the specification: before the workflow is queued, the server re-loads and re-validates the specification *from the current workspace* (in a sandbox for Snakemake/CWL/Yadage, in-process for serial) and refreshes the stored specification from it. A workspace that no longer loads or fails policy is rejected with a 400 and the workflow keeps its current status. Any non-blocking validation findings are returned in ``validation_warnings``.",
         "operationId": "start_workflow",
         "parameters": [
           {
@@ -4822,6 +4910,13 @@
                 },
                 "user": {
                   "type": "string"
+                },
+                "validation_warnings": {
+                  "description": "Non-blocking findings from re-validating the workspace specification at start.",
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
                 },
                 "workflow_id": {
                   "type": "string"
