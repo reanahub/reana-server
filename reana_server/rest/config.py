@@ -11,7 +11,7 @@
 import logging
 import traceback
 
-from flask import Blueprint, jsonify
+from flask import Blueprint, current_app, jsonify
 from reana_commons.config import REANAConfig
 
 blueprint = Blueprint("config", __name__)
@@ -27,14 +27,9 @@ def get_config():
       description: >-
         This resource provides configuration needed by Reana-UI.
       operationId: get_config
+      security: []
       produces:
         - application/json
-      parameters:
-        - name: access_token
-          in: query
-          description: API access_token of user.
-          required: false
-          type: string
       responses:
         200:
           description: >-
@@ -49,11 +44,13 @@ def get_config():
                 "client_pyvenv": "/afs/cern.ch/user/r/reana/public/reana/bin/activate",
                 "docs_url": "http://docs.reana.io/",
                 "forum_url": "https://forum.reana.io/",
-                "local_users": True,
-                "hide_signup": False,
                 "admin_email": "admin@example.org",
                 "polling_secs": 15,
-                "sso": True
+                "auth": {
+                  "bff_enabled": True,
+                  "login_url": "/api/login",
+                  "logout_url": "/api/logout"
+                }
               }
         500:
           description: >-
@@ -70,8 +67,16 @@ def get_config():
               }
     """
     try:
+        ui_config = dict(REANAConfig.load("ui") or {})
+        # Browser-authentication endpoints consumed by the web UI.
+        auth_config = current_app.config["REANA_AUTH"]
+        ui_config["auth"] = {
+            "bff_enabled": bool(auth_config["bff_enabled"] and auth_config["issuer"]),
+            "login_url": "/api/login",
+            "logout_url": "/api/logout",
+        }
         return (
-            jsonify(REANAConfig.load("ui")),
+            jsonify(ui_config),
             200,
         )
     except Exception as e:

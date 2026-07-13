@@ -6,17 +6,19 @@
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
 
-"""Pytest configuration for REANA-Workflow-Controller."""
+"""Pytest configuration for REANA-Server."""
 
 from __future__ import absolute_import, print_function
 
 from datetime import datetime, timedelta
 import os
+import time
+from unittest.mock import Mock, patch
 
-
-import flask_login
+import fakeredis
 import pytest
-from mock import Mock, patch
+from authlib.jose import JsonWebKey
+from authlib.jose import jwt as jose_jwt
 
 from reana_db.models import (
     WorkspaceRetentionAuditLog,
@@ -24,7 +26,12 @@ from reana_db.models import (
     WorkspaceRetentionRuleStatus,
 )
 
-from reana_server.factory import create_minimal_app
+import reana_server.auth.sessions as _sessions_module
+import reana_server.auth.tokens as _tokens_module
+from reana_server.factory import create_app
+
+TEST_ISSUER = "https://auth.example.org/realms/reana"
+"""Issuer used by the test JWKS fixtures."""
 
 
 @pytest.fixture(scope="module")
@@ -36,22 +43,102 @@ def base_app(tmp_shared_volume_path):
         "SECRET_KEY": "SECRET_KEY",
         "TESTING": True,
         "DEBUG": True,
+        "RATELIMIT_ENABLED": False,
         "SHARED_VOLUME_PATH": tmp_shared_volume_path,
         "SQLALCHEMY_DATABASE_URI": os.getenv("REANA_SQLALCHEMY_DATABASE_URI"),
         "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-        "APP_THEME": None,
-        "THEME_ICONS": None,
+        "REANA_AUTH": {
+            "issuer": TEST_ISSUER,
+            "audience": ["reana"],
+            "jwks_url": f"{TEST_ISSUER}/jwks",
+            "userinfo_url": f"{TEST_ISSUER}/userinfo",
+        },
     }
-    app_ = create_minimal_app(config_mapping=config_mapping)
+    app_ = create_app(config_mapping=config_mapping)
     return app_
 
 
+@pytest.fixture(scope="session")
+def jwt_signing_key():
+    """Key pair whose public part is served as the test issuer's JWKS."""
+    return JsonWebKey.generate_key("EC", "P-256", is_private=True)
+
+
+@pytest.fixture(autouse=True)
+def jwt_issuer(base_app, jwt_signing_key):
+    """Point JWT validation at the test issuer and serve its JWKS."""
+    base_app.extensions.pop(_tokens_module._JWKS_EXTENSION, None)
+    jwks_response = Mock()
+    jwks_response.raise_for_status = Mock()
+    jwks_response.json = Mock(
+        return_value={"keys": [jwt_signing_key.as_dict(private=False)]}
+    )
+    with patch.object(_tokens_module.requests, "get", return_value=jwks_response):
+        yield
+
+
 @pytest.fixture()
-def _get_user_mock():
-    mocked_user = Mock(is_authenticated=False, roles=[])
-    mocked_get_user = Mock(return_value=mocked_user)
-    with patch("flask_login.utils._get_user", mocked_get_user):
-        yield flask_login.utils._get_user
+def default_user(user0):
+    """Backward-compatible alias for the shared reana-db admin fixture."""
+    return user0
+
+
+@pytest.fixture
+def redis_store(base_app):
+    """Replace the Redis client with an in-memory fake."""
+    fake = fakeredis.FakeRedis(decode_responses=True)
+    base_app.extensions[_sessions_module._REDIS_EXTENSION] = fake
+    # count_sessions() caches its result briefly across calls (see its own
+    # docstring) in a plain module-level dict, not app.extensions, so a
+    # fresh fake Redis per test would otherwise not invalidate a value a
+    # previous test already cached within the TTL window.
+    _sessions_module._count_sessions_cache["at"] = 0.0
+    with base_app.app_context():
+        yield fake
+
+
+@pytest.fixture()
+def make_token(jwt_signing_key):
+    """Mint access tokens signed by the test issuer."""
+
+    def _make_token(sub, roles=("reana:user",), **overrides):
+        now = int(time.time())
+        claims = {
+            "iss": TEST_ISSUER,
+            "aud": "reana",
+            "sub": str(sub),
+            "iat": now,
+            "exp": now + 600,
+            "reana_roles": list(roles),
+        }
+        claims.update(overrides)
+        claims = {k: v for k, v in claims.items() if v is not None}
+        header = {
+            "alg": "ES256",
+            "kid": jwt_signing_key.as_dict(private=False).get("kid"),
+        }
+        return jose_jwt.encode(header, claims, jwt_signing_key).decode()
+
+    return _make_token
+
+
+@pytest.fixture()
+def auth_headers(make_token, session):
+    """Authenticate a fixture user: link the IdP identity, mint a Bearer.
+
+    Linking ``(iss, sub)`` on the user row makes just-in-time provisioning
+    resolve the identity by lookup, so no userinfo mock is needed.
+    """
+
+    def _auth_headers(user, roles=("reana:user",)):
+        if not user.idp_subject:
+            user.idp_issuer = TEST_ISSUER
+            user.idp_subject = str(user.id_)
+            session.commit()
+        token = make_token(user.idp_subject, roles=roles)
+        return {"Authorization": f"Bearer {token}"}
+
+    return _auth_headers
 
 
 @pytest.fixture()

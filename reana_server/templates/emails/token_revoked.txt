@@ -1,9 +1,0 @@
-Dear {{ user_full_name }},
-
-Your {{ reana_hostname }} access token has been revoked.
-
-{% include 'emails/assistance_links.txt' %}
-
-Best regards,
-
-REANA notification system

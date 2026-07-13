@@ -20,7 +20,7 @@ blueprint = Blueprint("status", __name__)
 
 
 @blueprint.route("/status")
-@signin_required(token_required=False)
+@signin_required()
 def status(**kwargs):  # noqa
     r"""Endpoint to retrieve Cluster health status.
     ---
@@ -144,6 +144,14 @@ def status(**kwargs):  # noqa
               {
                 "message": "Internal controller error."
               }
+        401:
+          description: The request is not authenticated.
+        403:
+          description: The authenticated user lacks the required REANA role.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
     """
     try:
         cluster_health = ClusterHealth()

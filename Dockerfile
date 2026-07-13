@@ -69,10 +69,6 @@ RUN if test -e modules/reana-db; then \
 # hadolint ignore=DL3013
 RUN if [ "${DEBUG}" -gt 0 ]; then pip install --no-cache-dir -e ".[debug]"; else pip install --no-cache-dir .; fi;
 
-# A quick fix to allow eduGAIN and social login users that wouldn't otherwise match Invenio username rules
-# hadolint ignore=DL3059
-RUN sed -i 's|^username_regex = re.compile\(.*\)$|username_regex = re.compile("^\\S+$")|g' /usr/local/lib/python3.12/dist-packages/invenio_userprofiles/validators.py
-
 # Check for any broken Python dependencies
 # hadolint ignore=DL3059
 RUN pip check

@@ -65,11 +65,6 @@ def add_secrets(user, overwrite=False):
       produces:
         - application/json
       parameters:
-        - name: access_token
-          in: query
-          description: Secrets owner access token.
-          required: false
-          type: string
         - name: overwrite
           in: query
           description: Whether existing secret keys should be overwritten.
@@ -111,6 +106,20 @@ def add_secrets(user, overwrite=False):
               {
                 "message": "Secret(s) successfully added."
               }
+        400:
+          description: >-
+            Request failed. A secret value is not correctly base64-encoded.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. Token is not valid.
@@ -195,12 +204,6 @@ def get_secrets(user):  # noqa
       operationId: get_secrets
       produces:
         - application/json
-      parameters:
-        - name: access_token
-          in: query
-          description: Secrets owner access token.
-          required: false
-          type: string
       responses:
         200:
           description: >-
@@ -233,6 +236,12 @@ def get_secrets(user):  # noqa
                   "value": "reanauser",
                 },
               ]
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. Token is not valid.
@@ -294,11 +303,6 @@ def delete_secrets(user):  # noqa
       produces:
         - application/json
       parameters:
-        - name: access_token
-          in: query
-          description: API key of the admin.
-          required: false
-          type: string
         - name: secrets
           in: body
           description: >-
@@ -326,6 +330,12 @@ def delete_secrets(user):  # noqa
                 ".keytab",
                 "username",
               ]
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. Token is not valid.

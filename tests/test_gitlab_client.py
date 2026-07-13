@@ -14,7 +14,11 @@ import pytest
 from reana_commons.k8s.secrets import UserSecrets, Secret
 
 import reana_server.config as config
-from reana_server.gitlab_client import GitLabClient, GitLabClientInvalidToken
+from reana_server.gitlab_client import (
+    GitLabClient,
+    GitLabClientInvalidToken,
+    GitLabClientRequestError,
+)
 
 
 def mock_response(status_code=200, json={}, content=b"", links={}):
@@ -61,7 +65,8 @@ def test_gitlab_client_oauth_token():
     """Test getting OAuth token from GitLab."""
     response = mock_response()
 
-    def request(verb, url, params, data):
+    def request(verb, url, params, data, timeout=None):
+        assert timeout == config.FETCHER_REQUEST_TIMEOUT
         assert verb == "POST"
         assert url == "https://gitlab.example.org/oauth/token"
         assert params is None
@@ -80,7 +85,8 @@ def test_gitlab_client_oauth_token():
 def test_gitlab_client_get_file():
     """Test getting file from GitLab."""
 
-    def request(verb, url, params, data):
+    def request(verb, url, params, data, timeout=None):
+        assert timeout == config.FETCHER_REQUEST_TIMEOUT
         assert verb == "GET"
         assert (
             url == "https://gitlab.example.org/api/v4/"
@@ -129,7 +135,8 @@ def test_gitlab_client_get_projects():
 
     response = mock_response()
 
-    def request(verb, url, params, data):
+    def request(verb, url, params, data, timeout=None):
+        assert timeout == config.FETCHER_REQUEST_TIMEOUT
         assert verb == "GET"
         assert url == "https://gitlab.example.org/api/v4/projects"
         assert params == {"access_token": "gitlab_token", "page": 123, "per_page": 20}
@@ -149,7 +156,8 @@ def test_gitlab_client_get_webhooks():
     """Test getting webhooks from GitLab."""
     response = mock_response()
 
-    def request(verb, url, params, data):
+    def request(verb, url, params, data, timeout=None):
+        assert timeout == config.FETCHER_REQUEST_TIMEOUT
         assert verb == "GET"
         assert url == "https://gitlab.example.org/api/v4/projects/123/hooks"
         assert params == {"access_token": "gitlab_token", "page": 123, "per_page": 20}
@@ -169,7 +177,8 @@ def test_gitlab_client_get_all_webhooks():
     """Test getting all webhooks from GitLab."""
     num_request = 0
 
-    def request(verb, url, params, data):
+    def request(verb, url, params, data, timeout=None):
+        assert timeout == config.FETCHER_REQUEST_TIMEOUT
         nonlocal num_request
         num_request += 1
         if num_request == 1:
@@ -202,7 +211,8 @@ def test_gitlab_client_create_webhook():
     """Test creating webhook in GitLab."""
     response = mock_response()
 
-    def request(verb, url, params, data):
+    def request(verb, url, params, data, timeout=None):
+        assert timeout == config.FETCHER_REQUEST_TIMEOUT
         assert verb == "POST"
         assert url == "https://gitlab.example.org/api/v4/projects/123/hooks"
         assert params == {
@@ -224,7 +234,8 @@ def test_gitlab_client_delete_webhook():
     """Test deleting webhook in GitLab."""
     response = mock_response()
 
-    def request(verb, url, params, data):
+    def request(verb, url, params, data, timeout=None):
+        assert timeout == config.FETCHER_REQUEST_TIMEOUT
         assert verb == "DELETE"
         assert url == "https://gitlab.example.org/api/v4/projects/123/hooks/456"
         assert params == {
@@ -242,11 +253,73 @@ def test_gitlab_client_delete_webhook():
     assert res is response
 
 
+def test_gitlab_client_test_webhook():
+    """Test triggering a test delivery for a webhook in GitLab, default trigger."""
+    response = mock_response(201, json={"message": "201 Created"})
+
+    def request(verb, url, params, data, timeout=None):
+        assert timeout == config.FETCHER_REQUEST_TIMEOUT
+        assert verb == "POST"
+        assert (
+            url
+            == "https://gitlab.example.org/api/v4/projects/123/hooks/456/test/push_events"
+        )
+        assert params == {"access_token": "gitlab_token"}
+        assert data is None
+
+        return response
+
+    gitlab_client = GitLabClient(
+        access_token="gitlab_token", host="gitlab.example.org", http_request=request
+    )
+
+    res = gitlab_client.test_webhook(project=123, hook_id=456)
+    assert res is response
+
+
+def test_gitlab_client_test_webhook_custom_trigger():
+    """Test triggering a test delivery for a webhook with an explicit trigger."""
+    response = mock_response(201, json={"message": "201 Created"})
+
+    def request(verb, url, params, data, timeout=None):
+        assert timeout == config.FETCHER_REQUEST_TIMEOUT
+        assert (
+            url
+            == "https://gitlab.example.org/api/v4/projects/123/hooks/456/test/merge_requests_events"
+        )
+        return response
+
+    gitlab_client = GitLabClient(
+        access_token="gitlab_token", host="gitlab.example.org", http_request=request
+    )
+
+    res = gitlab_client.test_webhook(
+        project=123, hook_id=456, trigger="merge_requests_events"
+    )
+    assert res is response
+
+
+def test_gitlab_client_test_webhook_permanently_disabled_rejects():
+    """A permanently auto-disabled hook can still reject the test-delivery call."""
+
+    def request(verb, url, params, data, timeout=None):
+        assert timeout == config.FETCHER_REQUEST_TIMEOUT
+        return mock_response(422, json={"message": "Hook is disabled"})
+
+    gitlab_client = GitLabClient(
+        access_token="gitlab_token", host="gitlab.example.org", http_request=request
+    )
+
+    with pytest.raises(GitLabClientRequestError):
+        gitlab_client.test_webhook(project=123, hook_id=456)
+
+
 def test_gitlab_client_set_commit_build_status():
     """Test setting commit build status in GitLab."""
     response = mock_response()
 
-    def request(verb, url, params, data):
+    def request(verb, url, params, data, timeout=None):
+        assert timeout == config.FETCHER_REQUEST_TIMEOUT
         assert verb == "POST"
         assert url == "https://gitlab.example.org/api/v4/projects/123/statuses/12345"
         assert params == {
@@ -277,7 +350,8 @@ def test_gitlab_client_get_user():
     """Test getting user from GitLab."""
     response = mock_response()
 
-    def request(verb, url, params, data):
+    def request(verb, url, params, data, timeout=None):
+        assert timeout == config.FETCHER_REQUEST_TIMEOUT
         assert verb == "GET"
         assert url == "https://gitlab.example.org/api/v4/user"
         assert params == {"access_token": "gitlab_token"}
