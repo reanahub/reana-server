@@ -92,10 +92,13 @@ class GitLabClient:
         return f"https://{self.host}/api/v4/{path.lstrip('/').format(**quoted)}"
 
     def _request(self, verb: str, url: str, params=None, data=None, stream=False):
-        request_kwargs = {"params": params, "data": data}
+        request_kwargs = {
+            "params": params,
+            "data": data,
+            "timeout": FETCHER_REQUEST_TIMEOUT,
+        }
         if stream:
             request_kwargs["stream"] = True
-            request_kwargs["timeout"] = FETCHER_REQUEST_TIMEOUT
         res = self._http_request(verb, url, **request_kwargs)
         if res.status_code == 401:
             raise GitLabClientInvalidToken
@@ -271,6 +274,35 @@ class GitLabClient:
             "description": description,
             "name": name,
         }
+        return self._post(url, params)
+
+    def test_webhook(
+        self, project: Union[int, str], hook_id: int, trigger: str = "push_events"
+    ):
+        """Ask GitLab to send a test delivery for a webhook.
+
+        A hook GitLab has auto-disabled after too many consecutive delivery
+        failures does not resume just because REANA renews its secret's
+        authorization -- GitLab additionally requires a successful test (or
+        real) delivery. This triggers one opportunistically; a hook GitLab
+        has *permanently* disabled may still reject it, in which case the
+        user must trigger a delivery from GitLab's own UI (documented in the
+        README).
+
+        :param project: Project ID or name.
+        :param hook_id: Webhook ID.
+        :param trigger: Event type to test. See
+            https://docs.gitlab.com/api/project_webhooks/#test-a-project-webhook
+            for allowed values; ``push_events`` is used by default since it
+            does not depend on the project having open merge requests.
+        """
+        url = self._make_url(
+            "projects/{project}/hooks/{hook_id}/test/{trigger}",
+            project=str(project),
+            hook_id=str(hook_id),
+            trigger=trigger,
+        )
+        params = {"access_token": self.access_token}
         return self._post(url, params)
 
     def get_user(self):

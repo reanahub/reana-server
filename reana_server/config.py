@@ -8,7 +8,6 @@
 
 """Flask application configuration."""
 
-import copy
 import json
 import logging
 import os
@@ -18,19 +17,14 @@ from typing import Optional
 from urllib.parse import quote as _urlquote
 
 from distutils.util import strtobool
-from flask import request
 from limits.util import parse
-from invenio_app.config import APP_DEFAULT_SECURE_HEADERS
-from invenio_app.limiter import set_rate_limit
-from invenio_oauthclient.contrib import cern_openid, eosc_aai
-from invenio_oauthclient.contrib.keycloak import KeycloakSettingsHelper
 from reana_commons.config import (
     REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES,
     WORKFLOW_SPECIFICATION_BUNDLES_CAPABILITY,
 )
 from reana_commons.job_utils import kubernetes_memory_to_bytes
 
-# This database URI import is necessary for Invenio-DB
+# Database URI re-exported for Flask/SQLAlchemy consumers.
 from reana_db.config import SQLALCHEMY_DATABASE_URI
 
 SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -42,6 +36,42 @@ def compose_reana_url(hostname: str, hostport: str | int) -> str:
     if str(hostport) == "443":
         return f"https://{hostname}"
     return f"https://{hostname}:{hostport}"
+
+
+def _positive_seconds_or_none(value) -> Optional[int]:
+    """Parse a positive-integer seconds setting, deferring invalid values.
+
+    Returns ``None`` for anything that is not a positive whole number of
+    seconds, so that the application factory can report every unusable
+    operator setting the same way instead of failing at import time.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    try:
+        seconds = int(value)
+    except (TypeError, ValueError):
+        # Helm renders large unquoted YAML numbers in scientific notation
+        # (e.g. 2592000 -> "2.592e+06"), which ``int()`` cannot parse. Accept
+        # any float-representable whole number of seconds so such a value does
+        # not crash startup; ``inf``/``nan``/fractions still fail ``is_integer``.
+        try:
+            as_float = float(value)
+        except (TypeError, ValueError):
+            return None
+        if not as_float.is_integer():
+            return None
+        seconds = int(as_float)
+    if seconds <= 0:
+        return None
+    try:
+        # A finite, whole-valued float (e.g. 1e100) passes the checks above
+        # but is far larger than ``timedelta`` can represent; reject it here
+        # instead of letting ``_gitlab_webhook_secret_expiry()`` raise
+        # ``OverflowError`` the first time a webhook secret is issued.
+        timedelta(seconds=seconds)
+    except OverflowError:
+        return None
+    return seconds
 
 
 ADMIN_USER_ID = "00000000-0000-0000-0000-000000000000"
@@ -105,62 +135,6 @@ REANA_HOSTNAME = os.getenv("REANA_HOSTNAME", "localhost")
 REANA_HOSTPORT = os.getenv("REANA_HOSTPORT", "30443")
 REANA_URL = compose_reana_url(REANA_HOSTNAME, REANA_HOSTPORT)
 
-REANA_SSO_CERN_CONSUMER_KEY = os.getenv("CERN_CONSUMER_KEY", "")
-REANA_SSO_CERN_CONSUMER_SECRET = os.getenv("CERN_CONSUMER_SECRET", "")
-REANA_SSO_CERN_BASE_URL = os.getenv(
-    "CERN_BASE_URL", "https://auth.cern.ch/auth/realms/cern"
-)
-REANA_SSO_CERN_TOKEN_URL = os.getenv(
-    "CERN_TOKEN_URL",
-    "https://auth.cern.ch/auth/realms/cern/protocol/openid-connect/token",
-)
-REANA_SSO_CERN_AUTH_URL = os.getenv(
-    "CERN_AUTH_URL",
-    "https://auth.cern.ch/auth/realms/cern/protocol/openid-connect/auth",
-)
-REANA_SSO_CERN_USERINFO_URL = os.getenv(
-    "CERN_USERINFO_URL",
-    "https://auth.cern.ch/auth/realms/cern/protocol/openid-connect/userinfo",
-)
-
-REANA_SSO_EOSC_CONSUMER_KEY = os.getenv("EOSC_CONSUMER_KEY", "")
-REANA_SSO_EOSC_CONSUMER_SECRET = os.getenv("EOSC_CONSUMER_SECRET", "")
-REANA_SSO_EOSC_BASE_URL = os.getenv(
-    "EOSC_BASE_URL", "https://proxy.testing.eosc-federation.eu"
-)
-REANA_SSO_EOSC_REQUIRED_ENTITLEMENT = os.getenv("EOSC_REQUIRED_ENTITLEMENT", "")
-"""Required EOSC AAI entitlement for login. If set, users must have this entitlement to access REANA."""
-REANA_SSO_EOSC_TOKEN_URL = os.getenv(
-    "EOSC_TOKEN_URL",
-    f"{REANA_SSO_EOSC_BASE_URL}/OIDC/token",
-)
-REANA_SSO_EOSC_AUTH_URL = os.getenv(
-    "EOSC_AUTH_URL",
-    f"{REANA_SSO_EOSC_BASE_URL}/OIDC/authorization",
-)
-REANA_SSO_EOSC_USERINFO_URL = os.getenv(
-    "EOSC_USERINFO_URL",
-    f"{REANA_SSO_EOSC_BASE_URL}/OIDC/userinfo",
-)
-
-# Load Login Providers Configuration and Secrets as JSON from environment variables
-REANA_SSO_LOGIN_PROVIDERS = json.loads(os.getenv("LOGIN_PROVIDERS_CONFIGS", "[]"))
-REANA_SSO_LOGIN_PROVIDERS_SECRETS = json.loads(
-    os.getenv("LOGIN_PROVIDERS_SECRETS", "{}")
-)
-
-#: Whether the deployment uses an external SSO provider (CERN, EOSC, or
-#: generic Keycloak). Derived from the presence of provider credentials: the
-#: REANA Helm chart only sets the corresponding env vars when real secrets
-#: are configured, so truthiness is a reliable signal. When enabled, local
-#: account registration and login are disabled: local accounts and external
-#: SSO are mutually exclusive.
-REANA_SSO_ENABLED = bool(
-    REANA_SSO_LOGIN_PROVIDERS
-    or REANA_SSO_CERN_CONSUMER_KEY
-    or REANA_SSO_EOSC_CONSUMER_KEY
-)
-
 DASK_ENABLED = strtobool(os.getenv("DASK_ENABLED", "true"))
 """Whether Dask is enabled in the cluster or not."""
 
@@ -204,9 +178,6 @@ REANA_DASK_CLUSTER_MAX_SINGLE_WORKER_THREADS = int(
 
 REANA_QUOTA_MANAGEMENT_SECRET = os.getenv("REANA_QUOTA_MANAGEMENT_SECRET", "")
 """Secret used to authenticate quota-management REST API requests."""
-
-REANA_TOKEN_MANAGEMENT_SECRET = os.getenv("REANA_TOKEN_MANAGEMENT_SECRET", "")
-"""Secret used to authenticate token-management REST API requests."""
 
 REANA_KUBERNETES_JOBS_CPU_REQUEST = os.getenv("REANA_KUBERNETES_JOBS_CPU_REQUEST")
 """Default cpu request for user job containers."""
@@ -294,74 +265,6 @@ SUPPORTED_COMPUTE_BACKENDS = json.loads(os.getenv("REANA_COMPUTE_BACKENDS", "[]"
 REANA_QUOTAS_DOCS_URL = "https://docs.reana.io/advanced-usage/user-quotas"
 
 
-# Invenio configuration
-# =====================
-def _(x):
-    """Identity function used to trigger string extraction."""
-    return x
-
-
-# Email configuration
-# ===================
-#: Email address for support.
-SUPPORT_EMAIL = "info@reanahub.io"
-#: Disable email sending by default.
-MAIL_SUPPRESS_SEND = True
-
-# Accounts
-# ========
-#: Redis URL
-REANA_CACHE_USER = os.getenv("REANA_CACHE_USER", "")
-REANA_CACHE_PASSWORD = os.getenv("REANA_CACHE_PASSWORD", "")
-# Percent-encode credentials so any of @, :, /, ?, #, %, [, ], etc. in
-# operator-supplied passwords do not break URI parsing.
-ACCOUNTS_SESSION_REDIS_URL = "redis://{user}:{password}@{host}:6379/1".format(
-    user=_urlquote(REANA_CACHE_USER, safe=""),
-    password=_urlquote(REANA_CACHE_PASSWORD, safe=""),
-    host=REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES["cache"],
-)
-#: Email address used as sender of account registration emails.
-SECURITY_EMAIL_SENDER = SUPPORT_EMAIL
-#: Email subject for account registration emails.
-SECURITY_EMAIL_SUBJECT_REGISTER = _("Welcome to REANA Server!")
-
-#: Enable session/user id request tracing. This feature will add X-Session-ID
-#: and X-User-ID headers to HTTP response. You MUST ensure that NGINX (or other
-#: proxies) removes these headers again before sending the response to the
-#: client. Set to False, in case of doubt.
-ACCOUNTS_USERINFO_HEADERS = bool(
-    strtobool(os.getenv("ACCOUNTS_USERINFO_HEADERS", "False"))
-)
-#: Disable password recovery by users.
-SECURITY_RECOVERABLE = False
-REANA_USER_EMAIL_CONFIRMATION = strtobool(
-    os.getenv("REANA_USER_EMAIL_CONFIRMATION", "true")
-)
-#: Enable user to confirm their email address.
-SECURITY_CONFIRMABLE = REANA_USER_EMAIL_CONFIRMATION
-if REANA_USER_EMAIL_CONFIRMATION:
-    #: Disable user login without confirming their email address.
-    SECURITY_LOGIN_WITHOUT_CONFIRMATION = False
-    #: Value to be used for the confirmation email link in the API application.
-    ACCOUNTS_REST_CONFIRM_EMAIL_ENDPOINT = "/confirm-email"
-#: URL endpoint for login.
-SECURITY_LOGIN_URL = "/signin"
-#: Disable password change by users.
-SECURITY_CHANGEABLE = False
-if REANA_SSO_ENABLED:
-    #: Disable local account registration when an external SSO provider is
-    #: configured. Local accounts and SSO are mutually exclusive.
-    SECURITY_REGISTERABLE = False
-    #: Disable local username/password login when an external SSO provider is
-    #: configured. Users must authenticate via the SSO flow.
-    ACCOUNTS_LOCAL_LOGIN_ENABLED = False
-#: Modify sign in validaiton error to avoid leaking extra information.
-failed_signin_msg = ("Signin failed. Invalid user or password.", "error")
-SECURITY_MSG_USER_DOES_NOT_EXIST = failed_signin_msg
-SECURITY_MSG_PASSWORD_NOT_SET = failed_signin_msg
-SECURITY_MSG_INVALID_PASSWORD = failed_signin_msg
-SECURITY_MSG_PASSWORD_INVALID_LENGTH = failed_signin_msg
-
 # CORS
 # ====
 REST_ENABLE_CORS = True
@@ -383,19 +286,6 @@ CORS_ORIGINS = [REANA_URL]
 SECRET_KEY = os.getenv("REANA_SECRET_KEY", "")
 """Secret key used for the application user sessions."""
 
-#: Maximum lifetime of a user web session, in hours. Flask-KVSession uses this
-#: value as the Redis TTL for server-side session keys. Since flask-kvsession
-#: only saves on session.modified (which only happens at login), this is
-#: effectively an absolute timeout from login.
-PERMANENT_SESSION_LIFETIME = timedelta(
-    hours=int(os.getenv("PERMANENT_SESSION_LIFETIME", 744))
-)
-"""Maximum session lifetime from login, in hours."""
-
-#: Sets cookie with the secure flag by default
-SESSION_COOKIE_SECURE = True
-#: Sets session to be samesite to avoid CSRF attacks
-SESSION_COOKIE_SAMESITE = "Lax"
 #: Since HAProxy and Nginx route all requests no matter the host header
 #: provided, the allowed hosts variable is set to localhost. In production it
 #: should be set to the correct host and it is strongly recommended to only
@@ -409,26 +299,24 @@ if REANA_HOSTNAME:
 # Security configuration
 # ======================
 PROXYFIX_CONFIG = json.loads(os.getenv("PROXYFIX_CONFIG", '{"x_proto": 1}'))
-
-# See:
-# - Invenio docs: https://invenio-app.readthedocs.io/en/latest/configuration.html
-# - flask-talisman docs: https://github.com/GoogleCloudPlatform/flask-talisman
-APP_DEFAULT_SECURE_HEADERS["frame_options"] = "DENY"
-APP_DEFAULT_SECURE_HEADERS["strict_transport_security"] = True
-APP_DEFAULT_SECURE_HEADERS["strict_transport_security_max_age"] = 31536000
-APP_DEFAULT_SECURE_HEADERS["strict_transport_security_include_subdomains"] = True
-APP_DEFAULT_SECURE_HEADERS["referrer_policy"] = "strict-origin-when-cross-origin"
-# NOTE: keep in sync with reana-ui nginx/reana-ui.conf content security policy headers
-APP_DEFAULT_SECURE_HEADERS["content_security_policy"] = {
-    "default-src": ["'self'"],
-    "script-src": ["'self'"],
-    "style-src": ["'self'", "'unsafe-inline'"],
-    "img-src": ["'self'", "data:"],
-    "font-src": ["'self'"],
-    "connect-src": ["'self'"],
-    "frame-ancestors": ["'none'"],
-    "object-src": ["'none'"],
-    "base-uri": ["'self'"],
+APP_DEFAULT_SECURE_HEADERS = {
+    "force_https": False,
+    "frame_options": "DENY",
+    "strict_transport_security": True,
+    "strict_transport_security_max_age": 31536000,
+    "strict_transport_security_include_subdomains": True,
+    "referrer_policy": "strict-origin-when-cross-origin",
+    "content_security_policy": {
+        "default-src": ["'self'"],
+        "script-src": ["'self'"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "img-src": ["'self'", "data:"],
+        "font-src": ["'self'"],
+        "connect-src": ["'self'"],
+        "frame-ancestors": ["'none'"],
+        "object-src": ["'none'"],
+        "base-uri": ["'self'"],
+    },
 }
 APP_DEFAULT_SECURE_HEADERS.update(
     json.loads(os.getenv("APP_DEFAULT_SECURE_HEADERS", "{}"))
@@ -441,16 +329,28 @@ if "REANA_FORCE_HTTPS" in os.environ:
 APP_HEALTH_BLUEPRINT_ENABLED = False
 
 
-# Rate limiting configuration using invenio-app
+# Rate limiting configuration
 # ===========================
 
 
 def _get_rate_limit(env_variable: str, default: str) -> str:
-    env_value = os.getenv(env_variable, "")
+    env_value = os.getenv(env_variable)
+    if not env_value:
+        return default
     try:
         parse(env_value)
         return env_value
     except ValueError:
+        # Distinct from the common "not set at all" case above: this is a
+        # value the operator explicitly set that Flask-Limiter cannot parse
+        # (e.g. a typo), silently falling back to the default with no
+        # signal that the override never took effect.
+        logging.warning(
+            "%s=%r is not a valid rate limit; using the default %r instead.",
+            env_variable,
+            env_value,
+            default,
+        )
         return default
 
 
@@ -471,7 +371,6 @@ def _get_int_env_variable(env_variable: str, default: int) -> int:
         return default
 
 
-# Note: users that are connecting via reana-client will be treated as guests by the Invenio framework
 RATELIMIT_GUEST_USER = _get_rate_limit("REANA_RATELIMIT_GUEST_USER", "20 per second")
 RATELIMIT_AUTHENTICATED_USER = _get_rate_limit(
     "REANA_RATELIMIT_AUTHENTICATED_USER", "20 per second"
@@ -495,148 +394,32 @@ RATELIMIT_PER_ENDPOINT = {
 }
 
 
-def set_reana_rate_limit():
-    """Return a slow limit only for the expensive PUT status=start branch."""
-    if (
-        request.endpoint == "workflows.set_workflow_status"
-        and request.args.get("status") == "start"
-    ):
-        return REANA_RATELIMIT_SLOW
-    return set_rate_limit()
-
-
-RATELIMIT_APPLICATION = set_reana_rate_limit
-"""Global rate selector with conditional protection for workflow starts."""
-
-# Invenio-accounts rate limits — only effective in deployments where local
-# accounts are allowed (i.e. ``REANA_SSO_ENABLED`` is false). Setting them
-# unconditionally is harmless: SSO-mode clusters have no local /signin POST
-# or local registration flow to throttle.
-ACCOUNTS_LOGIN_RATELIMIT = REANA_RATELIMIT_SLOWER
-ACCOUNTS_SEND_CONFIRMATION_RATELIMIT = REANA_RATELIMIT_SLOWEST
-ACCOUNTS_FORGOT_PASSWORD_EMAIL_RATELIMIT = REANA_RATELIMIT_SLOWEST
-
-# Flask-Breadcrumbs needs this variable set
-# =========================================
-BREADCRUMBS_ROOT = "breadcrumbs"
-
-# Combined OAuth configuration for CERN and generic Keycloak
-# ==========================================================
-
-OAUTH_REDIRECT_URL = "/signin_callback"
-
-OAUTHCLIENT_REST_DEFAULT_ERROR_REDIRECT_URL = OAUTH_REDIRECT_URL
-
-OAUTHCLIENT_REMOTE_APPS = dict()
-OAUTHCLIENT_REST_REMOTE_APPS = dict()
-
-# Keycloak is only configured if login providers are defined
-if REANA_SSO_LOGIN_PROVIDERS:
-    # Variables for the first login provider in the JSON
-    PROVIDER_NAME = REANA_SSO_LOGIN_PROVIDERS[0]["name"]
-    PROVIDER_CONFIG = REANA_SSO_LOGIN_PROVIDERS[0]["config"]
-    PROVIDER_SECRETS = REANA_SSO_LOGIN_PROVIDERS_SECRETS[PROVIDER_NAME]
-
-    helper = KeycloakSettingsHelper(
-        title=PROVIDER_CONFIG["title"],
-        description="",  # This is not used and thus left empty
-        base_url=PROVIDER_CONFIG["base_url"],
-        realm="",  # The realm_url is set manually below
-    )
-
-    KEYCLOAK_APP = copy.deepcopy(helper.remote_app)
-    KEYCLOAK_APP["params"]["authorize_url"] = PROVIDER_CONFIG["auth_url"]
-    KEYCLOAK_APP["params"]["access_token_url"] = PROVIDER_CONFIG["token_url"]
-    KEYCLOAK_APP["params"]["request_token_params"] = {"scope": "openid profile email"}
-    KEYCLOAK_APP["authorized_redirect_url"] = OAUTH_REDIRECT_URL
-    KEYCLOAK_APP["error_redirect_url"] = OAUTH_REDIRECT_URL
-
-    KEYCLOAK_REST_APP = copy.deepcopy(helper.remote_rest_app)
-    KEYCLOAK_REST_APP["params"]["authorize_url"] = PROVIDER_CONFIG["auth_url"]
-    KEYCLOAK_REST_APP["params"]["request_token_params"] = {
-        "scope": "openid profile email"
-    }
-    KEYCLOAK_REST_APP["params"]["access_token_url"] = PROVIDER_CONFIG["token_url"]
-    KEYCLOAK_REST_APP["authorized_redirect_url"] = OAUTH_REDIRECT_URL
-    KEYCLOAK_REST_APP["error_redirect_url"] = OAUTH_REDIRECT_URL
-
-    OAUTHCLIENT_KEYCLOAK_REALM_URL = PROVIDER_CONFIG["realm_url"]
-    OAUTHCLIENT_KEYCLOAK_USER_INFO_URL = PROVIDER_CONFIG["userinfo_url"]
-    OAUTHCLIENT_KEYCLOAK_USER_INFO_FROM_ENDPOINT = True
-    OAUTHCLIENT_KEYCLOAK_VERIFY_EXP = True
-    OAUTHCLIENT_KEYCLOAK_VERIFY_AUD = True
-    OAUTHCLIENT_KEYCLOAK_AUD = PROVIDER_SECRETS["consumer_key"]
-
-    KEYCLOAK_APP_CREDENTIALS = dict(
-        consumer_key=PROVIDER_SECRETS["consumer_key"],
-        consumer_secret=PROVIDER_SECRETS["consumer_secret"],
-    )
-
-    OAUTHCLIENT_REMOTE_APPS["keycloak"] = KEYCLOAK_APP
-    OAUTHCLIENT_REST_REMOTE_APPS["keycloak"] = KEYCLOAK_REST_APP
-
-# CERN SSO configuration
-CERN_REMOTE_REST_APP = copy.deepcopy(cern_openid.REMOTE_REST_APP)
-CERN_REMOTE_REST_APP.update(
-    {
-        "authorized_redirect_url": OAUTH_REDIRECT_URL,
-        "error_redirect_url": OAUTH_REDIRECT_URL,
-    }
-)
-CERN_REMOTE_REST_APP["params"].update(
-    dict(
-        request_token_params={"scope": "openid"},
-        base_url=REANA_SSO_CERN_BASE_URL,
-        access_token_url=REANA_SSO_CERN_TOKEN_URL,
-        authorize_url=REANA_SSO_CERN_AUTH_URL,
-    )
-)
-OAUTHCLIENT_CERN_OPENID_USERINFO_URL = REANA_SSO_CERN_USERINFO_URL
-
-CERN_APP_OPENID_CREDENTIALS = dict(
-    consumer_key=REANA_SSO_CERN_CONSUMER_KEY,
-    consumer_secret=REANA_SSO_CERN_CONSUMER_SECRET,
-)
-
-OAUTHCLIENT_REMOTE_APPS["cern_openid"] = CERN_REMOTE_REST_APP
-OAUTHCLIENT_REST_REMOTE_APPS["cern_openid"] = CERN_REMOTE_REST_APP
-
-# EOSC SSO configuration
-EOSC_REMOTE_REST_APP = copy.deepcopy(eosc_aai.REMOTE_REST_APP)
-EOSC_REMOTE_REST_APP.update(
-    {
-        "authorized_redirect_url": OAUTH_REDIRECT_URL,
-        "error_redirect_url": OAUTH_REDIRECT_URL,
-    }
-)
-EOSC_REMOTE_REST_APP["params"].update(
-    dict(
-        request_token_params={"scope": "openid profile email entitlements"},
-        base_url=REANA_SSO_EOSC_BASE_URL,
-        access_token_url=REANA_SSO_EOSC_TOKEN_URL,
-        authorize_url=REANA_SSO_EOSC_AUTH_URL,
-    )
-)
-OAUTHCLIENT_EOSC_AAI_USERINFO_URL = REANA_SSO_EOSC_USERINFO_URL
-
-EOSC_AAI_APP_CREDENTIALS = dict(
-    consumer_key=REANA_SSO_EOSC_CONSUMER_KEY,
-    consumer_secret=REANA_SSO_EOSC_CONSUMER_SECRET,
-)
-
-OAUTHCLIENT_REMOTE_APPS["eosc_aai"] = EOSC_REMOTE_REST_APP
-OAUTHCLIENT_REST_REMOTE_APPS["eosc_aai"] = EOSC_REMOTE_REST_APP
-
-SECURITY_PASSWORD_SALT = "security-password-salt"
-
-SECURITY_SEND_REGISTER_EMAIL = False
-
 # Gitlab Application configuration
 # ================================
 REANA_GITLAB_OAUTH_APP_ID = os.getenv("REANA_GITLAB_OAUTH_APP_ID", "")
 REANA_GITLAB_OAUTH_APP_SECRET = os.getenv("REANA_GITLAB_OAUTH_APP_SECRET", "")
 REANA_GITLAB_HOST = os.getenv("REANA_GITLAB_HOST", "")
 REANA_GITLAB_URL = "https://{}".format(REANA_GITLAB_HOST) if REANA_GITLAB_HOST else ""
+REANA_GITLAB_WEBHOOK_SECRET_MAX_LIFETIME = os.getenv(
+    "REANA_GITLAB_WEBHOOK_SECRET_MAX_LIFETIME", "2592000"
+)
+"""Raw maximum lifetime for a delegated GitLab webhook secret.
+
+The application factory validates this value and replaces it in ``app.config``
+with a positive integer. Keeping the raw environment value here lets every
+entry point report a consistent startup error instead of raising at import time.
+"""
+
+REANA_GITLAB_WEBHOOK_SSL_VERIFICATION = bool(
+    strtobool(os.getenv("REANA_GITLAB_WEBHOOK_SSL_VERIFICATION", "true"))
+)
+"""Whether GitLab authenticates REANA's TLS certificate when delivering webhooks.
+
+Defaults to ``True`` so the delegated webhook secret is never delivered over an
+unauthenticated transport where an on-path attacker could capture it. Self-signed
+local development installs may set this to ``false``; production private-PKI
+deployments should instead configure GitLab to trust the relevant CA.
+"""
 
 # Workflow scheduler
 # ==================
@@ -775,22 +558,137 @@ the ``/info`` endpoint so that users and administrators can verify the
 configured value.
 """
 
-# Access token issuance policy:
-# "manual" (default): users must request token and admin grants via `reana-admin token-grant`
-# "auto": automatically create token when a user logs in for the first time
-ACCESS_TOKEN_ISSUANCE_POLICY = (
-    os.getenv("REANA_ACCESS_TOKEN_ISSUANCE_POLICY", "manual").strip().lower()
+# OIDC/JWT authentication configuration
+# =====================================
+_AUTH_HTTP_TIMEOUT = int(os.getenv("REANA_AUTH_HTTP_TIMEOUT", "10"))
+"""Timeout (seconds) for HTTP calls to the issuer."""
+
+_AUTH_REFRESH_WAIT_TIMEOUT = float(
+    os.getenv("REANA_AUTH_REFRESH_WAIT_TIMEOUT", "")
+    or min(15.0, max(5.0, float(_AUTH_HTTP_TIMEOUT)))
 )
-_ACCESS_TOKEN_ISSUANCE_POLICIES = {"manual", "auto"}
-if ACCESS_TOKEN_ISSUANCE_POLICY not in _ACCESS_TOKEN_ISSUANCE_POLICIES:
-    logging.warning(
-        "Invalid REANA_ACCESS_TOKEN_ISSUANCE_POLICY=%r; falling back to 'manual'. "
-        "Allowed values: %s",
-        ACCESS_TOKEN_ISSUANCE_POLICY,
-        sorted(_ACCESS_TOKEN_ISSUANCE_POLICIES),
-    )
-    ACCESS_TOKEN_ISSUANCE_POLICY = "manual"
-# The unsafe ``auto`` + no-SSO combination is refused at Flask app
-# initialization time (``REANA.init_app``) rather than here, so importers
-# that only read a few constants (e.g. the scheduler container) are not
-# forced to receive the SSO secrets just to satisfy a module-level check.
+"""Derived default for how long a request waits out a concurrent refresh.
+
+One issuer round trip's worth of patience, floored so a very small issuer
+timeout still tolerates ordinary latency and capped so a synchronous worker is
+never held for long. Operators can still pin an explicit value.
+"""
+
+REANA_AUTH = {
+    # The single trusted OIDC issuer (the bundled Keycloak realm by
+    # default, any OIDC-compliant issuer otherwise), e.g.
+    # "https://auth.reana.example.org/realms/reana".
+    "issuer": os.getenv("REANA_AUTH_ISSUER", ""),
+    # Expected audience(s) of access tokens, comma-separated. A token is
+    # accepted when its `aud` contains at least one of these -- needed when
+    # separate CLI and web clients are registered with the issuer, since
+    # each mints tokens audienced to its own client id. An empty list here
+    # is not a supported "skip audience checking" mode: whenever an issuer
+    # is configured, discovery.validate_auth_configuration() rejects a
+    # missing audience at startup (fails closed), so token validation never
+    # actually runs with an empty audience list on a live server.
+    "audience": [
+        value
+        for value in (
+            v.strip() for v in os.getenv("REANA_AUTH_AUDIENCE", "reana").split(",")
+        )
+        if value
+    ],
+    # Endpoint overrides; when empty, endpoints are resolved from the
+    # issuer's /.well-known/openid-configuration document.
+    "openid_config_url": os.getenv("REANA_AUTH_OPENID_CONFIG_URL", ""),
+    # Optional physical transport base used for server-to-issuer calls. It is
+    # independent from the stable public issuer identifier. HTTP is accepted
+    # only below this exact base and only with the explicit opt-in below.
+    "backchannel_base_url": os.getenv("REANA_AUTH_BACKCHANNEL_BASE_URL", ""),
+    "backchannel_allow_http": bool(
+        strtobool(os.getenv("REANA_AUTH_BACKCHANNEL_ALLOW_HTTP", "false"))
+    ),
+    "jwks_url": os.getenv("REANA_AUTH_JWKS_URL", ""),
+    "userinfo_url": os.getenv("REANA_AUTH_USERINFO_URL", ""),
+    # Public client id used by reana-client for the device authorization
+    # grant; advertised through the openid-configuration proxy endpoint.
+    "cli_client_id": os.getenv("REANA_AUTH_CLIENT_ID", "reana-cli"),
+    # Claim carrying REANA roles.
+    "roles_claim": os.getenv("REANA_AUTH_ROLES_CLAIM", "reana_roles"),
+    # Role required to use protected API endpoints. Authentication-enabled
+    # applications fail at startup when this is empty.
+    "required_role": os.getenv("REANA_AUTH_REQUIRED_ROLE", "reana:user"),
+    # Clock-skew leeway (seconds) for exp/nbf validation.
+    "leeway": int(os.getenv("REANA_AUTH_LEEWAY", "30")),
+    # TTL (seconds) of the in-process JWKS and discovery-document caches.
+    "jwks_ttl": int(os.getenv("REANA_AUTH_JWKS_TTL", "600")),
+    # Timeout (seconds) for HTTP calls to the issuer.
+    "http_timeout": _AUTH_HTTP_TIMEOUT,
+    # Optional CA bundle for a private/self-signed issuer certificate. TLS
+    # verification cannot be disabled; an empty value uses the system roots.
+    "ca_bundle": os.getenv("REANA_AUTH_CA_BUNDLE", ""),
+    # BFF (backend-for-frontend) browser login: when enabled (and an issuer
+    # is configured), reana-server runs the authorization code flow and
+    # gives browsers httpOnly-cookie transport for the access JWT.
+    "bff_enabled": bool(strtobool(os.getenv("REANA_AUTH_BFF_ENABLED", "true"))),
+    # Confidential web client used by the BFF code flow.
+    "web_client_id": os.getenv("REANA_AUTH_WEB_CLIENT_ID", "reana-server"),
+    "web_client_secret": os.getenv("REANA_AUTH_WEB_CLIENT_SECRET", ""),
+    # Scopes requested in the authorization code / device authorization flow.
+    "scopes": os.getenv("REANA_AUTH_SCOPES", "openid profile email"),
+    # Server-side lifetime (seconds) of a BFF session (refresh-token
+    # storage in Redis); the issuer's session policy is the real authority.
+    "session_ttl": int(os.getenv("REANA_AUTH_SESSION_TTL", "604800")),
+    # Redis storage for BFF refresh tokens. Credentials are percent-quoted
+    # so operator-supplied passwords cannot break URI parsing.
+    "redis_url": os.getenv("REANA_AUTH_REDIS_URL", "")
+    or "redis://{user}:{password}@{host}:6379/1".format(
+        user=_urlquote(os.getenv("REANA_CACHE_USER", ""), safe=""),
+        password=_urlquote(os.getenv("REANA_CACHE_PASSWORD", ""), safe=""),
+        host=REANA_INFRASTRUCTURE_COMPONENTS_HOSTNAMES["cache"],
+    ),
+    # Bound every Redis operation so a stalled cache cannot hold a serving
+    # thread indefinitely. Health checks avoid reusing dead pooled sockets.
+    "redis_socket_connect_timeout": float(
+        os.getenv("REANA_AUTH_REDIS_SOCKET_CONNECT_TIMEOUT", "2")
+    ),
+    "redis_socket_timeout": float(os.getenv("REANA_AUTH_REDIS_SOCKET_TIMEOUT", "2")),
+    # Maximum time a request waits for another worker to finish refreshing the
+    # same browser session. This is independent from the longer Redis lock TTL,
+    # which protects refresh-token rotation if the lock owner dies: waiting
+    # that long would pin a synchronous worker whenever the lock owner is
+    # killed. The default tracks the configured issuer timeout so that raising
+    # it for a slow identity provider does not start returning 503 to sibling
+    # browser tabs while the winning request is still legitimately in flight.
+    "refresh_wait_timeout": _AUTH_REFRESH_WAIT_TIMEOUT,
+    "redis_health_check_interval": int(
+        os.getenv("REANA_AUTH_REDIS_HEALTH_CHECK_INTERVAL", "30")
+    ),
+    # Optional endpoint overrides (resolved from the discovery document
+    # when empty, see reana_server.auth.discovery).
+    "authorization_url": os.getenv("REANA_AUTH_AUTHORIZATION_URL", ""),
+    "token_url": os.getenv("REANA_AUTH_TOKEN_URL", ""),
+    "end_session_url": os.getenv("REANA_AUTH_END_SESSION_URL", ""),
+    "device_authorization_url": os.getenv("REANA_AUTH_DEVICE_AUTHORIZATION_URL", ""),
+    # Automatic linking of a freshly-seen IdP identity to a pre-existing
+    # REANA account that has the same verified email (migration aid). It is
+    # an account-takeover vector when the issuer does not truly verify
+    # emails, so it is DISABLED by default and gated by explicit allow-lists
+    # for migrations. With an empty allow-list the corresponding check is
+    # skipped, so enabling linking
+    # without any allow-list trusts every configured issuer/domain.
+    "email_linking_enabled": bool(
+        strtobool(os.getenv("REANA_AUTH_EMAIL_LINKING_ENABLED", "false"))
+    ),
+    "email_linking_issuer_allowlist": [
+        value.strip()
+        for value in os.getenv("REANA_AUTH_EMAIL_LINKING_ISSUER_ALLOWLIST", "").split(
+            ","
+        )
+        if value.strip()
+    ],
+    "email_linking_domain_allowlist": [
+        value.strip().lower()
+        for value in os.getenv("REANA_AUTH_EMAIL_LINKING_DOMAIN_ALLOWLIST", "").split(
+            ","
+        )
+        if value.strip()
+    ],
+}
+"""OIDC/JWT authentication configuration."""

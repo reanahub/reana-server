@@ -12,23 +12,20 @@ import csv
 import datetime
 import io
 import pathlib
-import secrets
 import uuid
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import ANY, MagicMock, Mock, patch
 
+import click
 import pytest
 from click.testing import CliRunner
-from reana_commons.errors import REANAEmailNotificationError
 from reana_commons.testing import make_mock_api_client
 from reana_db.models import (
-    AuditLogAction,
     InteractiveSession,
     Resource,
     ResourceType,
     RunStatus,
     User,
     UserResource,
-    UserTokenStatus,
     Workflow,
     WorkspaceRetentionRuleStatus,
     generate_uuid,
@@ -38,11 +35,59 @@ from reana_server.reana_admin import reana_admin
 from reana_server.reana_admin.check_workflows import check_workspaces
 from reana_server.reana_admin.cli import RetentionRuleDeleter
 from reana_server.reana_admin.consumer import MessageConsumer
-from reana_server.utils import (
-    _create_and_associate_reana_user,
-    _get_user_from_invenio_user,
-)
 from reana_server.workspace_mutations import WorkspaceMutationConflict
+from reana_server.reana_admin.options import (
+    add_user_options,
+    add_workflow_option,
+)
+from reana_server.auth.errors import InvalidTokenError
+from reana_server.decorators import _get_user_from_gitlab_secret
+from reana_server.utils import naive_utcnow
+
+
+def test_admin_user_options_exit_cleanly_on_invalid_selection():
+    """Guarded user-option failures use Click's exit machinery."""
+
+    @click.command()
+    @add_user_options
+    def command(user):
+        click.echo(user.email if user else "all users")
+
+    runner = CliRunner()
+    conflicting = runner.invoke(
+        command, ["--id", str(uuid.uuid4()), "--email", "user@example.org"]
+    )
+    assert conflicting.exit_code == 1
+    assert conflicting.output == ("Cannot provide --email and --id at the same time.\n")
+
+    with patch(
+        "reana_server.reana_admin.options._get_user_by_criteria",
+        return_value=None,
+    ):
+        missing = runner.invoke(command, ["--email", "missing@example.org"])
+    assert missing.exit_code == 1
+    assert missing.output == "User not found.\n"
+
+
+def test_admin_workflow_option_exits_cleanly_on_invalid_selection():
+    """Guarded workflow-option failures use Click's exit machinery."""
+
+    @click.command()
+    @add_workflow_option()
+    def command(workflow):
+        click.echo(workflow.id_ if workflow else "all workflows")
+
+    runner = CliRunner()
+    invalid = runner.invoke(command, ["--workflow", "not-a-uuid"])
+    assert invalid.exit_code == 1
+    assert invalid.output == "Invalid workflow UUID.\n"
+
+    query = Mock()
+    query.filter.return_value.first.return_value = None
+    with patch("reana_server.reana_admin.options.Session.query", return_value=query):
+        missing = runner.invoke(command, ["--workflow", str(uuid.uuid4())])
+    assert missing.exit_code == 1
+    assert missing.output == "Workflow not found.\n"
 
 
 def test_export_users(user0):
@@ -54,15 +99,39 @@ def test_export_users(user0):
         [
             user0.id_,
             user0.email,
-            user0.access_token,
             user0.username,
             user0.full_name,
         ]
     )
-    result = runner.invoke(
-        reana_admin, ["user-export", "--admin-access-token", user0.access_token]
-    )
+    result = runner.invoke(reana_admin, ["user-export"])
     assert result.output == expected_csv_file.getvalue()
+
+
+def test_export_users_neutralizes_csv_formula_injection(app, session):
+    """A username/full_name starting with =/+/-/@ must not export as a live formula.
+
+    These fields are JIT-provisioned from the external issuer's userinfo
+    response, so an attacker who controls their own IdP profile can set them
+    to a spreadsheet-formula payload; opening the exported CSV in
+    Excel/Sheets/LibreOffice must not execute it.
+    """
+    user = User(
+        email="attacker@example.org",
+        username='=HYPERLINK("http://evil","x")',
+        full_name="+cmd|'/c calc'!A1",
+    )
+    session.add(user)
+    session.commit()
+
+    runner = CliRunner()
+    result = runner.invoke(reana_admin, ["user-export"])
+
+    rows = list(csv.reader(io.StringIO(result.output)))
+    (exported,) = [row for row in rows if row[0] == str(user.id_)]
+    assert exported[2] == '\'=HYPERLINK("http://evil","x")'
+    assert exported[3] == "'+cmd|'/c calc'!A1"
+    assert not exported[2].startswith(("=", "+", "-", "@"))
+    assert not exported[3].startswith(("=", "+", "-", "@"))
 
 
 def test_import_users(app, session, user0):
@@ -72,22 +141,17 @@ def test_import_users(app, session, user0):
     users_csv_file_name = "reana-users.csv"
     user_id = uuid.uuid4()
     user_email = "test@reana.io"
-    user_access_token = secrets.token_urlsafe(16)
     user_username = "jdoe"
     user_full_name = "John Doe"
     with runner.isolated_filesystem():
         with open(users_csv_file_name, "w") as f:
             csv_writer = csv.writer(f, dialect="unix")
-            csv_writer.writerow(
-                [user_id, user_email, user_access_token, user_username, user_full_name]
-            )
+            csv_writer.writerow([user_id, user_email, user_username, user_full_name])
 
         result = runner.invoke(
             reana_admin,
             [
                 "user-import",
-                "--admin-access-token",
-                user0.access_token,
                 "--file",
                 users_csv_file_name,
             ],
@@ -96,424 +160,296 @@ def test_import_users(app, session, user0):
         user = session.query(User).filter_by(id_=user_id).first()
         assert user
         assert user.email == user_email
-        assert user.access_token == user_access_token
         assert user.username == user_username
         assert user.full_name == user_full_name
 
 
-def test_grant_token(user0, session):
-    """Test grant access token."""
+def test_import_users_accepts_legacy_token_column(app, session):
+    """Legacy five-column exports import without restoring access tokens."""
     runner = CliRunner()
+    user_id = uuid.uuid4()
+    with runner.isolated_filesystem():
+        with open("legacy-users.csv", "w") as csv_file:
+            csv.writer(csv_file, dialect="unix").writerow(
+                [
+                    user_id,
+                    "legacy@reana.io",
+                    "legacy-secret-token",
+                    "legacy-user",
+                    "Legacy User",
+                ]
+            )
 
-    # non-existing email user
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-grant",
-            "--admin-access-token",
-            user0.access_token,
-            "-e",
-            "nonexisting@example.org",
-        ],
-    )
-    assert "does not exist" in result.output
-
-    # non-existing id user
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-grant",
-            "--admin-access-token",
-            user0.access_token,
-            "--id",
-            "fake_id",
-        ],
-    )
-    assert "does not exist" in result.output
-
-    # non-requested-token user
-    user = User(email="johndoe@cern.ch")
-    session.add(user)
-    session.commit()
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-grant",
-            "--admin-access-token",
-            user0.access_token,
-            "-e",
-            user.email,
-        ],
-    )
-    assert "token status is None, do you want to proceed?" in result.output
-
-    # abort grant
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-grant",
-            "--admin-access-token",
-            user0.access_token,
-            "-e",
-            user.email,
-        ],
-        input="\n",
-    )
-    assert "Grant token aborted" in result.output
-
-    # confirm grant
-    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "manual"), patch(
-        "reana_server.utils.REANAConfig.load", return_value={}
-    ), patch("reana_server.utils.JinjaEnv.render_template", return_value="body"), patch(
-        "reana_server.utils.send_email"
-    ) as send_email_mock:
         result = runner.invoke(
-            reana_admin,
-            [
-                "token-grant",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
-            input="y\n",
+            reana_admin, ["user-import", "--file", "legacy-users.csv"]
         )
-    assert f"Token for user {user.id_} ({user.email}) granted" in result.output
-    assert user.access_token
-    assert user0.audit_logs[-1].action is AuditLogAction.grant_token
-    send_email_mock.assert_called()
 
-    # user with active token
-    active_user = User(email="active@cern.ch", access_token="valid_token")
-    session.add(active_user)
-    session.commit()
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-grant",
-            "--admin-access-token",
-            user0.access_token,
-            "--id",
-            str(active_user.id_),
-        ],
-    )
-    assert "has already an active access token" in result.output
+    assert result.exit_code == 0, result.output
+    user = session.query(User).filter_by(id_=user_id).one()
+    assert user.username == "legacy-user"
+    assert user.full_name == "Legacy User"
+    assert user.active_token is None
 
-    # typical ui user workflow
-    ui_user = User(email="ui_user@cern.ch")
-    session.add(ui_user)
-    session.commit()
-    ui_user.request_access_token()
-    assert ui_user.access_token_status is UserTokenStatus.requested.name
-    assert ui_user.access_token is None
-    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "manual"), patch(
-        "reana_server.utils.REANAConfig.load", return_value={}
-    ), patch("reana_server.utils.JinjaEnv.render_template", return_value="body"), patch(
-        "reana_server.utils.send_email"
-    ):
-        result = runner.invoke(
+
+def test_create_admin_user_with_explicit_identity(app, session):
+    """Admin bootstrap can create a row already linked to its OIDC identity."""
+    user_id = uuid.uuid4()
+    with patch("reana_server.reana_admin.cli.create_user_workspace"):
+        result = CliRunner().invoke(
             reana_admin,
             [
-                "token-grant",
-                "--admin-access-token",
-                user0.access_token,
+                "create-admin-user",
                 "--id",
-                str(ui_user.id_),
+                str(user_id),
+                "--email",
+                "admin-link@example.org",
+                "--idp-issuer",
+                "https://auth.example.org/realms/reana",
+                "--idp-subject",
+                "keycloak-admin-id",
             ],
         )
-    assert ui_user.access_token_status is UserTokenStatus.active.name
-    assert ui_user.access_token
-    assert user0.audit_logs[-1].action is AuditLogAction.grant_token
+
+    assert result.exit_code == 0, result.output
+    user = session.query(User).filter_by(id_=user_id).one()
+    assert user.idp_issuer == "https://auth.example.org/realms/reana"
+    assert user.idp_subject == "keycloak-admin-id"
 
 
-def test_grant_token_auto_policy_still_sends_email_when_explicit_admin_grant(
-    user0, session
-):
-    runner = CliRunner()
-
-    user = User(email="auto@cern.ch")
+def test_create_admin_user_can_link_existing_unlinked_row(app, session):
+    """Rerunning bootstrap explicitly links an existing unlinked admin row."""
+    user_id = uuid.uuid4()
+    user = User(id_=user_id, email="existing-admin@example.org")
     session.add(user)
     session.commit()
 
-    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "auto"), patch(
-        "reana_server.utils.REANAConfig.load", return_value={}
-    ), patch("reana_server.utils.JinjaEnv.render_template", return_value="body"), patch(
-        "reana_server.utils.send_email"
-    ) as send_email_mock:
-        result = runner.invoke(
-            reana_admin,
-            [
-                "token-grant",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
-            input="y\n",
-        )
-
-    assert f"Token for user {user.id_} ({user.email}) granted" in result.output
-    assert user.access_token
-    # Explicit admin grant should respect send_notification_email=True regardless of global policy
-    send_email_mock.assert_called()
-
-
-def test_grant_token_fails_when_admin_user_cannot_be_resolved(user0, session):
-    """Test grant access token refuses to proceed without an audit actor."""
-    runner = CliRunner()
-    user = User(email="grant.noadmin@example.org")
-    session.add(user)
-    session.commit()
-
-    with patch(
-        "reana_server.utils.ADMIN_USER_ID",
-        "99999999-9999-9999-9999-999999999999",
-    ):
-        result = runner.invoke(
-            reana_admin,
-            [
-                "token-grant",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
-            input="y\n",
-        )
-
-    assert "Server misconfiguration." in result.output
-    assert user.access_token is None
-
-
-def test_grant_token_reports_success_when_email_preparation_fails(user0, session):
-    """Test grant access token keeps success output if email rendering fails."""
-    runner = CliRunner()
-    user = User(email="grant.render@example.org")
-    session.add(user)
-    session.commit()
-
-    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "manual"), patch(
-        "reana_server.utils.REANAConfig.load",
-        side_effect=FileNotFoundError("/var/reana/config/ui-config.yaml"),
-    ):
-        result = runner.invoke(
-            reana_admin,
-            [
-                "token-grant",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
-            input="y\n",
-        )
-
-    assert f"Token for user {user.id_} ({user.email}) granted" in result.output
-    assert "Something went wrong while sending email" in result.output
-    assert "/var/reana/config/ui-config.yaml" in result.output
-    assert user.access_token
-    assert user0.audit_logs[-1].action is AuditLogAction.grant_token
-
-
-def test_auto_issue_token_for_existing_user_when_policy_flips_to_auto(user0, session):
-    """
-    User created under manual policy with no token should receive a token on next login
-    once ACCESS_TOKEN_ISSUANCE_POLICY becomes 'auto'.
-    """
-
-    user = User(
-        email="pending@cern.ch",
-        full_name="Pending User",
-        username="pending@cern.ch",
-    )
-    session.add(user)
-    session.commit()
-
-    assert user.access_token is None
-
-    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "auto"), patch(
-        "reana_server.utils.send_email"
-    ) as send_email_mock:
-        _create_and_associate_reana_user(user.email, user.full_name, user.username)
-
-    # Token is auto-issued but no email should be sent for automatic issuance
-    assert user.access_token is not None
-    send_email_mock.assert_not_called()
-
-
-def test_auto_issue_token_for_existing_local_user_on_login_resolution(user0, session):
-    """
-    Existing local user (created under manual policy) should receive a token
-    when policy is auto and the user is resolved via _get_user_from_invenio_user().
-    """
-    user = User(
-        email="test2@test.com",
-        full_name="Test Two",
-        username="test2@test.com",
-    )
-    session.add(user)
-    session.commit()
-    assert user.access_token is None
-
-    with patch("reana_server.utils.ACCESS_TOKEN_ISSUANCE_POLICY", "auto"), patch(
-        "reana_server.utils.send_email"
-    ) as send_email_mock:
-        resolved = _get_user_from_invenio_user(user.email)
-
-    assert resolved.id_ == user.id_
-    assert resolved.access_token is not None
-    send_email_mock.assert_not_called()
-
-
-def test_revoke_token(user0, session):
-    """Test revoke access token."""
-    runner = CliRunner()
-
-    # non-active-token user
-    user = User(email="janedoe@cern.ch")
-    session.add(user)
-    session.commit()
-    result = runner.invoke(
+    result = CliRunner().invoke(
         reana_admin,
         [
-            "token-revoke",
-            "--admin-access-token",
-            user0.access_token,
-            "-e",
-            user.email,
-        ],
-    )
-    assert "does not have an active access token" in result.output
-
-    # user with requested token
-    user.request_access_token()
-    assert user.access_token_status == UserTokenStatus.requested.name
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-revoke",
-            "--admin-access-token",
-            user0.access_token,
-            "-e",
-            user.email,
-        ],
-    )
-    assert "does not have an active access token" in result.output
-
-    # user with active token
-    user.access_token = "active_token"
-    session.commit()
-    assert user.access_token
-    result = runner.invoke(
-        reana_admin,
-        [
-            "token-revoke",
-            "--admin-access-token",
-            user0.access_token,
+            "create-admin-user",
             "--id",
-            str(user.id_),
+            str(user_id),
+            "--email",
+            user.email,
+            "--idp-issuer",
+            "https://auth.example.org/realms/reana",
+            "--idp-subject",
+            "existing-admin-id",
         ],
     )
-    assert "was successfully revoked" in result.output
-    assert user.access_token_status == UserTokenStatus.revoked.name
-    assert user0.audit_logs[-1].action is AuditLogAction.revoke_token
-    assert "active_token" in user0.audit_logs[-1].details["reana_admin"]
 
-    # try to revoke again
-    result = runner.invoke(
+    assert result.exit_code == 0
+    session.refresh(user)
+    assert user.idp_subject == "existing-admin-id"
+
+
+def test_create_admin_user_requires_complete_identity_pair(app):
+    """Partial identity input fails instead of creating an ambiguous link."""
+    result = CliRunner().invoke(
         reana_admin,
         [
-            "token-revoke",
-            "--admin-access-token",
-            user0.access_token,
+            "create-admin-user",
             "--id",
-            str(user.id_),
+            str(uuid.uuid4()),
+            "--email",
+            "partial-admin@example.org",
+            "--idp-issuer",
+            "https://auth.example.org/realms/reana",
         ],
     )
-    assert "does not have an active access token" in result.output
+
+    assert result.exit_code == 1
+    assert "must be provided together" in result.output
 
 
-def test_revoke_token_reports_success_when_email_fails(user0, session):
-    """Test revoke access token keeps success output if email sending fails."""
-    runner = CliRunner()
-    user = User(email="mail.failure@example.org", access_token="active_token")
+def test_link_user_identity(app, session):
+    """An existing user can be explicitly linked by an administrator."""
+    user = User(email="migration-user@example.org")
     session.add(user)
     session.commit()
 
-    with patch("reana_server.utils.REANAConfig.load", return_value={}), patch(
-        "reana_server.utils.JinjaEnv.render_template", return_value="body"
-    ), patch(
-        "reana_server.utils.send_email",
-        side_effect=REANAEmailNotificationError("Email delivery failed."),
-    ):
-        result = runner.invoke(
-            reana_admin,
-            [
-                "token-revoke",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
-        )
+    result = CliRunner().invoke(
+        reana_admin,
+        [
+            "link-user-identity",
+            "--email",
+            user.email,
+            "--idp-issuer",
+            "https://auth.example.org/realms/reana",
+            "--idp-subject",
+            "migration-subject",
+        ],
+    )
 
-    assert "was successfully revoked" in result.output
-    assert "Something went wrong while sending email" in result.output
-    assert user.access_token_status == UserTokenStatus.revoked.name
+    assert result.exit_code == 0
+    session.refresh(user)
+    assert user.idp_subject == "migration-subject"
 
 
-def test_revoke_token_reports_success_when_email_preparation_fails(user0, session):
-    """Test revoke access token keeps success output if email rendering fails."""
-    runner = CliRunner()
-    user = User(email="mail.render@example.org", access_token="active_token")
+def test_link_user_identity_dry_run(app, session):
+    """Dry-run validates but does not persist the identity link."""
+    user = User(email="dry-run-user@example.org")
     session.add(user)
     session.commit()
 
+    result = CliRunner().invoke(
+        reana_admin,
+        [
+            "link-user-identity",
+            "--email",
+            user.email,
+            "--idp-issuer",
+            "https://auth.example.org/realms/reana",
+            "--idp-subject",
+            "dry-run-subject",
+            "--dry-run",
+        ],
+    )
+
+    assert result.exit_code == 0
+    session.refresh(user)
+    assert user.idp_subject is None
+
+
+def test_link_user_identity_rejects_identity_conflict(app, session):
+    """An identity already owned by another user cannot be reassigned."""
+    issuer = "https://auth.example.org/realms/reana"
+    owner = User(
+        email="identity-owner@example.org",
+        idp_issuer=issuer,
+        idp_subject="owned-subject",
+    )
+    target = User(email="identity-target@example.org")
+    session.add_all([owner, target])
+    session.commit()
+
+    result = CliRunner().invoke(
+        reana_admin,
+        [
+            "link-user-identity",
+            "--email",
+            target.email,
+            "--idp-issuer",
+            issuer,
+            "--idp-subject",
+            "owned-subject",
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "already linked to another user" in result.output
+    session.refresh(target)
+    assert target.idp_subject is None
+
+
+def test_gitlab_webhook_revoke_deauthorizes_but_keeps_secret(app, session):
+    """Revocation takes effect immediately without rotating the secret."""
+    user = User(
+        email="revoke-me@example.org",
+        gitlab_webhook_secret="installed-in-gitlab",
+        gitlab_webhook_secret_expires_at=naive_utcnow() + datetime.timedelta(days=30),
+    )
+    session.add(user)
+    session.commit()
+
+    result = CliRunner().invoke(
+        reana_admin, ["gitlab-webhook-revoke", "--email", user.email]
+    )
+
+    assert result.exit_code == 0
+    session.refresh(user)
+    assert user.gitlab_webhook_secret_expires_at is None
+    assert user.gitlab_webhook_secret == "installed-in-gitlab"
+    with app.test_request_context(
+        headers={"X-Gitlab-Token": "installed-in-gitlab"}
+    ), pytest.raises(InvalidTokenError):
+        _get_user_from_gitlab_secret("installed-in-gitlab")
+
+
+def test_gitlab_webhook_revoke_can_delete_the_secret(app, session):
+    """A compromised secret can be removed outright."""
+    user = User(
+        email="compromised@example.org",
+        gitlab_webhook_secret="leaked-secret",
+        gitlab_webhook_secret_expires_at=naive_utcnow() + datetime.timedelta(days=30),
+    )
+    session.add(user)
+    session.commit()
+
+    result = CliRunner().invoke(
+        reana_admin,
+        ["gitlab-webhook-revoke", "--email", user.email, "--delete-secret"],
+    )
+
+    assert result.exit_code == 0
+    session.refresh(user)
+    assert user.gitlab_webhook_secret is None
+    assert user.gitlab_webhook_secret_expires_at is None
+
+
+def test_gitlab_webhook_revoke_dry_run_changes_nothing(app, session):
+    """Dry-run reports the revocation without persisting it."""
+    expires_at = naive_utcnow() + datetime.timedelta(days=30)
+    user = User(
+        email="dry-run-revoke@example.org",
+        gitlab_webhook_secret="still-valid",
+        gitlab_webhook_secret_expires_at=expires_at,
+    )
+    session.add(user)
+    session.commit()
+
+    result = CliRunner().invoke(
+        reana_admin, ["gitlab-webhook-revoke", "--email", user.email, "--dry-run"]
+    )
+
+    assert result.exit_code == 0
+    assert "Would revoke" in result.output
+    session.refresh(user)
+    assert user.gitlab_webhook_secret == "still-valid"
+    assert user.gitlab_webhook_secret_expires_at == expires_at
+
+
+def test_gitlab_webhook_revoke_requires_a_user(app, session):
+    """The command refuses to run without an explicit user selection."""
+    result = CliRunner().invoke(reana_admin, ["gitlab-webhook-revoke"])
+
+    assert result.exit_code == 1
+    assert "--email or --id" in result.output
+
+
+def test_gitlab_webhook_revoke_without_configured_secret(app, session):
+    """Revoking a user who never enabled GitLab succeeds and says so."""
+    user = User(email="no-webhook@example.org")
+    session.add(user)
+    session.commit()
+
+    result = CliRunner().invoke(
+        reana_admin, ["gitlab-webhook-revoke", "--email", user.email]
+    )
+
+    assert result.exit_code == 0
+    assert "no GitLab webhook authorization" in result.output
+
+
+def test_status_report_can_send_email():
+    """Test that status reports still use the shared SMTP email helper."""
+
+    class Status:
+        def get_status(self):
+            return {"ok": True}
+
+    runner = CliRunner()
     with patch(
-        "reana_server.utils.REANAConfig.load",
-        side_effect=FileNotFoundError("/var/reana/config/ui-config.yaml"),
-    ):
+        "reana_server.reana_admin.cli.STATUS_OBJECT_TYPES", {"status": Status}
+    ), patch("reana_server.reana_admin.cli.send_email") as send_email:
         result = runner.invoke(
             reana_admin,
-            [
-                "token-revoke",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
+            ["status-report", "--email", "admin@example.org"],
         )
 
-    assert "was successfully revoked" in result.output
-    assert "Something went wrong while sending email" in result.output
-    assert "/var/reana/config/ui-config.yaml" in result.output
-    assert user.access_token_status == UserTokenStatus.revoked.name
-
-
-def test_revoke_token_fails_when_admin_user_cannot_be_resolved(user0, session):
-    """Test revoke access token refuses to proceed without an audit actor."""
-    runner = CliRunner()
-    user = User(email="revoke.noadmin@example.org", access_token="active_token")
-    session.add(user)
-    session.commit()
-
-    with patch(
-        "reana_server.utils.ADMIN_USER_ID",
-        "99999999-9999-9999-9999-999999999999",
-    ):
-        result = runner.invoke(
-            reana_admin,
-            [
-                "token-revoke",
-                "--admin-access-token",
-                user0.access_token,
-                "-e",
-                user.email,
-            ],
-        )
-
-    assert "Server misconfiguration." in result.output
-    assert user.access_token_status == UserTokenStatus.active.name
+    assert result.exit_code == 0
+    send_email.assert_called_once()
+    assert send_email.call_args.args[0] == "admin@example.org"
 
 
 class TestMessageConsumer:
@@ -676,8 +612,6 @@ def test_retention_rules_apply(
 
     command = [
         "retention-rules-apply",
-        "--admin-access-token",
-        user0.access_token,
     ]
     if time_delta is not None:
         forced_date = datetime.datetime.now() + time_delta
@@ -723,8 +657,6 @@ def test_retention_rules_apply_error(
         reana_admin,
         [
             "retention-rules-apply",
-            "--admin-access-token",
-            user0.access_token,
         ],
     )
 
@@ -750,8 +682,6 @@ def test_retention_rules_contention_preserves_rule_states(
             reana_admin,
             [
                 "retention-rules-apply",
-                "--admin-access-token",
-                user0.access_token,
             ],
         )
 
@@ -775,8 +705,6 @@ def test_retention_rules_extend(workflow_with_retention_rules, user0):
             "-w non-valid-id",
             "-d",
             extend_days,
-            "--admin-access-token",
-            user0.access_token,
         ],
     )
     assert result.output == "Invalid workflow UUID.\n"
@@ -790,8 +718,6 @@ def test_retention_rules_extend(workflow_with_retention_rules, user0):
             workflow.id_,
             "-d",
             extend_days,
-            "--admin-access-token",
-            user0.access_token,
         ],
     )
     assert "Extending rule" in result.output
@@ -826,14 +752,24 @@ def test_retention_rule_deleter_file_outside_workspace(tmp_path):
 )
 @patch("reana_server.reana_admin.cli.requests.get")
 def test_interactive_session_cleanup(
-    mock_requests, sample_serial_workflow_in_db, days, output, user0
+    mock_requests, sample_serial_workflow_in_db, days, output, user0, session
 ):
     """Test closure of long running interactive sessions."""
     runner = CliRunner()
 
     mock_session_pod = MagicMock()
     mock_session_pod.metadata.name = f"run-session-{sample_serial_workflow_in_db.id_}-a"
-    mock_session_pod.spec.containers[0].args = ["--NotebookApp.token='token'"]
+    session_secret = "per-session-secret"
+    interactive_session = InteractiveSession(
+        name=f"run-session-{sample_serial_workflow_in_db.id_}",
+        path=f"/{sample_serial_workflow_in_db.id_}",
+        owner_id=sample_serial_workflow_in_db.owner_id,
+        session_secret=session_secret,
+    )
+    sample_serial_workflow_in_db.sessions.append(interactive_session)
+    session.add(sample_serial_workflow_in_db)
+    session.commit()
+    mock_session_pod.spec.containers[0].args = []
     mock_session_pod.metadata.labels = {
         "app": mock_session_pod.metadata.name,
         "reana_workflow_mode": "session",
@@ -868,11 +804,131 @@ def test_interactive_session_cleanup(
                     "interactive-session-cleanup",
                     "-d",
                     days,
-                    "--admin-access-token",
-                    user0.access_token,
                 ],
             )
             assert output in result.output
+            mock_requests.assert_called_once_with(
+                ANY,
+                headers={"Authorization": f"token {session_secret}"},
+                timeout=10,
+            )
+
+
+@patch("reana_server.reana_admin.cli.requests.get")
+def test_interactive_session_cleanup_by_user_closes_immediately(
+    mock_requests, sample_serial_workflow_in_db, user0, session
+):
+    """--email closes a user's sessions immediately, ignoring inactivity."""
+    runner = CliRunner()
+
+    mock_session_pod = MagicMock()
+    mock_session_pod.metadata.name = f"run-session-{sample_serial_workflow_in_db.id_}-a"
+    session_secret = "per-session-secret"
+    interactive_session = InteractiveSession(
+        name=f"run-session-{sample_serial_workflow_in_db.id_}",
+        path=f"/{sample_serial_workflow_in_db.id_}",
+        owner_id=sample_serial_workflow_in_db.owner_id,
+        session_secret=session_secret,
+    )
+    sample_serial_workflow_in_db.sessions.append(interactive_session)
+    session.add(sample_serial_workflow_in_db)
+    session.commit()
+    mock_session_pod.spec.containers[0].args = []
+    mock_session_pod.metadata.labels = {
+        "app": mock_session_pod.metadata.name,
+        "reana_workflow_mode": "session",
+        "reana-run-session-workflow-uuid": str(sample_serial_workflow_in_db.id_),
+        "user-uuid": str(sample_serial_workflow_in_db.owner_id),
+    }
+    mock_pod_list = Mock()
+    mock_pod_list.items = [mock_session_pod]
+    mock_k8s_api_client = Mock()
+    mock_k8s_api_client.list_namespaced_pod.return_value = mock_pod_list
+
+    with patch(
+        "reana_server.reana_admin.cli.current_k8s_corev1_api_client",
+        mock_k8s_api_client,
+    ):
+        with patch(
+            "reana_server.reana_admin.cli.current_rwc_api_client",
+            make_mock_api_client("reana-workflow-controller")(
+                mock_http_response=Mock()
+            ),
+        ):
+            result = runner.invoke(
+                reana_admin,
+                ["interactive-session-cleanup", "--email", user0.email],
+            )
+            assert "has been closed" in result.output
+            # Immediate revocation must not depend on the session's own
+            # (self-reported) activity status.
+            mock_requests.assert_not_called()
+            mock_k8s_api_client.list_namespaced_pod.assert_called_once()
+            _, kwargs = mock_k8s_api_client.list_namespaced_pod.call_args
+            assert f"user-uuid={user0.id_}" in kwargs["label_selector"]
+
+
+@patch("reana_server.reana_admin.cli.requests.get")
+def test_interactive_session_cleanup_by_user_closes_pre_upgrade_session(
+    mock_requests, sample_serial_workflow_in_db, user0, session
+):
+    """--email/--id must close sessions created before session tokens existed.
+
+    Interactive sessions created before the session-token feature shipped
+    have ``session_secret is None``. Immediate revocation only needs the
+    workflow/user identity to call ``close_interactive_session``, so it must
+    not skip these sessions just because they have no token.
+    """
+    runner = CliRunner()
+
+    mock_session_pod = MagicMock()
+    mock_session_pod.metadata.name = f"run-session-{sample_serial_workflow_in_db.id_}-a"
+    interactive_session = InteractiveSession(
+        name=f"run-session-{sample_serial_workflow_in_db.id_}",
+        path=f"/{sample_serial_workflow_in_db.id_}",
+        owner_id=sample_serial_workflow_in_db.owner_id,
+        session_secret=None,
+    )
+    sample_serial_workflow_in_db.sessions.append(interactive_session)
+    session.add(sample_serial_workflow_in_db)
+    session.commit()
+    mock_session_pod.spec.containers[0].args = []
+    mock_session_pod.metadata.labels = {
+        "app": mock_session_pod.metadata.name,
+        "reana_workflow_mode": "session",
+        "reana-run-session-workflow-uuid": str(sample_serial_workflow_in_db.id_),
+        "user-uuid": str(sample_serial_workflow_in_db.owner_id),
+    }
+    mock_pod_list = Mock()
+    mock_pod_list.items = [mock_session_pod]
+    mock_k8s_api_client = Mock()
+    mock_k8s_api_client.list_namespaced_pod.return_value = mock_pod_list
+
+    with patch(
+        "reana_server.reana_admin.cli.current_k8s_corev1_api_client",
+        mock_k8s_api_client,
+    ):
+        with patch(
+            "reana_server.reana_admin.cli.current_rwc_api_client",
+            make_mock_api_client("reana-workflow-controller")(
+                mock_http_response=Mock()
+            ),
+        ):
+            result = runner.invoke(
+                reana_admin,
+                ["interactive-session-cleanup", "--email", user0.email],
+            )
+            assert "has been closed" in result.output
+            # A missing session_secret must not stop immediate revocation.
+            mock_requests.assert_not_called()
+
+
+def test_interactive_session_cleanup_requires_days_or_user():
+    """Neither --days nor --email/--id given must fail clearly, not silently."""
+    runner = CliRunner()
+    result = runner.invoke(reana_admin, ["interactive-session-cleanup"])
+    assert result.exit_code != 0
+    assert "--days" in result.output
 
 
 class TestCheckWorkflows:
@@ -1261,8 +1317,6 @@ def test_quota_set_default_limits_for_user_with_custom_limits(user0, session):
         reana_admin,
         [
             "quota-set-default-limits",
-            "--admin-access-token",
-            user0.access_token,
         ],
     )
 
