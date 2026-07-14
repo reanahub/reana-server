@@ -113,8 +113,8 @@ def verify_userinfo_subject(claims, userinfo):
 
     UserInfo is fetched with the user's access token, but a confused-deputy
     or misconfigured issuer could return a response for a different subject;
-    binding it to the token ``sub`` before provisioning, linking or role
-    checks prevents identity confusion.
+    binding it to the token ``sub`` before provisioning, linking or group
+    synchronization prevents identity confusion.
 
     :raises ProvisioningError: when ``sub`` is missing or mismatched.
     """
@@ -227,10 +227,12 @@ def get_or_provision_user(claims, token, userinfo=None):
         :func:`reana_server.auth.tokens.validate_access_token`).
     :param token: the raw bearer token, used for the userinfo call on
         first sight of an identity when ``userinfo`` was not supplied.
-    :param userinfo: optional already-fetched UserInfo response used only for
-        identity provisioning/linking. It is never an authorization source.
+    :param userinfo: optional already-fetched UserInfo response used for
+        identity provisioning/linking and group synchronization. It is never
+        an authorization source.
     :returns: ``(user, is_new)`` where ``is_new`` is ``True`` when the user
-        was just provisioned; ``False`` for returning users.
+        was just provisioned (groups already synced); ``False`` for returning
+        users (caller decides whether to re-sync).
     :raises MissingRoleError: when the user lacks the required REANA role.
     :raises ProvisioningError: when the user cannot be linked or created.
     :raises IntegrityError: for database integrity failures that do not leave
@@ -309,4 +311,21 @@ def get_or_provision_user(claims, token, userinfo=None):
         Session.rollback()
         raise ProvisioningError(f"Could not provision user: {error}")
 
+    _sync_groups(user, userinfo)
     return user, True
+
+
+def _sync_groups(user, userinfo):
+    """Synchronize the user's group membership snapshot from userinfo.
+
+    Sync failures must not fail authentication: the sync engine is
+    fail-closed on malformed claims (memberships cleared), and transport
+    problems leave the previous snapshot to age out via
+    ``REANA_GROUP_MEMBERSHIP_MAX_AGE``.
+    """
+    try:
+        from reana_server.groups.sync import sync_user_groups_from_userinfo
+
+        sync_user_groups_from_userinfo(user, userinfo)
+    except Exception:
+        logging.exception("Group membership sync failed for user %s.", user.id_)

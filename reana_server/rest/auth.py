@@ -51,6 +51,8 @@ from reana_server.auth.sessions import (
     store_session,
 )
 from reana_server.config import REANA_URL
+from reana_server.auth.userinfo import fetch_userinfo
+from reana_server.groups.sync import sync_user_groups_from_userinfo
 from reana_server.oauth_state import (
     BFF_STATE_COOKIE,
     InvalidOAuthState,
@@ -316,8 +318,8 @@ def oauth_callback():  # noqa: C901
       description: >-
         Handles the issuer's redirect: validates the OAuth state, exchanges
         the authorization code for tokens, provisions/links the REANA user,
-        stores the refresh token server-side and sets the authentication
-        cookies.
+        synchronizes group memberships, stores the refresh token server-side
+        and sets the authentication cookies.
       operationId: bff_oauth_callback
       security: []
       parameters:
@@ -425,6 +427,13 @@ def oauth_callback():  # noqa: C901
 
     try:
         user, _is_new = get_or_provision_user(claims, access_token)
+        # Re-sync group memberships on every login, not only on first
+        # sight (JIT syncs internally only when provisioning).
+        try:
+            userinfo = fetch_userinfo(access_token)
+            sync_user_groups_from_userinfo(user, userinfo)
+        except Exception:
+            logging.exception("Group sync failed during login.")
     except MissingRoleError:
         # The session is still established: /api/you will answer 403 and
         # the UI shows the "access not granted" state.

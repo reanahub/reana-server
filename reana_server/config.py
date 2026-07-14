@@ -646,6 +646,10 @@ REANA_AUTH = {
     "web_client_id": os.getenv("REANA_AUTH_WEB_CLIENT_ID", "reana-server"),
     "web_client_secret": os.getenv("REANA_AUTH_WEB_CLIENT_SECRET", ""),
     # Scopes requested in the authorization code / device authorization flow.
+    # EOSC AAI 2025 deployments should use "openid profile email entitlements"
+    # so that the UserInfo response includes the AARC-G069 ``entitlements``
+    # claim used by the EOSC group backend. Older
+    # EGI-compatible deployments may still release ``eduperson_entitlement``.
     "scopes": os.getenv("REANA_AUTH_SCOPES", "openid profile email"),
     # Server-side lifetime (seconds) of a BFF session (refresh-token
     # storage in Redis); the issuer's session policy is the real authority.
@@ -721,3 +725,51 @@ REANA_AUTH = {
     ],
 }
 """OIDC/JWT authentication configuration."""
+
+try:
+    REANA_GROUP_BACKENDS = json.loads(os.getenv("REANA_GROUP_BACKENDS", "[]"))
+except json.JSONDecodeError:
+    logging.error("REANA_GROUP_BACKENDS is not valid JSON, ignoring.")
+    REANA_GROUP_BACKENDS = []
+"""Group backend configuration.
+
+JSON list of backend definitions, e.g.::
+
+    [{"type": "keycloak", "provider": "keycloak",
+      "server_url": "https://auth.reana.example.org", "realm": "reana",
+      "groups_claim": "groups", "client_id": "reana-server-internal",
+      "client_secret_env": "REANA_GROUP_BACKEND_KEYCLOAK_CLIENT_SECRET"},
+     {"type": "cern", "provider": "cern", "client_id": "reana-gms-reader",
+      "client_secret_env": "REANA_GROUP_BACKEND_CERN_CLIENT_SECRET"},
+     {"type": "indigo_iam", "provider": "escape", "base_url": "https://iam.local",
+      "client_id": "reana-scim-reader",
+      "client_secret_env": "REANA_GROUP_BACKEND_INDIGO_IAM_CLIENT_SECRET"},
+     {"type": "eosc", "provider": "eosc"}]
+
+Each backend's service credentials are read from the environment variable
+named by ``client_secret_env``. See ``reana_server/groups``.
+
+The ``cern`` backend sources memberships from the CERN Authorization Service
+API (``GET /Identity/{upn}/groups/recursive``), keyed on the ``cern_upn``
+userinfo claim; the same API serves sharing-UI search and share-time group
+existence. It therefore requires a client-credentials API client
+(``client_id`` + secret, audience ``authorization-service-api``) with read
+permission — there is no claim-only mode. Override ``identity_claim``,
+``identity_user_attr``, ``api_base_url``, ``audience`` or
+``search_filter_template`` only when CERN's defaults do not apply.
+
+The ``indigo_iam`` backend sources memberships from INDIGO IAM's SCIM API.
+It uses the OIDC subject as the SCIM user id for live refresh and reads
+``groups`` from userinfo as a login-time fallback. Group search and existence
+checks use ``/scim/Groups`` with a client-credentials token carrying
+``scim:read``.
+
+The ``eosc`` backend is claim-only: it parses group memberships from the
+``entitlements`` userinfo claim (EOSC AAI 2025 / AARC-G069) and the legacy
+``eduperson_entitlement`` claim, and requires no service credentials. Override
+``entitlement_claim``, ``entitlement_claims``, ``urn_namespace`` (default
+``urn:mace:egi.eu``) or ``member_roles`` (default ``["member"]``) to adapt to
+other EOSC-compatible federations. Group search is not supported (EOSC has no
+group search API); live refresh is not supported (entitlements are only
+available at login time via the user's own access token).
+"""

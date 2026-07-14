@@ -8,8 +8,9 @@
 
 """Userinfo endpoint access.
 
-Profile attributes and optional role claims are read from the issuer's
-UserInfo endpoint during provisioning and login.
+Profile attributes and group memberships are read from the issuer's UserInfo
+endpoint during provisioning and login. Authorization remains based on the
+validated access token.
 """
 
 import requests

@@ -106,6 +106,16 @@ from reana_server.utils import (
     prevent_disk_quota_excess,
     publish_workflow_submission,
 )
+from reana_server.groups.shares import (
+    GroupBackendUnavailableError,
+    GroupNotFoundError,
+    GroupShareConflictError,
+    GroupShareValidationError,
+    get_group_shares_for_workflow,
+    parse_valid_until,
+    share_workflow_with_group,
+    unshare_workflow_with_group,
+)
 from reana_server.validation import (
     REANA_SPEC_FILENAMES,
     SpecValidationServiceError,
@@ -5177,7 +5187,9 @@ def prune_workspace(
 @signin_required()
 @use_kwargs(
     {
-        "user_email_to_share_with": fields.Str(required=True),
+        "user_email_to_share_with": fields.Str(),
+        "group_provider": fields.Str(),
+        "group_id": fields.Str(),
         "message": fields.Str(),
         "valid_until": fields.Str(),
     },
@@ -5210,14 +5222,25 @@ def share_workflow(workflow_id_or_name, user, **kwargs):
             properties:
               user_email_to_share_with:
                 type: string
-                description: User to share the workflow with.
+                description: >-
+                  User to share the workflow with. Mutually exclusive with
+                  the group target.
+              group_provider:
+                type: string
+                description: >-
+                  Group provider tag (e.g. keycloak) when sharing with a
+                  group. Must be given together with group_id.
+              group_id:
+                type: string
+                description: >-
+                  Group identifier within the provider when sharing with a
+                  group. Must be given together with group_provider.
               message:
                 type: string
                 description: Optional. Message to include when sharing the workflow.
               valid_until:
                 type: string
                 description: Optional. Date when access to the workflow will expire (format YYYY-MM-DD).
-            required: [user_email_to_share_with]
       responses:
         200:
           description: >-
@@ -5317,7 +5340,71 @@ def share_workflow(workflow_id_or_name, user, **kwargs):
                 "message": "Internal controller error.",
               }
     """
+    user_email = kwargs.pop("user_email_to_share_with", None)
+    group_provider = kwargs.pop("group_provider", None)
+    group_id = kwargs.pop("group_id", None)
+    has_group_target = group_provider is not None or group_id is not None
+    if bool(user_email) == has_group_target:
+        return (
+            jsonify(
+                message=(
+                    "Exactly one share target is required: either "
+                    "'user_email_to_share_with' or 'group_provider' + "
+                    "'group_id'."
+                )
+            ),
+            400,
+        )
+    if has_group_target and not (group_provider and group_id):
+        return (
+            jsonify(
+                message=(
+                    "Fields 'group_provider' and 'group_id' must be given " "together."
+                )
+            ),
+            400,
+        )
+
+    if has_group_target:
+        # Group shares are managed in reana-server (the user-share branch
+        # below keeps proxying to reana-workflow-controller unchanged).
+        try:
+            workflow = _get_workflow_with_uuid_or_name(
+                workflow_id_or_name, str(user.id_)
+            )
+            share_workflow_with_group(
+                workflow,
+                group_provider,
+                group_id,
+                message=kwargs.get("message"),
+                valid_until=parse_valid_until(kwargs.get("valid_until")),
+            )
+            return (
+                jsonify(
+                    message="The workflow has been shared with the group.",
+                    workflow_id=str(workflow.id_),
+                    workflow_name=workflow.get_full_workflow_name(),
+                ),
+                200,
+            )
+        except GroupShareValidationError as e:
+            return jsonify({"message": str(e)}), 400
+        except GroupNotFoundError as e:
+            return jsonify({"message": str(e)}), 404
+        except GroupShareConflictError as e:
+            return jsonify({"message": str(e)}), 409
+        except GroupBackendUnavailableError as e:
+            return jsonify({"message": str(e)}), 503
+        except ValueError as e:
+            # Unknown workflow or not the owner.
+            logging.exception(str(e))
+            return jsonify({"message": str(e)}), 403
+        except Exception as e:
+            logging.exception(str(e))
+            return jsonify({"message": str(e)}), 500
+
     try:
+        kwargs["user_email_to_share_with"] = user_email
         response, http_response = current_rwc_api_client.api.share_workflow(
             workflow_id_or_name=workflow_id_or_name,
             user=str(user.id_),
@@ -5336,13 +5423,21 @@ def share_workflow(workflow_id_or_name, user, **kwargs):
 @blueprint.route("/workflows/<workflow_id_or_name>/unshare", methods=["POST"])
 @use_kwargs(
     {
-        "user_email_to_unshare_with": fields.String(required=True),
+        "user_email_to_unshare_with": fields.String(),
+        "group_provider": fields.String(),
+        "group_id": fields.String(),
     },
     location="query",
     unknown=marshmallow.EXCLUDE,
 )
 @signin_required()
-def unshare_workflow(workflow_id_or_name, user, user_email_to_unshare_with):
+def unshare_workflow(
+    workflow_id_or_name,
+    user,
+    user_email_to_unshare_with=None,
+    group_provider=None,
+    group_id=None,
+):
     r"""Unshare a workflow with another user.
 
     ---
@@ -5459,6 +5554,52 @@ def unshare_workflow(workflow_id_or_name, user, user_email_to_unshare_with):
                 "message": "Internal controller error."
               }
     """
+    has_group_target = group_provider is not None or group_id is not None
+    if bool(user_email_to_unshare_with) == has_group_target:
+        return (
+            jsonify(
+                message=(
+                    "Exactly one unshare target is required: either "
+                    "'user_email_to_unshare_with' or 'group_provider' + "
+                    "'group_id'."
+                )
+            ),
+            400,
+        )
+    if has_group_target and not (group_provider and group_id):
+        return (
+            jsonify(
+                message=(
+                    "Fields 'group_provider' and 'group_id' must be given " "together."
+                )
+            ),
+            400,
+        )
+
+    if has_group_target:
+        try:
+            workflow = _get_workflow_with_uuid_or_name(
+                workflow_id_or_name, str(user.id_)
+            )
+            unshare_workflow_with_group(workflow, group_provider, group_id)
+            return (
+                jsonify(
+                    message="The workflow has been unshared with the group.",
+                    workflow_id=str(workflow.id_),
+                    workflow_name=workflow.get_full_workflow_name(),
+                ),
+                200,
+            )
+        except GroupNotFoundError as e:
+            return jsonify({"message": str(e)}), 404
+        except ValueError as e:
+            # Unknown workflow or not the owner.
+            logging.exception(str(e))
+            return jsonify({"message": str(e)}), 403
+        except Exception as e:
+            logging.exception(str(e))
+            return jsonify({"message": str(e)}), 500
+
     try:
         unshare_params = {
             "workflow_id_or_name": workflow_id_or_name,
@@ -5601,6 +5742,11 @@ def get_workflow_share_status(workflow_id_or_name, user):
         response, http_response = current_rwc_api_client.api.get_workflow_share_status(
             **share_status_params
         ).result()
+
+        # User shares come from reana-workflow-controller; group shares are
+        # managed locally and merged into the response here.
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
+        response["shared_with_groups"] = get_group_shares_for_workflow(workflow)
 
         return jsonify(response), 200
     except HTTPError as e:

@@ -282,6 +282,10 @@ class TestCallback:
             ), patch(
                 "reana_server.rest.auth.secrets.token_urlsafe",
                 return_value="browser-session-id",
+            ), patch(
+                "reana_server.rest.auth.fetch_userinfo", return_value={}
+            ), patch(
+                "reana_server.rest.auth.sync_user_groups_from_userinfo"
             ):
                 response = client.get(
                     f"/api/oauth/callback?state={state}&code=the-code"

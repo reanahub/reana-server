@@ -310,6 +310,7 @@ def create_app(config_mapping=None):
         auth,
         config,
         gitlab,
+        groups,
         ping,
         secrets,
         status,
@@ -331,6 +332,7 @@ def create_app(config_mapping=None):
     app.register_blueprint(launch.blueprint, url_prefix="/api")
     app.register_blueprint(quota.blueprint, url_prefix="/api")
     app.register_blueprint(auth.blueprint, url_prefix="/api")
+    app.register_blueprint(groups.blueprint, url_prefix="/api")
 
     app.register_error_handler(RateLimitExceeded, handle_rate_limit_error)
     app.register_error_handler(UnprocessableEntity, handle_args_validation_error)

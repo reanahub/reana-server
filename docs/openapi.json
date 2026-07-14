@@ -687,6 +687,110 @@
         "summary": "Renew GitLab webhook authorization"
       }
     },
+    "/api/groups/search": {
+      "get": {
+        "description": "This resource searches the configured group backends for groups matching the given query, for use in workflow sharing. Group member lists are never exposed.",
+        "operationId": "search_groups",
+        "parameters": [
+          {
+            "description": "API access_token of the user.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Required. Search string (at least 3 characters).",
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Optional. Restrict the search to one group provider.",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The response contains matching groups.",
+            "examples": {
+              "application/json": {
+                "items": [
+                  {
+                    "display_name": "atlas",
+                    "external_id": "/local/atlas",
+                    "provider": "keycloak"
+                  }
+                ]
+              }
+            },
+            "schema": {
+              "properties": {
+                "items": {
+                  "items": {
+                    "properties": {
+                      "display_name": {
+                        "type": "string"
+                      },
+                      "external_id": {
+                        "type": "string"
+                      },
+                      "provider": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The query is too short or the provider unknown.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Request failed. User not signed in.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "503": {
+            "description": "Request failed. The group backend is currently unavailable.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Search shareable groups by name."
+      }
+    },
     "/api/health": {
       "get": {
         "description": "Unlike /api/ping (process liveness only), this reports whether the BFF session store (Redis) and the configured OIDC issuer currently have usable cached material, so that external monitoring pointed here can detect an outage that /api/ping cannot see. Each check is skipped (omitted from the response and not counted against health) when the corresponding feature is not configured for this deployment. Never performs a live network call to the issuer; only inspects already-cached state, so this is cheap enough to poll frequently and cannot itself add load to a struggling issuer.\n\nOnly the ``redis`` check (the BFF session store) can make this endpoint's own status code report unhealthy. This endpoint is for dependency monitoring, not Kubernetes readiness; deployments should probe /api/ping so a Redis outage does not withdraw the otherwise usable whole API. ``issuer`` is reported in the body for observability/alerting only and never affects the status code: with several worker processes sharing one pod, coupling readiness to issuer reachability could make an IdP outage take the whole pod out of rotation and keep it there even after the IdP recovers, because losing readiness also stops the very traffic that would refresh the issuer's discovery/JWKS caches. REANA Server keeps serving /api/ping, /api/info, /api/config, and the friendly 503 auth-error response regardless of issuer cache health.",
@@ -1609,7 +1713,7 @@
     },
     "/api/oauth/callback": {
       "get": {
-        "description": "Handles the issuer's redirect: validates the OAuth state, exchanges the authorization code for tokens, provisions/links the REANA user, stores the refresh token server-side and sets the authentication cookies.",
+        "description": "Handles the issuer's redirect: validates the OAuth state, exchanges the authorization code for tokens, provisions/links the REANA user, synchronizes group memberships, stores the refresh token server-side and sets the authentication cookies.",
         "operationId": "bff_oauth_callback",
         "parameters": [
           {
@@ -4936,12 +5040,20 @@
             "required": true,
             "schema": {
               "properties": {
+                "group_id": {
+                  "description": "Group identifier within the provider when sharing with a group. Must be given together with group_provider.",
+                  "type": "string"
+                },
+                "group_provider": {
+                  "description": "Group provider tag (e.g. keycloak) when sharing with a group. Must be given together with group_id.",
+                  "type": "string"
+                },
                 "message": {
                   "description": "Optional. Message to include when sharing the workflow.",
                   "type": "string"
                 },
                 "user_email_to_share_with": {
-                  "description": "User to share the workflow with.",
+                  "description": "User to share the workflow with. Mutually exclusive with the group target.",
                   "type": "string"
                 },
                 "valid_until": {
@@ -4949,9 +5061,6 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "user_email_to_share_with"
-              ],
               "type": "object"
             }
           }
