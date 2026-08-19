@@ -4008,6 +4008,27 @@
               "type": "object"
             }
           },
+          "410": {
+            "description": "Request failed because the workflow logs were pruned by the cluster retention policy.",
+            "examples": {
+              "application/json": {
+                "logs_pruned_at": "2026-07-13T03:00:00Z",
+                "message": "The logs for this run were pruned by the cluster's retention policy on 2026-07-13T03:00:00Z and are no longer available."
+              }
+            },
+            "schema": {
+              "properties": {
+                "logs_pruned_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
           "500": {
             "description": "Request failed. Internal controller error.",
             "examples": {

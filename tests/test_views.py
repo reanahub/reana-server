@@ -16,6 +16,7 @@ import shutil
 import zipfile
 import yaml
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from io import BytesIO
 from uuid import uuid4
 
@@ -2134,6 +2135,38 @@ def test_get_workflow_logs(app, user0, _get_user_mock):
                 data=json.dumps(None),
             )
             assert res.status_code == 200
+
+
+def test_get_workflow_logs_pruned(
+    app, session, user0, _get_user_mock, sample_serial_workflow_in_db
+):
+    """Test that pruned workflow logs return a clear HTTP 410 response."""
+    workflow = sample_serial_workflow_in_db
+    workflow.logs_pruned_at = datetime(2026, 7, 13, 3, 0, tzinfo=timezone.utc)
+    session.add(workflow)
+    session.commit()
+
+    with app.test_client() as client:
+        with patch(
+            "reana_server.rest.workflows.current_rwc_api_client"
+        ) as workflow_controller:
+            res = client.get(
+                url_for(
+                    "workflows.get_workflow_logs",
+                    workflow_id_or_name=str(workflow.id_),
+                ),
+                query_string={"access_token": user0.access_token},
+            )
+
+    assert res.status_code == 410
+    assert res.json == {
+        "logs_pruned_at": "2026-07-13T03:00:00Z",
+        "message": (
+            "The logs for this run were pruned by the cluster's retention policy "
+            "on 2026-07-13T03:00:00Z and are no longer available."
+        ),
+    }
+    workflow_controller.api.get_workflow_logs.assert_not_called()
 
 
 def test_get_workflow_status(app, user0, _get_user_mock):

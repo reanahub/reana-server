@@ -23,9 +23,15 @@ from reana_commons.testing import make_mock_api_client
 from reana_db.models import (
     AuditLogAction,
     InteractiveSession,
+    Job,
+    JobStatus,
     Resource,
     ResourceType,
     RunStatus,
+    Service,
+    ServiceLog,
+    ServiceStatus,
+    ServiceType,
     User,
     UserResource,
     UserTokenStatus,
@@ -604,6 +610,275 @@ def test_is_input_or_output(file_or_dir, expected_result):
     rule.workspace_files = "**/*"
 
     assert RetentionRuleDeleter(rule).is_input_output(file_or_dir) == expected_result
+
+
+def test_logs_prune(app, session, sample_serial_workflow_in_db, user0):
+    """Test pruning all database-backed log types while preserving run data."""
+    workflow = sample_serial_workflow_in_db
+    workflow.status = RunStatus.finished
+    workflow.run_finished_at = datetime.datetime(2026, 6, 1, 12, 0)
+    workflow.logs = "workflow engine logs"
+    original_specification = dict(workflow.reana_specification)
+
+    job = Job(
+        workflow_uuid=workflow.id_,
+        status=JobStatus.finished,
+        logs="job logs",
+    )
+    service = Service(
+        name=f"dask-{uuid.uuid4()}",
+        uri=f"https://dask-{uuid.uuid4()}.example.org",
+        owner_id=user0.id_,
+        type_=ServiceType.dask,
+        status=ServiceStatus.finished,
+    )
+    service.logs.append(
+        ServiceLog(log={"component": "scheduler", "content": "service logs"})
+    )
+    workflow.services.append(service)
+    session.add_all([workflow, job])
+    session.commit()
+
+    runner = CliRunner()
+    command = [
+        "logs-prune",
+        "--force-date",
+        "2026-07-13T03:00:00",
+        "--yes-i-am-sure",
+        "--admin-access-token",
+        user0.access_token,
+    ]
+    with patch("reana_server.reana_admin.cli.LOG_RETENTION_PERIOD", 30):
+        dry_run = runner.invoke(reana_admin, [*command, "--dry-run"])
+        assert dry_run.exit_code == 0, dry_run.output
+        assert "1 workflow(s) would be pruned" in dry_run.output
+        assert workflow.logs == "workflow engine logs"
+        assert workflow.logs_pruned_at is None
+
+        result = runner.invoke(reana_admin, command)
+        assert result.exit_code == 0, result.output
+        assert "1 workflow(s) pruned" in result.output
+
+        session.refresh(workflow)
+        session.refresh(job)
+        assert workflow.logs is None
+        assert workflow.logs_pruned_at.isoformat() == "2026-07-13T03:00:00+00:00"
+        assert workflow.reana_specification == original_specification
+        assert workflow.status == RunStatus.finished
+        assert job.logs is None
+        assert session.query(Service).filter_by(id_=service.id_).one()
+        assert session.query(ServiceLog).filter_by(service_id=service.id_).count() == 0
+
+        second_run = runner.invoke(reana_admin, command)
+        assert second_run.exit_code == 0, second_run.output
+        assert "0 workflow(s) pruned" in second_run.output
+
+
+def test_logs_prune_disabled(sample_serial_workflow_in_db, user0):
+    """Test that the default forever policy leaves logs untouched."""
+    sample_serial_workflow_in_db.logs = "workflow engine logs"
+    runner = CliRunner()
+
+    with patch("reana_server.reana_admin.cli.LOG_RETENTION_PERIOD", None):
+        result = runner.invoke(
+            reana_admin,
+            ["logs-prune", "--admin-access-token", user0.access_token],
+        )
+
+    assert result.exit_code == 0
+    assert "logs are kept forever" in result.output
+    assert sample_serial_workflow_in_db.logs == "workflow engine logs"
+    assert sample_serial_workflow_in_db.logs_pruned_at is None
+
+
+@pytest.mark.parametrize(
+    ("status", "terminal_field", "terminal_at", "expected_to_be_pruned"),
+    [
+        pytest.param(
+            RunStatus.failed,
+            "run_finished_at",
+            datetime.datetime(2026, 6, 1, 12, 0),
+            True,
+            id="expired-failed-workflow",
+        ),
+        pytest.param(
+            RunStatus.stopped,
+            "run_stopped_at",
+            datetime.datetime(2026, 6, 1, 12, 0),
+            True,
+            id="expired-stopped-workflow",
+        ),
+        pytest.param(
+            RunStatus.finished,
+            "run_finished_at",
+            datetime.datetime(2026, 7, 1, 12, 0),
+            False,
+            id="recent-finished-workflow",
+        ),
+        pytest.param(
+            RunStatus.running,
+            None,
+            None,
+            False,
+            id="old-non-terminal-workflow",
+        ),
+        pytest.param(
+            RunStatus.deleted,
+            "run_finished_at",
+            datetime.datetime(2026, 6, 1, 12, 0),
+            True,
+            id="expired-deleted-workflow-with-finished-time",
+        ),
+        pytest.param(
+            RunStatus.deleted,
+            None,
+            None,
+            True,
+            id="expired-deleted-workflow-with-fallback-time",
+        ),
+    ],
+)
+def test_logs_prune_candidate_selection(
+    app,
+    session,
+    user0,
+    status,
+    terminal_field,
+    terminal_at,
+    expected_to_be_pruned,
+):
+    """Test that only expired workflows in terminal states are selected."""
+    old_timestamp = datetime.datetime(2026, 6, 1, 12, 0)
+    workflow = Workflow(
+        id_=str(uuid.uuid4()),
+        name=f"log-retention-{uuid.uuid4()}",
+        owner_id=user0.id_,
+        reana_specification={},
+        type_="serial",
+        status=status,
+        logs="workflow engine logs",
+    )
+    workflow.created = old_timestamp
+    workflow.updated = old_timestamp
+    if terminal_field:
+        setattr(workflow, terminal_field, terminal_at)
+    session.add(workflow)
+    session.commit()
+
+    runner = CliRunner()
+    with patch("reana_server.reana_admin.cli.LOG_RETENTION_PERIOD", 30):
+        result = runner.invoke(
+            reana_admin,
+            [
+                "logs-prune",
+                "--force-date",
+                "2026-07-13T03:00:00",
+                "--yes-i-am-sure",
+                "--admin-access-token",
+                user0.access_token,
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    expected_count = 1 if expected_to_be_pruned else 0
+    assert f"{expected_count} workflow(s) pruned" in result.output
+    session.refresh(workflow)
+    if expected_to_be_pruned:
+        assert workflow.logs is None
+        assert workflow.logs_pruned_at is not None
+    else:
+        assert workflow.logs == "workflow engine logs"
+        assert workflow.logs_pruned_at is None
+
+
+@pytest.mark.parametrize(
+    ("extra_flags", "input_text", "expects_confirmation", "expected_exit_code"),
+    [
+        pytest.param([], "y\n", True, 0, id="confirm"),
+        pytest.param([], "n\n", True, 1, id="abort"),
+        pytest.param(["--dry-run"], None, False, 0, id="dry-run"),
+        pytest.param(["--yes-i-am-sure"], None, False, 0, id="explicit-confirmation"),
+    ],
+)
+def test_logs_prune_force_date_confirmation(
+    user0,
+    extra_flags,
+    input_text,
+    expects_confirmation,
+    expected_exit_code,
+):
+    """Test confirmation safeguards for forced pruning dates."""
+    command = [
+        "logs-prune",
+        "--force-date",
+        "2026-07-13T03:00:00",
+        "--admin-access-token",
+        user0.access_token,
+        *extra_flags,
+    ]
+
+    with patch("reana_server.reana_admin.cli.LOG_RETENTION_PERIOD", 30), patch(
+        "reana_server.reana_admin.cli.iter_log_retention_candidates",
+        return_value=[],
+    ) as candidates:
+        result = CliRunner().invoke(reana_admin, command, input=input_text)
+
+    assert result.exit_code == expected_exit_code, result.output
+    assert ("Are you sure you want to continue?" in result.output) is (
+        expects_confirmation
+    )
+    if expected_exit_code == 0:
+        assert "The current time is forced to be 2026-07-13T03:00:00+00:00" in (
+            result.output
+        )
+        candidates.assert_called_once()
+    else:
+        assert "Aborted!" in result.output
+        candidates.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("token_flags", "expected_error"),
+    [
+        pytest.param([], "Admin access token invalid.", id="missing"),
+        pytest.param(
+            ["--admin-access-token", "invalid"],
+            "Admin access token invalid.",
+            id="invalid",
+        ),
+    ],
+)
+def test_logs_prune_requires_admin_access_token(user0, token_flags, expected_error):
+    """Test that pruning cannot start without a valid administrator token."""
+    with patch("reana_server.reana_admin.cli.LOG_RETENTION_PERIOD", 30), patch(
+        "reana_server.reana_admin.cli.iter_log_retention_candidates"
+    ) as candidates:
+        result = CliRunner().invoke(reana_admin, ["logs-prune", *token_flags])
+
+    assert result.exit_code != 0
+    assert expected_error in result.output
+    candidates.assert_not_called()
+
+
+def test_logs_prune_reports_only_successful_workflows(user0):
+    """Test that failed transactions are excluded from the success summary."""
+    workflows = [Mock(id_="successful-workflow"), Mock(id_="failed-workflow")]
+    with patch("reana_server.reana_admin.cli.LOG_RETENTION_PERIOD", 30), patch(
+        "reana_server.reana_admin.cli.iter_log_retention_candidates",
+        return_value=workflows,
+    ), patch(
+        "reana_server.reana_admin.cli.prune_workflow_logs",
+        side_effect=[None, RuntimeError("database error")],
+    ):
+        result = CliRunner().invoke(
+            reana_admin,
+            ["logs-prune", "--admin-access-token", user0.access_token],
+        )
+
+    assert result.exit_code == 1
+    assert "1 workflow(s) pruned." in result.output
+    assert "Failed to prune logs for 1 workflow(s)" in result.output
+    assert "2 workflow(s) pruned." not in result.output
 
 
 @pytest.mark.parametrize(
