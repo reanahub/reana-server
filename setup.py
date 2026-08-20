@@ -65,7 +65,7 @@ install_requires = [
     "adage==0.11.0",  # matches the version in r-w-e-yadage
     "packtivity==0.16.2",  # matches the version in r-w-e-yadage
     "yadage==0.20.1",  # matches the version in r-w-e-yadage
-    "yadage-schemas==0.10.6",  # matches the version in r-w-e-yadage
+    "yadage-schemas @ https://github.com/tiborsimko/yadage-schemas/archive/fb4fd499fd2bcb5e63311c9c81b8106f3bf4fa4f.tar.gz",
     # Invenio dependencies
     "invenio-app>=3.0.0,<4.0.0",
     "flask-limiter>=2.3,<3",
