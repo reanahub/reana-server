@@ -15,7 +15,7 @@ import stat
 import struct
 import uuid
 import zipfile
-from typing import Dict, Tuple
+from typing import Dict, NamedTuple, Tuple
 
 from reana_commons.errors import (
     REANASpecificationScopeError,
@@ -43,6 +43,16 @@ ZIP_MAXIMUM_CENTRAL_DIRECTORY_BYTES = 64 * 1024 * 1024
 _ZIP_EOCD = struct.Struct("<4s4H2LH")
 _ZIP64_LOCATOR = struct.Struct("<4sLQL")
 _ZIP_CENTRAL_DIRECTORY_ENTRY = struct.Struct("<4s6H3L5H2L")
+
+
+class ExtractedSpecificationBundle(NamedTuple):
+    """Validated specification bundle staged on the shared volume."""
+
+    absolute_path: str
+    relative_path: str
+    total_bytes: int
+    legacy_parameters: bool
+    members: Dict[str, str]
 
 
 def preflight_zip_metadata(  # noqa: C901
@@ -354,7 +364,7 @@ def _extract_archive_entries(archive, entries, absolute_path):
 
 def extract_uploaded_bundle(
     storage, shared_volume_path: str = None
-) -> Tuple[str, str, int, bool]:
+) -> ExtractedSpecificationBundle:
     """Extract and validate one uploaded ``ZIP_STORED`` specification snapshot.
 
     The archive must contain exactly the members selected by its own canonical
@@ -397,7 +407,13 @@ def extract_uploaded_bundle(
             # its structured ``load`` report.  There is no trustworthy declared
             # scope in this case, so only the canonical file itself is allowed.
             if names == {CANONICAL_REANA_SPECIFICATION}:
-                return absolute_path, relative_path, total_bytes, False
+                return ExtractedSpecificationBundle(
+                    absolute_path,
+                    relative_path,
+                    total_bytes,
+                    False,
+                    {CANONICAL_REANA_SPECIFICATION: specification_path},
+                )
             raise
         selected_names = set(selected)
         if names != selected_names:
@@ -412,7 +428,13 @@ def extract_uploaded_bundle(
                 "Specification bundle does not match its declared validation "
                 "scope ({})".format("; ".join(details))
             )
-        return absolute_path, relative_path, total_bytes, legacy_parameters
+        return ExtractedSpecificationBundle(
+            absolute_path,
+            relative_path,
+            total_bytes,
+            legacy_parameters,
+            selected,
+        )
     except Exception:
         shutil.rmtree(absolute_path, ignore_errors=True)
         raise
@@ -508,7 +530,11 @@ def seed_workspace(members: Dict[str, str], workspace_path: str) -> int:
     copied = 0
     for member in sorted(members):
         destination = os.path.join(workspace_path, *member.split("/"))
-        os.makedirs(os.path.dirname(destination), mode=0o700, exist_ok=True)
+        # Validator staging above deliberately forces private modes. Workspace
+        # content instead uses conventional base modes so
+        # ``REANA_WORKFLOW_UMASK`` provides the group-write access required by
+        # runtime containers.
+        os.makedirs(os.path.dirname(destination), mode=0o777, exist_ok=True)
         source_relative_path = os.path.relpath(
             os.path.abspath(members[member]), base_directory
         ).replace(os.sep, "/")
@@ -519,7 +545,7 @@ def seed_workspace(members: Dict[str, str], workspace_path: str) -> int:
         if hasattr(os, "O_NOFOLLOW"):
             destination_flags |= os.O_NOFOLLOW
         try:
-            destination_descriptor = os.open(destination, destination_flags, 0o600)
+            destination_descriptor = os.open(destination, destination_flags, 0o666)
         except Exception:
             os.close(source_descriptor)
             raise

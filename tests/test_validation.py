@@ -22,7 +22,10 @@ from flask import Flask
 from werkzeug.datastructures import FileStorage, MultiDict
 from werkzeug.exceptions import RequestEntityTooLarge
 
-from reana_commons.config import REANA_DEFAULT_SNAKEMAKE_ENV_IMAGE
+from reana_commons.config import (
+    REANA_DEFAULT_SNAKEMAKE_ENV_IMAGE,
+    REANA_WORKFLOW_UMASK,
+)
 from reana_commons.errors import REANASpecificationPathError, REANAValidationError
 
 # The per-check server wrappers (``validate_inputs``/``validate_images``) have
@@ -193,11 +196,25 @@ def test_uploaded_bundle_regathers_legacy_external_workflow_scope(tmp_path):
         ]
     )
 
-    absolute_path, _relative_path, _size, _legacy = (
-        specification_bundles.extract_uploaded_bundle(storage, str(tmp_path))
-    )
+    bundle = specification_bundles.extract_uploaded_bundle(storage, str(tmp_path))
 
-    assert os.path.isfile(os.path.join(absolute_path, "workflow", "step.cwl"))
+    assert set(bundle.members) == {
+        "reana.yaml",
+        "workflow/main.cwl",
+        "workflow/step.cwl",
+    }
+    assert os.path.isfile(os.path.join(bundle.absolute_path, "workflow", "step.cwl"))
+
+
+def test_unloadable_uploaded_bundle_returns_canonical_member(tmp_path):
+    """An unloadable canonical-only bundle still has a safe member mapping."""
+    storage = _uploaded_zip([("reana.yaml", "workflow: [")])
+
+    bundle = specification_bundles.extract_uploaded_bundle(storage, str(tmp_path))
+
+    assert bundle.members == {
+        "reana.yaml": os.path.join(bundle.absolute_path, "reana.yaml")
+    }
 
 
 def test_zip64_archives_are_rejected_before_zipfile():
@@ -522,7 +539,7 @@ def test_stage_validation_bundle_is_readable_by_validator_group(monkeypatch, tmp
     monkeypatch.setattr(workflows, "SHARED_VOLUME_PATH", str(tmp_path))
     absolute_path = None
     try:
-        absolute_path, _relative, _bytes, _legacy = workflows._stage_validation_bundle(
+        bundle = workflows._stage_validation_bundle(
             {
                 "bundle": _uploaded_zip(
                     [
@@ -538,6 +555,7 @@ def test_stage_validation_bundle_is_readable_by_validator_group(monkeypatch, tmp
                 )
             }
         )
+        absolute_path = bundle.absolute_path
         shared_gid = os.stat(tmp_path).st_gid
         assert stat.S_IMODE(os.stat(absolute_path).st_mode) == 0o2750
         assert (
@@ -554,6 +572,43 @@ def test_stage_validation_bundle_is_readable_by_validator_group(monkeypatch, tmp
     finally:
         if absolute_path:
             shutil.rmtree(absolute_path, ignore_errors=True)
+
+
+def test_seed_workspace_uses_shared_permissions(tmp_path):
+    """Seeded sources are accessible to runtime containers in the shared group."""
+    source = tmp_path / "source"
+    (source / "workflow").mkdir(parents=True)
+    files = {
+        "reana.yaml": "workflow:\n  type: snakemake\n  file: workflow/Snakefile\n",
+        "workflow/Snakefile": "rule all:\n  input: 'result.txt'\n",
+    }
+    members = {}
+    for relative_path, contents in files.items():
+        path = source / relative_path
+        path.write_text(contents)
+        members[relative_path] = str(path)
+
+    workspace = tmp_path / "workspace"
+    previous_umask = os.umask(REANA_WORKFLOW_UMASK)
+    try:
+        copied = specification_bundles.seed_workspace(members, str(workspace))
+    finally:
+        os.umask(previous_umask)
+
+    expected_directory_mode = 0o777 & ~REANA_WORKFLOW_UMASK
+    expected_file_mode = 0o666 & ~REANA_WORKFLOW_UMASK
+    assert copied == sum(len(contents) for contents in files.values())
+    assert stat.S_IMODE(workspace.stat().st_mode) == expected_directory_mode
+    assert (
+        stat.S_IMODE((workspace / "workflow").stat().st_mode) == expected_directory_mode
+    )
+    assert stat.S_IMODE((workspace / "reana.yaml").stat().st_mode) == expected_file_mode
+    assert stat.S_IMODE((workspace / "workflow" / "Snakefile").stat().st_mode) == (
+        expected_file_mode
+    )
+    assert (workspace / "workflow" / "Snakefile").read_text() == files[
+        "workflow/Snakefile"
+    ]
 
 
 def test_stage_validation_snapshot_rejects_ancestor_swap(monkeypatch, tmp_path):
