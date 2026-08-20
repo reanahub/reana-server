@@ -100,7 +100,6 @@ from reana_server.utils import (
     get_quota_excess_message,
     get_workspace_retention_rules,
     is_uuid_v4,
-    mv_workflow_files,
     prevent_disk_quota_excess,
     publish_workflow_submission,
 )
@@ -576,9 +575,9 @@ def validate_workflow_specification(user):  # noqa
                 jsonify({"message": "No specification bundle files were provided."}),
                 400,
             )
-        abs_dir, rel_path, _bundle_bytes, _legacy_parameters = _stage_validation_bundle(
-            request.files
-        )
+        bundle = _stage_validation_bundle(request.files)
+        abs_dir = bundle.absolute_path
+        rel_path = bundle.relative_path
         reana_yaml_path = next(
             (
                 os.path.join(abs_dir, name)
@@ -1127,6 +1126,7 @@ def create_workflow(user):  # noqa
             Request failed. Not implemented.
     """
     bundle_dir = None
+    bundle_members = None
     fetched_dir = None
     seed_members = None
     seed_bytes = 0
@@ -1221,12 +1221,10 @@ def create_workflow(user):  # noqa
             # Stage the bundle and validate it (B3: create-time lint). Keep it
             # afterwards so it can seed the workspace once the workflow exists
             # (C1); it is removed in the outer ``finally``.
-            (
-                bundle_dir,
-                _bundle_rel,
-                bundle_bytes,
-                _legacy_parameters,
-            ) = _stage_validation_bundle(request.files)
+            bundle = _stage_validation_bundle(request.files)
+            bundle_dir = bundle.absolute_path
+            bundle_bytes = bundle.total_bytes
+            bundle_members = bundle.members
             reana_spec_file, validation_warnings = load_and_validate_spec(bundle_dir)
             prevent_disk_quota_excess(
                 user, bundle_bytes, action=f"Creating the workflow {workflow_name}"
@@ -1330,7 +1328,14 @@ def create_workflow(user):  # noqa
                 # Seed the freshly created workspace from the exact validated
                 # snapshot while creation still owns its mutation boundary.
                 try:
-                    mv_workflow_files(bundle_dir, workflow.workspace_path)
+                    copied_bytes = seed_workspace(
+                        bundle_members, workflow.workspace_path
+                    )
+                    if copied_bytes != bundle_bytes:
+                        raise REANAValidationError(
+                            "The uploaded workflow bundle changed while its "
+                            "workspace was seeded."
+                        )
                     store_workflow_disk_quota(workflow, bytes_to_sum=bundle_bytes)
                     update_users_disk_quota(user, bytes_to_sum=bundle_bytes)
                 except Exception:

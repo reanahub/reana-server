@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import shutil
+import stat
 import zipfile
 import yaml
 from contextlib import contextmanager
@@ -24,6 +25,7 @@ from flask import Flask, url_for
 from mock import Mock, patch
 from werkzeug.test import EnvironBuilder
 from reana_commons.config import (
+    REANA_WORKFLOW_UMASK,
     WORKFLOW_RUNTIME_USER_GID,
     WORKFLOW_RUNTIME_USER_UID,
 )
@@ -70,6 +72,16 @@ def _validation_shared_volume(app, monkeypatch):
     )
 
 
+@contextmanager
+def _configured_workspace_umask():
+    """Apply and restore the shared-workspace umask around one test action."""
+    previous_umask = os.umask(REANA_WORKFLOW_UMASK)
+    try:
+        yield
+    finally:
+        os.umask(previous_umask)
+
+
 def test_get_workflows(app, user0, _get_user_mock):
     """Test get_workflows view."""
     with app.test_client() as client:
@@ -111,11 +123,26 @@ SERIAL_REANA_YAML = (
     "inputs:\n"
     "  parameters: {}\n"
 )
+SERIAL_REANA_YAML_WITH_SUPPORT_FILE = SERIAL_REANA_YAML.replace(
+    "  specification:\n",
+    "  files: [code/helper.py]\n  specification:\n",
+)
+SERIAL_SUPPORT_FILE = b"print('helper')\n"
 
 
 def _serial_bundle():
     """Build a fresh multipart spec bundle for a single request."""
     return _zip_bundle({"reana.yaml": SERIAL_REANA_YAML.encode()})
+
+
+def _serial_bundle_with_support_file():
+    """Build a multipart spec bundle containing one nested workflow file."""
+    return _zip_bundle(
+        {
+            "reana.yaml": SERIAL_REANA_YAML_WITH_SUPPORT_FILE.encode(),
+            "code/helper.py": SERIAL_SUPPORT_FILE,
+        }
+    )
 
 
 def _serial_bundle_with_uid_override():
@@ -198,7 +225,7 @@ def test_create_workflow(
         },
         create_http_response,
     )
-    with app.test_client() as client:
+    with _configured_workspace_umask(), app.test_client() as client:
         with patch(
             "reana_server.rest.workflows.current_rwc_api_client",
             rwc_client,
@@ -262,18 +289,34 @@ def test_create_workflow(
                     "access_token": user0.access_token,
                     "workflow_name": "test",
                 },
-                data=_serial_bundle(),
+                data=_serial_bundle_with_support_file(),
                 content_type="multipart/form-data",
             )
             assert res.status_code == 200
-            bundle_bytes = len(SERIAL_REANA_YAML.encode())
+            bundle_bytes = len(SERIAL_REANA_YAML_WITH_SUPPORT_FILE.encode()) + len(
+                SERIAL_SUPPORT_FILE
+            )
             prevent_call = _quota_call_for_user(prevent_quota_mock, user0)
             assert prevent_call.args[1] == bundle_bytes
             assert prevent_call.kwargs == {"action": "Creating the workflow test"}
             seeded = os.path.join(
                 sample_serial_workflow_in_db.workspace_path, "reana.yaml"
             )
+            seeded_directory = os.path.join(
+                sample_serial_workflow_in_db.workspace_path, "code"
+            )
+            seeded_support_file = os.path.join(seeded_directory, "helper.py")
             assert os.path.isfile(seeded)
+            assert os.path.isfile(seeded_support_file)
+            expected_directory_mode = 0o777 & ~REANA_WORKFLOW_UMASK
+            expected_file_mode = 0o666 & ~REANA_WORKFLOW_UMASK
+            assert stat.S_IMODE(os.stat(seeded_directory).st_mode) == (
+                expected_directory_mode
+            )
+            assert stat.S_IMODE(os.stat(seeded).st_mode) == expected_file_mode
+            assert (
+                stat.S_IMODE(os.stat(seeded_support_file).st_mode) == expected_file_mode
+            )
             store_workflow_quota_mock.assert_called_once_with(
                 sample_serial_workflow_in_db, bytes_to_sum=bundle_bytes
             )
@@ -479,8 +522,8 @@ def test_raw_bundle_create_failure_compensates_workspace_and_quota(
     """A failure after controller create leaves no live workflow or workspace.
 
     Exercise the latest possible failure point: workflow quota accounting and
-    bundle promotion have completed, but user quota accounting fails. Cleanup
-    must remove the promoted workspace, mark the row deleted, reset workflow
+    bundle seeding have completed, but user quota accounting fails. Cleanup
+    must remove the seeded workspace, mark the row deleted, reset workflow
     quota, and recalculate user quota. Calling compensation again demonstrates
     that every cleanup action is retry-safe.
     """
@@ -554,7 +597,7 @@ def test_raw_bundle_create_failure_compensates_workspace_and_quota(
         assert update_mock.call_args_list[-1].kwargs == {"override_policy_checks": True}
 
 
-def test_raw_bundle_promotion_failure_is_compensated(
+def test_raw_bundle_seed_failure_is_compensated(
     app,
     session,
     user0,
@@ -563,7 +606,7 @@ def test_raw_bundle_promotion_failure_is_compensated(
     monkeypatch,
     tmp_path,
 ):
-    """Even a partial workspace promotion is removed before returning 500."""
+    """Even a partial workspace seed is removed before returning 500."""
     monkeypatch.setattr(
         "reana_server.rest.workflows.uuid.uuid4",
         lambda: sample_serial_workflow_in_db.id_,
@@ -582,7 +625,7 @@ def test_raw_bundle_promotion_failure_is_compensated(
         Mock(status_code=201),
     )
 
-    def _partially_promote_then_fail(source, target):
+    def _partially_seed_then_fail(_members, target):
         os.makedirs(target, exist_ok=True)
         with open(os.path.join(target, "partial"), "w") as partial:
             partial.write("partial")
@@ -591,8 +634,8 @@ def test_raw_bundle_promotion_failure_is_compensated(
     with app.test_client() as client, patch(
         "reana_server.rest.workflows.current_rwc_api_client", rwc_client
     ), patch("reana_server.rest.workflows.prevent_disk_quota_excess"), patch(
-        "reana_server.rest.workflows.mv_workflow_files",
-        side_effect=_partially_promote_then_fail,
+        "reana_server.rest.workflows.seed_workspace",
+        side_effect=_partially_seed_then_fail,
     ), patch(
         "reana_server.rest.workflows.store_workflow_disk_quota"
     ) as store_mock, patch(
@@ -602,7 +645,7 @@ def test_raw_bundle_promotion_failure_is_compensated(
             url_for("workflows.create_workflow"),
             query_string={
                 "access_token": user0.access_token,
-                "workflow_name": "failed-promotion",
+                "workflow_name": "failed-seeding",
             },
             data=_serial_bundle(),
             content_type="multipart/form-data",
@@ -936,7 +979,7 @@ def test_launch_validates_definition_before_seeding_inputs(
                 )
         return load_and_validate_spec(directory)
 
-    with app.test_client() as client, patch(
+    with _configured_workspace_umask(), app.test_client() as client, patch(
         "reana_server.rest.launch.get_fetched_workflows_dir",
         return_value=str(source),
     ), patch("reana_server.rest.launch.get_fetcher", return_value=fetcher), patch(
@@ -966,6 +1009,15 @@ def test_launch_validates_definition_before_seeding_inputs(
     assert os.path.isfile(os.path.join(workspace, "code", "helper.py"))
     assert os.path.isfile(os.path.join(workspace, "data", "input.csv"))
     assert not os.path.exists(os.path.join(workspace, "undeclared.txt"))
+    expected_directory_mode = 0o777 & ~REANA_WORKFLOW_UMASK
+    expected_file_mode = 0o666 & ~REANA_WORKFLOW_UMASK
+    assert stat.S_IMODE(os.stat(os.path.join(workspace, "code")).st_mode) == (
+        expected_directory_mode
+    )
+    assert (
+        stat.S_IMODE(os.stat(os.path.join(workspace, "code", "helper.py")).st_mode)
+        == expected_file_mode
+    )
     create_call = rwc_client.api.create_workflow.call_args
     assert create_call.kwargs["workflow"]["workflow_id"] == str(
         sample_serial_workflow_in_db.id_

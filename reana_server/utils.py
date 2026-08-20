@@ -177,12 +177,6 @@ def remove_fetched_workflows_dir(tmpdir: str) -> None:
         shutil.rmtree(tmpdir)
 
 
-def mv_workflow_files(source: str, target: str) -> None:
-    """Move files from one directory to another."""
-    for entry in os.listdir(source):
-        shutil.move(os.path.join(source, entry), target)
-
-
 # FIXME: use `is_relative_to` from the standard library when moving to Python 3.9
 def is_relative_to(path: pathlib.Path, base: pathlib.Path) -> bool:
     """Check whether `path` is contained inside `base`."""
