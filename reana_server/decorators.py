@@ -16,7 +16,8 @@ import traceback
 from flask import after_this_request, g, jsonify, request
 from reana_commons.errors import REANAQuotaExceededError
 from reana_db.database import Session
-from reana_db.models import User, gitlab_webhook_secret_digest
+from reana_db.models import User
+from reana_db.secrets import compute_lookup_digest
 
 from reana_server.auth import (
     AuthError,
@@ -278,9 +279,7 @@ def _get_user_from_gitlab_secret(secret_value):
     """Authenticate the dedicated per-user GitLab webhook secret."""
     user = (
         Session.query(User)
-        .filter_by(
-            gitlab_webhook_secret_digest=gitlab_webhook_secret_digest(secret_value)
-        )
+        .filter_by(gitlab_webhook_secret_digest=compute_lookup_digest(secret_value))
         .one_or_none()
     )
     if (

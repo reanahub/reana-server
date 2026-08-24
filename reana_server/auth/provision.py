@@ -46,6 +46,14 @@ def _sanitize_claim(value):
     return _CONTROL_CHAR_RE.sub("", value)
 
 
+def _validated_email(userinfo):
+    """Return an identity email only when it cannot normalize to another key."""
+    email = userinfo["email"]
+    if _CONTROL_CHAR_RE.search(email):
+        raise ProvisioningError("UserInfo email contains forbidden control characters.")
+    return email
+
+
 def verify_userinfo_subject(claims, userinfo):
     """Verify the userinfo ``sub`` matches the validated token ``sub``.
 
@@ -167,7 +175,7 @@ def get_or_provision_user(claims, token, userinfo=None):
     # profile data only; it cannot grant REANA access.
     userinfo = userinfo or fetch_userinfo(token)
     verify_userinfo_subject(claims, userinfo)
-    email = _sanitize_claim(userinfo["email"])
+    email = _validated_email(userinfo)
     try:
         existing = Session.query(User).filter_by(email=email).one_or_none()
         if existing is not None:

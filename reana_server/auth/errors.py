@@ -20,6 +20,15 @@ class IssuerUnavailableError(AuthError):
     """
 
 
+class IssuerKeyUnavailableError(IssuerUnavailableError):
+    """The issuer cannot currently supply usable key material.
+
+    This is distinct from a definitive token-validation failure: malformed or
+    empty issuer JWKS and a key rotation that cannot currently be followed may
+    recover without the browser discarding its refresh-capable BFF session.
+    """
+
+
 class IssuerMisconfiguredError(AuthError):
     """The issuer/discovery-document configuration is invalid or incomplete.
 

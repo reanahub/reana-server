@@ -44,6 +44,7 @@ from reana_db.models import (
 
 from reana_server.api_client import current_rwc_api_client
 from reana_server.auth.provision import link_user_identity
+from reana_server.auth.sessions import delete_sessions_for_subject
 from reana_server.config import ADMIN_USER_ID, REANA_HOSTNAME
 from reana_server.reana_admin.check_workflows import check_workspaces
 from reana_server.reana_admin.options import (
@@ -235,6 +236,83 @@ def gitlab_webhook_revoke(delete_secret: bool, dry_run: bool, user: Optional[Use
             "The secret is preserved. The user can re-authorize it from the "
             "REANA web interface while they still hold the required role."
         )
+
+
+@reana_admin.command("revoke-identity")
+@click.option(
+    "--delete-secret",
+    is_flag=True,
+    help=(
+        "Also delete the GitLab webhook secret. Hooks already installed in "
+        "GitLab stop working permanently and the user must recreate them "
+        "through REANA."
+    ),
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Report what would be revoked without changing or deleting anything.",
+)
+@add_user_options
+@with_appcontext
+@click.pass_context
+def revoke_identity(
+    ctx, delete_secret: bool, dry_run: bool, user: Optional[User]
+) -> None:
+    """Revoke every REANA-side session and secret for one identity at once.
+
+    Closes the user's open interactive sessions immediately, revokes their
+    GitLab webhook authorization, and deletes their browser (BFF) sessions
+    -- everything REANA itself can revoke without delay, in one command
+    instead of three. Equivalent to running ``interactive-session-cleanup
+    --email``, ``gitlab-webhook-revoke --email``, and a BFF-session
+    revocation separately; see those commands for narrower standalone use
+    (e.g. only closing sessions, or only a leaked-secret response).
+
+    This does NOT remove the user's identity-provider role/entitlement, and
+    cannot revoke a JWT access token already issued: REANA validates bearer
+    tokens statelessly, so a live one keeps working until it expires
+    regardless of anything this command does. For offboarding or a
+    suspected compromise, remove the identity-provider role FIRST, then run
+    this -- the same ordering ``gitlab-webhook-revoke``'s documentation
+    already requires, now covering every REANA-side credential at once.
+    """
+    if user is None:
+        click.secho("Please specify the user with --email or --id.", fg="red", err=True)
+        raise click.exceptions.Exit(1)
+
+    ctx.invoke(
+        interactive_session_cleanup,
+        days=None,
+        dry_run=dry_run,
+        email=user.email,
+        id_=None,
+    )
+    ctx.invoke(
+        gitlab_webhook_revoke,
+        delete_secret=delete_secret,
+        dry_run=dry_run,
+        email=user.email,
+        id_=None,
+    )
+    if user.idp_subject:
+        count = delete_sessions_for_subject(
+            user.idp_issuer, user.idp_subject, dry_run=dry_run
+        )
+        verb = "Would delete" if dry_run else "Deleted"
+        click.echo(f"{verb} {count} browser session(s) for {user.email}.")
+    else:
+        click.echo(
+            f"{user.email} has no linked identity-provider subject yet; "
+            "no browser sessions to look up."
+        )
+
+    click.secho(
+        "Remember to remove this user's identity-provider role separately "
+        "-- a live access token keeps working until it expires regardless "
+        "of anything this command does.",
+        fg="yellow",
+    )
 
 
 @reana_admin.command("user-list", help="List users according to the search criteria.")

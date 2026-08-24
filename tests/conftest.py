@@ -15,6 +15,7 @@ import os
 import time
 from unittest.mock import Mock, patch
 
+import fakeredis
 import pytest
 from authlib.jose import JsonWebKey
 from authlib.jose import jwt as jose_jwt
@@ -25,6 +26,7 @@ from reana_db.models import (
     WorkspaceRetentionRuleStatus,
 )
 
+import reana_server.auth.sessions as _sessions_module
 import reana_server.auth.tokens as _tokens_module
 from reana_server.factory import create_app
 
@@ -79,6 +81,15 @@ def jwt_issuer(base_app, jwt_signing_key):
 def default_user(user0):
     """Backward-compatible alias for the shared reana-db admin fixture."""
     return user0
+
+
+@pytest.fixture
+def redis_store(base_app):
+    """Replace the Redis client with an in-memory fake."""
+    fake = fakeredis.FakeRedis(decode_responses=True)
+    base_app.extensions[_sessions_module._REDIS_EXTENSION] = fake
+    with base_app.app_context():
+        yield fake
 
 
 @pytest.fixture()

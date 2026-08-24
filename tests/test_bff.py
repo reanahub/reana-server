@@ -13,7 +13,6 @@ import time
 from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlparse
 
-import fakeredis
 import pytest
 import requests
 from authlib.jose import JsonWebKey
@@ -98,6 +97,7 @@ def _store_bound_session(sid, refresh_token, id_token, access_token):
         issuer=ISSUER,
         subject="subject-bff",
         client_id="reana-server",
+        created_at=time.time(),
     )
 
 
@@ -134,15 +134,6 @@ def bff_config(base_app, monkeypatch, signing_key):
     with patch.object(tokens_module.requests, "get", return_value=jwks_response):
         with base_app.app_context():
             yield
-
-
-@pytest.fixture
-def redis_store(base_app):
-    """Replace the Redis client with an in-memory fake."""
-    fake = fakeredis.FakeRedis(decode_responses=True)
-    base_app.extensions[sessions_module._REDIS_EXTENSION] = fake
-    with base_app.app_context():
-        yield fake
 
 
 def _state_cookie_for(app, client, **payload):
@@ -488,6 +479,7 @@ class TestLogout:
             issuer=ISSUER,
             subject="session-subject",
             client_id="reana-server",
+            created_at=time.time(),
         )
 
         with base_app.test_client() as client:
@@ -694,6 +686,48 @@ class TestRefreshSession:
             side_effect=requests.ConnectionError("issuer unavailable"),
         ):
             response, endpoint = self._decorated_response(base_app, expired, sid)
+
+        assert response.status_code == 503
+        assert sessions_module.get_session(sid)["rt"] == "refresh"
+        assert not response.headers.getlist("Set-Cookie")
+        endpoint.assert_not_called()
+
+    def test_jwks_rotation_outage_preserves_recoverable_browser_session(
+        self, base_app, bff_config, redis_store, signing_key
+    ):
+        """An unavailable new signing key is a 503, not terminal cookie loss."""
+        tokens_module.validate_access_token(_make_token(signing_key))
+        sid = "rotation-outage"
+        rotated_key = JsonWebKey.generate_key("EC", "P-256", is_private=True)
+        expired = _make_token(rotated_key, exp=int(time.time()) - 3600)
+        _store_bound_session(sid, "refresh", "id", expired)
+
+        with patch.object(
+            tokens_module.requests,
+            "get",
+            side_effect=requests.ConnectionError("issuer unavailable"),
+        ):
+            response, endpoint = self._decorated_response(base_app, expired, sid)
+
+        assert response.status_code == 503
+        assert sessions_module.get_session(sid)["rt"] == "refresh"
+        assert not response.headers.getlist("Set-Cookie")
+        endpoint.assert_not_called()
+
+    def test_jwks_rotation_during_unknown_kid_backoff_preserves_session(
+        self, base_app, bff_config, redis_store, signing_key
+    ):
+        """An ambiguous rotated key returns 503 without clearing cookies."""
+        tokens_module.validate_access_token(_make_token(signing_key))
+        cache = tokens_module._get_jwks_cache()
+        cache.get_key_set_for_kid("attacker-controlled-kid")
+
+        sid = "rotation-backoff"
+        rotated_key = JsonWebKey.generate_key("EC", "P-256", is_private=True)
+        expired = _make_token(rotated_key, exp=int(time.time()) - 3600)
+        _store_bound_session(sid, "refresh", "id", expired)
+
+        response, endpoint = self._decorated_response(base_app, expired, sid)
 
         assert response.status_code == 503
         assert sessions_module.get_session(sid)["rt"] == "refresh"
@@ -1056,3 +1090,187 @@ class TestRefreshSession:
 
         assert result.outcome is RefreshOutcome.TERMINAL
         assert sessions_module.get_session(sid) is None
+
+    def test_refresh_caps_ttl_to_original_creation_window(
+        self, base_app, bff_config, redis_store, signing_key, monkeypatch
+    ):
+        """A refresh near the end of the session window does not re-arm it.
+
+        Without the fix, store_session() re-issues the full session_ttl on
+        every refresh, so an actively used session never actually expires --
+        contradicting the documented absolute cap. Set a short session_ttl,
+        create a session whose original window is almost elapsed, refresh
+        it, and assert the resulting Redis TTL is bounded by what remained
+        of the *original* window, not reset to the full session_ttl.
+        """
+        monkeypatch.setitem(base_app.config["REANA_AUTH"], "session_ttl", 100)
+        sid = "near-expiry"
+        expired = _make_token(signing_key, exp=int(time.time()) - 3600)
+        long_ago = time.time() - 95  # only ~5s left of a 100s window
+        sessions_module.store_session(
+            sid,
+            "refresh",
+            "id",
+            expired,
+            issuer=ISSUER,
+            subject="subject-bff",
+            client_id="reana-server",
+            created_at=long_ago,
+        )
+        response = Mock(status_code=200)
+        response.json.return_value = {"access_token": _make_token(signing_key)}
+
+        with patch.object(sessions_module.requests, "post", return_value=response):
+            result = _refresh_bound_session(sid, expired)
+
+        assert result.outcome is RefreshOutcome.SUCCESS
+        ttl = redis_store.ttl(f"reana:bff:session:{sid}")
+        assert 0 < ttl <= 10
+
+    def test_refresh_well_within_window_extends_normally(
+        self, base_app, bff_config, redis_store, signing_key, monkeypatch
+    ):
+        """A refresh soon after creation still gets close to the full TTL."""
+        monkeypatch.setitem(base_app.config["REANA_AUTH"], "session_ttl", 100)
+        sid = "fresh-session"
+        expired = _make_token(signing_key, exp=int(time.time()) - 3600)
+        sessions_module.store_session(
+            sid,
+            "refresh",
+            "id",
+            expired,
+            issuer=ISSUER,
+            subject="subject-bff",
+            client_id="reana-server",
+            created_at=time.time(),
+        )
+        response = Mock(status_code=200)
+        response.json.return_value = {"access_token": _make_token(signing_key)}
+
+        with patch.object(sessions_module.requests, "post", return_value=response):
+            result = _refresh_bound_session(sid, expired)
+
+        assert result.outcome is RefreshOutcome.SUCCESS
+        ttl = redis_store.ttl(f"reana:bff:session:{sid}")
+        assert ttl > 90
+
+    def test_refresh_finishing_after_absolute_deadline_is_discarded(
+        self, base_app, bff_config, redis_store, signing_key, monkeypatch
+    ):
+        """A slow issuer response cannot resurrect an elapsed BFF session."""
+        monkeypatch.setitem(base_app.config["REANA_AUTH"], "session_ttl", 100)
+        sid = "deadline-crossed"
+        expired = _make_token(signing_key, exp=int(time.time()) - 3600)
+        redis_store.set(
+            f"reana:bff:session:{sid}",
+            json.dumps(
+                {
+                    "rt": "refresh",
+                    "idt": "id",
+                    "at": expired,
+                    "iss": ISSUER,
+                    "sub": "subject-bff",
+                    "cid": "reana-server",
+                    "created_at": 1000,
+                }
+            ),
+        )
+        response = Mock(status_code=200)
+        response.json.return_value = {"access_token": _make_token(signing_key)}
+
+        clock = {"now": 1099}
+
+        def finish_after_deadline(*_args, **_kwargs):
+            clock["now"] = 1101
+            return response
+
+        with patch.object(
+            sessions_module.requests, "post", side_effect=finish_after_deadline
+        ), patch.object(sessions_module, "_now", side_effect=lambda: clock["now"]):
+            result = sessions_module._refresh_locked_session(
+                sid, base_app.config["REANA_AUTH"], ISSUER, "subject-bff"
+            )
+
+        assert result.outcome is RefreshOutcome.TERMINAL
+        assert sessions_module.get_session(sid) is None
+
+
+class TestDeleteSessionsForSubject:
+    def test_deletes_only_the_matching_identity(self, redis_store):
+        """Only the targeted issuer/subject's sessions are removed."""
+        sessions_module.store_session(
+            "target-1",
+            "refresh",
+            "id",
+            "access",
+            issuer=ISSUER,
+            subject="target-subject",
+            client_id="reana-server",
+            created_at=time.time(),
+        )
+        sessions_module.store_session(
+            "target-2",
+            "refresh",
+            "id",
+            "access",
+            issuer=ISSUER,
+            subject="target-subject",
+            client_id="reana-server",
+            created_at=time.time(),
+        )
+        sessions_module.store_session(
+            "other",
+            "refresh",
+            "id",
+            "access",
+            issuer=ISSUER,
+            subject="other-subject",
+            client_id="reana-server",
+            created_at=time.time(),
+        )
+
+        count = sessions_module.delete_sessions_for_subject(ISSUER, "target-subject")
+
+        assert count == 2
+        assert sessions_module.get_session("target-1") is None
+        assert sessions_module.get_session("target-2") is None
+        assert sessions_module.get_session("other") is not None
+
+    def test_dry_run_counts_without_deleting(self, redis_store):
+        """A dry run reports the match count but deletes nothing."""
+        sessions_module.store_session(
+            "target-1",
+            "refresh",
+            "id",
+            "access",
+            issuer=ISSUER,
+            subject="target-subject",
+            client_id="reana-server",
+            created_at=time.time(),
+        )
+
+        count = sessions_module.delete_sessions_for_subject(
+            ISSUER, "target-subject", dry_run=True
+        )
+
+        assert count == 1
+        assert sessions_module.get_session("target-1") is not None
+
+    def test_ignores_refresh_lock_keys(self, redis_store):
+        """A stray refresh-lock key never matches or gets deleted as a session."""
+        sessions_module.store_session(
+            "target-1",
+            "refresh",
+            "id",
+            "access",
+            issuer=ISSUER,
+            subject="target-subject",
+            client_id="reana-server",
+            created_at=time.time(),
+        )
+        redis_store.set("reana:bff:session:target-1:lock", "1")
+
+        count = sessions_module.delete_sessions_for_subject(ISSUER, "target-subject")
+
+        assert count == 1
+        assert redis_store.get("reana:bff:session:target-1:lock") == "1"

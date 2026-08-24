@@ -128,9 +128,12 @@ rejected for long enough, GitLab may
 — temporarily after a few consecutive failures and permanently after many.
 Renewing the REANA authorization restores REANA's acceptance, but a hook GitLab
 has permanently disabled additionally needs a successful test delivery from
-GitLab before it resumes. Plan upgrades of busy installations accordingly, and
-tell users to renew promptly so their projects do not cross GitLab's
-auto-disable thresholds during an unattended expiry window.
+GitLab before it resumes. REANA cannot detect or repair that disablement itself,
+so renewing an already-expired authorization (`PUT /api/gitlab/webhook-token`)
+returns a `message` field warning of it, as a pointer back to this manual
+recovery step. Plan upgrades of busy installations accordingly, and tell users
+to renew promptly so their projects do not cross GitLab's auto-disable
+thresholds during an unattended expiry window.
 
 Administrators do not have to wait out an expiry window, but the correct
 procedure depends on the incident.

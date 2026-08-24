@@ -25,6 +25,7 @@ from reana_server.auth.errors import (
     AuthError,
     InvalidTokenError,
     IssuerMisconfiguredError,
+    IssuerKeyUnavailableError,
     IssuerUnavailableError,
     MissingRoleError,
     ProvisioningError,
@@ -111,6 +112,52 @@ class TestValidateAccessToken:
         with pytest.raises(InvalidTokenError):
             validate_access_token(token)
 
+    def test_any_configured_audience_is_accepted(
+        self, base_app, auth_config, signing_key, monkeypatch
+    ):
+        """Both web and CLI audiences remain valid when configured together."""
+        monkeypatch.setitem(base_app.config["REANA_AUTH"], "audience", ["cli", "web"])
+        assert validate_access_token(_make_token(signing_key, aud="web"))["sub"]
+        for audience in ("other", None):
+            with pytest.raises(InvalidTokenError):
+                validate_access_token(_make_token(signing_key, aud=audience))
+
+    def test_expired_cookie_uses_the_same_audience_set(
+        self, base_app, auth_config, signing_key, monkeypatch
+    ):
+        """Refreshable cookies accept either configured access-token audience."""
+        monkeypatch.setitem(base_app.config["REANA_AUTH"], "audience", ["cli", "web"])
+        expired = int(time.time()) - 3600
+        assert decode_expired_token(_make_token(signing_key, aud="cli", exp=expired))[
+            "sub"
+        ]
+        for audience in ("other", None):
+            with pytest.raises(InvalidTokenError):
+                decode_expired_token(
+                    _make_token(signing_key, aud=audience, exp=expired)
+                )
+
+    @pytest.mark.parametrize("payload", [{}, {"keys": []}, {"keys": "bad"}])
+    def test_unusable_jwks_is_an_availability_error(
+        self, auth_config, signing_key, payload
+    ):
+        """A broken issuer key set is not blamed on the user's browser session."""
+        response = Mock()
+        response.raise_for_status = Mock()
+        response.json.return_value = payload
+        auth_config.return_value = response
+        with pytest.raises(IssuerKeyUnavailableError):
+            validate_access_token(_make_token(signing_key))
+
+    def test_unknown_rotated_key_during_outage_is_an_availability_error(
+        self, auth_config, signing_key
+    ):
+        """A recoverable warm session survives a failed rotation lookup."""
+        validate_access_token(_make_token(signing_key))
+        auth_config.side_effect = tokens_module.requests.RequestException("issuer down")
+        with pytest.raises(IssuerKeyUnavailableError):
+            validate_access_token(_make_token(_generate_key()))
+
     def test_id_token_audience_is_rejected_as_an_access_token(
         self, auth_config, signing_key
     ):
@@ -193,15 +240,41 @@ class TestValidateAccessToken:
     def test_global_unknown_kid_backoff_does_not_grow_cache(
         self, auth_config, signing_key
     ):
-        """Random key ids during global backoff are not retained in memory."""
+        """Random key ids during global backoff are transient and not retained."""
         validate_access_token(_make_token(signing_key))
         cache = tokens_module._get_jwks_cache()
         cache.get_key_set_for_kid("first-unknown")
 
         for index in range(100):
-            cache.get_key_set_for_kid(f"random-{index}")
+            with pytest.raises(IssuerKeyUnavailableError):
+                cache.get_key_set_for_kid(f"random-{index}")
 
         assert set(cache._unknown_kids) == {"first-unknown"}
+        assert auth_config.call_count == 2
+
+    def test_rotated_key_during_unknown_kid_backoff_recovers_after_backoff(
+        self, auth_config, signing_key
+    ):
+        """An ambiguous rotation is temporary, then gets a guarded refresh."""
+        validate_access_token(_make_token(signing_key))
+        unknown_key = _generate_key()
+        with pytest.raises(InvalidTokenError):
+            validate_access_token(_make_token(unknown_key))
+
+        rotated_key = _generate_key()
+        rotated_token = _make_token(rotated_key)
+        with pytest.raises(IssuerKeyUnavailableError):
+            validate_access_token(rotated_token)
+        assert auth_config.call_count == 2
+
+        cache = tokens_module._get_jwks_cache()
+        cache._last_unknown_kid_refresh -= (
+            tokens_module._MIN_UNKNOWN_KID_REFRESH_INTERVAL + 1
+        )
+        auth_config.return_value = _jwks_response(signing_key, rotated_key)
+
+        assert validate_access_token(rotated_token)["sub"] == "subject-1"
+        assert auth_config.call_count == 3
 
     def test_unknown_kid_cache_is_bounded_during_issuer_outage(
         self, auth_config, signing_key
@@ -258,6 +331,26 @@ class TestValidateAccessToken:
         with pytest.raises(InvalidTokenError):
             decode_expired_token(expired_cookie)
         assert auth_config.call_count == 1
+
+    def test_decode_expired_token_reports_issuer_outage_distinctly(
+        self, base_app, signing_key
+    ):
+        """A JWKS-fetch failure during expired-cookie decode is not "invalid".
+
+        Regression test for the same misclassification already fixed in
+        JWKSCache._fetch/_refresh (test_discovery_failure_does_not_wedge_
+        refresh above): decode_expired_token's own broad ``except
+        Exception`` previously reclassified IssuerUnavailableError as
+        InvalidTokenError, which decorators.py's _authenticate then
+        promotes to _TerminalSessionError -- clearing cookies over a
+        transient, potentially self-healing issuer outage rather than
+        surfacing it as an availability problem.
+        """
+        with base_app.app_context(), patch.object(
+            tokens_module, "get_endpoint", side_effect=AuthError("unavailable")
+        ):
+            with pytest.raises(IssuerUnavailableError):
+                decode_expired_token(_make_token(signing_key))
 
     def test_jwks_served_stale_on_issuer_outage(self, auth_config, signing_key):
         """Cached keys keep validating tokens while the issuer is down."""

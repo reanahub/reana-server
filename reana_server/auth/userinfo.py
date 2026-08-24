@@ -42,6 +42,14 @@ def fetch_userinfo(token):
         raise IssuerUnavailableError(
             f"Could not fetch userinfo from issuer: {error}"
         ) from error
+    if not isinstance(userinfo, dict):
+        raise ProvisioningError("Userinfo response from issuer is not an object.")
+    for claim in ("sub", "email", "name", "preferred_username"):
+        value = userinfo.get(claim)
+        if value is not None and not isinstance(value, str):
+            raise ProvisioningError(
+                f"Userinfo response claim '{claim}' must be a string."
+            )
     if not userinfo.get("email"):
         raise ProvisioningError("Userinfo response from issuer is missing 'email'.")
     return userinfo

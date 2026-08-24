@@ -23,7 +23,14 @@ from flask import current_app
 from reana_server.auth import tokens as _tokens
 from reana_server.auth.config import get_auth_config, get_issuer_request_kwargs
 from reana_server.auth.discovery import get_endpoint
-from reana_server.auth.errors import InvalidTokenError, SessionUnavailableError
+from reana_server.auth.errors import (
+    InvalidTokenError,
+    IssuerMisconfiguredError,
+    IssuerUnavailableError,
+    SessionUnavailableError,
+)
+
+_now = time.time
 
 AUTH_COOKIE = "reana_at"
 """httpOnly cookie carrying the access JWT."""
@@ -92,12 +99,31 @@ def store_session(
     issuer,
     subject,
     client_id,
+    created_at,
 ):
-    """Persist a BFF session bound to one issuer, subject, and client."""
+    """Persist a BFF session bound to one issuer, subject, and client.
+
+    ``created_at`` is the session's original creation time (a Unix
+    timestamp), supplied by the caller rather than defaulted here: a fresh
+    login passes ``time.time()``, while a refresh
+    (:func:`_refresh_locked_session`) must forward the *existing* session's
+    ``created_at`` unchanged. Without that distinction, re-arming the full
+    ``session_ttl`` on every refresh would let an actively used session's
+    expiry slide forward indefinitely, defeating the documented absolute
+    cap ("removed after REANA_AUTH_SESSION_TTL even if the issuer would
+    keep [refresh tokens] longer"). The TTL actually written is instead
+    bounded by how much of that original window remains; a session whose
+    window has already elapsed is deleted rather than re-armed.
+    """
+    session_ttl = get_auth_config()["session_ttl"]
+    remaining_ttl = math.ceil(created_at + session_ttl - _now())
     try:
+        if remaining_ttl <= 0:
+            get_redis().delete(_SESSION_KEY.format(sid=sid))
+            return False
         get_redis().setex(
             _SESSION_KEY.format(sid=sid),
-            get_auth_config()["session_ttl"],
+            min(session_ttl, remaining_ttl),
             json.dumps(
                 {
                     "rt": refresh_token,
@@ -106,9 +132,11 @@ def store_session(
                     "iss": issuer,
                     "sub": subject,
                     "cid": client_id,
+                    "created_at": created_at,
                 }
             ),
         )
+        return True
     except redis.RedisError as error:
         raise _session_unavailable(error) from error
 
@@ -146,6 +174,44 @@ def count_sessions():
         raise _session_unavailable(error) from error
 
 
+def delete_sessions_for_subject(issuer, subject, *, dry_run=False):
+    """Delete every BFF session bound to one issuer/subject identity.
+
+    Unlike interactive sessions and the GitLab webhook secret, BFF sessions
+    are keyed by a random ``sid``, not by owner -- there is no indexed
+    lookup path by identity. A full scan is used instead: this is an
+    admin-invoked, identity-targeted revocation, not a hot path, and the
+    live BFF session count is bounded by concurrently signed-in browsers,
+    so the O(live sessions) cost of scanning is an accepted, deliberate
+    tradeoff rather than a gap to close with new persistent infrastructure.
+
+    :param dry_run: report the count that would be deleted without deleting.
+    :return: number of matching sessions found (deleted unless ``dry_run``).
+    """
+    try:
+        redis_client = get_redis()
+        keys = redis_client.scan_iter(match=_SESSION_KEY.format(sid="*"))
+        matched = 0
+        for key in keys:
+            if key.endswith(":lock"):
+                continue
+            raw = redis_client.get(key)
+            if not raw:
+                continue
+            try:
+                session = json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+            if not session_matches_identity(session, issuer, subject):
+                continue
+            matched += 1
+            if not dry_run:
+                redis_client.delete(key)
+        return matched
+    except redis.RedisError as error:
+        raise _session_unavailable(error) from error
+
+
 def decode_expired_token(token):
     """Return claims of a signature-valid but possibly expired token.
 
@@ -156,10 +222,23 @@ def decode_expired_token(token):
     refresh is attempted using the separate browser-session cookie.
 
     :raises InvalidTokenError: on bad signature, issuer or audience.
+    :raises IssuerUnavailableError: when the issuer's JWKS cannot currently
+        be fetched -- a transient, potentially self-healing state, distinct
+        from a definitively invalid token.
+    :raises IssuerMisconfiguredError: when the issuer integration itself is
+        misconfigured.
     """
     try:
         claims = _tokens._decode_token(token)
     except InvalidTokenError:
+        raise
+    except (IssuerUnavailableError, IssuerMisconfiguredError):
+        # Not a token-validity verdict: re-raise as-is so the caller (see
+        # decorators.py's _authenticate) can tell an issuer outage apart
+        # from a definitively bad cookie and avoid clearing cookies over a
+        # condition that may resolve on its own. Same classification
+        # already applied to _fetch_discovery_document/JWKSCache._fetch;
+        # this call site just postdates that fix.
         raise
     except Exception as error:
         raise InvalidTokenError(f"Invalid token: {error}")
@@ -297,6 +376,10 @@ def _refresh_locked_session(sid, auth_config, expected_issuer, expected_subject)
         # to another browser identity.
         logging.warning("Rejecting mismatched browser access/session cookies.")
         return RefreshResult(RefreshOutcome.TERMINAL)
+    created_at = session.get("created_at", _now())
+    if created_at + auth_config["session_ttl"] <= _now():
+        delete_session(sid)
+        return RefreshResult(RefreshOutcome.TERMINAL)
     outcome, body = _request_refreshed_tokens(session["rt"], auth_config)
     if outcome is RefreshOutcome.TERMINAL:
         logging.info("Refresh token rejected by issuer, ending session.")
@@ -328,7 +411,7 @@ def _refresh_locked_session(sid, auth_config, expected_issuer, expected_subject)
         )
         delete_session(sid)
         return RefreshResult(RefreshOutcome.TERMINAL)
-    store_session(
+    stored = store_session(
         sid,
         body.get("refresh_token") or session["rt"],
         refreshed_id_token,
@@ -336,7 +419,14 @@ def _refresh_locked_session(sid, auth_config, expected_issuer, expected_subject)
         issuer=session["iss"],
         subject=session["sub"],
         client_id=session["cid"],
+        # A session stored before this field existed has no recorded
+        # creation time; treat it as created now rather than raising, so
+        # refreshing it is not silently blocked -- it still receives the
+        # bounded-cap treatment from that point forward.
+        created_at=created_at,
     )
+    if not stored:
+        return RefreshResult(RefreshOutcome.TERMINAL)
     return RefreshResult(RefreshOutcome.SUCCESS, access_token)
 
 

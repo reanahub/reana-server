@@ -610,25 +610,8 @@
         "summary": "Get GitLab webhook authorization status"
       },
       "put": {
-        "description": "Confirm the current user's REANA entitlement and extend the delegated GitLab webhook authorization without rotating its secret. If ``project_id`` is given, best-effort asks GitLab to redeliver that project's webhook, which can resume a hook GitLab has auto-disabled after consecutive failures; renewal itself always succeeds regardless of whether that best-effort attempt does.",
+        "description": "Confirm the current user's REANA entitlement and extend the delegated GitLab webhook authorization without rotating its secret. Renewal does not re-enable a webhook that GitLab has disabled; the user must send a test delivery or re-enable it from that project's GitLab settings. If the authorization had already expired, the response includes a ``message`` pointing this out, since REANA cannot detect or repair a GitLab-side auto-disable on its own.",
         "operationId": "renew_gitlab_webhook_token",
-        "parameters": [
-          {
-            "description": "Optional GitLab project to attempt a test delivery for after renewal.",
-            "in": "body",
-            "name": "data",
-            "required": false,
-            "schema": {
-              "properties": {
-                "project_id": {
-                  "description": "The GitLab project id.",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "description": "Renewed GitLab webhook authorization status.",
@@ -646,13 +629,14 @@
                 },
                 "max_lifetime_seconds": {
                   "type": "integer"
+                },
+                "message": {
+                  "description": "Present only when the authorization had already expired, warning that GitLab may have auto-disabled affected webhooks and pointing to the manual recovery step.",
+                  "type": "string"
                 }
               },
               "type": "object"
             }
-          },
-          "400": {
-            "description": "The request body, if given, is not a JSON object."
           },
           "401": {
             "description": "The request is not authenticated."
@@ -672,7 +656,7 @@
     },
     "/api/health": {
       "get": {
-        "description": "Unlike /api/ping (process liveness only), this reports whether the BFF session store (Redis) and the configured OIDC issuer currently have usable cached material, so that external monitoring pointed here can detect an outage that /api/ping cannot see. Each check is skipped (omitted from the response and not counted against readiness) when the corresponding feature is not configured for this deployment. Never performs a live network call to the issuer; only inspects already-cached state, so this is cheap enough to poll frequently and cannot itself add load to a struggling issuer.\n\nOnly the ``redis`` check (the BFF session store) can make this endpoint's own status code report not-ready -- it is safe to point a Kubernetes readiness probe here. ``issuer`` is reported in the body for observability/alerting only and never affects the status code: with several worker processes sharing one pod, coupling readiness to issuer reachability could make an IdP outage take the whole pod out of rotation and keep it there even after the IdP recovers, because losing readiness also stops the very traffic that would refresh the issuer's discovery/JWKS caches. REANA Server keeps serving /api/ping, /api/info, /api/config, and the friendly 503 auth-error response regardless of issuer cache health.",
+        "description": "Unlike /api/ping (process liveness only), this reports whether the BFF session store (Redis) and the configured OIDC issuer currently have usable cached material, so that external monitoring pointed here can detect an outage that /api/ping cannot see. Each check is skipped (omitted from the response and not counted against health) when the corresponding feature is not configured for this deployment. Never performs a live network call to the issuer; only inspects already-cached state, so this is cheap enough to poll frequently and cannot itself add load to a struggling issuer.\n\nOnly the ``redis`` check (the BFF session store) can make this endpoint's own status code report unhealthy. This endpoint is for dependency monitoring, not Kubernetes readiness; deployments should probe /api/ping so a Redis outage does not withdraw the otherwise usable whole API. ``issuer`` is reported in the body for observability/alerting only and never affects the status code: with several worker processes sharing one pod, coupling readiness to issuer reachability could make an IdP outage take the whole pod out of rotation and keep it there even after the IdP recovers, because losing readiness also stops the very traffic that would refresh the issuer's discovery/JWKS caches. REANA Server keeps serving /api/ping, /api/info, /api/config, and the friendly 503 auth-error response regardless of issuer cache health.",
         "operationId": "health",
         "produces": [
           "application/json"
@@ -717,7 +701,7 @@
           }
         },
         "security": [],
-        "summary": "Report readiness of REANA Server's auth-adjacent dependencies."
+        "summary": "Report health of REANA Server's auth-adjacent dependencies."
       }
     },
     "/api/info": {

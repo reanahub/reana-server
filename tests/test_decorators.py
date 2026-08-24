@@ -288,16 +288,6 @@ class TestGitlabWebhookAuthentication:
             response, code = signin_required(include_gitlab_login=True)(endpoint)()
         assert code == 401
 
-    def test_active_legacy_reana_token_is_rejected(self, app, user0):
-        """Opaque REANA tokens are not valid GitLab webhook credentials."""
-        legacy_token = user0.access_token
-        assert legacy_token
-        endpoint = _ok_endpoint()
-        with app.test_request_context(headers={"X-Gitlab-Token": legacy_token}):
-            response, code = signin_required(include_gitlab_login=True)(endpoint)()
-        assert code == 401
-        endpoint.assert_not_called()
-
     def test_webhook_header_ignored_without_flag(self, app, session, user0):
         user0.gitlab_webhook_secret = "webhook-secret-value"
         user0.gitlab_webhook_secret_expires_at = datetime.utcnow() + timedelta(hours=1)

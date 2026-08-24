@@ -40,6 +40,7 @@ from reana_server.reana_admin.options import (
     add_user_options,
     add_workflow_option,
 )
+import reana_server.auth.sessions as sessions_module
 from reana_server.auth.errors import InvalidTokenError
 from reana_server.decorators import _get_user_from_gitlab_secret
 from reana_server.utils import naive_utcnow
@@ -188,7 +189,6 @@ def test_import_users_accepts_legacy_token_column(app, session):
     user = session.query(User).filter_by(id_=user_id).one()
     assert user.username == "legacy-user"
     assert user.full_name == "Legacy User"
-    assert user.active_token is None
 
 
 def test_create_admin_user_with_explicit_identity(app, session):
@@ -929,6 +929,178 @@ def test_interactive_session_cleanup_requires_days_or_user():
     result = runner.invoke(reana_admin, ["interactive-session-cleanup"])
     assert result.exit_code != 0
     assert "--days" in result.output
+
+
+@patch("reana_server.reana_admin.cli.requests.get")
+def test_revoke_identity_closes_everything(
+    mock_requests, sample_serial_workflow_in_db, user0, session, redis_store
+):
+    """One command closes the session, revokes the webhook, kills the BFF session."""
+    runner = CliRunner()
+    user0.idp_issuer = "https://issuer.example.org"
+    user0.idp_subject = "user0-subject"
+    user0.gitlab_webhook_secret = "installed-in-gitlab"
+    user0.gitlab_webhook_secret_expires_at = naive_utcnow() + datetime.timedelta(
+        days=30
+    )
+    session.add(user0)
+    session.commit()
+    sessions_module.store_session(
+        "user0-browser-session",
+        "refresh",
+        "id",
+        "access",
+        issuer=user0.idp_issuer,
+        subject=user0.idp_subject,
+        client_id="reana-server",
+        created_at=datetime.datetime.now().timestamp(),
+    )
+
+    mock_session_pod = MagicMock()
+    mock_session_pod.metadata.name = f"run-session-{sample_serial_workflow_in_db.id_}-a"
+    interactive_session = InteractiveSession(
+        name=f"run-session-{sample_serial_workflow_in_db.id_}",
+        path=f"/{sample_serial_workflow_in_db.id_}",
+        owner_id=sample_serial_workflow_in_db.owner_id,
+        session_secret="per-session-secret",
+    )
+    sample_serial_workflow_in_db.sessions.append(interactive_session)
+    session.add(sample_serial_workflow_in_db)
+    session.commit()
+    mock_session_pod.spec.containers[0].args = []
+    mock_session_pod.metadata.labels = {
+        "app": mock_session_pod.metadata.name,
+        "reana_workflow_mode": "session",
+        "reana-run-session-workflow-uuid": str(sample_serial_workflow_in_db.id_),
+        "user-uuid": str(sample_serial_workflow_in_db.owner_id),
+    }
+    mock_pod_list = Mock()
+    mock_pod_list.items = [mock_session_pod]
+    mock_k8s_api_client = Mock()
+    mock_k8s_api_client.list_namespaced_pod.return_value = mock_pod_list
+
+    with patch(
+        "reana_server.reana_admin.cli.current_k8s_corev1_api_client",
+        mock_k8s_api_client,
+    ), patch(
+        "reana_server.reana_admin.cli.current_rwc_api_client",
+        make_mock_api_client("reana-workflow-controller")(mock_http_response=Mock()),
+    ):
+        result = runner.invoke(reana_admin, ["revoke-identity", "--email", user0.email])
+
+    assert result.exit_code == 0, result.output
+    assert "has been closed" in result.output
+    assert "Revoked the GitLab webhook authorization" in result.output
+    assert "Deleted 1 browser session(s)" in result.output
+    assert "Remember to remove this user's identity-provider role" in result.output
+    # revoke-identity's composed gitlab_webhook_revoke call commits, which
+    # (via the Flask app-context teardown at the end of CliRunner.invoke)
+    # expunges every object the shared scoped_session was tracking --
+    # including sample_serial_workflow_in_db's own object, whose fixture
+    # teardown later lazily loads the workflow's related rows. Re-attach and
+    # load them here so teardown does not itself fail with
+    # DetachedInstanceError. This is a test-fixture interaction, not something
+    # revoke-identity itself needs to account for in production.
+    session.add(sample_serial_workflow_in_db)
+    list(sample_serial_workflow_in_db.jobs)
+    list(sample_serial_workflow_in_db.resources)
+    session.refresh(user0)
+    assert user0.gitlab_webhook_secret_expires_at is None
+    assert user0.gitlab_webhook_secret == "installed-in-gitlab"
+    assert sessions_module.get_session("user0-browser-session") is None
+
+
+def test_revoke_identity_dry_run_changes_nothing(user0, session, redis_store):
+    """Dry-run reports what would happen across all three subsystems, changes none."""
+    runner = CliRunner()
+    user0.idp_issuer = "https://issuer.example.org"
+    user0.idp_subject = "user0-subject"
+    user0.gitlab_webhook_secret = "still-valid"
+    user0.gitlab_webhook_secret_expires_at = naive_utcnow() + datetime.timedelta(
+        days=30
+    )
+    session.add(user0)
+    session.commit()
+    sessions_module.store_session(
+        "user0-browser-session",
+        "refresh",
+        "id",
+        "access",
+        issuer=user0.idp_issuer,
+        subject=user0.idp_subject,
+        client_id="reana-server",
+        created_at=datetime.datetime.now().timestamp(),
+    )
+    mock_k8s_api_client = Mock()
+    mock_k8s_api_client.list_namespaced_pod.return_value = Mock(items=[])
+
+    with patch(
+        "reana_server.reana_admin.cli.current_k8s_corev1_api_client",
+        mock_k8s_api_client,
+    ):
+        result = runner.invoke(
+            reana_admin, ["revoke-identity", "--email", user0.email, "--dry-run"]
+        )
+
+    assert result.exit_code == 0, result.output
+    assert "Would revoke" in result.output
+    assert "Would delete 1 browser session(s)" in result.output
+    session.refresh(user0)
+    assert user0.gitlab_webhook_secret == "still-valid"
+    assert user0.gitlab_webhook_secret_expires_at is not None
+    assert sessions_module.get_session("user0-browser-session") is not None
+
+
+def test_revoke_identity_delete_secret_passthrough(user0, session):
+    """--delete-secret forwards through to the composed webhook revocation."""
+    runner = CliRunner()
+    user0.gitlab_webhook_secret = "leaked-secret"
+    user0.gitlab_webhook_secret_expires_at = naive_utcnow() + datetime.timedelta(
+        days=30
+    )
+    session.add(user0)
+    session.commit()
+    mock_k8s_api_client = Mock()
+    mock_k8s_api_client.list_namespaced_pod.return_value = Mock(items=[])
+
+    with patch(
+        "reana_server.reana_admin.cli.current_k8s_corev1_api_client",
+        mock_k8s_api_client,
+    ):
+        result = runner.invoke(
+            reana_admin,
+            ["revoke-identity", "--email", user0.email, "--delete-secret"],
+        )
+
+    assert result.exit_code == 0, result.output
+    session.refresh(user0)
+    assert user0.gitlab_webhook_secret is None
+    assert user0.gitlab_webhook_secret_expires_at is None
+
+
+def test_revoke_identity_requires_a_user(app):
+    """The command refuses to run without an explicit user selection."""
+    result = CliRunner().invoke(reana_admin, ["revoke-identity"])
+
+    assert result.exit_code == 1
+    assert "--email or --id" in result.output
+
+
+def test_revoke_identity_without_linked_identity(user0, session):
+    """A never-logged-in account has no BFF sessions to look up -- not an error."""
+    runner = CliRunner()
+    assert user0.idp_subject is None
+    mock_k8s_api_client = Mock()
+    mock_k8s_api_client.list_namespaced_pod.return_value = Mock(items=[])
+
+    with patch(
+        "reana_server.reana_admin.cli.current_k8s_corev1_api_client",
+        mock_k8s_api_client,
+    ):
+        result = runner.invoke(reana_admin, ["revoke-identity", "--email", user0.email])
+
+    assert result.exit_code == 0, result.output
+    assert "no linked identity-provider subject" in result.output
 
 
 class TestCheckWorkflows:

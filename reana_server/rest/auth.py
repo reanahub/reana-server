@@ -12,6 +12,7 @@ import base64
 import hashlib
 import logging
 import secrets
+import time
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
@@ -452,6 +453,7 @@ def oauth_callback():  # noqa: C901
             issuer=claims["iss"],
             subject=claims["sub"],
             client_id=auth_config["web_client_id"],
+            created_at=time.time(),
         )
     except SessionUnavailableError as error:
         logging.error("Could not establish browser session: %s", error)

@@ -24,10 +24,10 @@ from flask import (
     request,
     url_for,
 )
-from kubernetes.client.rest import ApiException
 from reana_commons.k8s.secrets import UserSecretsStore
 from reana_db.database import Session
 from reana_db.models import User
+from reana_db.secrets import get_or_create_bearer_secret
 import marshmallow
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
@@ -41,7 +41,6 @@ from reana_server.config import (
 from reana_server.decorators import signin_required
 from reana_server.gitlab_client import (
     GitLabClient,
-    GitLabClientException,
     GitLabClientRequestError,
     GitLabClientInvalidToken,
 )
@@ -130,24 +129,12 @@ def gitlab_webhook_token(user):
       operationId: renew_gitlab_webhook_token
       description: >-
         Confirm the current user's REANA entitlement and extend the delegated
-        GitLab webhook authorization without rotating its secret. If
-        ``project_id`` is given, best-effort asks GitLab to redeliver that
-        project's webhook, which can resume a hook GitLab has auto-disabled
-        after consecutive failures; renewal itself always succeeds
-        regardless of whether that best-effort attempt does.
-      parameters:
-        - name: data
-          in: body
-          required: false
-          description: >-
-            Optional GitLab project to attempt a test delivery for after
-            renewal.
-          schema:
-            type: object
-            properties:
-              project_id:
-                description: The GitLab project id.
-                type: string
+        GitLab webhook authorization without rotating its secret. Renewal does
+        not re-enable a webhook that GitLab has disabled; the user must send a
+        test delivery or re-enable it from that project's GitLab settings. If
+        the authorization had already expired, the response includes a
+        ``message`` pointing this out, since REANA cannot detect or repair a
+        GitLab-side auto-disable on its own.
       responses:
         200:
           description: Renewed GitLab webhook authorization status.
@@ -163,9 +150,12 @@ def gitlab_webhook_token(user):
                 format: date-time
               max_lifetime_seconds:
                 type: integer
-        400:
-          description: >-
-            The request body, if given, is not a JSON object.
+              message:
+                description: >-
+                  Present only when the authorization had already expired,
+                  warning that GitLab may have auto-disabled affected
+                  webhooks and pointing to the manual recovery step.
+                type: string
         404:
           description: No GitLab webhook secret is configured.
         401:
@@ -180,53 +170,23 @@ def gitlab_webhook_token(user):
     if request.method == "PUT":
         if not user.gitlab_webhook_secret:
             return jsonify(message="No GitLab webhook token is configured."), 404
-        body = request.get_json(silent=True)
-        if body is not None and not isinstance(body, dict):
-            return (
-                jsonify(message="Request body, if given, must be a JSON object."),
-                400,
-            )
-        project_id = (body or {}).get("project_id")
+        was_expired = (
+            user.gitlab_webhook_secret_expires_at is None
+            or user.gitlab_webhook_secret_expires_at <= naive_utcnow()
+        )
         user.gitlab_webhook_secret_expires_at = _gitlab_webhook_secret_expiry()
         Session.commit()
-        _try_test_webhook_delivery(user, project_id)
+        if was_expired:
+            status = _serialize_webhook_secret_status(user)
+            status["message"] = (
+                "This authorization had expired, so GitLab may have "
+                "automatically disabled webhooks using it. If your "
+                "integration does not resume, send a test delivery or "
+                "re-enable the webhook from each affected project's GitLab "
+                "settings."
+            )
+            return jsonify(status), 200
     return jsonify(_serialize_webhook_secret_status(user)), 200
-
-
-def _try_test_webhook_delivery(user, project_id) -> None:
-    """Best-effort ask GitLab to redeliver a webhook after secret renewal.
-
-    Renewing REANA's authorization does not by itself resume a webhook
-    GitLab has auto-disabled after too many consecutive failures -- GitLab
-    additionally requires a successful (test or real) delivery. This
-    opportunistically triggers one for the caller's project, if given; a
-    hook GitLab has *permanently* disabled may still reject it, in which
-    case the existing documented manual fallback (a test delivery from
-    GitLab's own UI) still applies. Silent no-op without a ``project_id``
-    (the caller doesn't always know which project it's renewing for) or if
-    anything about this best-effort attempt fails.
-    """
-    if not project_id:
-        return
-    try:
-        gitlab_client = GitLabClient.from_k8s_secret(user.id_)
-        hook_id = _get_gitlab_hook_id(project_id, gitlab_client)
-        if hook_id is not None:
-            gitlab_client.test_webhook(project_id, hook_id)
-    except (GitLabClientException, ApiException, requests.RequestException) as e:
-        # `GitLabClient.from_k8s_secret` reads the user's GitLab token from a
-        # Kubernetes Secret (`UserSecretsStore.fetch`), which can raise
-        # `ApiException` (e.g. the k8s API being unreachable); the GitLab
-        # calls it makes afterwards can themselves fail at the transport
-        # level with `requests.RequestException` (e.g. a timeout) rather
-        # than being wrapped as a `GitLabClientException`. Both are just as
-        # best-effort as an ordinary `GitLabClientException` here.
-        logging.warning(
-            "Could not trigger a test delivery for GitLab project %s's webhook "
-            "after renewal: %s",
-            project_id,
-            e,
-        )
 
 
 @blueprint.route("/gitlab/connect")
@@ -700,20 +660,24 @@ def gitlab_webhook(user):  # noqa
             # Create the per-user webhook secret atomically. Two concurrent
             # first-time enables must not each generate and install a different
             # secret, which would leave one project configured with a value
-            # REANA later rejects. Lock the user row so creation is serialised:
-            # the winner persists its secret and the loser reuses that stored
-            # value instead of its own.
-            locked_user = (
-                Session.query(User).filter_by(id_=user.id_).with_for_update().one()
+            # REANA later rejects. get_or_create_bearer_secret locks the user
+            # row so creation is serialised: the winner persists its secret
+            # and the loser reuses that stored value instead of its own.
+            webhook_secret, created = get_or_create_bearer_secret(
+                Session,
+                User,
+                {"id_": user.id_},
+                "gitlab_webhook_secret",
+                lambda: secrets.token_urlsafe(32),
             )
-            if not locked_user.gitlab_webhook_secret:
-                locked_user.gitlab_webhook_secret = secrets.token_urlsafe(32)
-                locked_user.gitlab_webhook_secret_expires_at = (
-                    _gitlab_webhook_secret_expiry()
-                )
+            if created:
+                # Same locked row as `user` (same session, same primary
+                # key) -- setting the expiry here is still covered by the
+                # lock get_or_create_bearer_secret held during creation.
+                user.gitlab_webhook_secret_expires_at = _gitlab_webhook_secret_expiry()
             elif (
-                not locked_user.gitlab_webhook_secret_expires_at
-                or locked_user.gitlab_webhook_secret_expires_at <= naive_utcnow()
+                not user.gitlab_webhook_secret_expires_at
+                or user.gitlab_webhook_secret_expires_at <= naive_utcnow()
             ):
                 Session.commit()  # release the row lock before returning
                 return (
@@ -725,7 +689,6 @@ def gitlab_webhook(user):  # noqa
                     ),
                     409,
                 )
-            webhook_secret = locked_user.gitlab_webhook_secret
             # Persist any newly created secret and release the row lock before
             # the GitLab network call, so the lock is never held across I/O.
             Session.commit()

@@ -15,9 +15,11 @@ import os
 import shutil
 import zipfile
 import yaml
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from io import BytesIO
+from threading import Barrier
 from uuid import uuid4
 
 import pytest
@@ -30,10 +32,6 @@ from reana_commons.config import (
 )
 from reana_commons.testing import make_mock_api_client
 from reana_commons.errors import REANAMissingWorkspaceError
-
-from kubernetes.client.rest import ApiException
-
-from reana_server.gitlab_client import GitLabClientRequestError
 
 from reana_db.models import (
     InteractiveSession,
@@ -2444,9 +2442,7 @@ def test_workspace_mutation_decorator_maps_lock_failures(
     assert response.get_json()["message"]
 
 
-def test_status_delete_locks_all_workspaces_but_stop_does_not(
-    app, user0, auth_headers
-):
+def test_status_delete_locks_all_workspaces_but_stop_does_not(app, user0, auth_headers):
     """Only destructive status changes enter the multi-workspace boundary."""
     from reana_server.rest import workflows
 
@@ -3053,7 +3049,9 @@ def test_get_workflow_retention_rules(app, user0, auth_headers):
         assert res.status_code == 401
 
         # Token not valid
-        res = client.get(endpoint_url, headers={"Authorization": "Bearer invalid_token"})
+        res = client.get(
+            endpoint_url, headers={"Authorization": "Bearer invalid_token"}
+        )
         assert res.status_code == 401
 
         # Test that status code is propagated from r-w-controller
@@ -3083,7 +3081,9 @@ def test_prune_workspace(app, user0, sample_serial_workflow_in_db, auth_headers)
         assert res.status_code == 401
 
         # Test invalid token
-        res = client.post(endpoint_url, headers={"Authorization": "Bearer invalid_token"})
+        res = client.post(
+            endpoint_url, headers={"Authorization": "Bearer invalid_token"}
+        )
         assert res.status_code == 401
 
         # Test invalid workflow name
@@ -3230,7 +3230,6 @@ def test_new_gitlab_webhook_uses_dedicated_secret(app, session, user0, auth_head
     assert user0.gitlab_webhook_secret_expires_at > datetime.utcnow()
     webhook_config = gitlab_client.create_webhook.call_args.args[1]
     assert webhook_config["token"] == user0.gitlab_webhook_secret
-    assert webhook_config["token"] != user0.access_token
     # The delegated secret is delivered over a TLS-verified channel by default.
     assert webhook_config["enable_ssl_verification"] is True
 
@@ -3304,6 +3303,66 @@ def test_first_webhook_enables_install_the_persisted_secret(
     assert user0.gitlab_webhook_secret == "winning-secret"
 
 
+def test_concurrent_first_webhook_enables_serialize_on_one_secret(
+    app, session, user0, auth_headers
+):
+    """Two truly concurrent first-time enables must not install different secrets.
+
+    Unlike the sequential test above (which only proves the *outcome* of two
+    calls made one after another), this fires two real threads through the
+    Flask test client, synchronized with a barrier so both reach
+    ``get_or_create_bearer_secret``'s row lock at the same time -- proving
+    the lock actually serializes concurrent database transactions, not just
+    that the code reads correctly in isolation.
+    """
+    from reana_server.rest import gitlab as gitlab_module
+
+    gitlab_client = Mock()
+    gitlab_client.create_webhook.return_value.json.side_effect = [
+        {"id": 1},
+        {"id": 2},
+    ]
+    # Link the identity and mint the header once up front, outside the race:
+    # auth_headers() itself writes to the DB on first use, and the point of
+    # this test is to race the webhook-secret creation, not identity linking.
+    headers = auth_headers(user0)
+
+    entry_barrier = Barrier(2)
+    real_get_or_create_bearer_secret = gitlab_module.get_or_create_bearer_secret
+
+    def _synchronized_get_or_create_bearer_secret(*args, **kwargs):
+        entry_barrier.wait(timeout=10)
+        return real_get_or_create_bearer_secret(*args, **kwargs)
+
+    def _enable(project_id):
+        with app.test_client() as client:
+            return client.post(
+                "/api/gitlab/webhook",
+                json={"project_id": project_id},
+                headers=headers,
+            )
+
+    with patch(
+        "reana_server.rest.gitlab.GitLabClient.from_k8s_secret",
+        return_value=gitlab_client,
+    ), patch.object(
+        gitlab_module,
+        "get_or_create_bearer_secret",
+        new=_synchronized_get_or_create_bearer_secret,
+    ):
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            responses = list(executor.map(_enable, ["project-1", "project-2"]))
+
+    assert [response.status_code for response in responses] == [201, 201]
+    session.refresh(user0)
+    tokens = [
+        call.args[1]["token"] for call in gitlab_client.create_webhook.call_args_list
+    ]
+    # Both concurrent enables installed the same secret -- whichever one won
+    # the row lock -- not two different, independently generated values.
+    assert tokens[0] == tokens[1] == user0.gitlab_webhook_secret
+
+
 def test_gitlab_webhook_token_status_and_renewal(app, session, user0, auth_headers):
     """Renewal extends authorization without rotating the shared secret."""
     user0.gitlab_webhook_secret = "existing-webhook-secret"
@@ -3322,6 +3381,10 @@ def test_gitlab_webhook_token_status_and_renewal(app, session, user0, auth_heade
     assert renewed.json["configured"]
     assert not renewed.json["expired"]
     assert renewed.json["max_lifetime_seconds"] == 3600
+    # Renewing an already-expired authorization warns that GitLab may have
+    # auto-disabled affected webhooks, since REANA cannot detect or repair
+    # that on its own.
+    assert "may have" in renewed.json["message"]
     session.refresh(user0)
     assert user0.gitlab_webhook_secret == "existing-webhook-secret"
     assert (
@@ -3331,65 +3394,44 @@ def test_gitlab_webhook_token_status_and_renewal(app, session, user0, auth_heade
     )
 
 
-def test_gitlab_webhook_token_renewal_triggers_test_delivery(
+def test_gitlab_webhook_token_renewal_of_still_valid_secret_has_no_warning(
     app, session, user0, auth_headers
 ):
-    """Renewal with a project id best-effort asks GitLab to redeliver the hook."""
+    """Renewing before expiry never had a chance to be auto-disabled."""
     user0.gitlab_webhook_secret = "existing-webhook-secret"
-    user0.gitlab_webhook_secret_expires_at = datetime.utcnow() - timedelta(days=1)
+    user0.gitlab_webhook_secret_expires_at = datetime.utcnow() + timedelta(days=1)
     session.commit()
 
-    gitlab_client = Mock()
-    gitlab_client.get_all_webhooks.return_value = [
-        {"id": 456, "url": "http://localhost:5000/api/workflows"}
-    ]
-    with app.test_client() as client, patch(
-        "reana_server.rest.gitlab.GitLabClient.from_k8s_secret",
-        return_value=gitlab_client,
-    ):
-        renewed = client.put(
-            "/api/gitlab/webhook-token",
-            json={"project_id": "project-1"},
-            headers=auth_headers(user0),
-        )
+    with app.test_client() as client:
+        renewed = client.put("/api/gitlab/webhook-token", headers=auth_headers(user0))
 
     assert renewed.status_code == 200
-    gitlab_client.test_webhook.assert_called_once_with("project-1", 456)
+    assert "message" not in renewed.json
 
 
-def test_gitlab_webhook_token_renewal_survives_test_delivery_failure(
+def test_gitlab_webhook_token_first_renewal_of_never_expiring_secret_warns(
     app, session, user0, auth_headers
 ):
-    """A rejected (e.g. permanently disabled) test delivery never fails renewal."""
+    """A pre-expiry-enforcement secret with no expiry is fail-closed too.
+
+    Its first renewal must warn the same way an ordinarily-expired one
+    does, since it was equally rejecting deliveries until now.
+    """
     user0.gitlab_webhook_secret = "existing-webhook-secret"
-    user0.gitlab_webhook_secret_expires_at = datetime.utcnow() - timedelta(days=1)
+    user0.gitlab_webhook_secret_expires_at = None
     session.commit()
 
-    gitlab_client = Mock()
-    gitlab_client.get_all_webhooks.return_value = [
-        {"id": 456, "url": "http://localhost:5000/api/workflows"}
-    ]
-    gitlab_client.test_webhook.side_effect = GitLabClientRequestError(
-        Mock(status_code=422), "Hook is disabled"
-    )
-    with app.test_client() as client, patch(
-        "reana_server.rest.gitlab.GitLabClient.from_k8s_secret",
-        return_value=gitlab_client,
-    ):
-        renewed = client.put(
-            "/api/gitlab/webhook-token",
-            json={"project_id": "project-1"},
-            headers=auth_headers(user0),
-        )
+    with app.test_client() as client:
+        renewed = client.put("/api/gitlab/webhook-token", headers=auth_headers(user0))
 
     assert renewed.status_code == 200
-    assert renewed.json["expired"] is False
+    assert "may have" in renewed.json["message"]
 
 
-def test_gitlab_webhook_token_renewal_without_project_id_skips_test_delivery(
+def test_gitlab_webhook_token_renewal_does_not_call_gitlab(
     app, session, user0, auth_headers
 ):
-    """Renewal with no project id does not attempt any GitLab call."""
+    """User-wide renewal leaves disabled-hook recovery to GitLab's UI."""
     user0.gitlab_webhook_secret = "existing-webhook-secret"
     user0.gitlab_webhook_secret_expires_at = datetime.utcnow() - timedelta(days=1)
     session.commit()
@@ -3401,64 +3443,6 @@ def test_gitlab_webhook_token_renewal_without_project_id_skips_test_delivery(
 
     assert renewed.status_code == 200
     from_k8s_secret.assert_not_called()
-
-
-def test_gitlab_webhook_token_renewal_rejects_non_dict_json_body(
-    app, session, user0, auth_headers
-):
-    """A JSON body that parses but isn't an object must not 500, nor commit.
-
-    ``request.get_json(silent=True)`` happily returns a non-dict for a
-    request body like a JSON list or string. Calling ``.get("project_id")``
-    on that would raise an unhandled ``AttributeError``, which must instead
-    surface as a clean 4xx -- and, since validation now happens before the
-    renewal is committed, the secret's expiry must be left untouched.
-    """
-    expired_at = datetime.utcnow() - timedelta(days=1)
-    user0.gitlab_webhook_secret = "existing-webhook-secret"
-    user0.gitlab_webhook_secret_expires_at = expired_at
-    session.commit()
-
-    with app.test_client() as client:
-        response = client.put(
-            "/api/gitlab/webhook-token",
-            data=json.dumps(["not", "a", "dict"]),
-            content_type="application/json",
-            headers=auth_headers(user0),
-        )
-
-    assert response.status_code == 400
-    session.refresh(user0)
-    assert user0.gitlab_webhook_secret_expires_at == expired_at
-
-
-def test_gitlab_webhook_token_renewal_survives_secrets_fetch_api_exception(
-    app, session, user0, auth_headers
-):
-    """Renewal must survive a Kubernetes API failure during test delivery.
-
-    ``GitLabClient.from_k8s_secret`` reads the user's GitLab token via
-    ``UserSecretsStore.fetch``, which talks to the Kubernetes API and can
-    raise ``ApiException`` (e.g. if the API server is briefly unreachable).
-    That failure must not escape the best-effort test-delivery attempt, nor
-    should it prevent the (already committed) renewal from being reported.
-    """
-    user0.gitlab_webhook_secret = "existing-webhook-secret"
-    user0.gitlab_webhook_secret_expires_at = datetime.utcnow() - timedelta(days=1)
-    session.commit()
-
-    with app.test_client() as client, patch(
-        "reana_server.rest.gitlab.GitLabClient.from_k8s_secret",
-        side_effect=ApiException(status=503, reason="Service Unavailable"),
-    ):
-        renewed = client.put(
-            "/api/gitlab/webhook-token",
-            json={"project_id": "project-1"},
-            headers=auth_headers(user0),
-        )
-
-    assert renewed.status_code == 200
-    assert renewed.json["expired"] is False
 
 
 def test_gitlab_webhook_token_renewal_requires_existing_secret(

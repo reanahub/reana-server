@@ -28,6 +28,7 @@ from reana_server.auth.discovery import get_endpoint
 from reana_server.auth.errors import (
     AuthError,
     InvalidTokenError,
+    IssuerKeyUnavailableError,
     IssuerMisconfiguredError,
     IssuerUnavailableError,
     MissingRoleError,
@@ -103,13 +104,15 @@ class JWKSCache:
                 f"Could not fetch JWKS from {issuer_location}: {error}"
             ) from error
         if not isinstance(jwks, dict) or not isinstance(jwks.get("keys"), list):
-            raise InvalidTokenError("Issuer's JWKS is malformed.")
+            raise IssuerKeyUnavailableError("Issuer's JWKS is malformed.")
         if not jwks["keys"]:
-            raise InvalidTokenError("Issuer's JWKS contains no keys.")
+            raise IssuerKeyUnavailableError("Issuer's JWKS contains no keys.")
         try:
             key_set = JsonWebKey.import_key_set(jwks)
         except (TypeError, ValueError) as error:
-            raise InvalidTokenError(f"Issuer's JWKS is malformed: {error}")
+            raise IssuerKeyUnavailableError(
+                f"Issuer's JWKS is malformed: {error}"
+            ) from error
         known_kids = {
             key["kid"]
             for key in jwks["keys"]
@@ -117,21 +120,27 @@ class JWKSCache:
         }
         return key_set, known_kids
 
-    def _refresh(self, wait_for_initial=False):
+    def _refresh(self, wait_for_initial=False, require_fresh=False):
         """Refresh once, with network I/O outside the state mutex."""
         with self._refresh_condition:
             now = time.monotonic()
             if self._refresh_in_progress:
-                if not wait_for_initial or self._key_set is not None:
+                if not require_fresh and (
+                    not wait_for_initial or self._key_set is not None
+                ):
                     return self._key_set
                 deadline = now + self.refresh_wait_timeout
-                while self._refresh_in_progress and self._key_set is None:
+                while self._refresh_in_progress:
                     remaining = deadline - time.monotonic()
                     if remaining <= 0:
-                        raise IssuerUnavailableError("Issuer key refresh timed out.")
+                        raise IssuerKeyUnavailableError("Issuer key refresh timed out.")
                     self._refresh_condition.wait(timeout=remaining)
                 if self._key_set is None:
                     raise IssuerUnavailableError(
+                        "Issuer key refresh is temporarily unavailable."
+                    )
+                if require_fresh and self._refresh_failed_at:
+                    raise IssuerKeyUnavailableError(
                         "Issuer key refresh is temporarily unavailable."
                     )
                 return self._key_set
@@ -139,6 +148,10 @@ class JWKSCache:
                 5, self.ttl
             ):
                 if self._key_set is not None:
+                    if require_fresh:
+                        raise IssuerKeyUnavailableError(
+                            "Issuer key refresh is temporarily unavailable."
+                        )
                     return self._key_set
                 raise IssuerUnavailableError(
                     "Issuer key refresh is temporarily unavailable."
@@ -168,6 +181,12 @@ class JWKSCache:
                     error,
                     (requests.RequestException, ValueError, AuthError),
                 ):
+                    if require_fresh:
+                        if isinstance(error, IssuerKeyUnavailableError):
+                            raise
+                        raise IssuerKeyUnavailableError(
+                            "Issuer key refresh is temporarily unavailable."
+                        ) from error
                     logging.warning(
                         "Could not refresh JWKS; serving cached key set: %s", error
                     )
@@ -247,24 +266,38 @@ class JWKSCache:
             if not kid or kid in self._known_kids:
                 return key_set
             if kid in self._unknown_kids:
+                if self._refresh_failed_at:
+                    raise IssuerKeyUnavailableError(
+                        "The token's signing key cannot currently be refreshed."
+                    )
                 return key_set
             if (
                 self._last_unknown_kid_refresh
                 and now - self._last_unknown_kid_refresh
                 < _MIN_UNKNOWN_KID_REFRESH_INTERVAL
             ):
-                # The global backoff already suppresses all issuer I/O. Do not
-                # retain each random key id seen during that interval.
-                return key_set
+                # The global backoff suppresses issuer I/O, so a different
+                # unseen key is ambiguous: it may be another random key id or
+                # a legitimate rotation. Treat it as temporarily unavailable
+                # instead of passing a stale set to signature validation,
+                # which would turn a recoverable browser session into a
+                # terminal 401. Do not retain every key id seen here.
+                raise IssuerKeyUnavailableError(
+                    "The token's signing key cannot currently be refreshed."
+                )
             if was_stale and had_cached_keys:
                 # The refresh above could not advance the cache, so the issuer
                 # is unreachable. Start the global backoff here too, otherwise
                 # every request during an outage records another key id.
                 self._last_unknown_kid_refresh = now
                 self._remember_unknown_kid(kid, now)
+                if self._refresh_failed_at:
+                    raise IssuerKeyUnavailableError(
+                        "The token's signing key cannot currently be refreshed."
+                    )
                 return key_set
             self._last_unknown_kid_refresh = now
-        key_set = self._refresh(wait_for_initial=False)
+        key_set = self._refresh(wait_for_initial=False, require_fresh=True)
         with self._lock:
             if kid not in self._known_kids:
                 self._remember_unknown_kid(kid, time.monotonic())

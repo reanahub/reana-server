@@ -124,7 +124,7 @@ def health():  # noqa
     r"""Endpoint reporting whether REANA Server's dependencies are usable.
     ---
     get:
-      summary: Report readiness of REANA Server's auth-adjacent dependencies.
+      summary: Report health of REANA Server's auth-adjacent dependencies.
       operationId: health
       security: []
       description: >-
@@ -132,17 +132,19 @@ def health():  # noqa
         BFF session store (Redis) and the configured OIDC issuer currently
         have usable cached material, so that external monitoring pointed
         here can detect an outage that /api/ping cannot see. Each check is
-        skipped (omitted from the response and not counted against
-        readiness) when the corresponding feature is not configured for this
+        skipped (omitted from the response and not counted against health)
+        when the corresponding feature is not configured for this
         deployment. Never performs a live network call to the issuer; only
         inspects already-cached state, so this is cheap enough to poll
         frequently and cannot itself add load to a struggling issuer.
 
 
         Only the ``redis`` check (the BFF session store) can make this
-        endpoint's own status code report not-ready -- it is safe to point a
-        Kubernetes readiness probe here. ``issuer`` is reported in the body
-        for observability/alerting only and never affects the status code:
+        endpoint's own status code report unhealthy. This endpoint is for
+        dependency monitoring, not Kubernetes readiness; deployments should
+        probe /api/ping so a Redis outage does not withdraw the otherwise
+        usable whole API. ``issuer`` is reported in the body for
+        observability/alerting only and never affects the status code:
         with several worker processes sharing one pod, coupling readiness to
         issuer reachability could make an IdP outage take the whole pod out
         of rotation and keep it there even after the IdP recovers, because

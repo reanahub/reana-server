@@ -55,3 +55,26 @@ def test_userinfo_missing_email_is_a_provisioning_error(base_app):
         ):
             with pytest.raises(ProvisioningError, match="missing 'email'"):
                 fetch_userinfo("token")
+
+
+@pytest.mark.parametrize("payload", [None, [], "not-an-object", 42])
+def test_userinfo_payload_must_be_an_object(base_app, payload):
+    """Malformed successful responses become controlled provisioning errors."""
+    with base_app.app_context(), patch(
+        "reana_server.auth.userinfo.requests.get",
+        return_value=_json_response(payload),
+    ):
+        with pytest.raises(ProvisioningError, match="not an object"):
+            fetch_userinfo("token")
+
+
+@pytest.mark.parametrize("claim", ["sub", "email", "name", "preferred_username"])
+def test_userinfo_identity_claims_must_be_strings(base_app, claim):
+    """Structured values cannot reach username or email provisioning code."""
+    payload = {"sub": "abc", "email": "alice@example.org", claim: ["invalid"]}
+    with base_app.app_context(), patch(
+        "reana_server.auth.userinfo.requests.get",
+        return_value=_json_response(payload),
+    ):
+        with pytest.raises(ProvisioningError, match=f"'{claim}' must be a string"):
+            fetch_userinfo("token")
