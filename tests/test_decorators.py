@@ -17,7 +17,12 @@ import pytest
 from flask import jsonify
 
 import reana_server.auth.sessions as sessions_module
-from reana_server.auth.errors import IssuerMisconfiguredError, IssuerUnavailableError
+from reana_server.auth.errors import (
+    IssuerKeyUnavailableError,
+    IssuerMisconfiguredError,
+    IssuerUnavailableError,
+    UnknownKeyHealthyBackoffError,
+)
 from reana_server.auth.sessions import (
     AUTH_COOKIE,
     CSRF_COOKIE,
@@ -87,6 +92,44 @@ class TestBearerAuthentication:
             "temporarily unavailable"
             in json.loads(response.get_data(as_text=True))["message"]
         )
+        endpoint.assert_not_called()
+
+    def test_unknown_kid_healthy_backoff_is_401_not_503(self, app):
+        """A one-shot bearer call gains nothing from being told to retry.
+
+        Unlike the cookie/BFF path (a live user session, where a genuine key
+        rotation arriving in this same window is more consequential to
+        misclassify), the bearer path treats this narrow, healthy-cache case
+        as an invalid credential rather than an issuer outage.
+        """
+        endpoint = _ok_endpoint()
+        with app.test_request_context(
+            headers={"Authorization": "Bearer signed-token"}
+        ), patch(
+            "reana_server.decorators.validate_access_token",
+            side_effect=UnknownKeyHealthyBackoffError(
+                "The token's signing key cannot currently be refreshed."
+            ),
+        ):
+            response, code = signin_required()(endpoint)()
+
+        assert code == 401
+        endpoint.assert_not_called()
+
+    def test_unknown_kid_failed_refresh_stays_503_on_bearer_path(self, app):
+        """A genuinely failed refresh is not reclassified, even on the bearer path."""
+        endpoint = _ok_endpoint()
+        with app.test_request_context(
+            headers={"Authorization": "Bearer signed-token"}
+        ), patch(
+            "reana_server.decorators.validate_access_token",
+            side_effect=IssuerKeyUnavailableError(
+                "The token's signing key cannot currently be refreshed."
+            ),
+        ):
+            response, code = signin_required()(endpoint)()
+
+        assert code == 503
         endpoint.assert_not_called()
 
     def test_issuer_misconfiguration_is_reported_as_500_not_403(self, app):
@@ -242,6 +285,33 @@ class TestCookieAuthentication:
         with app.test_request_context(headers={"Cookie": f"{AUTH_COOKIE}={expired}"}):
             response, code = signin_required()(endpoint)()
         assert code == 401
+
+    def test_unknown_kid_healthy_backoff_stays_503(
+        self, app, user0, auth_headers, make_token, monkeypatch
+    ):
+        """The narrower bearer-only reclassification does not apply here.
+
+        A genuine key rotation arriving in this same backoff window is more
+        consequential to misclassify for a live user session than for a
+        one-shot bearer API call, so the cookie/BFF path deliberately keeps
+        this as an issuer-unavailable 503, not an invalid-token 401.
+        """
+        monkeypatch.setitem(app.config["REANA_AUTH"], "bff_enabled", True)
+        auth_headers(user0)
+        token = make_token(user0.idp_subject)
+        endpoint = _ok_endpoint()
+        with app.test_request_context(
+            headers={"Cookie": f"{AUTH_COOKIE}={token}"}
+        ), patch(
+            "reana_server.decorators.validate_access_token",
+            side_effect=UnknownKeyHealthyBackoffError(
+                "The token's signing key cannot currently be refreshed."
+            ),
+        ):
+            response, code = signin_required()(endpoint)()
+
+        assert code == 503
+        endpoint.assert_not_called()
 
     def test_refreshed_cookie_without_current_role_is_rejected(
         self, app, user0, auth_headers, make_token, monkeypatch

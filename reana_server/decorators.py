@@ -41,7 +41,10 @@ from reana_server.auth.sessions import (
     set_auth_cookies,
 )
 from reana_server.auth.config import get_auth_config
-from reana_server.auth.errors import SessionUnavailableError
+from reana_server.auth.errors import (
+    SessionUnavailableError,
+    UnknownKeyHealthyBackoffError,
+)
 from reana_server.utils import get_quota_excess_message, naive_utcnow
 
 
@@ -187,7 +190,18 @@ def _authenticate(include_gitlab_login):
         and authorization_parts[1]
     ):
         raw_token = authorization_parts[1]
-        claims = _validate_token_once(raw_token)
+        try:
+            claims = _validate_token_once(raw_token)
+        except UnknownKeyHealthyBackoffError as error:
+            # Only the bearer path makes this distinction: a one-shot API
+            # call gains nothing from a 503 that just means "ask again in a
+            # few seconds" for what is, in the common case, simply a forged
+            # or stale credential. The cookie/BFF path deliberately does not
+            # catch this here -- it falls through to the generic
+            # IssuerUnavailableError handling below (503), since a genuine
+            # key rotation arriving in this same window is more
+            # consequential to misclassify for a live user session.
+            raise InvalidTokenError(str(error)) from error
         return _authorize_and_provision(claims, raw_token), None
 
     cookie_token = request.cookies.get(AUTH_COOKIE)

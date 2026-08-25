@@ -30,20 +30,37 @@ from reana_server.auth.userinfo import fetch_userinfo
 
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x1f\x7f]")
 
+_MAX_CLAIM_LENGTH = 255
+"""Matches the ``String(255)`` column length shared by every identity/profile
+column this module writes to (``User.email``/``full_name``/``username``/
+``idp_issuer``/``idp_subject`` -- see ``reana_db.models.User``). An oversized
+issuer-supplied claim that reached ``Session.commit()`` unvalidated used to
+surface as an unhandled ``sqlalchemy.exc.DataError`` (neither an
+``IntegrityError`` nor an ``InvalidRequestError``, so uncaught by either
+existing handler below) -- an unhandled 500 on first login instead of the
+usual, uniformly-handled :class:`ProvisioningError`.
+"""
+
 
 def _sanitize_claim(value):
-    """Strip control characters from an untrusted issuer-supplied claim.
+    """Strip control characters and bound the length of a presentation-only claim.
 
     ``email``, ``name`` and ``preferred_username`` come verbatim from the
     issuer's userinfo response and reach ``logging`` calls and (via
-    ``reana-admin export-users``) a CSV writer. Without this, a user who
+    ``reana-admin export-users``) a CSV writer. Without stripping, a user who
     controls their own IdP profile could embed CR/LF to forge adjacent log
     lines, or an ANSI escape sequence (which always starts with the ESC
     byte, also stripped here) to corrupt an admin's terminal.
+
+    ``name`` and ``preferred_username`` are presentation-only, so truncating
+    a pathologically long value to the storable length is safe here --
+    unlike an identity key (see :func:`_validated_email`,
+    :func:`_validated_identity_claim`), where truncation could silently
+    collide two different identities onto the same stored value.
     """
     if value is None:
         return value
-    return _CONTROL_CHAR_RE.sub("", value)
+    return _CONTROL_CHAR_RE.sub("", value)[:_MAX_CLAIM_LENGTH]
 
 
 def _validated_email(userinfo):
@@ -51,7 +68,24 @@ def _validated_email(userinfo):
     email = userinfo["email"]
     if _CONTROL_CHAR_RE.search(email):
         raise ProvisioningError("UserInfo email contains forbidden control characters.")
+    if len(email) > _MAX_CLAIM_LENGTH:
+        raise ProvisioningError("UserInfo email exceeds the maximum allowed length.")
     return email
+
+
+def _validated_identity_claim(value, claim_name):
+    """Reject an issuer/subject claim too long to store.
+
+    Unlike a presentation-only field, silently truncating an identity key
+    risks two different real identities colliding onto the same stored
+    value, so this rejects rather than truncates -- matching
+    :func:`_validated_email`'s treatment of the other identity key.
+    """
+    if len(value) > _MAX_CLAIM_LENGTH:
+        raise ProvisioningError(
+            f"Token {claim_name} exceeds the maximum allowed length."
+        )
+    return value
 
 
 def verify_userinfo_subject(claims, userinfo):
@@ -77,11 +111,22 @@ def email_linking_allowed(iss, email, userinfo):
     Disabled by default; enabling it still requires a verified email and,
     when configured, the issuer and the email domain to be on their
     allow-lists. An empty allow-list skips that particular check.
+
+    A small number of institutional issuers never emit the standard OIDC
+    ``email_verified`` claim at all, even though their email is verified
+    out-of-band by the issuer itself (no self-service "add any email" step
+    exists there). ``email_linking_assume_verified_issuers`` lets an
+    administrator explicitly attest to that for one issuer at a time,
+    without weakening the check for every other issuer.
     """
     auth_config = get_auth_config()
     if not auth_config["email_linking_enabled"]:
         return False
-    if userinfo.get("email_verified") is not True:
+    assume_verified_issuers = auth_config["email_linking_assume_verified_issuers"]
+    if (
+        userinfo.get("email_verified") is not True
+        and iss not in assume_verified_issuers
+    ):
         return False
     issuer_allowlist = auth_config["email_linking_issuer_allowlist"]
     if issuer_allowlist and iss not in issuer_allowlist:
@@ -120,19 +165,18 @@ def link_user_identity(user, iss, sub):
 
 
 def _link_existing_user(user, sub, iss, userinfo):
-    """One-shot link of an IdP identity to a pre-existing unlinked account."""
+    """One-shot link of an IdP identity to a pre-existing unlinked account.
+
+    Callers must have already confirmed ``email_linking_allowed(iss, email,
+    userinfo)`` for this identity -- that is the single source of truth for
+    whether the issuer's email assertion (verified claim, or an explicit
+    per-issuer administrator attestation) is trustworthy enough to link on.
+    Duplicating that condition here previously drifted out of sync with it.
+    """
     if user.idp_subject is not None:
         raise ProvisioningError(
             f"Email '{user.email}' is already linked to a different "
             "identity. Please contact the administrators."
-        )
-    if userinfo.get("email_verified") is not True:
-        # Linking by email is an account-takeover vector when the issuer
-        # has not verified the address; fail closed and let administrators
-        # resolve it (or the user verify their email at the issuer).
-        raise ProvisioningError(
-            f"Cannot link existing account '{user.email}': the issuer did "
-            "not assert a verified email."
         )
     link_user_identity(user, iss, sub)
     if not user.full_name and userinfo.get("name"):
@@ -163,6 +207,8 @@ def get_or_provision_user(claims, token, userinfo=None):
         a concurrently committed user with the same immutable IdP identity.
     """
     sub, iss = claims["sub"], claims["iss"]
+    _validated_identity_claim(sub, "subject")
+    _validated_identity_claim(iss, "issuer")
     require_role(claims)
     user = get_user_by_idp_identity(sub, iss)
     if user:

@@ -1194,6 +1194,76 @@ class TestRefreshSession:
         assert result.outcome is RefreshOutcome.TERMINAL
         assert sessions_module.get_session(sid) is None
 
+    def test_concurrent_revocation_during_refresh_does_not_resurrect_session(
+        self, base_app, bff_config, redis_store, signing_key
+    ):
+        """An admin revocation racing an in-flight refresh must not be undone.
+
+        The refresh lock only serializes concurrent refreshes of the same
+        session against each other -- it is never checked by
+        ``delete_sessions_for_subject`` (what ``reana-admin revoke-identity``
+        calls). Without ``require_existing`` on the refresh path's final
+        write, a revocation landing while the issuer round-trip is in
+        flight would be silently undone once that round-trip completes.
+        """
+        sid = "revoked-mid-refresh"
+        expired = _make_token(signing_key, exp=int(time.time()) - 3600)
+        _store_bound_session(sid, "refresh", "id", expired)
+        response = Mock(status_code=200)
+        response.json.return_value = {"access_token": _make_token(signing_key)}
+
+        def revoke_during_issuer_call(*_args, **_kwargs):
+            sessions_module.delete_sessions_for_subject(ISSUER, "subject-bff")
+            return response
+
+        with patch.object(
+            sessions_module.requests, "post", side_effect=revoke_during_issuer_call
+        ):
+            result = _refresh_bound_session(sid, expired)
+
+        assert result.outcome is RefreshOutcome.TERMINAL
+        assert sessions_module.get_session(sid) is None
+        lock_key = f"reana:bff:session:{sid}:lock"
+        assert redis_store.get(lock_key) is None
+
+
+class TestStoreSession:
+    """Direct coverage of store_session's require_existing semantics."""
+
+    def test_require_existing_returns_false_when_missing(self, redis_store):
+        """XX must not create a session that was never (or no longer) stored."""
+        stored = sessions_module.store_session(
+            "never-stored",
+            "refresh",
+            issuer=ISSUER,
+            subject="subject-bff",
+            client_id="reana-server",
+            created_at=time.time(),
+            require_existing=True,
+        )
+        assert stored is False
+        assert redis_store.get("reana:bff:session:never-stored") is None
+
+    def test_require_existing_replaces_existing_session(self, redis_store):
+        """XX must still replace an existing session's contents on the happy path."""
+        sid = "already-stored"
+        _store_bound_session(sid, "old-refresh", "old-id", "old-access")
+        stored = sessions_module.store_session(
+            sid,
+            "new-refresh",
+            "new-id",
+            "new-access",
+            issuer=ISSUER,
+            subject="subject-bff",
+            client_id="reana-server",
+            created_at=time.time(),
+            require_existing=True,
+        )
+        assert stored is True
+        assert json.loads(redis_store.get(f"reana:bff:session:{sid}"))["rt"] == (
+            "new-refresh"
+        )
+
 
 class TestDeleteSessionsForSubject:
     def test_deletes_only_the_matching_identity(self, redis_store):

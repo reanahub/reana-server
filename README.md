@@ -72,6 +72,13 @@ Two ways to resolve it, and they can be combined:
   allow-list skips that particular check rather than rejecting every
   issuer/domain.
 
+  Some institutional issuers (e.g. CERN Keycloak) never emit the standard OIDC
+  `email_verified` claim at all, even though their email is verified out-of-band
+  by the issuer itself. `REANA_AUTH_EMAIL_LINKING_ASSUME_VERIFIED_ISSUERS` is a
+  comma-separated list of issuers for which the administrator explicitly attests
+  that their asserted email can be trusted without that claim; it does not
+  weaken the check for any other issuer.
+
 REANA Server validates API access tokens statelessly. Issuer, audience,
 signature, expiry, and the configured REANA role are checked on every protected
 request. Consequently, role removal or account disablement takes effect for
@@ -139,21 +146,32 @@ Administrators do not have to wait out an expiry window, but the correct
 procedure depends on the incident.
 
 **Offboarding or a suspected account compromise.** Remove the user's
-identity-provider entitlement (their `reana:user` role) **first**, then close
-the existing webhook authorization:
+identity-provider entitlement (their `reana:user` role) **first** — a live
+access token keeps working until it expires regardless of anything below, since
+REANA validates bearer tokens statelessly — then revoke everything REANA itself
+can revoke immediately, in one command:
 
 ```console
-$ reana-admin gitlab-webhook-revoke --email user@example.org
+$ reana-admin revoke-identity --email user@example.org
 ```
 
-This de-authorizes the secret immediately — clearing its expiry — while keeping
-it, so nothing needs to be reconfigured in GitLab. The ordering matters: while
-the account still holds the required role it can sign in and renew the preserved
-secret, so revoking before the entitlement is removed leaves a window in which
-the user restores their own webhook access.
+This closes the user's open interactive sessions, revokes their GitLab webhook
+authorization, and deletes their browser (BFF) sessions, attempting all three
+independently so a failure in one does not block the others. Equivalent to
+running `interactive-session-cleanup --email`, `gitlab-webhook-revoke --email`,
+and a BFF-session revocation separately. Pass `--delete-secret` to also
+permanently invalidate the GitLab webhook secret already installed in the user's
+projects (see below), and `--dry-run` to preview without changing anything. The
+ordering above still matters: while the account still holds the required role it
+can sign in and undo some of this (e.g. renew the webhook authorization), so
+revoking before the entitlement is removed leaves a window in which the user
+restores their own access.
+
+The narrower commands below remain available for standalone use — e.g. only a
+leaked-secret response, without touching interactive or browser sessions.
 
 **A leaked webhook secret.** When the secret value itself must be treated as
-compromised, additionally delete it:
+compromised, revoke and delete it directly:
 
 ```console
 $ reana-admin gitlab-webhook-revoke --email user@example.org --delete-secret
@@ -163,8 +181,13 @@ $ reana-admin gitlab-webhook-revoke --email user@example.org --delete-secret
 and forces the user to re-enable each project; it is the operation that
 invalidates a captured secret value. It does not by itself close the offboarding
 window — an account that still holds the role can create a fresh secret the next
-time it enables a project — so for offboarding remove the identity-provider
-entitlement first as above.
+time it enables a project — so for offboarding use `revoke-identity` (with the
+identity-provider entitlement removed first) as above, or run this command with
+`--delete-secret` after doing so.
+
+Without `--delete-secret`, `gitlab-webhook-revoke` only de-authorizes the secret
+— clearing its expiry — while keeping it, so nothing needs to be reconfigured in
+GitLab.
 
 `--dry-run` reports the effect of either form without applying it.
 

@@ -29,6 +29,23 @@ class IssuerKeyUnavailableError(IssuerUnavailableError):
     """
 
 
+class UnknownKeyHealthyBackoffError(IssuerKeyUnavailableError):
+    """An unseen key id arrived during a healthy unknown-kid refresh backoff.
+
+    Raised when the cache is otherwise healthy (the last refresh attempt
+    succeeded). A subclass, not a new raise condition: any caller that does not
+    explicitly handle it keeps today's IssuerKeyUnavailableError/503
+    treatment. Only the bearer-token path distinguishes it, mapping it to
+    401 instead -- a one-shot API call gains nothing from a 503 that just
+    means "ask again in a few seconds," whereas the cookie/BFF path stays
+    conservative because a genuine key rotation arriving during this same
+    window is more consequential to misclassify there (a real user's
+    session, not a single request). Never raised when the last refresh
+    itself failed (JWKSCache._refresh_failed_at) -- that case stays a
+    plain IssuerKeyUnavailableError.
+    """
+
+
 class IssuerMisconfiguredError(AuthError):
     """The issuer/discovery-document configuration is invalid or incomplete.
 

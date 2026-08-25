@@ -690,5 +690,19 @@ REANA_AUTH = {
         )
         if value.strip()
     ],
+    # Some institutional issuers (e.g. CERN Keycloak) never emit the
+    # standard OIDC `email_verified` claim at all, even though the email
+    # they assert is institutionally verified out-of-band (there is no
+    # self-service "add any email" step on that issuer). Listing an issuer
+    # here is a deliberate administrator attestation that its emails are
+    # trustworthy without that claim; it does not weaken the check for any
+    # other issuer.
+    "email_linking_assume_verified_issuers": [
+        value.strip()
+        for value in os.getenv(
+            "REANA_AUTH_EMAIL_LINKING_ASSUME_VERIFIED_ISSUERS", ""
+        ).split(",")
+        if value.strip()
+    ],
 }
 """OIDC/JWT authentication configuration."""

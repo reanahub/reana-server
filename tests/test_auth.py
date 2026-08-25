@@ -558,6 +558,50 @@ class TestJITProvisioning:
         assert "\n" not in user.full_name
         assert "\x1b" not in user.username
 
+    def test_refuses_oversized_email(self, app, session, claims, userinfo):
+        """An oversized email is rejected, not left to crash as a DataError."""
+        userinfo["email"] = "a" * 250 + "@example.org"
+        with patch(
+            "reana_server.auth.provision.fetch_userinfo",
+            return_value=userinfo,
+        ):
+            with pytest.raises(ProvisioningError, match="maximum allowed length"):
+                get_or_provision_user(claims, "token")
+
+    def test_truncates_oversized_display_name(self, app, session, claims, userinfo):
+        """Presentation-only fields are truncated, not rejected outright."""
+        userinfo["name"] = "A" * 300
+        userinfo["preferred_username"] = "B" * 300
+        with patch(
+            "reana_server.auth.provision.fetch_userinfo",
+            return_value=userinfo,
+        ):
+            user, _is_new = get_or_provision_user(claims, "token")
+        assert len(user.full_name) == 255
+        assert len(user.username) == 255
+
+    def test_refuses_oversized_subject_claim(self, app, session, claims, userinfo):
+        """An oversized token subject is rejected before any I/O."""
+        claims["sub"] = "s" * 256
+        with patch(
+            "reana_server.auth.provision.fetch_userinfo",
+            return_value=userinfo,
+        ) as fetch_userinfo:
+            with pytest.raises(ProvisioningError, match="maximum allowed length"):
+                get_or_provision_user(claims, "token")
+        fetch_userinfo.assert_not_called()
+
+    def test_refuses_oversized_issuer_claim(self, app, session, claims, userinfo):
+        """An oversized token issuer is rejected before any I/O."""
+        claims["iss"] = "https://" + "a" * 256
+        with patch(
+            "reana_server.auth.provision.fetch_userinfo",
+            return_value=userinfo,
+        ) as fetch_userinfo:
+            with pytest.raises(ProvisioningError, match="maximum allowed length"):
+                get_or_provision_user(claims, "token")
+        fetch_userinfo.assert_not_called()
+
     def test_links_existing_unlinked_user_by_verified_email(
         self, app, session, monkeypatch, default_user, claims, userinfo
     ):
@@ -585,10 +629,58 @@ class TestJITProvisioning:
         assert default_user.idp_subject is None
 
     def test_refuses_link_without_verified_email(
-        self, app, session, default_user, claims, userinfo
+        self, app, session, monkeypatch, default_user, claims, userinfo
     ):
+        monkeypatch.setitem(app.config["REANA_AUTH"], "email_linking_enabled", True)
         userinfo["email"] = default_user.email
         userinfo["email_verified"] = False
+        with patch(
+            "reana_server.auth.provision.fetch_userinfo",
+            return_value=userinfo,
+        ):
+            with pytest.raises(ProvisioningError):
+                get_or_provision_user(claims, "token")
+        assert default_user.idp_subject is None
+
+    def test_links_existing_user_via_assume_verified_issuer(
+        self, app, session, monkeypatch, default_user, claims, userinfo
+    ):
+        """An issuer that never emits ``email_verified`` can still be trusted.
+
+        Some institutional issuers (e.g. CERN Keycloak) never emit the
+        standard OIDC ``email_verified`` claim at all, even though their
+        email is verified out-of-band. An administrator can explicitly
+        attest to that for one issuer via ``email_linking_assume_verified_issuers``
+        without weakening the check for any other issuer.
+        """
+        monkeypatch.setitem(app.config["REANA_AUTH"], "email_linking_enabled", True)
+        monkeypatch.setitem(
+            app.config["REANA_AUTH"],
+            "email_linking_assume_verified_issuers",
+            [ISSUER],
+        )
+        userinfo["email"] = default_user.email
+        del userinfo["email_verified"]
+        with patch(
+            "reana_server.auth.provision.fetch_userinfo",
+            return_value=userinfo,
+        ):
+            user, _is_new = get_or_provision_user(claims, "token")
+        assert user.id_ == default_user.id_
+        assert user.idp_subject == "subject-jit"
+
+    def test_refuses_link_for_unassumed_issuer_without_verified_email(
+        self, app, session, monkeypatch, default_user, claims, userinfo
+    ):
+        """The escape hatch is per-issuer, not global."""
+        monkeypatch.setitem(app.config["REANA_AUTH"], "email_linking_enabled", True)
+        monkeypatch.setitem(
+            app.config["REANA_AUTH"],
+            "email_linking_assume_verified_issuers",
+            ["https://a-different-issuer.example.org/realms/reana"],
+        )
+        userinfo["email"] = default_user.email
+        del userinfo["email_verified"]
         with patch(
             "reana_server.auth.provision.fetch_userinfo",
             return_value=userinfo,

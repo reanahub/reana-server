@@ -100,6 +100,7 @@ def store_session(
     subject,
     client_id,
     created_at,
+    require_existing=False,
 ):
     """Persist a BFF session bound to one issuer, subject, and client.
 
@@ -114,6 +115,21 @@ def store_session(
     keep [refresh tokens] longer"). The TTL actually written is instead
     bounded by how much of that original window remains; a session whose
     window has already elapsed is deleted rather than re-armed.
+
+    ``require_existing`` makes the write a replace-only ``SET ... XX``
+    instead of an unconditional one, returning ``False`` (instead of
+    creating the key) if it is currently absent. A fresh login must NOT
+    pass this -- it needs to create a brand-new key. A refresh
+    (:func:`_refresh_locked_session`) MUST pass ``require_existing=True``:
+    the refresh lock it holds only serializes concurrent refreshes of the
+    *same* session against each other, never against
+    :func:`delete_session`/:func:`delete_sessions_for_subject` (neither
+    touches the lock). Without this, a session deleted by a logout or an
+    admin's ``revoke-identity`` while a refresh is already in flight would
+    get silently recreated by this function's own write once the refresh's
+    issuer round-trip completes -- resurrecting a session that was just
+    revoked, with a freshly rotated refresh token. Returns whether the key
+    was actually written.
     """
     session_ttl = get_auth_config()["session_ttl"]
     remaining_ttl = math.ceil(created_at + session_ttl - _now())
@@ -121,9 +137,8 @@ def store_session(
         if remaining_ttl <= 0:
             get_redis().delete(_SESSION_KEY.format(sid=sid))
             return False
-        get_redis().setex(
+        stored = get_redis().set(
             _SESSION_KEY.format(sid=sid),
-            min(session_ttl, remaining_ttl),
             json.dumps(
                 {
                     "rt": refresh_token,
@@ -135,8 +150,10 @@ def store_session(
                     "created_at": created_at,
                 }
             ),
+            ex=min(session_ttl, remaining_ttl),
+            xx=require_existing,
         )
-        return True
+        return bool(stored)
     except redis.RedisError as error:
         raise _session_unavailable(error) from error
 
@@ -424,8 +441,30 @@ def _refresh_locked_session(sid, auth_config, expected_issuer, expected_subject)
         # refreshing it is not silently blocked -- it still receives the
         # bounded-cap treatment from that point forward.
         created_at=created_at,
+        # Replace-only: a logout or admin revoke-identity racing this
+        # refresh (neither coordinates with the lock this function holds)
+        # may have already deleted the session. Without require_existing,
+        # this write would silently recreate it once the issuer round-trip
+        # above completes -- resurrecting a session that was just revoked.
+        # A narrower window remains between this write succeeding and this
+        # function returning, both still inside the lock: a revocation
+        # landing there still deletes the key correctly, but the
+        # already-in-flight caller walks away with one legitimately-issued,
+        # short-lived access token. That's the same already-documented JWT
+        # non-revocability caveat as everywhere else in this codebase
+        # (revoke_identity's own docstring: "a live access token keeps
+        # working until it expires regardless of anything this command
+        # does"), not a new exposure -- not worth closing with a blocking
+        # lock acquisition in the deleter, which would turn an admin-facing
+        # revocation command into something that can hang for a lock's
+        # full TTL per session scanned.
+        require_existing=True,
     )
     if not stored:
+        logging.info(
+            "Refreshed session could not be persisted (absolute TTL "
+            "elapsed or session was concurrently revoked); ending session."
+        )
         return RefreshResult(RefreshOutcome.TERMINAL)
     return RefreshResult(RefreshOutcome.SUCCESS, access_token)
 

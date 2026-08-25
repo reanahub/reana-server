@@ -32,6 +32,7 @@ from reana_server.auth.errors import (
     IssuerMisconfiguredError,
     IssuerUnavailableError,
     MissingRoleError,
+    UnknownKeyHealthyBackoffError,
 )
 
 ALLOWED_ALGORITHMS = ["RS256", "ES256"]
@@ -282,7 +283,23 @@ class JWKSCache:
                 # instead of passing a stale set to signature validation,
                 # which would turn a recoverable browser session into a
                 # terminal 401. Do not retain every key id seen here.
-                raise IssuerKeyUnavailableError(
+                #
+                # When the cache is otherwise healthy (the last refresh
+                # attempt succeeded -- not just "we haven't rechecked in
+                # 5s"), raise the narrower subclass instead: the
+                # bearer-token path treats it as an invalid token (401)
+                # rather than an issuer outage (503), since a one-shot API
+                # call gains nothing from being told to retry a credential
+                # that is, in the common case, simply forged or stale. A
+                # failed last refresh keeps the plain (503) classification
+                # unchanged -- that ambiguity is real, not just "haven't
+                # checked yet."
+                error_cls = (
+                    IssuerKeyUnavailableError
+                    if self._refresh_failed_at
+                    else UnknownKeyHealthyBackoffError
+                )
+                raise error_cls(
                     "The token's signing key cannot currently be refreshed."
                 )
             if was_stale and had_cached_keys:

@@ -269,6 +269,13 @@ def revoke_identity(
     revocation separately; see those commands for narrower standalone use
     (e.g. only closing sessions, or only a leaked-secret response).
 
+    The three subsystems are independent (Kubernetes, the database, and
+    Redis respectively) and are each attempted even if another one fails --
+    an outage in one must not leave the others un-revoked. The GitLab
+    webhook and BFF-session steps run first since neither depends on
+    Kubernetes; the exit code is non-zero if any subsystem failed, after
+    every subsystem has been attempted.
+
     This does NOT remove the user's identity-provider role/entitlement, and
     cannot revoke a JWT access token already issued: REANA validates bearer
     tokens statelessly, so a live one keeps working until it expires
@@ -281,30 +288,52 @@ def revoke_identity(
         click.secho("Please specify the user with --email or --id.", fg="red", err=True)
         raise click.exceptions.Exit(1)
 
-    ctx.invoke(
-        interactive_session_cleanup,
-        days=None,
-        dry_run=dry_run,
-        email=user.email,
-        id_=None,
-    )
-    ctx.invoke(
-        gitlab_webhook_revoke,
-        delete_secret=delete_secret,
-        dry_run=dry_run,
-        email=user.email,
-        id_=None,
-    )
-    if user.idp_subject:
-        count = delete_sessions_for_subject(
-            user.idp_issuer, user.idp_subject, dry_run=dry_run
+    failures = []
+
+    try:
+        ctx.invoke(
+            gitlab_webhook_revoke,
+            delete_secret=delete_secret,
+            dry_run=dry_run,
+            email=user.email,
+            id_=None,
         )
-        verb = "Would delete" if dry_run else "Deleted"
-        click.echo(f"{verb} {count} browser session(s) for {user.email}.")
-    else:
-        click.echo(
-            f"{user.email} has no linked identity-provider subject yet; "
-            "no browser sessions to look up."
+    except (Exception, SystemExit) as error:
+        failures.append("GitLab webhook authorization")
+        click.secho(
+            f"Failed to revoke the GitLab webhook authorization: {error}",
+            fg="red",
+            err=True,
+        )
+
+    try:
+        if user.idp_subject:
+            count = delete_sessions_for_subject(
+                user.idp_issuer, user.idp_subject, dry_run=dry_run
+            )
+            verb = "Would delete" if dry_run else "Deleted"
+            click.echo(f"{verb} {count} browser session(s) for {user.email}.")
+        else:
+            click.echo(
+                f"{user.email} has no linked identity-provider subject yet; "
+                "no browser sessions to look up."
+            )
+    except (Exception, SystemExit) as error:
+        failures.append("browser (BFF) sessions")
+        click.secho(f"Failed to delete browser sessions: {error}", fg="red", err=True)
+
+    try:
+        ctx.invoke(
+            interactive_session_cleanup,
+            days=None,
+            dry_run=dry_run,
+            email=user.email,
+            id_=None,
+        )
+    except (Exception, SystemExit) as error:
+        failures.append("interactive sessions")
+        click.secho(
+            f"Failed to close interactive sessions: {error}", fg="red", err=True
         )
 
     click.secho(
@@ -313,6 +342,17 @@ def revoke_identity(
         "of anything this command does.",
         fg="yellow",
     )
+
+    if failures:
+        click.secho(
+            "revoke-identity did not fully succeed -- failed subsystem(s): "
+            + ", ".join(failures)
+            + ". Subsystems that did not fail were still revoked; re-run "
+            "this command to retry the ones that failed.",
+            fg="red",
+            err=True,
+        )
+        raise click.exceptions.Exit(1)
 
 
 @reana_admin.command("user-list", help="List users according to the search criteria.")

@@ -18,6 +18,7 @@ from unittest.mock import ANY, MagicMock, Mock, patch
 import click
 import pytest
 from click.testing import CliRunner
+from kubernetes.client.rest import ApiException
 from reana_commons.testing import make_mock_api_client
 from reana_db.models import (
     InteractiveSession,
@@ -1101,6 +1102,90 @@ def test_revoke_identity_without_linked_identity(user0, session):
 
     assert result.exit_code == 0, result.output
     assert "no linked identity-provider subject" in result.output
+
+
+def test_revoke_identity_k8s_failure_does_not_block_other_subsystems(
+    user0, session, redis_store
+):
+    """A Kubernetes outage must not leave the webhook/BFF steps un-revoked."""
+    runner = CliRunner()
+    user0.idp_issuer = "https://issuer.example.org"
+    user0.idp_subject = "user0-subject"
+    user0.gitlab_webhook_secret = "installed-in-gitlab"
+    user0.gitlab_webhook_secret_expires_at = naive_utcnow() + datetime.timedelta(
+        days=30
+    )
+    session.add(user0)
+    session.commit()
+    sessions_module.store_session(
+        "user0-browser-session",
+        "refresh",
+        "id",
+        "access",
+        issuer=user0.idp_issuer,
+        subject=user0.idp_subject,
+        client_id="reana-server",
+        created_at=datetime.datetime.now().timestamp(),
+    )
+    mock_k8s_api_client = Mock()
+    mock_k8s_api_client.list_namespaced_pod.side_effect = ApiException(
+        status=503, reason="Kubernetes API unavailable"
+    )
+
+    with patch(
+        "reana_server.reana_admin.cli.current_k8s_corev1_api_client",
+        mock_k8s_api_client,
+    ):
+        result = runner.invoke(reana_admin, ["revoke-identity", "--email", user0.email])
+
+    assert result.exit_code == 1, result.output
+    assert "interactive sessions" in result.output
+    assert "Revoked the GitLab webhook authorization" in result.output
+    assert "Deleted 1 browser session(s)" in result.output
+    session.refresh(user0)
+    assert user0.gitlab_webhook_secret_expires_at is None
+    assert sessions_module.get_session("user0-browser-session") is None
+
+
+def test_revoke_identity_webhook_failure_does_not_block_bff_deletion(
+    user0, session, redis_store
+):
+    """A DB outage during the webhook step must not block BFF revocation."""
+    runner = CliRunner()
+    user0.idp_issuer = "https://issuer.example.org"
+    user0.idp_subject = "user0-subject"
+    user0.gitlab_webhook_secret = "installed-in-gitlab"
+    user0.gitlab_webhook_secret_expires_at = naive_utcnow() + datetime.timedelta(
+        days=30
+    )
+    session.add(user0)
+    session.commit()
+    sessions_module.store_session(
+        "user0-browser-session",
+        "refresh",
+        "id",
+        "access",
+        issuer=user0.idp_issuer,
+        subject=user0.idp_subject,
+        client_id="reana-server",
+        created_at=datetime.datetime.now().timestamp(),
+    )
+    mock_k8s_api_client = Mock()
+    mock_k8s_api_client.list_namespaced_pod.return_value = Mock(items=[])
+
+    with patch(
+        "reana_server.reana_admin.cli.current_k8s_corev1_api_client",
+        mock_k8s_api_client,
+    ), patch(
+        "reana_server.reana_admin.cli.Session.commit",
+        side_effect=Exception("database unavailable"),
+    ):
+        result = runner.invoke(reana_admin, ["revoke-identity", "--email", user0.email])
+
+    assert result.exit_code == 1, result.output
+    assert "GitLab webhook authorization" in result.output
+    assert "Deleted 1 browser session(s)" in result.output
+    assert sessions_module.get_session("user0-browser-session") is None
 
 
 class TestCheckWorkflows:
