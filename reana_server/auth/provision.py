@@ -74,13 +74,22 @@ def _validated_email(userinfo):
 
 
 def _validated_identity_claim(value, claim_name):
-    """Reject an issuer/subject claim too long to store.
+    """Reject an issuer/subject claim that is not a storable non-empty string.
 
     Unlike a presentation-only field, silently truncating an identity key
     risks two different real identities colliding onto the same stored
     value, so this rejects rather than truncates -- matching
     :func:`_validated_email`'s treatment of the other identity key.
+
+    ``iss`` is pinned to an exact configured string by JWT validation
+    (``tokens.py``'s ``"iss": {"value": ...}`` claim option), but ``sub`` is
+    only required to be *present*, not string-typed -- a token with e.g. a
+    numeric ``sub`` would otherwise reach ``len(value)`` below and raise an
+    uncaught ``TypeError`` instead of the controlled error every other
+    malformed-claim case in this module produces.
     """
+    if not isinstance(value, str) or not value:
+        raise ProvisioningError(f"Token {claim_name} is missing or not a string.")
     if len(value) > _MAX_CLAIM_LENGTH:
         raise ProvisioningError(
             f"Token {claim_name} exceeds the maximum allowed length."

@@ -591,6 +591,23 @@ class TestJITProvisioning:
                 get_or_provision_user(claims, "token")
         fetch_userinfo.assert_not_called()
 
+    def test_refuses_non_string_subject_claim(self, app, session, claims, userinfo):
+        """A numeric (or otherwise non-string) token subject is rejected.
+
+        JWT validation only enforces that ``sub`` is *present*
+        (``tokens.py``'s ``"sub": {"essential": True}``), not that it is a
+        string. A signed token with e.g. a numeric subject must not reach
+        ``len(value)`` and raise an uncaught ``TypeError``.
+        """
+        claims["sub"] = 12345
+        with patch(
+            "reana_server.auth.provision.fetch_userinfo",
+            return_value=userinfo,
+        ) as fetch_userinfo:
+            with pytest.raises(ProvisioningError, match="missing or not a string"):
+                get_or_provision_user(claims, "token")
+        fetch_userinfo.assert_not_called()
+
     def test_refuses_oversized_issuer_claim(self, app, session, claims, userinfo):
         """An oversized token issuer is rejected before any I/O."""
         claims["iss"] = "https://" + "a" * 256

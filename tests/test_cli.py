@@ -20,6 +20,7 @@ import pytest
 from click.testing import CliRunner
 from kubernetes.client.rest import ApiException
 from reana_commons.testing import make_mock_api_client
+from sqlalchemy.orm import Session as SAOrmSession
 from reana_db.models import (
     InteractiveSession,
     Resource,
@@ -1185,6 +1186,85 @@ def test_revoke_identity_webhook_failure_does_not_block_bff_deletion(
     assert result.exit_code == 1, result.output
     assert "GitLab webhook authorization" in result.output
     assert "Deleted 1 browser session(s)" in result.output
+    assert sessions_module.get_session("user0-browser-session") is None
+
+
+def test_revoke_identity_continuing_database_outage_does_not_block_bff_deletion(
+    user0, session, redis_store
+):
+    """A continuing database outage must not block independent Redis revocation.
+
+    The previous regression test only breaks ``Session.commit()`` once; the
+    real rollback that follows still leaves later queries able to succeed
+    against the (still live, in tests) database, so it never actually
+    exercises what happens if ``user.idp_subject``/``idp_issuer``/``email``
+    are re-read off the now-expired instance *after* the webhook step's
+    rollback. This test keeps the database unavailable for every query
+    issued from that point onward, proving revoke-identity's snapshot
+    (taken before any subsystem runs) is what makes BFF/Redis revocation
+    genuinely independent -- not just resilient to a single failed commit.
+    """
+    runner = CliRunner()
+    user0.idp_issuer = "https://issuer.example.org"
+    user0.idp_subject = "user0-subject"
+    user0.gitlab_webhook_secret = "installed-in-gitlab"
+    user0.gitlab_webhook_secret_expires_at = naive_utcnow() + datetime.timedelta(
+        days=30
+    )
+    session.add(user0)
+    session.commit()
+    sessions_module.store_session(
+        "user0-browser-session",
+        "refresh",
+        "id",
+        "access",
+        issuer=user0.idp_issuer,
+        subject=user0.idp_subject,
+        client_id="reana-server",
+        created_at=datetime.datetime.now().timestamp(),
+    )
+
+    outage = {"started": False}
+    real_execute = SAOrmSession.execute
+
+    def failing_commit(*args, **kwargs):
+        outage["started"] = True
+        raise Exception("database unavailable")
+
+    def execute_unless_outage(self, *args, **kwargs):
+        if outage["started"]:
+            raise Exception("database unavailable")
+        return real_execute(self, *args, **kwargs)
+
+    mock_k8s_api_client = Mock()
+    mock_k8s_api_client.list_namespaced_pod.return_value = Mock(items=[])
+
+    with patch(
+        "reana_server.reana_admin.cli.current_k8s_corev1_api_client",
+        mock_k8s_api_client,
+    ), patch(
+        "reana_server.reana_admin.cli.Session.commit", side_effect=failing_commit
+    ), patch.object(
+        SAOrmSession, "execute", autospec=True, side_effect=execute_unless_outage
+    ):
+        # SQLAlchemy reloads expired attributes (e.g. user0.idp_subject,
+        # expired by the real Session.rollback() below) through the
+        # underlying sqlalchemy.orm.Session.execute -- not through the
+        # scoped_session's Session.query proxy patched above for
+        # gitlab_webhook_revoke's own user lookups -- so both must be
+        # gated for this test to genuinely simulate a continuing outage.
+        result = runner.invoke(reana_admin, ["revoke-identity", "--email", user0.email])
+
+    assert result.exit_code == 1, result.output
+    # The webhook step's commit fails, and the interactive-session step's own
+    # user lookup fails too, once the database stays down -- both are
+    # genuine, correctly-attributed failures.
+    assert "GitLab webhook authorization" in result.output
+    assert "interactive sessions" in result.output
+    # The BFF/Redis step never touches the database at all: it used the
+    # values snapshotted before the outage began.
+    assert "Deleted 1 browser session(s)" in result.output
+    assert "browser (BFF) sessions" not in result.output
     assert sessions_module.get_session("user0-browser-session") is None
 
 

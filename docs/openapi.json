@@ -257,6 +257,17 @@
           "403": {
             "description": "The authenticated user lacks the required REANA role."
           },
+          "500": {
+            "description": "The identity provider integration is not correctly configured.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
           "503": {
             "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
@@ -603,6 +614,17 @@
           "403": {
             "description": "The authenticated user lacks the required REANA role."
           },
+          "500": {
+            "description": "The identity provider integration is not correctly configured.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
           "503": {
             "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
@@ -646,6 +668,17 @@
           },
           "404": {
             "description": "No GitLab webhook secret is configured."
+          },
+          "500": {
+            "description": "The identity provider integration is not correctly configured.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
           },
           "503": {
             "description": "The identity provider or the authentication session store is temporarily unavailable."

@@ -20,12 +20,13 @@ resolved statically and are ignored; the guard covers literal returns, which is
 where the observed drift occurred.
 
 The literal-return scan is blind to statuses a *decorator* injects around the
-view function -- ``signin_required`` returns 401/403/503 from its wrapper in
-``decorators.py``, never touching the route function's own AST, and
-``check_quota`` similarly injects 403/500. A route can therefore pass the
-literal-return check while still failing to declare a status its own
-decorator is guaranteed to produce. ``_decorator_injected_codes`` closes that
-gap by checking each function's decorator list.
+view function -- ``signin_required`` returns 401/403/500/503 from its
+wrapper in ``decorators.py`` (500 for ``IssuerMisconfiguredError``), never
+touching the route function's own AST, and ``check_quota`` similarly
+injects 403/500. A route can therefore pass the literal-return check while
+still failing to declare a status its own decorator is guaranteed to
+produce. ``_decorator_injected_codes`` closes that gap by checking each
+function's decorator list.
 """
 
 import ast
@@ -87,7 +88,7 @@ def _declared_status_codes(docstring):
 # error), and 503 (issuer or session-store unavailable); ``check_quota``'s
 # wrapper returns 403 (quota exceeded) and 500 (unexpected error).
 _DECORATOR_CODES = {
-    "signin_required": {401, 403, 503},
+    "signin_required": {401, 403, 500, 503},
     "check_quota": {403, 500},
 }
 
@@ -171,8 +172,9 @@ def test_guard_catches_a_decorator_protected_route_missing_401():
     This is exactly the PR789-30 sibling gap: the view function itself only
     ever ``return``s 200, so the literal-return check
     (``test_returned_statuses_are_declared_in_the_openapi_docstring``) is
-    satisfied even though ``signin_required`` can still produce 401/403/503
-    around it. Proves the decorator-aware check is the one doing the work.
+    satisfied even though ``signin_required`` can still produce
+    401/403/500/503 around it. Proves the decorator-aware check is the one
+    doing the work.
     """
     broken_source = '''
 @signin_required()
@@ -194,4 +196,4 @@ def broken_route(user):
 
     expected = _decorator_injected_codes(func_node)
     declared = _declared_status_codes(docstring)
-    assert expected - declared == {401, 403, 503}
+    assert expected - declared == {401, 403, 500, 503}

@@ -118,6 +118,13 @@ def gitlab_webhook_token(user):
                 type: integer
         401:
           description: The request is not authenticated.
+        500:
+          description: The identity provider integration is not correctly configured.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
         503:
           description: >-
             The identity provider or the authentication session store is
@@ -160,6 +167,13 @@ def gitlab_webhook_token(user):
           description: No GitLab webhook secret is configured.
         401:
           description: The request is not authenticated.
+        500:
+          description: The identity provider integration is not correctly configured.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
         503:
           description: >-
             The identity provider or the authentication session store is
@@ -209,6 +223,13 @@ def gitlab_connect(**kwargs):
           description: The request is not authenticated.
         403:
           description: The authenticated user lacks the required REANA role.
+        500:
+          description: The identity provider integration is not correctly configured.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
         503:
           description: >-
             The identity provider or the authentication session store is

@@ -288,6 +288,19 @@ def revoke_identity(
         click.secho("Please specify the user with --email or --id.", fg="red", err=True)
         raise click.exceptions.Exit(1)
 
+    # Snapshotted up front, before any subsystem below can commit or roll
+    # back: SQLAlchemy expires ``user``'s attributes by default after
+    # gitlab_webhook_revoke's commit (or its rollback, on failure), so any
+    # later access to user.email/idp_issuer/idp_subject would issue a fresh
+    # database query. During a genuine, *continuing* database outage that
+    # reload also fails -- which would make the BFF/Redis step below report
+    # itself as failed even though Redis revocation never actually depends
+    # on the database. Reading these once now keeps the BFF step truly
+    # independent of the other two subsystems' database access.
+    snapshot_email = user.email
+    snapshot_idp_issuer = user.idp_issuer
+    snapshot_idp_subject = user.idp_subject
+
     failures = []
 
     try:
@@ -295,7 +308,7 @@ def revoke_identity(
             gitlab_webhook_revoke,
             delete_secret=delete_secret,
             dry_run=dry_run,
-            email=user.email,
+            email=snapshot_email,
             id_=None,
         )
     except (Exception, SystemExit) as error:
@@ -307,27 +320,32 @@ def revoke_identity(
         )
 
     try:
-        if user.idp_subject:
+        if snapshot_idp_subject:
             count = delete_sessions_for_subject(
-                user.idp_issuer, user.idp_subject, dry_run=dry_run
+                snapshot_idp_issuer, snapshot_idp_subject, dry_run=dry_run
             )
             verb = "Would delete" if dry_run else "Deleted"
-            click.echo(f"{verb} {count} browser session(s) for {user.email}.")
+            click.echo(f"{verb} {count} browser session(s) for {snapshot_email}.")
         else:
             click.echo(
-                f"{user.email} has no linked identity-provider subject yet; "
-                "no browser sessions to look up."
+                f"{snapshot_email} has no linked identity-provider subject "
+                "yet; no browser sessions to look up."
             )
     except (Exception, SystemExit) as error:
         failures.append("browser (BFF) sessions")
         click.secho(f"Failed to delete browser sessions: {error}", fg="red", err=True)
 
     try:
+        # Unlike the BFF step, this one legitimately depends on the
+        # database: its own user-option lookup re-queries the user, and it
+        # maps running pods to Workflow rows. A database outage failing
+        # this step is a genuine, correctly-attributed failure, not the
+        # cross-subsystem leak the snapshot above avoids.
         ctx.invoke(
             interactive_session_cleanup,
             days=None,
             dry_run=dry_run,
-            email=user.email,
+            email=snapshot_email,
             id_=None,
         )
     except (Exception, SystemExit) as error:
