@@ -618,6 +618,11 @@ REANA_AUTH = {
     "leeway": int(os.getenv("REANA_AUTH_LEEWAY", "30")),
     # TTL (seconds) of the in-process JWKS and discovery-document caches.
     "jwks_ttl": int(os.getenv("REANA_AUTH_JWKS_TTL", "600")),
+    # Additional time (seconds) that a previously fetched JWKS may be used
+    # after its normal TTL when a transient issuer refresh fails. This bounds
+    # the availability fallback so a key removed by the issuer cannot remain
+    # trusted indefinitely during a prolonged outage.
+    "jwks_stale_grace": int(os.getenv("REANA_AUTH_JWKS_STALE_GRACE", "3600")),
     # Timeout (seconds) for HTTP calls to the issuer.
     "http_timeout": _AUTH_HTTP_TIMEOUT,
     # Optional CA bundle for a private/self-signed issuer certificate. TLS

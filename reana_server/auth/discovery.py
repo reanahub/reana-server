@@ -268,6 +268,10 @@ def validate_auth_configuration():
             raise IssuerMisconfiguredError(
                 f"OIDC {label} must be configured when an issuer is enabled."
             )
+    if auth_config.get("jwks_stale_grace", 0) < 0:
+        raise IssuerMisconfiguredError(
+            "OIDC JWKS stale grace must be zero or a positive number of seconds."
+        )
     if auth_config.get("bff_enabled") and not auth_config.get("web_client_id"):
         raise IssuerMisconfiguredError(
             "OIDC web client id must be configured when browser login is enabled."

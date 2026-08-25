@@ -127,15 +127,25 @@ def email_linking_allowed(iss, email, userinfo):
     exists there). ``email_linking_assume_verified_issuers`` lets an
     administrator explicitly attest to that for one issuer at a time,
     without weakening the check for every other issuer.
+
+    That attestation only covers an *absent* claim. An issuer that
+    explicitly asserts ``email_verified: false`` for a specific address is
+    saying something concrete about that address, not merely omitting the
+    claim the way the assume-verified issuers are attested to -- it must
+    never be treated the same as an absent claim, trusted issuer or not.
     """
     auth_config = get_auth_config()
     if not auth_config["email_linking_enabled"]:
         return False
     assume_verified_issuers = auth_config["email_linking_assume_verified_issuers"]
-    if (
-        userinfo.get("email_verified") is not True
-        and iss not in assume_verified_issuers
-    ):
+    if "email_verified" in userinfo:
+        # The administrator attestation covers only issuers that omit the
+        # claim. Any present value must be the exact JSON boolean ``true``;
+        # accepting null, 0, "false", or another malformed value would turn
+        # the fallback back into trust for an explicitly unverified claim.
+        if userinfo["email_verified"] is not True:
+            return False
+    elif iss not in assume_verified_issuers:
         return False
     issuer_allowlist = auth_config["email_linking_issuer_allowlist"]
     if issuer_allowlist and iss not in issuer_allowlist:

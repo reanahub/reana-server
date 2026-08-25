@@ -86,6 +86,13 @@ direct API access when the currently issued access token expires; deployments
 that need a shorter revocation window must configure that lifetime at the
 identity provider.
 
+During a transient issuer outage, REANA can continue validating known signing
+keys from its last successfully fetched JWKS for `REANA_AUTH_JWKS_STALE_GRACE`
+seconds beyond the normal `REANA_AUTH_JWKS_TTL` (one hour beyond a ten-minute
+TTL by default). Once that bounded grace period ends, authentication fails with
+an issuer-availability error until current keys can be fetched. Set the stale
+grace to `0` to disable the outage fallback after the normal TTL.
+
 Browser BFF sessions follow the same access-token rule. Refresh tokens are kept
 only in Redis, bound to issuer, subject, and web client, and are removed after
 `REANA_AUTH_SESSION_TTL` even if the issuer would keep them longer. Refresh is

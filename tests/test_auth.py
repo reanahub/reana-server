@@ -286,7 +286,7 @@ class TestValidateAccessToken:
         # Every iteration finds a stale cache that cannot be refreshed, which
         # is the outage path that previously recorded one entry per request.
         for index in range(tokens_module._MAX_UNKNOWN_KIDS * 4):
-            cache._fetched_at = 0.0
+            cache._fetched_at = time.monotonic() - cache.ttl - 1
             cache._last_unknown_kid_refresh = 0.0
             cache._refresh_failed_at = 0.0
             cache.get_key_set_for_kid(f"flood-{index}")
@@ -297,7 +297,7 @@ class TestValidateAccessToken:
         """A TTL refresh also serves as the unknown-key refresh attempt."""
         validate_access_token(_make_token(signing_key))
         cache = tokens_module._get_jwks_cache()
-        cache._fetched_at = 0.0
+        cache._fetched_at = time.monotonic() - cache.ttl - 1
         token = _make_token(_generate_key())
 
         with pytest.raises(InvalidTokenError):
@@ -356,10 +356,37 @@ class TestValidateAccessToken:
         """Cached keys keep validating tokens while the issuer is down."""
         validate_access_token(_make_token(signing_key))
         cache = tokens_module._get_jwks_cache()
-        cache._fetched_at = 0.0  # expire the cache
+        cache._fetched_at = time.monotonic() - cache.ttl - 1
         auth_config.side_effect = tokens_module.requests.RequestException("issuer down")
         claims = validate_access_token(_make_token(signing_key))
         assert claims["sub"] == "subject-1"
+
+    def test_jwks_stale_grace_has_a_hard_cutoff(self, auth_config, signing_key):
+        """A removed signing key is not trusted throughout a prolonged outage."""
+        validate_access_token(_make_token(signing_key))
+        cache = tokens_module._get_jwks_cache()
+        cache._fetched_at = time.monotonic() - cache.ttl - cache.stale_grace - 1
+        auth_config.side_effect = tokens_module.requests.RequestException("issuer down")
+
+        with pytest.raises(
+            IssuerKeyUnavailableError, match="exceeded their stale grace"
+        ):
+            validate_access_token(_make_token(signing_key))
+        assert cache.is_unavailable()
+
+    def test_zero_stale_grace_disables_outage_fallback(
+        self, base_app, auth_config, signing_key, monkeypatch
+    ):
+        """Zero grace fails closed as soon as the normal JWKS TTL elapses."""
+        monkeypatch.setitem(base_app.config["REANA_AUTH"], "jwks_stale_grace", 0)
+        base_app.extensions.pop(tokens_module._JWKS_EXTENSION, None)
+        validate_access_token(_make_token(signing_key))
+        cache = tokens_module._get_jwks_cache()
+        cache._fetched_at = time.monotonic() - cache.ttl - 1
+        auth_config.side_effect = tokens_module.requests.RequestException("issuer down")
+
+        with pytest.raises(IssuerKeyUnavailableError):
+            validate_access_token(_make_token(signing_key))
 
     def test_unconfigured_issuer_rejects(self, base_app, monkeypatch, signing_key):
         monkeypatch.setitem(base_app.config["REANA_AUTH"], "issuer", "")
@@ -393,7 +420,7 @@ class TestValidateAccessToken:
         """
         validate_access_token(_make_token(signing_key))
         cache = tokens_module._get_jwks_cache()
-        cache._fetched_at = 0.0  # force the TTL-expired refresh path
+        cache._fetched_at = time.monotonic() - cache.ttl - 1
         with patch.object(
             tokens_module,
             "get_endpoint",
@@ -424,7 +451,7 @@ class TestValidateAccessToken:
         """
         validate_access_token(_make_token(signing_key))
         cache = tokens_module._get_jwks_cache()
-        cache._fetched_at = 0.0  # force the TTL-expired refresh path
+        cache._fetched_at = time.monotonic() - cache.ttl - 1
         original_key_set = cache._key_set
 
         fetch_started = threading.Event()
@@ -685,6 +712,41 @@ class TestJITProvisioning:
             user, _is_new = get_or_provision_user(claims, "token")
         assert user.id_ == default_user.id_
         assert user.idp_subject == "subject-jit"
+
+    @pytest.mark.parametrize("unverified_value", [False, None, 0, "false", [], {}])
+    def test_refuses_link_for_assumed_issuer_with_explicit_unverified_email(
+        self,
+        app,
+        session,
+        monkeypatch,
+        default_user,
+        claims,
+        userinfo,
+        unverified_value,
+    ):
+        """The assume-verified escape hatch only covers an absent claim.
+
+        ``email_linking_assume_verified_issuers`` exists for issuers that
+        never emit ``email_verified`` at all. An issuer on that list that
+        explicitly asserts ``email_verified: false`` for one address is
+        saying something concrete about that address -- it must not be
+        treated the same as simply omitting the claim.
+        """
+        monkeypatch.setitem(app.config["REANA_AUTH"], "email_linking_enabled", True)
+        monkeypatch.setitem(
+            app.config["REANA_AUTH"],
+            "email_linking_assume_verified_issuers",
+            [ISSUER],
+        )
+        userinfo["email"] = default_user.email
+        userinfo["email_verified"] = unverified_value
+        with patch(
+            "reana_server.auth.provision.fetch_userinfo",
+            return_value=userinfo,
+        ):
+            with pytest.raises(ProvisioningError):
+                get_or_provision_user(claims, "token")
+        assert default_user.idp_subject is None
 
     def test_refuses_link_for_unassumed_issuer_without_verified_email(
         self, app, session, monkeypatch, default_user, claims, userinfo

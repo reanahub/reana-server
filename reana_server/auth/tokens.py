@@ -54,9 +54,10 @@ class JWKSCache:
     carries a non-empty ``kid`` absent from the cached key set.
     """
 
-    def __init__(self, ttl, refresh_wait_timeout=30):
+    def __init__(self, ttl, refresh_wait_timeout=30, stale_grace=3600):
         """Initialize the cache with a time-to-live in seconds."""
         self.ttl = ttl
+        self.stale_grace = stale_grace
         self.refresh_wait_timeout = refresh_wait_timeout
         self._lock = threading.Lock()
         self._refresh_condition = threading.Condition(self._lock)
@@ -68,6 +69,34 @@ class JWKSCache:
         self._unknown_kids = {}
         self._fetched_at = 0.0
         self._last_unknown_kid_refresh = 0.0
+
+    def _cached_keys_are_usable(self, now):
+        """Return whether cached keys are inside their bounded stale window.
+
+        Callers hold ``self._lock``. Fresh keys are necessarily usable; after
+        the normal TTL, a transient issuer failure may reuse them only for the
+        configured additional grace period. At the exact boundary validation
+        fails closed.
+        """
+        return self._key_set is not None and (
+            now - self._fetched_at < self.ttl + self.stale_grace
+        )
+
+    def _serve_stale_or_raise(self, now, refresh_error=None):
+        """Return cached keys inside the grace period or fail closed."""
+        if self._cached_keys_are_usable(now):
+            if refresh_error is not None:
+                logging.warning(
+                    "Could not refresh JWKS; serving cached key set: %s",
+                    refresh_error,
+                )
+            return self._key_set
+        error = IssuerKeyUnavailableError(
+            "Cached issuer keys have exceeded their stale grace period."
+        )
+        if refresh_error is not None:
+            raise error from refresh_error
+        raise error
 
     def _fetch(self):
         """Fetch and validate a JWKS without holding the cache mutex.
@@ -126,9 +155,7 @@ class JWKSCache:
         with self._refresh_condition:
             now = time.monotonic()
             if self._refresh_in_progress:
-                if not require_fresh and (
-                    not wait_for_initial or self._key_set is not None
-                ):
+                if not require_fresh and self._cached_keys_are_usable(now):
                     return self._key_set
                 deadline = now + self.refresh_wait_timeout
                 while self._refresh_in_progress:
@@ -144,7 +171,7 @@ class JWKSCache:
                     raise IssuerKeyUnavailableError(
                         "Issuer key refresh is temporarily unavailable."
                     )
-                return self._key_set
+                return self._serve_stale_or_raise(time.monotonic())
             if self._refresh_failed_at and now - self._refresh_failed_at < min(
                 5, self.ttl
             ):
@@ -153,7 +180,7 @@ class JWKSCache:
                         raise IssuerKeyUnavailableError(
                             "Issuer key refresh is temporarily unavailable."
                         )
-                    return self._key_set
+                    return self._serve_stale_or_raise(now)
                 raise IssuerUnavailableError(
                     "Issuer key refresh is temporarily unavailable."
                 )
@@ -188,10 +215,7 @@ class JWKSCache:
                         raise IssuerKeyUnavailableError(
                             "Issuer key refresh is temporarily unavailable."
                         ) from error
-                    logging.warning(
-                        "Could not refresh JWKS; serving cached key set: %s", error
-                    )
-                    return self._key_set
+                    return self._serve_stale_or_raise(time.monotonic(), error)
             raise
         with self._refresh_condition:
             if generation == self._refresh_generation:
@@ -230,15 +254,16 @@ class JWKSCache:
     def is_unavailable(self):
         """Return whether this cache has no usable key material at all.
 
-        True only when there is no cached key set (fresh or stale) *and* the
-        most recent refresh attempt is known to have failed -- a cache that
-        has simply never been touched yet (fresh boot, no traffic so far) or
-        that still has a stale-but-present key set to fall back on is not
-        reported unavailable. Reads existing state only; never triggers a
-        refresh, so this is cheap enough to call on every health check.
+        True when the most recent refresh failed and there is no cached key set
+        still inside the bounded stale grace period. A cache that has simply
+        never been touched yet (fresh boot, no traffic so far) is not reported
+        unavailable. Reads existing state only; never triggers a refresh, so
+        this is cheap enough to call on every health check.
         """
         with self._lock:
-            return self._key_set is None and bool(self._refresh_failed_at)
+            return bool(self._refresh_failed_at) and not self._cached_keys_are_usable(
+                time.monotonic()
+            )
 
     def get_key_set_for_kid(self, kid):
         """Resolve keys for ``kid`` with one guarded refresh opportunity.
@@ -342,6 +367,7 @@ def _get_jwks_cache():
         cache = JWKSCache(
             ttl=auth_config["jwks_ttl"],
             refresh_wait_timeout=max(30, 4 * auth_config["http_timeout"] + 5),
+            stale_grace=auth_config["jwks_stale_grace"],
         )
         current_app.extensions[_JWKS_EXTENSION] = cache
     return cache

@@ -466,3 +466,11 @@ def test_public_issuer_must_use_https(discovery_config, monkeypatch):
     )
     with pytest.raises(AuthError, match="must use HTTPS"):
         discovery.validate_auth_configuration()
+
+
+def test_jwks_stale_grace_cannot_be_negative(discovery_config, monkeypatch):
+    """The bounded stale-key fallback cannot be configured as unbounded."""
+    monkeypatch.setitem(discovery_config, "jwks_stale_grace", -1)
+
+    with pytest.raises(AuthError, match="stale grace"):
+        discovery.validate_auth_configuration()
