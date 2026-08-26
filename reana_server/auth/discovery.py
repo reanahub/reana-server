@@ -357,6 +357,7 @@ def _get_discovery_state():
                 "doc": None,
                 "fetched_at": 0.0,
                 "failed_at": 0.0,
+                "permanent_error": None,
                 "refresh_in_progress": False,
                 "refresh_generation": 0,
             },
@@ -388,7 +389,15 @@ def _serve_stale_or_raise(state, now):
     hitting this before any successful fetch gets the same message as
     before this staleness bound existed, not a misleading "exceeded its
     stale grace" that implies a document existed in the first place.
+
+    A remembered permanent misconfiguration always wins over a usable stale
+    document: a caller arriving after the refresh that detected it (not the
+    one that performed it -- that one already sees the error directly) must
+    not be told the issuer is fine because a stale document is still within
+    its grace window.
     """
+    if state["permanent_error"] is not None:
+        raise state["permanent_error"]
     if _document_is_usable(state, now):
         return state["doc"]
     if state["doc"] is None:
@@ -511,6 +520,15 @@ def get_openid_configuration():
         # on request count.
         with condition:
             state["failed_at"] = time.monotonic()
+            # A fresh attempt's classification always replaces the previous
+            # one: a permanent misconfiguration must be remembered so a
+            # later caller in the backoff window gets it too (not stale
+            # data or a transient error), but a subsequent transient
+            # failure must not keep re-raising a stale permanent error from
+            # an earlier attempt.
+            state["permanent_error"] = (
+                error if isinstance(error, IssuerMisconfiguredError) else None
+            )
             state["refresh_in_progress"] = False
             condition.notify_all()
             if isinstance(error, IssuerUnavailableError) and state["doc"] is not None:
@@ -544,6 +562,7 @@ def get_openid_configuration():
             state["fetched_at"] = time.monotonic()
             state["refresh_generation"] += 1
         state["failed_at"] = 0.0
+        state["permanent_error"] = None
         state["refresh_in_progress"] = False
         condition.notify_all()
         return state["doc"]

@@ -250,6 +250,82 @@ def test_misconfigured_issuer_surfaces_with_warm_cache_under_concurrent_refresh(
     assert state["failed_at"] > 0
 
 
+def test_misconfigured_issuer_surfaces_to_a_later_sequential_caller(
+    discovery_config, base_app
+):
+    """A permanent defect is remembered, not just discovered once.
+
+    Regression test for the reopened half of PR789-48: the refreshing
+    caller itself already sees ``IssuerMisconfiguredError`` correctly (see
+    the concurrent-refresh variant above), but that only fixed the
+    in-progress-refresh path. A *sequential* caller -- arriving after the
+    failing refresh has already completed, during the failure backoff
+    window -- only saw a bare timestamp (``state["failed_at"]``), not the
+    reason, and fell into ``_serve_stale_or_raise`` returning the stale-but-
+    present document instead of the permanent error.
+    """
+    with patch.object(discovery.requests, "get", return_value=_response(_document())):
+        discovery.get_openid_configuration()
+    state = discovery._get_discovery_state()
+    state["fetched_at"] -= discovery._DISCOVERY_TTL + 1
+
+    misconfigured_document = _document(issuer="https://attacker.example")
+    with patch.object(
+        discovery.requests, "get", return_value=_response(misconfigured_document)
+    ):
+        with pytest.raises(IssuerMisconfiguredError):
+            discovery.get_openid_configuration()
+
+    # The failing refresh has fully completed (no thread coordination
+    # needed) and recorded a permanent-error classification.
+    assert state["refresh_in_progress"] is False
+    assert state["permanent_error"] is not None
+
+    # A later, unrelated caller arriving within the failure backoff window
+    # must also see the permanent error, not the still-cached (stale)
+    # document from before the misconfiguration was detected.
+    with pytest.raises(IssuerMisconfiguredError):
+        discovery.get_openid_configuration()
+
+
+def test_transient_failure_after_permanent_one_is_not_masked(
+    discovery_config, base_app
+):
+    """The most recent refresh attempt's classification always wins.
+
+    A permanent misconfiguration must not stay "sticky" forever: once an
+    operator fixes the issuer and a later refresh attempt instead hits an
+    ordinary transient failure (network error), that attempt's outcome
+    (stale-serve, or a transient error if nothing is cached) must apply --
+    not a stale permanent-error classification from an earlier attempt.
+    """
+    with patch.object(discovery.requests, "get", return_value=_response(_document())):
+        cached = discovery.get_openid_configuration()
+    state = discovery._get_discovery_state()
+    state["fetched_at"] -= discovery._DISCOVERY_TTL + 1
+
+    misconfigured_document = _document(issuer="https://attacker.example")
+    with patch.object(
+        discovery.requests, "get", return_value=_response(misconfigured_document)
+    ):
+        with pytest.raises(IssuerMisconfiguredError):
+            discovery.get_openid_configuration()
+    assert state["permanent_error"] is not None
+
+    # Clear the backoff window and let the next attempt hit a transient
+    # network failure instead. ``fetched_at`` is untouched: the earlier
+    # failed refresh never updated it, so the document is still exactly as
+    # stale (and still within its grace window) as it was for that attempt.
+    state["failed_at"] = 0.0
+    with patch.object(
+        discovery.requests, "get", side_effect=discovery.requests.ConnectionError("x")
+    ):
+        result = discovery.get_openid_configuration()
+
+    assert result is cached
+    assert state["permanent_error"] is None
+
+
 def test_cold_discovery_failure_is_an_availability_error(discovery_config):
     """Issuer outages are distinct from invalid user credentials."""
     with patch.object(

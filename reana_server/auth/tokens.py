@@ -64,6 +64,7 @@ class JWKSCache:
         self._refresh_in_progress = False
         self._refresh_generation = 0
         self._refresh_failed_at = 0.0
+        self._permanent_error = None
         self._key_set = None
         self._known_kids = set()
         self._unknown_kids = {}
@@ -83,7 +84,15 @@ class JWKSCache:
         )
 
     def _serve_stale_or_raise(self, now, refresh_error=None):
-        """Return cached keys inside the grace period or fail closed."""
+        """Return cached keys inside the grace period or fail closed.
+
+        A remembered permanent misconfiguration always wins over a usable
+        stale key set: a caller arriving after the refresh that detected it
+        must not be told the issuer is fine because cached keys are still
+        within their grace window.
+        """
+        if self._permanent_error is not None:
+            raise self._permanent_error
         if self._cached_keys_are_usable(now):
             if refresh_error is not None:
                 logging.warning(
@@ -150,31 +159,44 @@ class JWKSCache:
         }
         return key_set, known_kids
 
+    def _await_in_progress_refresh(self, now, require_fresh):
+        """Wait for a concurrent refresh and return its outcome.
+
+        Callers hold ``self._refresh_condition``. Split out of ``_refresh``
+        to keep that method's cyclomatic complexity within the project's
+        linting limit.
+        """
+        if not require_fresh and self._cached_keys_are_usable(now):
+            return self._key_set
+        deadline = now + self.refresh_wait_timeout
+        while self._refresh_in_progress:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise IssuerKeyUnavailableError("Issuer key refresh timed out.")
+            self._refresh_condition.wait(timeout=remaining)
+        if self._permanent_error is not None:
+            raise self._permanent_error
+        if self._key_set is None:
+            raise IssuerUnavailableError(
+                "Issuer key refresh is temporarily unavailable."
+            )
+        if require_fresh and self._refresh_failed_at:
+            raise IssuerKeyUnavailableError(
+                "Issuer key refresh is temporarily unavailable."
+            )
+        return self._serve_stale_or_raise(time.monotonic())
+
     def _refresh(self, wait_for_initial=False, require_fresh=False):
         """Refresh once, with network I/O outside the state mutex."""
         with self._refresh_condition:
             now = time.monotonic()
             if self._refresh_in_progress:
-                if not require_fresh and self._cached_keys_are_usable(now):
-                    return self._key_set
-                deadline = now + self.refresh_wait_timeout
-                while self._refresh_in_progress:
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        raise IssuerKeyUnavailableError("Issuer key refresh timed out.")
-                    self._refresh_condition.wait(timeout=remaining)
-                if self._key_set is None:
-                    raise IssuerUnavailableError(
-                        "Issuer key refresh is temporarily unavailable."
-                    )
-                if require_fresh and self._refresh_failed_at:
-                    raise IssuerKeyUnavailableError(
-                        "Issuer key refresh is temporarily unavailable."
-                    )
-                return self._serve_stale_or_raise(time.monotonic())
+                return self._await_in_progress_refresh(now, require_fresh)
             if self._refresh_failed_at and now - self._refresh_failed_at < min(
                 5, self.ttl
             ):
+                if self._permanent_error is not None:
+                    raise self._permanent_error
                 if self._key_set is not None:
                     if require_fresh:
                         raise IssuerKeyUnavailableError(
@@ -188,21 +210,30 @@ class JWKSCache:
             generation = self._refresh_generation
         try:
             key_set, known_kids = self._fetch()
-        except IssuerMisconfiguredError:
+        except IssuerMisconfiguredError as error:
             # Same reasoning as _fetch: a permanent configuration defect must
             # surface even when a stale key set is cached, not be silently
             # absorbed by the "serve cached key set" fallback below, which
             # would otherwise keep serving stale keys forever behind a
             # config error that will never fix itself on retry. Still runs
-            # the same refresh-state cleanup as any other failure.
+            # the same refresh-state cleanup as any other failure. Remember
+            # the error itself (not just the timestamp) so a later caller
+            # arriving during the failure backoff -- not just this one --
+            # also gets the permanent classification instead of stale data
+            # or a generic transient error.
             with self._refresh_condition:
                 self._refresh_failed_at = time.monotonic()
+                self._permanent_error = error
                 self._refresh_in_progress = False
                 self._refresh_condition.notify_all()
             raise
         except Exception as error:
             with self._refresh_condition:
                 self._refresh_failed_at = time.monotonic()
+                # A fresh attempt's classification always replaces the
+                # previous one: this is a transient failure, so any earlier
+                # remembered permanent error must not keep being re-raised.
+                self._permanent_error = None
                 self._refresh_in_progress = False
                 self._refresh_condition.notify_all()
                 if self._key_set is not None and isinstance(
@@ -224,6 +255,7 @@ class JWKSCache:
                 self._fetched_at = time.monotonic()
                 self._refresh_generation += 1
             self._refresh_failed_at = 0.0
+            self._permanent_error = None
             self._refresh_in_progress = False
             self._refresh_condition.notify_all()
             return self._key_set

@@ -491,6 +491,85 @@ class TestValidateAccessToken:
         assert cache._refresh_in_progress is False
         assert cache._refresh_failed_at > 0
 
+    def test_misconfigured_jwks_surfaces_to_a_later_sequential_caller(
+        self, auth_config, signing_key
+    ):
+        """A permanent defect is remembered, not just discovered once.
+
+        Regression test for the reopened half of PR789-48:
+        ``test_misconfigured_jwks_endpoint_surfaces_with_warm_cache`` above
+        already proves the refreshing caller itself sees
+        ``IssuerMisconfiguredError``. That only fixed the caller that
+        performs the failing refresh. A *sequential* caller -- arriving
+        after that refresh has already completed, during the five-second
+        failure backoff -- only saw a bare timestamp
+        (``cache._refresh_failed_at``), not the reason, and fell into
+        ``_serve_stale_or_raise`` returning the stale-but-present key set
+        instead of the permanent error.
+        """
+        validate_access_token(_make_token(signing_key))
+        cache = tokens_module._get_jwks_cache()
+        cache._fetched_at = time.monotonic() - cache.ttl - 1
+        with patch.object(
+            tokens_module,
+            "get_endpoint",
+            side_effect=IssuerMisconfiguredError(
+                "jwks endpoint outside trust boundary"
+            ),
+        ):
+            with pytest.raises(IssuerMisconfiguredError):
+                cache.get_key_set()
+
+        assert cache._refresh_in_progress is False
+        assert cache._permanent_error is not None
+
+        # A later, unrelated caller arriving within the failure backoff
+        # window must also see the permanent error, not the still-cached
+        # (stale) key set from before the misconfiguration was detected.
+        with pytest.raises(IssuerMisconfiguredError):
+            cache.get_key_set()
+
+    def test_transient_jwks_failure_after_permanent_one_is_not_masked(
+        self, auth_config, signing_key
+    ):
+        """The most recent refresh attempt's classification always wins.
+
+        A permanent misconfiguration must not stay "sticky" forever: once
+        an operator fixes the issuer and a later refresh attempt instead
+        hits an ordinary transient failure, that attempt's outcome
+        (stale-serve) must apply -- not a stale permanent-error
+        classification from an earlier attempt.
+        """
+        validate_access_token(_make_token(signing_key))
+        cache = tokens_module._get_jwks_cache()
+        original_key_set = cache._key_set
+        cache._fetched_at = time.monotonic() - cache.ttl - 1
+        with patch.object(
+            tokens_module,
+            "get_endpoint",
+            side_effect=IssuerMisconfiguredError(
+                "jwks endpoint outside trust boundary"
+            ),
+        ):
+            with pytest.raises(IssuerMisconfiguredError):
+                cache.get_key_set()
+        assert cache._permanent_error is not None
+
+        # Clear the backoff window and let the next attempt hit a transient
+        # network failure instead. ``_fetched_at`` is untouched: the earlier
+        # failed refresh never updated it, so the key set is still exactly
+        # as stale (and still within its grace window) as for that attempt.
+        cache._refresh_failed_at = 0.0
+        with patch.object(
+            tokens_module,
+            "get_endpoint",
+            side_effect=AuthError("issuer temporarily unreachable"),
+        ):
+            result = cache.get_key_set()
+
+        assert result is original_key_set
+        assert cache._permanent_error is None
+
     def test_local_only_validation_accepts_a_known_kid(self, auth_config, signing_key):
         """The rate-limited (allow_remote=False) path accepts a cached kid."""
         validate_access_token(_make_token(signing_key))
