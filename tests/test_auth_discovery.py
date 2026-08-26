@@ -474,3 +474,56 @@ def test_jwks_stale_grace_cannot_be_negative(discovery_config, monkeypatch):
 
     with pytest.raises(AuthError, match="stale grace"):
         discovery.validate_auth_configuration()
+
+
+def test_discovery_stale_grace_cannot_be_negative(discovery_config, monkeypatch):
+    """The bounded stale-document fallback cannot be configured as unbounded."""
+    monkeypatch.setitem(discovery_config, "discovery_stale_grace", -1)
+
+    with pytest.raises(AuthError, match="stale grace"):
+        discovery.validate_auth_configuration()
+
+
+def test_discovery_stale_grace_has_a_hard_cutoff(discovery_config):
+    """A discovery document is not served once it exceeds its stale grace.
+
+    Mirrors JWKSCache's equivalent hard-cutoff test: an issuer that rotates
+    an endpoint (e.g. jwks_uri, as part of decommissioning a compromised
+    one) must not have REANA keep resolving the old document indefinitely
+    just because refreshes keep failing.
+    """
+    with patch.object(discovery.requests, "get", return_value=_response(_document())):
+        discovery.get_openid_configuration()
+    state = discovery._get_discovery_state()
+    stale_grace = discovery.get_auth_config()["discovery_stale_grace"]
+    state["fetched_at"] -= discovery._DISCOVERY_TTL + stale_grace + 1
+
+    with patch.object(
+        discovery.requests,
+        "get",
+        side_effect=discovery.requests.RequestException("issuer unavailable"),
+    ):
+        with pytest.raises(
+            discovery.IssuerUnavailableError, match="exceeded its stale grace"
+        ):
+            discovery.get_openid_configuration()
+    assert discovery.discovery_is_unavailable() is True
+
+
+def test_zero_discovery_stale_grace_disables_outage_fallback(
+    discovery_config, monkeypatch
+):
+    """Zero grace fails closed as soon as the normal TTL elapses."""
+    monkeypatch.setitem(discovery_config, "discovery_stale_grace", 0)
+    with patch.object(discovery.requests, "get", return_value=_response(_document())):
+        discovery.get_openid_configuration()
+    state = discovery._get_discovery_state()
+    state["fetched_at"] -= discovery._DISCOVERY_TTL + 1
+
+    with patch.object(
+        discovery.requests,
+        "get",
+        side_effect=discovery.requests.RequestException("issuer unavailable"),
+    ):
+        with pytest.raises(discovery.IssuerUnavailableError):
+            discovery.get_openid_configuration()

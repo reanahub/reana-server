@@ -189,9 +189,17 @@ def test_health_ok_when_serving_stale_cached_material(base_app):
     with base_app.app_context():
         discovery_state = discovery_module._get_discovery_state()
         discovery_state["doc"] = {"issuer": "https://stale.example.org"}
+        # Within the bounded stale-grace window, same reasoning as the JWKS
+        # cache below -- this test is about a cache that is
+        # stale-but-still-usable, not one that has exceeded its grace period.
+        discovery_state["fetched_at"] = time.monotonic()
         discovery_state["failed_at"] = time.monotonic()
         jwks_cache = tokens_module._get_jwks_cache()
         jwks_cache._key_set = object()
+        # Within the bounded stale-grace window (ttl + stale_grace) -- this
+        # test is specifically about a cache that is stale-but-still-usable,
+        # not one that has exceeded its grace period.
+        jwks_cache._fetched_at = time.monotonic()
         jwks_cache._refresh_failed_at = time.monotonic()
 
     with base_app.test_client() as client:

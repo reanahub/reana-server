@@ -8,6 +8,7 @@
 
 """Reana-Server GitLab integration Flask-Blueprint."""
 
+import hmac
 import logging
 import secrets
 import traceback
@@ -45,6 +46,7 @@ from reana_server.gitlab_client import (
     GitLabClientInvalidToken,
 )
 from reana_server.oauth_state import (
+    GITLAB_STATE_COOKIE,
     InvalidOAuthState,
     clear_state_cookie,
     consume_state,
@@ -205,7 +207,7 @@ def gitlab_webhook_token(user):
 
 @blueprint.route("/gitlab/connect")
 @signin_required()
-def gitlab_connect(**kwargs):
+def gitlab_connect(user):
     r"""Endpoint to init the REANA connection to GitLab.
 
     ---
@@ -238,7 +240,13 @@ def gitlab_connect(**kwargs):
     # Get redirect target in safe manner.
     next_param = safe_next_url(request.args.get("next"))
     response = redirect("placeholder")
-    state = issue_state(response, next=next_param)
+    state = issue_state(
+        response,
+        cookie_name=GITLAB_STATE_COOKIE,
+        flow="gitlab",
+        next=next_param,
+        user_id=str(user.id_),
+    )
 
     params = {
         "client_id": REANA_GITLAB_OAUTH_APP_ID,
@@ -320,7 +328,13 @@ def gitlab_oauth(user):  # noqa
         if "code" in request.args:
             # Verifies state parameter (signed state cookie) and obtains
             # the next url.
-            state = consume_state(request.args.get("state", ""))
+            state = consume_state(
+                request.args.get("state", ""),
+                cookie_name=GITLAB_STATE_COOKIE,
+                expected_flow="gitlab",
+            )
+            if not hmac.compare_digest(state.get("user_id", ""), str(user.id_)):
+                raise InvalidOAuthState("State param is invalid.")
             next_url = safe_next_url(state.get("next"))
             gitlab_code = request.args.get("code")
             params = {
@@ -347,7 +361,10 @@ def gitlab_oauth(user):  # noqa
             )
             UserSecretsStore.update(user_secrets)
             response = redirect(next_url)
-            return clear_state_cookie(response), 302
+            return (
+                clear_state_cookie(response, cookie_name=GITLAB_STATE_COOKIE),
+                302,
+            )
         else:
             return jsonify({"message": "OK"}), 200
     except ValueError:

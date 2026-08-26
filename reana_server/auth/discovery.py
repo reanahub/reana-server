@@ -272,6 +272,11 @@ def validate_auth_configuration():
         raise IssuerMisconfiguredError(
             "OIDC JWKS stale grace must be zero or a positive number of seconds."
         )
+    if auth_config.get("discovery_stale_grace", 0) < 0:
+        raise IssuerMisconfiguredError(
+            "OIDC discovery stale grace must be zero or a positive number of "
+            "seconds."
+        )
     if auth_config.get("bff_enabled") and not auth_config.get("web_client_id"):
         raise IssuerMisconfiguredError(
             "OIDC web client id must be configured when browser login is enabled."
@@ -359,17 +364,55 @@ def _get_discovery_state():
     return state
 
 
+def _document_is_usable(state, now):
+    """Return whether the cached document is inside its bounded stale window.
+
+    Callers hold ``state["lock"]``. Mirrors ``JWKSCache._cached_keys_are_usable``:
+    a document past its normal TTL may still be reused for
+    ``discovery_stale_grace`` additional seconds during a transient issuer
+    outage, but not indefinitely -- see ``discovery_stale_grace``'s
+    docstring in ``config.py`` for why this must be bounded.
+    """
+    if state["doc"] is None:
+        return False
+    stale_grace = get_auth_config()["discovery_stale_grace"]
+    return now - state["fetched_at"] < _DISCOVERY_TTL + stale_grace
+
+
+def _serve_stale_or_raise(state, now):
+    """Return the cached document inside its grace period or fail closed.
+
+    Callers hold ``state["lock"]``. Mirrors ``JWKSCache._serve_stale_or_raise``.
+    Distinguishes "never fetched" (nothing has ever been cached to call
+    stale) from "fetched once, now past its grace period", so a caller
+    hitting this before any successful fetch gets the same message as
+    before this staleness bound existed, not a misleading "exceeded its
+    stale grace" that implies a document existed in the first place.
+    """
+    if _document_is_usable(state, now):
+        return state["doc"]
+    if state["doc"] is None:
+        raise IssuerUnavailableError(
+            "OIDC discovery document is temporarily unavailable."
+        )
+    raise IssuerUnavailableError(
+        "OIDC discovery document has exceeded its stale grace period."
+    )
+
+
 def discovery_is_unavailable():
     """Return whether this application's discovery cache has no usable document.
 
-    True only when there is no cached document (fresh or stale) *and* the
-    most recent refresh attempt is known to have failed -- mirrors
+    True when the most recent refresh failed and there is no cached document
+    still inside the bounded stale grace period -- mirrors
     ``JWKSCache.is_unavailable``. Read-only: never triggers a fetch, so safe
     to call from a health check.
     """
     state = _get_discovery_state()
     with state["condition"]:
-        return state["doc"] is None and bool(state["failed_at"])
+        return bool(state["failed_at"]) and not _document_is_usable(
+            state, time.monotonic()
+        )
 
 
 def _discovery_refresh_wait_timeout():
@@ -431,25 +474,25 @@ def get_openid_configuration():
         if state["refresh_in_progress"]:
             # Another caller is already fetching. Reuse a usable document, or
             # wait for that refresh rather than starting a second network call.
-            if state["doc"] is not None:
+            # Waiting (not just checking once) matters here: a document past
+            # its stale-grace bound stays unusable for the rest of this
+            # function's lifetime, so without re-checking refresh_in_progress
+            # in the loop condition too, a caller would fall through
+            # immediately and raise instead of waiting for the in-flight
+            # refresh that could produce a fresh one.
+            if _document_is_usable(state, now):
                 return state["doc"]
             deadline = now + _discovery_refresh_wait_timeout()
-            while state["refresh_in_progress"] and state["doc"] is None:
+            while state["refresh_in_progress"] and not _document_is_usable(
+                state, time.monotonic()
+            ):
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise IssuerUnavailableError("OIDC discovery refresh timed out.")
                 condition.wait(timeout=remaining)
-            if state["doc"] is not None:
-                return state["doc"]
-            raise IssuerUnavailableError(
-                "OIDC discovery document is temporarily unavailable."
-            )
+            return _serve_stale_or_raise(state, time.monotonic())
         if state["failed_at"] and now - state["failed_at"] < _DISCOVERY_FAILURE_TTL:
-            if state["doc"] is not None:
-                return state["doc"]
-            raise IssuerUnavailableError(
-                "OIDC discovery document is temporarily unavailable."
-            )
+            return _serve_stale_or_raise(state, now)
         state["refresh_in_progress"] = True
         generation = state["refresh_generation"]
 
@@ -470,18 +513,29 @@ def get_openid_configuration():
             state["failed_at"] = time.monotonic()
             state["refresh_in_progress"] = False
             condition.notify_all()
-            if state["doc"] is not None and isinstance(error, IssuerUnavailableError):
+            if isinstance(error, IssuerUnavailableError) and state["doc"] is not None:
                 # Keep serving the stale document rather than failing hard,
                 # but only for the failure families _fetch_discovery_document
                 # itself judged transient/issuer-side -- not for a genuinely
                 # unexpected exception, which should surface rather than be
-                # silently absorbed into "serve stale forever".
-                logging.warning(
-                    "Could not refresh OIDC discovery document, "
-                    "serving cached document: %s",
-                    error,
-                )
-                return state["doc"]
+                # silently absorbed into "serve stale forever" -- and only
+                # while still inside the bounded stale-grace window. A
+                # ``doc is None`` failure (no document has ever been fetched
+                # successfully) has nothing stale to fall back on, so it
+                # falls through to the bare ``raise`` below and keeps
+                # _fetch_discovery_document's own "Could not fetch" message
+                # rather than the misleading "exceeded its stale grace"
+                # one, which implies a document existed in the first place.
+                if _document_is_usable(state, time.monotonic()):
+                    logging.warning(
+                        "Could not refresh OIDC discovery document, "
+                        "serving cached document: %s",
+                        error,
+                    )
+                    return state["doc"]
+                raise IssuerUnavailableError(
+                    "OIDC discovery document has exceeded its stale grace period."
+                ) from error
         raise
 
     with condition:

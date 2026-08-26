@@ -76,7 +76,12 @@ def signin_required(include_gitlab_login=False, access_denied_code=None):
             try:
                 user, refreshed_token = _authenticate(include_gitlab_login)
             except _TerminalSessionError as e:
-                return clear_auth_cookies(jsonify(message=str(e))), 401
+                return (
+                    clear_auth_cookies(
+                        jsonify(message=str(e), code="session_terminated")
+                    ),
+                    401,
+                )
             except InvalidTokenError as e:
                 logging.info("Access token validation failed: %s", e)
                 return jsonify(message="Invalid access token."), 401

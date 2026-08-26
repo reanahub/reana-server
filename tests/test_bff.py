@@ -35,7 +35,12 @@ from reana_server.auth.sessions import (
     SESSION_COOKIE,
 )
 from reana_server.decorators import signin_required
-from reana_server.oauth_state import STATE_COOKIE, _serializer
+from reana_server.oauth_state import (
+    BFF_STATE_COOKIE,
+    GITLAB_STATE_COOKIE,
+    STATE_COOKIE,
+    _serializer,
+)
 
 ISSUER = "https://auth.example.org/realms/reana"
 AUTHORIZATION_URL = f"{ISSUER}/protocol/openid-connect/auth"
@@ -140,8 +145,8 @@ def _state_cookie_for(app, client, **payload):
     """Craft a valid signed state cookie and return the state value."""
     state = "test-state-value"
     with app.app_context(), app.test_request_context():
-        cookie_value = _serializer().dumps({"state": state, **payload})
-    client.set_cookie(STATE_COOKIE, cookie_value, path="/api")
+        cookie_value = _serializer().dumps({"state": state, "flow": "bff", **payload})
+    client.set_cookie(BFF_STATE_COOKIE, cookie_value, path="/api")
     return state
 
 
@@ -176,6 +181,18 @@ class TestLogin:
         cookies = response.headers.getlist("Set-Cookie")
         assert any(STATE_COOKIE in cookie for cookie in cookies)
 
+    def test_login_does_not_overwrite_gitlab_state(self, base_app, bff_config):
+        """The two OAuth flows retain independent in-flight transactions."""
+        with base_app.test_client() as client:
+            client.set_cookie(GITLAB_STATE_COOKIE, "existing-gitlab-state", path="/api")
+            response = client.get("/api/login")
+
+            assert response.status_code == 302
+            assert client.get_cookie(GITLAB_STATE_COOKIE, path="/api").value == (
+                "existing-gitlab-state"
+            )
+            assert client.get_cookie(BFF_STATE_COOKIE, path="/api") is not None
+
     def test_next_url_must_be_relative(self, base_app, bff_config):
         with base_app.test_client() as client:
             response = client.get("/api/login?next=https://evil.example.org")
@@ -189,6 +206,25 @@ class TestCallback:
     def test_state_mismatch_returns_403(self, base_app, bff_config):
         with base_app.test_client() as client:
             response = client.get("/api/oauth/callback?state=wrong&code=abc")
+        assert response.status_code == 403
+
+    def test_state_from_another_flow_returns_403(self, base_app, bff_config):
+        """A correctly signed state cannot be consumed by the wrong flow."""
+        state = "test-state-value"
+        with base_app.app_context(), base_app.test_request_context():
+            cookie_value = _serializer().dumps(
+                {
+                    "state": state,
+                    "flow": "gitlab",
+                    "verifier": "ver",
+                    "next": "/",
+                    "nonce": "nonce",
+                }
+            )
+        with base_app.test_client() as client:
+            client.set_cookie(BFF_STATE_COOKIE, cookie_value, path="/api")
+            response = client.get(f"/api/oauth/callback?state={state}&code=code")
+
         assert response.status_code == 403
 
     def test_authorization_error_preserves_next_url_query_and_fragment(

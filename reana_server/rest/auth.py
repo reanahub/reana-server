@@ -52,6 +52,7 @@ from reana_server.auth.sessions import (
 )
 from reana_server.config import REANA_URL
 from reana_server.oauth_state import (
+    BFF_STATE_COOKIE,
     InvalidOAuthState,
     clear_state_cookie,
     consume_state,
@@ -278,7 +279,14 @@ def login():
         return jsonify(message="Could not reach the identity provider."), 502
     nonce = secrets.token_urlsafe(32)
     response = redirect("placeholder")
-    state = issue_state(response, verifier=verifier, next=next_url, nonce=nonce)
+    state = issue_state(
+        response,
+        cookie_name=BFF_STATE_COOKIE,
+        flow="bff",
+        verifier=verifier,
+        next=next_url,
+        nonce=nonce,
+    )
     response.headers["Location"] = (
         authorization_url
         + "?"
@@ -343,7 +351,11 @@ def oauth_callback():  # noqa: C901
         return jsonify(message="Browser login is not enabled."), 404
     auth_config = get_auth_config()
     try:
-        state_data = consume_state(request.args.get("state", ""))
+        state_data = consume_state(
+            request.args.get("state", ""),
+            cookie_name=BFF_STATE_COOKIE,
+            expected_flow="bff",
+        )
     except InvalidOAuthState as error:
         return jsonify(message=str(error)), 403
     next_url = safe_next_url(state_data.get("next"))
@@ -353,7 +365,7 @@ def oauth_callback():  # noqa: C901
             request.args.get("error"),
         )
         response = redirect(_login_error_redirect(next_url, "authorization"))
-        return clear_state_cookie(response)
+        return clear_state_cookie(response, cookie_name=BFF_STATE_COOKIE)
     try:
         token_response = requests.post(
             get_endpoint("token_url"),
@@ -423,7 +435,7 @@ def oauth_callback():  # noqa: C901
         # exchange path rather than letting it escape as an unhandled 500.
         logging.error("Identity provider unavailable during provisioning: %s", error)
         response = jsonify(message="The identity provider is temporarily unavailable.")
-        return clear_state_cookie(response), 503
+        return clear_state_cookie(response, cookie_name=BFF_STATE_COOKIE), 503
     except IssuerMisconfiguredError as error:
         # Distinct from the outage case above: retrying won't help, an
         # administrator must fix the issuer/discovery configuration. Without
@@ -437,11 +449,11 @@ def oauth_callback():  # noqa: C901
                 "configured. Please contact the administrator."
             )
         )
-        return clear_state_cookie(response), 500
+        return clear_state_cookie(response, cookie_name=BFF_STATE_COOKIE), 500
     except ProvisioningError as error:
         logging.warning("Could not provision user at login: %s", error)
         response = redirect(_login_error_redirect(next_url, "provisioning"))
-        return clear_state_cookie(response)
+        return clear_state_cookie(response, cookie_name=BFF_STATE_COOKIE)
 
     sid = secrets.token_urlsafe(32)
     try:
@@ -458,10 +470,10 @@ def oauth_callback():  # noqa: C901
     except SessionUnavailableError as error:
         logging.error("Could not establish browser session: %s", error)
         response = jsonify(message=str(error))
-        return clear_state_cookie(response), 503
+        return clear_state_cookie(response, cookie_name=BFF_STATE_COOKIE), 503
     response = redirect(next_url)
     set_auth_cookies(response, access_token, session_id=sid)
-    return clear_state_cookie(response)
+    return clear_state_cookie(response, cookie_name=BFF_STATE_COOKIE)
 
 
 @blueprint.route("/logout", methods=["POST"])

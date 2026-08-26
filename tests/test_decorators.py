@@ -203,6 +203,23 @@ class TestCookieAuthentication:
             response, code = signin_required()(endpoint)()
         assert code == 200
 
+    def test_jwks_outage_preserves_browser_session(self, app, make_token, monkeypatch):
+        """A temporary inability to verify keys must not clear BFF cookies."""
+        monkeypatch.setitem(app.config["REANA_AUTH"], "bff_enabled", True)
+        token = make_token("subject-1")
+        endpoint = _ok_endpoint()
+        with app.test_request_context(
+            headers={"Cookie": f"{AUTH_COOKIE}={token}; {SESSION_COOKIE}=session-1"}
+        ), patch(
+            "reana_server.decorators.validate_access_token",
+            side_effect=IssuerKeyUnavailableError("issuer unavailable"),
+        ):
+            response, code = signin_required()(endpoint)()
+
+        assert code == 503
+        assert response.headers.getlist("Set-Cookie") == []
+        endpoint.assert_not_called()
+
     def test_mutating_request_requires_csrf(
         self, app, user0, auth_headers, make_token, monkeypatch
     ):
@@ -285,6 +302,9 @@ class TestCookieAuthentication:
         with app.test_request_context(headers={"Cookie": f"{AUTH_COOKIE}={expired}"}):
             response, code = signin_required()(endpoint)()
         assert code == 401
+        assert json.loads(response.get_data(as_text=True))["code"] == (
+            "session_terminated"
+        )
 
     def test_unknown_kid_healthy_backoff_stays_503(
         self, app, user0, auth_headers, make_token, monkeypatch

@@ -616,13 +616,23 @@ REANA_AUTH = {
     "required_role": os.getenv("REANA_AUTH_REQUIRED_ROLE", "reana:user"),
     # Clock-skew leeway (seconds) for exp/nbf validation.
     "leeway": int(os.getenv("REANA_AUTH_LEEWAY", "30")),
-    # TTL (seconds) of the in-process JWKS and discovery-document caches.
+    # TTL (seconds) of the in-process JWKS cache. The discovery-document
+    # cache has its own fixed TTL (auth/discovery.py's _DISCOVERY_TTL); this
+    # setting does not apply to it.
     "jwks_ttl": int(os.getenv("REANA_AUTH_JWKS_TTL", "600")),
     # Additional time (seconds) that a previously fetched JWKS may be used
     # after its normal TTL when a transient issuer refresh fails. This bounds
     # the availability fallback so a key removed by the issuer cannot remain
     # trusted indefinitely during a prolonged outage.
     "jwks_stale_grace": int(os.getenv("REANA_AUTH_JWKS_STALE_GRACE", "3600")),
+    # Same bound as jwks_stale_grace, but for the discovery document cache.
+    # Without this, an issuer that rotates an endpoint (e.g. jwks_uri, as
+    # part of decommissioning a compromised one) while its discovery refresh
+    # happens to be failing would have REANA keep resolving the old,
+    # possibly-decommissioned URL indefinitely -- the JWKS cache's own
+    # staleness bound does not help if the endpoint it fetches from is
+    # itself stale.
+    "discovery_stale_grace": int(os.getenv("REANA_AUTH_DISCOVERY_STALE_GRACE", "3600")),
     # Timeout (seconds) for HTTP calls to the issuer.
     "http_timeout": _AUTH_HTTP_TIMEOUT,
     # Optional CA bundle for a private/self-signed issuer certificate. TLS

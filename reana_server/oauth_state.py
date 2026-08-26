@@ -21,7 +21,11 @@ import secrets
 from flask import current_app, request
 from itsdangerous import BadData, URLSafeTimedSerializer
 
-STATE_COOKIE = "reana_oauth_state"
+BFF_STATE_COOKIE = "reana_oauth_state"
+GITLAB_STATE_COOKIE = "reana_gitlab_oauth_state"
+# Backward-compatible internal alias for tests and extensions that imported the
+# original BFF cookie name before GitLab received its own transaction slot.
+STATE_COOKIE = BFF_STATE_COOKIE
 STATE_MAX_AGE = 600  # seconds
 
 
@@ -42,7 +46,7 @@ def safe_next_url(target):
     return target
 
 
-def issue_state(response, **payload):
+def issue_state(response, *, cookie_name, flow, **payload):
     """Create a random ``state`` and store it with payload in a cookie.
 
     :param response: response the state cookie is set on (the OAuth
@@ -52,9 +56,9 @@ def issue_state(response, **payload):
     :return: the ``state`` value to put in the authorization URL.
     """
     state = secrets.token_urlsafe(32)
-    cookie_value = _serializer().dumps({"state": state, **payload})
+    cookie_value = _serializer().dumps({"state": state, "flow": flow, **payload})
     response.set_cookie(
-        STATE_COOKIE,
+        cookie_name,
         cookie_value,
         max_age=STATE_MAX_AGE,
         httponly=True,
@@ -65,25 +69,27 @@ def issue_state(response, **payload):
     return state
 
 
-def consume_state(state_param):
+def consume_state(state_param, *, cookie_name, expected_flow):
     """Validate the returned ``state`` against the cookie; return payload.
 
     :raises InvalidOAuthState: when the cookie is missing/expired/tampered
         or the state value does not match.
     """
-    cookie_value = request.cookies.get(STATE_COOKIE)
+    cookie_value = request.cookies.get(cookie_name)
     if not cookie_value or not state_param:
         raise InvalidOAuthState("State param is invalid.")
     try:
         data = _serializer().loads(cookie_value, max_age=STATE_MAX_AGE)
     except BadData:
         raise InvalidOAuthState("State param is invalid.")
-    if not hmac.compare_digest(data.get("state", ""), state_param):
+    if not hmac.compare_digest(
+        data.get("state", ""), state_param
+    ) or not hmac.compare_digest(data.get("flow", ""), expected_flow):
         raise InvalidOAuthState("State param is invalid.")
     return data
 
 
-def clear_state_cookie(response):
+def clear_state_cookie(response, *, cookie_name):
     """Delete the state cookie after the round-trip completed."""
-    response.delete_cookie(STATE_COOKIE, path="/api")
+    response.delete_cookie(cookie_name, path="/api")
     return response
