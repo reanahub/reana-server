@@ -491,6 +491,33 @@ class TestValidateAccessToken:
         assert cache._refresh_in_progress is False
         assert cache._refresh_failed_at > 0
 
+    def test_local_only_validation_accepts_a_known_kid(self, auth_config, signing_key):
+        """The rate-limited (allow_remote=False) path accepts a cached kid."""
+        validate_access_token(_make_token(signing_key))
+        claims = validate_access_token(_make_token(signing_key), allow_remote=False)
+        assert claims["sub"] == "subject-1"
+
+    def test_local_only_validation_rejects_an_unknown_kid(
+        self, auth_config, signing_key
+    ):
+        """The rate-limited path never fetches, so an unseen kid is rejected."""
+        validate_access_token(_make_token(signing_key))
+        unseen_key_token = _make_token(_generate_key())
+        with pytest.raises(InvalidTokenError, match="not locally cached"):
+            validate_access_token(unseen_key_token, allow_remote=False)
+        assert auth_config.call_count == 1
+
+    def test_local_only_validation_rejects_a_stale_cache(
+        self, auth_config, signing_key
+    ):
+        """The rate-limited path never refreshes, even for a TTL-expired cache."""
+        validate_access_token(_make_token(signing_key))
+        cache = tokens_module._get_jwks_cache()
+        cache._fetched_at = time.monotonic() - cache.ttl - 1
+        with pytest.raises(InvalidTokenError, match="No locally cached"):
+            validate_access_token(_make_token(signing_key), allow_remote=False)
+        assert auth_config.call_count == 1
+
 
 class TestRequireRole:
     """The reana:user role gate."""
@@ -606,6 +633,42 @@ class TestJITProvisioning:
             user, _is_new = get_or_provision_user(claims, "token")
         assert len(user.full_name) == 255
         assert len(user.username) == 255
+
+    def test_refuses_non_string_email(self, app, session, claims, userinfo):
+        """A non-string email is rejected cleanly, not left to crash.
+
+        fetch_userinfo() itself already guarantees email is a string, so
+        this only matters for a caller that supplies userinfo directly
+        (test injection here mirrors that path) -- but the type check must
+        exist regardless, matching _validated_identity_claim's treatment
+        of sub/iss.
+        """
+        userinfo["email"] = ["not-a-string@example.org"]
+        with patch(
+            "reana_server.auth.provision.fetch_userinfo",
+            return_value=userinfo,
+        ):
+            with pytest.raises(ProvisioningError, match="missing or not a string"):
+                get_or_provision_user(claims, "token")
+
+    def test_treats_non_string_display_name_as_absent(
+        self, app, session, claims, userinfo
+    ):
+        """A non-string presentation field is dropped, not left to crash.
+
+        Unlike the identity-key claims (email/sub/iss), a malformed
+        presentation-only field doesn't need to be rejected outright --
+        provisioning still succeeds, just without that field.
+        """
+        userinfo["name"] = ["not", "a", "string"]
+        userinfo["preferred_username"] = {"not": "a string"}
+        with patch(
+            "reana_server.auth.provision.fetch_userinfo",
+            return_value=userinfo,
+        ):
+            user, _is_new = get_or_provision_user(claims, "token")
+        assert user.full_name is None
+        assert user.username is None
 
     def test_refuses_oversized_subject_claim(self, app, session, claims, userinfo):
         """An oversized token subject is rejected before any I/O."""

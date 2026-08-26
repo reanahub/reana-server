@@ -240,16 +240,26 @@ class JWKSCache:
             return cached
         return self._refresh(wait_for_initial=cached is None)
 
-    def get_cached_key_set(self):
-        """Return a fresh local key set without discovery or JWKS network I/O.
+    def get_cached_key_set_for_local_kid(self, kid):
+        """Return a fresh local key set, requiring ``kid`` to be locally known.
 
-        Returning ``None`` for stale state is important for rate limiting: the
-        protected endpoint then performs normal validation and refreshes the
-        TTL-expired cache instead of reusing rate-limit claims as authentication.
+        Single atomic read of freshness, key set, and known kids together, for
+        the ``allow_remote=False`` validation path (rate limiting: the caller
+        must not refresh from the issuer, only reuse an already-fresh cache).
+        Two separately locked reads -- a key-set snapshot followed by a later,
+        separately locked ``kid in known_kids`` check -- could otherwise
+        observe different generations if a refresh landed between them, since
+        each acquires and releases ``self._lock`` on its own.
+
+        :raises InvalidTokenError: no fresh cache, or ``kid`` not locally known.
         """
         with self._lock:
             fresh = time.monotonic() - self._fetched_at < self.ttl
-            return self._key_set if self._key_set is not None and fresh else None
+            if self._key_set is None or not fresh:
+                raise InvalidTokenError("No locally cached issuer keys are available.")
+            if kid and kid not in self._known_kids:
+                raise InvalidTokenError("JWT signing key is not locally cached.")
+            return self._key_set
 
     def is_unavailable(self):
         """Return whether this cache has no usable key material at all.
@@ -433,14 +443,7 @@ def _key_set_for_header(header, allow_remote):
     cache = _get_jwks_cache()
     if allow_remote:
         return cache.get_key_set_for_kid(header.get("kid"))
-    else:
-        key_set = cache.get_cached_key_set()
-        if key_set is None:
-            raise InvalidTokenError("No locally cached issuer keys are available.")
-    kid = header.get("kid")
-    if kid and kid not in cache._known_kids:
-        raise InvalidTokenError("JWT signing key is not locally cached.")
-    return key_set
+    return cache.get_cached_key_set_for_local_kid(header.get("kid"))
 
 
 def _decode_token(token, claims_options=None, allow_remote=True):

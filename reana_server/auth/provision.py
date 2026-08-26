@@ -57,15 +57,26 @@ def _sanitize_claim(value):
     unlike an identity key (see :func:`_validated_email`,
     :func:`_validated_identity_claim`), where truncation could silently
     collide two different identities onto the same stored value.
+
+    A non-string value (possible only via the ``userinfo=`` parameter that
+    exists for tests to inject a raw dict bypassing :func:`fetch_userinfo`'s
+    own validation -- every production call site goes through that
+    function, which already guarantees ``str`` or absent) is treated the
+    same as an absent one: ``None``, not a crash. Matches
+    :func:`_validated_identity_claim`'s reasoning for why this must be
+    checked at all, without escalating to a hard reject the way that
+    function does for an identity key -- this is presentation-only.
     """
-    if value is None:
-        return value
+    if value is None or not isinstance(value, str):
+        return None
     return _CONTROL_CHAR_RE.sub("", value)[:_MAX_CLAIM_LENGTH]
 
 
 def _validated_email(userinfo):
     """Return an identity email only when it cannot normalize to another key."""
-    email = userinfo["email"]
+    email = userinfo.get("email")
+    if not isinstance(email, str) or not email:
+        raise ProvisioningError("UserInfo email is missing or not a string.")
     if _CONTROL_CHAR_RE.search(email):
         raise ProvisioningError("UserInfo email contains forbidden control characters.")
     if len(email) > _MAX_CLAIM_LENGTH:
