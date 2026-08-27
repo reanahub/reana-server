@@ -397,7 +397,7 @@ def _serve_stale_or_raise(state, now):
     its grace window.
     """
     if state["permanent_error"] is not None:
-        raise state["permanent_error"]
+        raise IssuerMisconfiguredError(state["permanent_error"])
     if _document_is_usable(state, now):
         return state["doc"]
     if state["doc"] is None:
@@ -489,6 +489,8 @@ def get_openid_configuration():
             # in the loop condition too, a caller would fall through
             # immediately and raise instead of waiting for the in-flight
             # refresh that could produce a fresh one.
+            if state["permanent_error"] is not None:
+                raise IssuerMisconfiguredError(state["permanent_error"])
             if _document_is_usable(state, now):
                 return state["doc"]
             deadline = now + _discovery_refresh_wait_timeout()
@@ -521,13 +523,13 @@ def get_openid_configuration():
         with condition:
             state["failed_at"] = time.monotonic()
             # A fresh attempt's classification always replaces the previous
-            # one: a permanent misconfiguration must be remembered so a
+            # one: a permanent misconfiguration message must be remembered so a
             # later caller in the backoff window gets it too (not stale
             # data or a transient error), but a subsequent transient
             # failure must not keep re-raising a stale permanent error from
             # an earlier attempt.
             state["permanent_error"] = (
-                error if isinstance(error, IssuerMisconfiguredError) else None
+                str(error) if isinstance(error, IssuerMisconfiguredError) else None
             )
             state["refresh_in_progress"] = False
             condition.notify_all()

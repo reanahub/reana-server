@@ -288,6 +288,40 @@ def test_misconfigured_issuer_surfaces_to_a_later_sequential_caller(
         discovery.get_openid_configuration()
 
 
+def test_recovery_probe_does_not_bypass_remembered_permanent_error(
+    discovery_config, base_app
+):
+    """A caller arriving during post-backoff recovery must fail closed."""
+    with patch.object(discovery.requests, "get", return_value=_response(_document())):
+        cached = discovery.get_openid_configuration()
+    state = discovery._get_discovery_state()
+    state["fetched_at"] -= discovery._DISCOVERY_TTL + 1
+    state["failed_at"] -= discovery._DISCOVERY_FAILURE_TTL + 1
+    state["permanent_error"] = "issuer remains misconfigured"
+    state["refresh_in_progress"] = True
+
+    with pytest.raises(IssuerMisconfiguredError) as first:
+        discovery.get_openid_configuration()
+    with pytest.raises(IssuerMisconfiguredError) as second:
+        discovery.get_openid_configuration()
+
+    assert first.value is not second.value
+    assert state["doc"] is cached
+
+
+def test_fresh_discovery_document_precedes_old_permanent_verdict(
+    discovery_config, base_app
+):
+    """A normal-TTL hit remains usable while a recovery probe is running."""
+    with patch.object(discovery.requests, "get", return_value=_response(_document())):
+        cached = discovery.get_openid_configuration()
+    state = discovery._get_discovery_state()
+    state["permanent_error"] = "older failed refresh"
+    state["refresh_in_progress"] = True
+
+    assert discovery.get_openid_configuration() is cached
+
+
 def test_transient_failure_after_permanent_one_is_not_masked(
     discovery_config, base_app
 ):

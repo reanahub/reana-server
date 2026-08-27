@@ -1596,8 +1596,11 @@
           "404": {
             "description": "Browser login is not enabled."
           },
+          "500": {
+            "description": "Identity-provider configuration prevents safe session validation. Cookies are preserved so logout can be retried after repair."
+          },
           "503": {
-            "description": "Browser session storage is temporarily unavailable."
+            "description": "Browser session storage or the identity provider is temporarily unavailable. Cookies are preserved so logout can be retried."
           }
         },
         "security": [],

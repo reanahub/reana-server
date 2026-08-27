@@ -23,6 +23,7 @@ import reana_server.auth.sessions as sessions_module
 import reana_server.auth.tokens as tokens_module
 from reana_server.rest.auth import _client_facing_endpoint_url
 from reana_server.auth.errors import (
+    IssuerMisconfiguredError,
     IssuerUnavailableError,
     MissingRoleError,
     SessionUnavailableError,
@@ -532,7 +533,7 @@ class TestLogout:
         assert any(cookie.startswith(f"{AUTH_COOKIE}=;") for cookie in cleared)
         assert any(cookie.startswith(f"{SESSION_COOKIE}=;") for cookie in cleared)
 
-    def test_session_storage_failure_returns_503_and_clears_local_cookies(
+    def test_session_storage_failure_returns_503_and_preserves_local_cookies(
         self, base_app, bff_config, signing_key
     ):
         token = _make_token(signing_key)
@@ -547,10 +548,51 @@ class TestLogout:
                 )
 
         assert response.status_code == 503
-        cleared = response.headers.getlist("Set-Cookie")
-        assert any(cookie.startswith(f"{AUTH_COOKIE}=;") for cookie in cleared)
-        assert any(cookie.startswith(f"{SESSION_COOKIE}=;") for cookie in cleared)
-        assert any(cookie.startswith(f"{CSRF_COOKIE}=;") for cookie in cleared)
+        assert response.headers.getlist("Set-Cookie") == []
+
+    @pytest.mark.parametrize(
+        "error,status",
+        [
+            (IssuerUnavailableError("issuer unavailable"), 503),
+            (IssuerMisconfiguredError("issuer misconfigured"), 500),
+        ],
+    )
+    def test_token_validation_failure_preserves_retryable_logout(
+        self, base_app, bff_config, signing_key, error, status
+    ):
+        token = _make_token(signing_key)
+        with base_app.test_client() as client:
+            self._login_cookies(client, token)
+            with patch(
+                "reana_server.rest.auth.decode_expired_token", side_effect=error
+            ):
+                response = client.post(
+                    "/api/logout", headers={CSRF_HEADER: "csrf-value"}
+                )
+
+        assert response.status_code == status
+        assert response.headers.getlist("Set-Cookie") == []
+
+    def test_logout_url_failure_does_not_undo_completed_local_logout(
+        self, base_app, bff_config, redis_store, signing_key
+    ):
+        token = _make_token(signing_key)
+        _store_bound_session("browser-session-id", "r", "idt-1", token)
+        with base_app.test_client() as client:
+            self._login_cookies(client, token)
+            with patch(
+                "reana_server.rest.auth.get_endpoint",
+                side_effect=IssuerUnavailableError("issuer unavailable"),
+            ):
+                response = client.post(
+                    "/api/logout", headers={CSRF_HEADER: "csrf-value"}
+                )
+
+        assert response.status_code == 200
+        assert response.json["logout_url"] == ""
+        assert redis_store.get("reana:bff:session:browser-session-id") is None
+        cookies = response.headers.getlist("Set-Cookie")
+        assert any(cookie.startswith(f"{AUTH_COOKIE}=;") for cookie in cookies)
 
 
 class TestRefreshSession:

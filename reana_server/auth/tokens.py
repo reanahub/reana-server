@@ -92,7 +92,7 @@ class JWKSCache:
         within their grace window.
         """
         if self._permanent_error is not None:
-            raise self._permanent_error
+            raise IssuerMisconfiguredError(self._permanent_error)
         if self._cached_keys_are_usable(now):
             if refresh_error is not None:
                 logging.warning(
@@ -166,6 +166,8 @@ class JWKSCache:
         to keep that method's cyclomatic complexity within the project's
         linting limit.
         """
+        if self._permanent_error is not None:
+            raise IssuerMisconfiguredError(self._permanent_error)
         if not require_fresh and self._cached_keys_are_usable(now):
             return self._key_set
         deadline = now + self.refresh_wait_timeout
@@ -175,7 +177,7 @@ class JWKSCache:
                 raise IssuerKeyUnavailableError("Issuer key refresh timed out.")
             self._refresh_condition.wait(timeout=remaining)
         if self._permanent_error is not None:
-            raise self._permanent_error
+            raise IssuerMisconfiguredError(self._permanent_error)
         if self._key_set is None:
             raise IssuerUnavailableError(
                 "Issuer key refresh is temporarily unavailable."
@@ -196,7 +198,7 @@ class JWKSCache:
                 5, self.ttl
             ):
                 if self._permanent_error is not None:
-                    raise self._permanent_error
+                    raise IssuerMisconfiguredError(self._permanent_error)
                 if self._key_set is not None:
                     if require_fresh:
                         raise IssuerKeyUnavailableError(
@@ -217,13 +219,13 @@ class JWKSCache:
             # would otherwise keep serving stale keys forever behind a
             # config error that will never fix itself on retry. Still runs
             # the same refresh-state cleanup as any other failure. Remember
-            # the error itself (not just the timestamp) so a later caller
+            # the error message (not just the timestamp) so a later caller
             # arriving during the failure backoff -- not just this one --
-            # also gets the permanent classification instead of stale data
-            # or a generic transient error.
+            # also gets a fresh exception with the permanent classification
+            # instead of stale data or a generic transient error.
             with self._refresh_condition:
                 self._refresh_failed_at = time.monotonic()
-                self._permanent_error = error
+                self._permanent_error = str(error)
                 self._refresh_in_progress = False
                 self._refresh_condition.notify_all()
             raise

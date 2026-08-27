@@ -505,7 +505,13 @@ def logout():
         403:
           description: CSRF validation failed.
         503:
-          description: Browser session storage is temporarily unavailable.
+          description: >-
+            Browser session storage or the identity provider is temporarily
+            unavailable. Cookies are preserved so logout can be retried.
+        500:
+          description: >-
+            Identity-provider configuration prevents safe session validation.
+            Cookies are preserved so logout can be retried after repair.
         404:
           description: Browser login is not enabled.
     """
@@ -517,7 +523,6 @@ def logout():
         return jsonify(message="User not signed in."), 401
     if not csrf_ok(request.headers, request.cookies):
         return jsonify(message="CSRF token missing or invalid."), 403
-    logout_url = ""
     try:
         claims = decode_expired_token(token)
         sid = request.cookies.get(SESSION_COOKIE)
@@ -534,6 +539,21 @@ def logout():
                 "Browser access and session cookies belong to different identities."
             )
         delete_session(sid)
+    except (SessionUnavailableError, IssuerUnavailableError) as error:
+        logging.warning("Could not remove browser session: %s", error)
+        return jsonify(message=str(error)), 503
+    except IssuerMisconfiguredError as error:
+        logging.error("Could not validate browser session for logout: %s", error)
+        return jsonify(message=str(error)), 500
+    except (InvalidTokenError, AuthError) as error:
+        # A definitively unusable or mismatched cookie cannot safely identify
+        # a Redis session to delete. Clear only the local cookie set; unlike a
+        # dependency failure above, retrying cannot make this token valid.
+        logging.info("Logout with unusable session token: %s", error)
+        return clear_auth_cookies(jsonify(logout_url=""))
+
+    logout_url = ""
+    try:
         params = {
             "post_logout_redirect_uri": REANA_URL,
             "client_id": auth_config["web_client_id"],
@@ -541,12 +561,10 @@ def logout():
         if session_data and session_data.get("idt"):
             params["id_token_hint"] = session_data["idt"]
         logout_url = get_endpoint("end_session_url") + "?" + urlencode(params)
-    except SessionUnavailableError as error:
-        logging.warning("Could not remove browser session: %s", error)
-        response = jsonify(message=str(error))
-        return clear_auth_cookies(response), 503
-    except (InvalidTokenError, AuthError) as error:
-        # Even with an unusable cookie we still clear it locally.
-        logging.info("Logout with unusable session token: %s", error)
+    except AuthError as error:
+        # The renewable REANA session is already gone. Failure to construct
+        # the optional upstream logout URL must not turn that completed local
+        # logout into a retryable failure whose cookies remain present.
+        logging.warning("Could not construct identity-provider logout URL: %s", error)
     response = jsonify(logout_url=logout_url)
     return clear_auth_cookies(response)

@@ -529,6 +529,33 @@ class TestValidateAccessToken:
         with pytest.raises(IssuerMisconfiguredError):
             cache.get_key_set()
 
+    def test_recovery_probe_does_not_bypass_remembered_jwks_error(
+        self, auth_config, signing_key
+    ):
+        """Post-backoff waiters must not reuse stale keys after a verdict."""
+        validate_access_token(_make_token(signing_key))
+        cache = tokens_module._get_jwks_cache()
+        cache._fetched_at = time.monotonic() - cache.ttl - 1
+        cache._refresh_failed_at = time.monotonic() - min(5, cache.ttl) - 1
+        cache._permanent_error = "JWKS endpoint remains misconfigured"
+        cache._refresh_in_progress = True
+
+        with pytest.raises(IssuerMisconfiguredError) as first:
+            cache.get_key_set()
+        with pytest.raises(IssuerMisconfiguredError) as second:
+            cache.get_key_set()
+
+        assert first.value is not second.value
+
+    def test_fresh_jwks_precedes_old_permanent_verdict(self, auth_config, signing_key):
+        """Normal-TTL key hits remain available during a recovery probe."""
+        validate_access_token(_make_token(signing_key))
+        cache = tokens_module._get_jwks_cache()
+        cache._permanent_error = "older failed refresh"
+        cache._refresh_in_progress = True
+
+        assert cache.get_key_set() is cache._key_set
+
     def test_transient_jwks_failure_after_permanent_one_is_not_masked(
         self, auth_config, signing_key
     ):
