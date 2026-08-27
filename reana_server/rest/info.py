@@ -52,7 +52,7 @@ blueprint = Blueprint("info", __name__)
 
 
 @blueprint.route("/info", methods=["GET"])
-@signin_required(token_required=False)
+@signin_required()
 def info(user, **kwargs):  # noqa
     r"""Get information about the cluster capabilities.
 
@@ -64,12 +64,6 @@ def info(user, **kwargs):  # noqa
         This resource reports information about cluster capabilities.
       produces:
        - application/json
-      parameters:
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: true
-          type: string
       responses:
         200:
           description: >-
@@ -529,6 +523,14 @@ def info(user, **kwargs):  # noqa
               {
                 "message": "Internal controller error."
               }
+        401:
+          description: The request is not authenticated.
+        403:
+          description: The authenticated user lacks the required REANA role.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
     """
     try:
         cluster_information = dict(

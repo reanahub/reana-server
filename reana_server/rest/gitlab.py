@@ -8,8 +8,11 @@
 
 """Reana-Server GitLab integration Flask-Blueprint."""
 
+import hmac
 import logging
+import secrets
 import traceback
+from datetime import timedelta
 from typing import Optional
 from urllib.parse import urljoin
 
@@ -22,11 +25,10 @@ from flask import (
     request,
     url_for,
 )
-from flask_login.utils import _create_identifier
-from invenio_oauthclient.utils import get_safe_redirect_target
-from itsdangerous import BadData, URLSafeTimedSerializer
 from reana_commons.k8s.secrets import UserSecretsStore
-from werkzeug.local import LocalProxy
+from reana_db.database import Session
+from reana_db.models import User
+from reana_db.secrets import get_or_create_bearer_secret
 import marshmallow
 from webargs import fields, validate
 from webargs.flaskparser import use_kwargs
@@ -43,22 +45,169 @@ from reana_server.gitlab_client import (
     GitLabClientRequestError,
     GitLabClientInvalidToken,
 )
+from reana_server.oauth_state import (
+    GITLAB_STATE_COOKIE,
+    InvalidOAuthState,
+    clear_state_cookie,
+    consume_state,
+    issue_state,
+    safe_next_url,
+)
 from reana_server.utils import (
     _format_gitlab_secrets,
     _get_gitlab_hook_id,
+    naive_utcnow,
 )
 
 blueprint = Blueprint("gitlab", __name__)
 
 
-serializer = LocalProxy(
-    lambda: URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
-)
+def _gitlab_webhook_secret_expiry():
+    """Return the expiry granted by a successful user authorization."""
+    return naive_utcnow() + timedelta(
+        seconds=current_app.config["REANA_GITLAB_WEBHOOK_SECRET_MAX_LIFETIME"]
+    )
+
+
+def _serialize_webhook_secret_status(user):
+    """Return public metadata about a user's delegated webhook capability."""
+    expires_at = user.gitlab_webhook_secret_expires_at
+    return {
+        "configured": bool(user.gitlab_webhook_secret),
+        "expired": (
+            bool(expires_at is None or expires_at <= naive_utcnow())
+            if user.gitlab_webhook_secret
+            else False
+        ),
+        "expires_at": expires_at.isoformat() + "Z" if expires_at else None,
+        "max_lifetime_seconds": current_app.config[
+            "REANA_GITLAB_WEBHOOK_SECRET_MAX_LIFETIME"
+        ],
+    }
+
+
+@blueprint.route("/gitlab/webhook-token", methods=["GET", "PUT"])
+@signin_required()
+def gitlab_webhook_token(user):
+    r"""Inspect or renew the delegated GitLab webhook capability.
+
+    Renewal deliberately preserves the secret installed in existing GitLab
+    projects. The authenticated OIDC request reauthorizes that capability for
+    at most the operator-configured lifetime.
+
+    ---
+    get:
+      summary: Get GitLab webhook authorization status
+      operationId: get_gitlab_webhook_token
+      description: >-
+        Return expiry metadata for the current user's delegated GitLab
+        webhook authorization. The secret itself is never returned.
+      responses:
+        200:
+          description: GitLab webhook authorization status.
+          schema:
+            type: object
+            properties:
+              configured:
+                type: boolean
+              expired:
+                type: boolean
+              expires_at:
+                type: string
+                format: date-time
+                x-nullable: true
+              max_lifetime_seconds:
+                type: integer
+        401:
+          description: The request is not authenticated.
+        500:
+          description: The identity provider integration is not correctly configured.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
+        403:
+          description: The authenticated user lacks the required REANA role.
+    put:
+      summary: Renew GitLab webhook authorization
+      operationId: renew_gitlab_webhook_token
+      description: >-
+        Confirm the current user's REANA entitlement and extend the delegated
+        GitLab webhook authorization without rotating its secret. Renewal does
+        not re-enable a webhook that GitLab has disabled; the user must send a
+        test delivery or re-enable it from that project's GitLab settings. If
+        the authorization had already expired, the response includes a
+        ``message`` pointing this out, since REANA cannot detect or repair a
+        GitLab-side auto-disable on its own.
+      responses:
+        200:
+          description: Renewed GitLab webhook authorization status.
+          schema:
+            type: object
+            properties:
+              configured:
+                type: boolean
+              expired:
+                type: boolean
+              expires_at:
+                type: string
+                format: date-time
+              max_lifetime_seconds:
+                type: integer
+              message:
+                description: >-
+                  Present only when the authorization had already expired,
+                  warning that GitLab may have auto-disabled affected
+                  webhooks and pointing to the manual recovery step.
+                type: string
+        404:
+          description: No GitLab webhook secret is configured.
+        401:
+          description: The request is not authenticated.
+        500:
+          description: The identity provider integration is not correctly configured.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
+        403:
+          description: The authenticated user lacks the required REANA role.
+    """
+    if request.method == "PUT":
+        if not user.gitlab_webhook_secret:
+            return jsonify(message="No GitLab webhook token is configured."), 404
+        was_expired = (
+            user.gitlab_webhook_secret_expires_at is None
+            or user.gitlab_webhook_secret_expires_at <= naive_utcnow()
+        )
+        user.gitlab_webhook_secret_expires_at = _gitlab_webhook_secret_expiry()
+        Session.commit()
+        if was_expired:
+            status = _serialize_webhook_secret_status(user)
+            status["message"] = (
+                "This authorization had expired, so GitLab may have "
+                "automatically disabled webhooks using it. If your "
+                "integration does not resume, send a test delivery or "
+                "re-enable the webhook from each affected project's GitLab "
+                "settings."
+            )
+            return jsonify(status), 200
+    return jsonify(_serialize_webhook_secret_status(user)), 200
 
 
 @blueprint.route("/gitlab/connect")
 @signin_required()
-def gitlab_connect(**kwargs):
+def gitlab_connect(user):
     r"""Endpoint to init the REANA connection to GitLab.
 
     ---
@@ -72,15 +221,31 @@ def gitlab_connect(**kwargs):
         302:
           description: >-
             Redirection to GitLab site.
+        401:
+          description: The request is not authenticated.
+        403:
+          description: The authenticated user lacks the required REANA role.
+        500:
+          description: The identity provider integration is not correctly configured.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
     """
     # Get redirect target in safe manner.
-    next_param = get_safe_redirect_target()
-    # Create a JSON Web Token
-    state_token = serializer.dumps(
-        {
-            "next": next_param,
-            "sid": _create_identifier(),
-        }
+    next_param = safe_next_url(request.args.get("next"))
+    response = redirect("placeholder")
+    state = issue_state(
+        response,
+        cookie_name=GITLAB_STATE_COOKIE,
+        flow="gitlab",
+        next=next_param,
+        user_id=str(user.id_),
     )
 
     params = {
@@ -88,11 +253,12 @@ def gitlab_connect(**kwargs):
         "redirect_uri": url_for(".gitlab_oauth", _external=True),
         "response_type": "code",
         "scope": "api",
-        "state": state_token,
+        "state": state,
     }
     req = requests.PreparedRequest()
     req.prepare_url(REANA_GITLAB_URL + "/oauth/authorize", params)
-    return redirect(req.url), 302
+    response.headers["Location"] = req.url
+    return response, 302
 
 
 @blueprint.route("/gitlab", methods=["GET"])
@@ -125,6 +291,12 @@ def gitlab_oauth(user):  # noqa
         302:
           description: >-
             Authorization succeeded. GitLab secret created.
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User token not valid.
@@ -154,16 +326,16 @@ def gitlab_oauth(user):  # noqa
     """
     try:
         if "code" in request.args:
-            # Verifies state parameter and obtain next url
-            state_token = request.args.get("state")
-            assert state_token
-            # Checks authenticity and integrity of state and decodes the value.
-            state = serializer.loads(state_token)
-            # Verifies that state is for this session and that next parameter
-            # has not been modified.
-            assert state["sid"] == _create_identifier()
-            # Stores next URL
-            next_url = state["next"]
+            # Verifies state parameter (signed state cookie) and obtains
+            # the next url.
+            state = consume_state(
+                request.args.get("state", ""),
+                cookie_name=GITLAB_STATE_COOKIE,
+                expected_flow="gitlab",
+            )
+            if not hmac.compare_digest(state.get("user_id", ""), str(user.id_)):
+                raise InvalidOAuthState("State param is invalid.")
+            next_url = safe_next_url(state.get("next"))
             gitlab_code = request.args.get("code")
             params = {
                 "client_id": REANA_GITLAB_OAUTH_APP_ID,
@@ -188,12 +360,16 @@ def gitlab_oauth(user):  # noqa
                 _format_gitlab_secrets(gitlab_user, access_token), overwrite=True
             )
             UserSecretsStore.update(user_secrets)
-            return redirect(next_url), 302
+            response = redirect(next_url)
+            return (
+                clear_state_cookie(response, cookie_name=GITLAB_STATE_COOKIE),
+                302,
+            )
         else:
             return jsonify({"message": "OK"}), 200
     except ValueError:
         return jsonify({"message": "Token is not valid."}), 403
-    except (AssertionError, BadData):
+    except InvalidOAuthState:
         return jsonify({"message": "State param is invalid."}), 403
     except Exception as e:
         logging.error(traceback.format_exc())
@@ -224,11 +400,6 @@ def gitlab_projects(
       produces:
        - application/json
       parameters:
-        - name: access_token
-          in: query
-          description: The API access_token of the current user.
-          required: false
-          type: string
         - name: search
           in: query
           description: The search string to filter the project list.
@@ -279,6 +450,18 @@ def gitlab_projects(
                     hook_id:
                       type: integer
                       x-nullable: true
+        401:
+          description: >-
+            Request failed. The stored GitLab access token is not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User token not valid.
@@ -391,6 +574,27 @@ def gitlab_webhook(user):  # noqa
         201:
           description: >-
             The webhook was created.
+        401:
+          description: >-
+            Request failed. The stored GitLab access token is not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+        409:
+          description: >-
+            The delegated GitLab webhook authorization has expired and must be
+            renewed before enabling another project.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User token not valid.
@@ -444,9 +648,21 @@ def gitlab_webhook(user):  # noqa
         204:
           description: >-
             The webhook was properly deleted.
+        401:
+          description: >-
+            Request failed. The stored GitLab access token is not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
         404:
           description: >-
             No webhook found with provided id.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User token not valid.
@@ -479,13 +695,50 @@ def gitlab_webhook(user):  # noqa
         gitlab_client = GitLabClient.from_k8s_secret(user.id_)
         parameters = request.json
         if request.method == "POST":
+            # Create the per-user webhook secret atomically. Two concurrent
+            # first-time enables must not each generate and install a different
+            # secret, which would leave one project configured with a value
+            # REANA later rejects. get_or_create_bearer_secret locks the user
+            # row so creation is serialised: the winner persists its secret
+            # and the loser reuses that stored value instead of its own.
+            webhook_secret, created = get_or_create_bearer_secret(
+                Session,
+                User,
+                {"id_": user.id_},
+                "gitlab_webhook_secret",
+                lambda: secrets.token_urlsafe(32),
+            )
+            if created:
+                # Same locked row as `user` (same session, same primary
+                # key) -- setting the expiry here is still covered by the
+                # lock get_or_create_bearer_secret held during creation.
+                user.gitlab_webhook_secret_expires_at = _gitlab_webhook_secret_expiry()
+            elif (
+                not user.gitlab_webhook_secret_expires_at
+                or user.gitlab_webhook_secret_expires_at <= naive_utcnow()
+            ):
+                Session.commit()  # release the row lock before returning
+                return (
+                    jsonify(
+                        message=(
+                            "GitLab webhook authorization has expired. "
+                            "Renew it before enabling another project."
+                        )
+                    ),
+                    409,
+                )
+            # Persist any newly created secret and release the row lock before
+            # the GitLab network call, so the lock is never held across I/O.
+            Session.commit()
             webhook_config = {
                 "url": url_for("workflows.create_workflow", _external=True),
                 "push_events": True,
                 "push_events_branch_filter": "master",
                 "merge_requests_events": True,
-                "enable_ssl_verification": False,
-                "token": user.access_token,
+                "enable_ssl_verification": current_app.config[
+                    "REANA_GITLAB_WEBHOOK_SSL_VERIFICATION"
+                ],
+                "token": webhook_secret,
             }
             webhook = gitlab_client.create_webhook(
                 parameters["project_id"], webhook_config

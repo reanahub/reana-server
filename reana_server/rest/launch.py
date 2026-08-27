@@ -175,6 +175,20 @@ def launch(user, url, name="", parameters="{}", specification=None):
                 "workflow_name": "mytest.1",
                 "message": "The workflow has been successfully submitted."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
+        403:
+          description: >-
+            Request failed. The user's compute quota has been exceeded.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
         400:
           description: >-
             Request failed. The incoming payload seems malformed.

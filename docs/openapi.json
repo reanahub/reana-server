@@ -55,21 +55,77 @@
     "version": "0.95.0a6"
   },
   "paths": {
-    "/account/settings/linkedaccounts/": {},
-    "/account/settings/linkedaccounts/static/{filename}": {},
+    "/api/.well-known/openid-configuration": {
+      "get": {
+        "description": "Relays the OIDC discovery document of the deployment's trusted issuer, extended with the public client id that reana-client must use for the device authorization grant. This lets clients discover the identity provider knowing only the REANA URL.",
+        "operationId": "get_openid_configuration",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The response contains the issuer's OpenID configuration and the REANA CLI client id.",
+            "schema": {
+              "properties": {
+                "authorization_endpoint": {
+                  "type": "string"
+                },
+                "device_authorization_endpoint": {
+                  "type": "string"
+                },
+                "issuer": {
+                  "type": "string"
+                },
+                "jwks_uri": {
+                  "type": "string"
+                },
+                "reana_cli_client_id": {
+                  "type": "string"
+                },
+                "reana_client_id": {
+                  "type": "string"
+                },
+                "token_endpoint": {
+                  "type": "string"
+                },
+                "userinfo_endpoint": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "The identity provider integration is not correctly configured.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "502": {
+            "description": "Request failed. The issuer's OpenID configuration could not be fetched.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "security": [],
+        "summary": "Get the trusted issuer's OpenID configuration."
+      }
+    },
     "/api/config": {
       "get": {
         "description": "This resource provides configuration needed by Reana-UI.",
         "operationId": "get_config",
-        "parameters": [
-          {
-            "description": "API access_token of user.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          }
-        ],
         "produces": [
           "application/json"
         ],
@@ -80,14 +136,16 @@
               "application/json": {
                 "admin_email": "admin@example.org",
                 "announcement": "This is a QA instance",
+                "auth": {
+                  "bff_enabled": true,
+                  "login_url": "/api/login",
+                  "logout_url": "/api/logout"
+                },
                 "chat_url": "https://mattermost.web.cern.ch/it-dep/channels/reana",
                 "client_pyvenv": "/afs/cern.ch/user/r/reana/public/reana/bin/activate",
                 "docs_url": "http://docs.reana.io/",
                 "forum_url": "https://forum.reana.io/",
-                "hide_signup": false,
-                "local_users": true,
-                "polling_secs": 15,
-                "sso": true
+                "polling_secs": 15
               }
             },
             "schema": {
@@ -111,6 +169,7 @@
             }
           }
         },
+        "security": [],
         "summary": "Gets information about Reana-UI configuration user."
       }
     },
@@ -141,6 +200,9 @@
           },
           "302": {
             "description": "Authorization succeeded. GitLab secret created."
+          },
+          "401": {
+            "description": "The request is not authenticated."
           },
           "403": {
             "description": "Request failed. User token not valid.",
@@ -173,6 +235,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Get access token from GitLab"
@@ -185,6 +250,26 @@
         "responses": {
           "302": {
             "description": "Redirection to GitLab site."
+          },
+          "401": {
+            "description": "The request is not authenticated."
+          },
+          "403": {
+            "description": "The authenticated user lacks the required REANA role."
+          },
+          "500": {
+            "description": "The identity provider integration is not correctly configured.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Initiate connection to GitLab."
@@ -195,13 +280,6 @@
         "description": "Retrieve projects from GitLab.",
         "operationId": "gitlab_projects",
         "parameters": [
-          {
-            "description": "The API access_token of the current user.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          },
           {
             "description": "The search string to filter the project list.",
             "in": "query",
@@ -276,6 +354,17 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "Request failed. The stored GitLab access token is not valid.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
           "403": {
             "description": "Request failed. User token not valid.",
             "examples": {
@@ -307,6 +396,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Get user project from GitLab"
@@ -347,6 +439,17 @@
           "204": {
             "description": "The webhook was properly deleted."
           },
+          "401": {
+            "description": "Request failed. The stored GitLab access token is not valid.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
           "403": {
             "description": "Request failed. User token not valid.",
             "examples": {
@@ -381,6 +484,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Delete an existing webhook from GitLab"
@@ -414,6 +520,17 @@
           "201": {
             "description": "The webhook was created."
           },
+          "401": {
+            "description": "Request failed. The stored GitLab access token is not valid.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
           "403": {
             "description": "Request failed. User token not valid.",
             "examples": {
@@ -421,6 +538,17 @@
                 "message": "Token is not valid."
               }
             },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "409": {
+            "description": "The delegated GitLab webhook authorization has expired and must be renewed before enabling another project.",
             "schema": {
               "properties": {
                 "message": {
@@ -445,24 +573,278 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Set a webhook on a user project from GitLab"
+      }
+    },
+    "/api/gitlab/webhook-token": {
+      "get": {
+        "description": "Return expiry metadata for the current user's delegated GitLab webhook authorization. The secret itself is never returned.",
+        "operationId": "get_gitlab_webhook_token",
+        "responses": {
+          "200": {
+            "description": "GitLab webhook authorization status.",
+            "schema": {
+              "properties": {
+                "configured": {
+                  "type": "boolean"
+                },
+                "expired": {
+                  "type": "boolean"
+                },
+                "expires_at": {
+                  "format": "date-time",
+                  "type": "string",
+                  "x-nullable": true
+                },
+                "max_lifetime_seconds": {
+                  "type": "integer"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "The request is not authenticated."
+          },
+          "403": {
+            "description": "The authenticated user lacks the required REANA role."
+          },
+          "500": {
+            "description": "The identity provider integration is not correctly configured.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
+          }
+        },
+        "summary": "Get GitLab webhook authorization status"
+      },
+      "put": {
+        "description": "Confirm the current user's REANA entitlement and extend the delegated GitLab webhook authorization without rotating its secret. Renewal does not re-enable a webhook that GitLab has disabled; the user must send a test delivery or re-enable it from that project's GitLab settings. If the authorization had already expired, the response includes a ``message`` pointing this out, since REANA cannot detect or repair a GitLab-side auto-disable on its own.",
+        "operationId": "renew_gitlab_webhook_token",
+        "responses": {
+          "200": {
+            "description": "Renewed GitLab webhook authorization status.",
+            "schema": {
+              "properties": {
+                "configured": {
+                  "type": "boolean"
+                },
+                "expired": {
+                  "type": "boolean"
+                },
+                "expires_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "max_lifetime_seconds": {
+                  "type": "integer"
+                },
+                "message": {
+                  "description": "Present only when the authorization had already expired, warning that GitLab may have auto-disabled affected webhooks and pointing to the manual recovery step.",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "The request is not authenticated."
+          },
+          "403": {
+            "description": "The authenticated user lacks the required REANA role."
+          },
+          "404": {
+            "description": "No GitLab webhook secret is configured."
+          },
+          "500": {
+            "description": "The identity provider integration is not correctly configured.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
+          }
+        },
+        "summary": "Renew GitLab webhook authorization"
+      }
+    },
+    "/api/groups/search": {
+      "get": {
+        "description": "This resource searches the configured group backends for groups matching the given query, for use in workflow sharing. Group member lists are never exposed.",
+        "operationId": "search_groups",
+        "parameters": [
+          {
+            "description": "API access_token of the user.",
+            "in": "query",
+            "name": "access_token",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Required. Search string (at least 3 characters).",
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "Optional. Restrict the search to one group provider.",
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Request succeeded. The response contains matching groups.",
+            "examples": {
+              "application/json": {
+                "items": [
+                  {
+                    "display_name": "atlas",
+                    "external_id": "/local/atlas",
+                    "provider": "keycloak"
+                  }
+                ]
+              }
+            },
+            "schema": {
+              "properties": {
+                "items": {
+                  "items": {
+                    "properties": {
+                      "display_name": {
+                        "type": "string"
+                      },
+                      "external_id": {
+                        "type": "string"
+                      },
+                      "provider": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "400": {
+            "description": "Request failed. The query is too short or the provider unknown.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Request failed. User not signed in.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "503": {
+            "description": "Request failed. The group backend is currently unavailable.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "summary": "Search shareable groups by name."
+      }
+    },
+    "/api/health": {
+      "get": {
+        "description": "Unlike /api/ping (process liveness only), this reports whether the BFF session store (Redis) and the configured OIDC issuer currently have usable cached material, so that external monitoring pointed here can detect an outage that /api/ping cannot see. Each check is skipped (omitted from the response and not counted against health) when the corresponding feature is not configured for this deployment. Never performs a live network call to the issuer; only inspects already-cached state, so this is cheap enough to poll frequently and cannot itself add load to a struggling issuer.\n\nOnly the ``redis`` check (the BFF session store) can make this endpoint's own status code report unhealthy. This endpoint is for dependency monitoring, not Kubernetes readiness; deployments should probe /api/ping so a Redis outage does not withdraw the otherwise usable whole API. ``issuer`` is reported in the body for observability/alerting only and never affects the status code: with several worker processes sharing one pod, coupling readiness to issuer reachability could make an IdP outage take the whole pod out of rotation and keep it there even after the IdP recovers, because losing readiness also stops the very traffic that would refresh the issuer's discovery/JWKS caches. REANA Server keeps serving /api/ping, /api/info, /api/config, and the friendly 503 auth-error response regardless of issuer cache health.",
+        "operationId": "health",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "The BFF session store (when configured) is healthy. The issuer check may still be false; that is informational only.",
+            "examples": {
+              "application/json": {
+                "checks": {
+                  "issuer": true,
+                  "redis": true
+                },
+                "status": "ok"
+              }
+            },
+            "schema": {
+              "properties": {
+                "checks": {
+                  "type": "object"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "503": {
+            "description": "The BFF session store (when configured) is unreachable.",
+            "schema": {
+              "properties": {
+                "checks": {
+                  "type": "object"
+                },
+                "status": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "security": [],
+        "summary": "Report health of REANA Server's auth-adjacent dependencies."
       }
     },
     "/api/info": {
       "get": {
         "description": "This resource reports information about cluster capabilities.",
         "operationId": "info",
-        "parameters": [
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": true,
-            "type": "string"
-          }
-        ],
         "produces": [
           "application/json"
         ],
@@ -1071,6 +1453,12 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
+          "403": {
+            "description": "The authenticated user lacks the required REANA role."
+          },
           "500": {
             "description": "Request failed. Internal controller error.",
             "examples": {
@@ -1086,6 +1474,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Get information about the cluster capabilities."
@@ -1190,6 +1581,20 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
+          "403": {
+            "description": "Request failed. The user's compute quota has been exceeded.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
           "409": {
             "description": "Another workflow-family mutation is in progress.",
             "schema": {
@@ -1236,6 +1641,124 @@
         "summary": "Launch workflow from a remote REANA specification file."
       }
     },
+    "/api/login": {
+      "get": {
+        "description": "Redirects the browser to the trusted issuer's authorization endpoint (authorization code flow with PKCE). On completion the issuer redirects back to the OAuth callback, which establishes the cookie-based session. Returns 404 when the BFF login is disabled.",
+        "operationId": "bff_login",
+        "parameters": [
+          {
+            "description": "Relative URL to return to after login.",
+            "in": "query",
+            "name": "next",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to the issuer's authorization endpoint."
+          },
+          "404": {
+            "description": "BFF login is not enabled on this deployment."
+          },
+          "500": {
+            "description": "The identity provider integration is not correctly configured."
+          },
+          "502": {
+            "description": "The issuer's endpoints could not be resolved."
+          }
+        },
+        "security": [],
+        "summary": "Start the browser login flow."
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "description": "Deletes the server-side session (refresh token), clears the authentication cookies and returns the issuer's RP-initiated logout URL for the web application to navigate to.",
+        "operationId": "bff_logout",
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "Session ended. The response contains the issuer logout URL.",
+            "schema": {
+              "properties": {
+                "logout_url": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "No session cookie present."
+          },
+          "403": {
+            "description": "CSRF validation failed."
+          },
+          "404": {
+            "description": "Browser login is not enabled."
+          },
+          "500": {
+            "description": "Identity-provider configuration prevents safe session validation. Cookies are preserved so logout can be retried after repair."
+          },
+          "503": {
+            "description": "Browser session storage or the identity provider is temporarily unavailable. Cookies are preserved so logout can be retried."
+          }
+        },
+        "security": [],
+        "summary": "End the browser session."
+      }
+    },
+    "/api/oauth/callback": {
+      "get": {
+        "description": "Handles the issuer's redirect: validates the OAuth state, exchanges the authorization code for tokens, provisions/links the REANA user, synchronizes group memberships, stores the refresh token server-side and sets the authentication cookies.",
+        "operationId": "bff_oauth_callback",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "code",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "in": "query",
+            "name": "error",
+            "required": false,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect back to the web application."
+          },
+          "403": {
+            "description": "OAuth state validation failed."
+          },
+          "404": {
+            "description": "Browser login is not enabled."
+          },
+          "500": {
+            "description": "The identity provider integration is not correctly configured."
+          },
+          "502": {
+            "description": "Token exchange with the issuer failed."
+          },
+          "503": {
+            "description": "Browser session storage is temporarily unavailable."
+          }
+        },
+        "security": [],
+        "summary": "Complete the browser login flow."
+      }
+    },
     "/api/ping": {
       "get": {
         "description": "Ping the server.\n\nThis endpoint is deliberately unauthenticated: it also carries the protocol bootstrap signal that a client needs *before* it authenticates or builds a request body. ``api_capabilities`` advertises the client-facing protocols the server implements; a released server omits the field, which identifies it as legacy.",
@@ -1279,6 +1802,7 @@
             }
           }
         },
+        "security": [],
         "summary": "Ping the server (healthcheck)"
       }
     },
@@ -1295,23 +1819,16 @@
             "type": "string"
           },
           {
-            "description": "Get the quota limit by user ID (mutually exclusive with `email` and `user_access_token`)",
+            "description": "Get the quota limit by user ID (mutually exclusive with `email`)",
             "in": "query",
             "name": "user_id",
             "required": false,
             "type": "string"
           },
           {
-            "description": "Get the quota limit by user email (mutually exclusive with `user_id` and `user_access_token`)",
+            "description": "Get the quota limit by user email (mutually exclusive with `user_id`)",
             "in": "query",
             "name": "email",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "description": "Get the quota limit by user access token (mutually exclusive with `user_id` and `email`)",
-            "in": "query",
-            "name": "user_access_token",
             "required": false,
             "type": "string"
           },
@@ -1432,6 +1949,7 @@
             }
           }
         },
+        "security": [],
         "summary": "Get resource quota limits."
       },
       "patch": {
@@ -1510,6 +2028,7 @@
             "description": "Internal server error."
           }
         },
+        "security": [],
         "summary": "Patch periodic quota fields."
       },
       "post": {
@@ -1667,6 +2186,7 @@
             }
           }
         },
+        "security": [],
         "summary": "Set resource quota limits."
       }
     },
@@ -1674,15 +2194,6 @@
       "get": {
         "description": "Get user secrets.",
         "operationId": "get_secrets",
-        "parameters": [
-          {
-            "description": "Secrets owner access token.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          }
-        ],
         "produces": [
           "application/json"
         ],
@@ -1721,6 +2232,9 @@
               "type": "array"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
           "403": {
             "description": "Request failed. Token is not valid.",
             "examples": {
@@ -1752,6 +2266,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Get user secrets. Requires an user access token."
@@ -1762,13 +2279,6 @@
         "description": "This resource deletes the requested secrets.",
         "operationId": "delete_secrets",
         "parameters": [
-          {
-            "description": "API key of the admin.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          },
           {
             "description": "Optional. List of secrets to be deleted.",
             "in": "body",
@@ -1804,6 +2314,9 @@
               },
               "type": "array"
             }
+          },
+          "401": {
+            "description": "The request is not authenticated."
           },
           "403": {
             "description": "Request failed. Token is not valid.",
@@ -1853,6 +2366,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Deletes the specified secret(s)."
@@ -1861,13 +2377,6 @@
         "description": "This resource adds secrets for the authenticated user.",
         "operationId": "add_secrets",
         "parameters": [
-          {
-            "description": "Secrets owner access token.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          },
           {
             "description": "Whether existing secret keys should be overwritten.",
             "in": "query",
@@ -1923,6 +2432,20 @@
               "type": "object"
             }
           },
+          "400": {
+            "description": "Request failed. A secret value is not correctly base64-encoded.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "The request is not authenticated."
+          },
           "403": {
             "description": "Request failed. Token is not valid.",
             "examples": {
@@ -1970,6 +2493,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Add user secrets to REANA."
@@ -2115,6 +2641,12 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
+          "403": {
+            "description": "The authenticated user lacks the required REANA role."
+          },
           "500": {
             "description": "Request failed. Internal controller error.",
             "examples": {
@@ -2130,284 +2662,18 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Retrieve cluster health status"
-      }
-    },
-    "/api/token": {
-      "delete": {
-        "consumes": [
-          "application/json"
-        ],
-        "description": "This management resource revokes the currently active REANA access token of a selected user. The endpoint is disabled unless `REANA_TOKEN_MANAGEMENT_SECRET` is configured.",
-        "operationId": "delete_token",
-        "parameters": [
-          {
-            "description": "REANA user token management secret",
-            "in": "header",
-            "name": "X-Token-Management-Secret",
-            "required": true,
-            "type": "string"
-          },
-          {
-            "description": "Data required to identify the target user (exactly one of `user_id` or `email` must be provided).",
-            "in": "body",
-            "name": "data",
-            "required": true,
-            "schema": {
-              "properties": {
-                "email": {
-                  "description": "Email of the target user (mutually exclusive with `user_id`)",
-                  "type": "string"
-                },
-                "user_id": {
-                  "description": "ID of the target user (mutually exclusive with `email`)",
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "Access token successfully revoked.",
-            "examples": {
-              "application/json": {
-                "email": "john.doe@example.org",
-                "id_": "aa37d63d-3186-45d5-aa40-5d221cb170bf",
-                "message": "Access token revoked.",
-                "reana_token": {
-                  "status": "revoked"
-                },
-                "status": 200
-              }
-            },
-            "schema": {
-              "properties": {
-                "email": {
-                  "type": "string"
-                },
-                "id_": {
-                  "type": "string"
-                },
-                "message": {
-                  "type": "string"
-                },
-                "reana_token": {
-                  "properties": {
-                    "status": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                },
-                "status": {
-                  "type": "integer"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "400": {
-            "description": "Invalid request.",
-            "schema": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                },
-                "status": {
-                  "type": "integer"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "401": {
-            "description": "Unauthorized.",
-            "schema": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                },
-                "status": {
-                  "type": "integer"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "403": {
-            "description": "Token management endpoint is not configured.",
-            "schema": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                },
-                "status": {
-                  "type": "integer"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "404": {
-            "description": "No active token to revoke for the given user.",
-            "schema": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                },
-                "status": {
-                  "type": "integer"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Internal server error.",
-            "schema": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                },
-                "status": {
-                  "type": "integer"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Revokes the active access token of the selected user."
-      },
-      "put": {
-        "description": "This resource allows the user to create an empty REANA access token and mark it as requested.",
-        "operationId": "request_token",
-        "parameters": [
-          {
-            "description": "API access_token of user.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          }
-        ],
-        "produces": [
-          "application/json"
-        ],
-        "responses": {
-          "200": {
-            "description": "User information correspoding to the session cookie sent in the request.",
-            "examples": {
-              "application/json": {
-                "reana_token": {
-                  "requested_at": "Mon, 25 May 2020 10:45:15 GMT",
-                  "status": "requested"
-                }
-              }
-            },
-            "schema": {
-              "properties": {
-                "reana_token": {
-                  "properties": {
-                    "requested_at": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "401": {
-            "description": "Error message indicating that the uses is not authenticated.",
-            "examples": {
-              "application/json": {
-                "message": "User not logged in"
-              }
-            },
-            "schema": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "403": {
-            "description": "Request failed. User token not valid.",
-            "examples": {
-              "application/json": {
-                "message": "Token is not valid."
-              }
-            },
-            "schema": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          },
-          "429": {
-            "description": "Request rate limit exceeded.",
-            "schema": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "message"
-              ],
-              "type": "object"
-            }
-          },
-          "500": {
-            "description": "Request failed. Internal server error.",
-            "examples": {
-              "application/json": {
-                "message": "Internal server error."
-              }
-            },
-            "schema": {
-              "properties": {
-                "message": {
-                  "type": "string"
-                }
-              },
-              "type": "object"
-            }
-          }
-        },
-        "summary": "Requests a new access token for the authenticated user."
       }
     },
     "/api/users/shared-with-you": {
       "get": {
         "description": "This resource provides information about users that shared workflow(s) with the authenticated user.",
         "operationId": "get_users_shared_with_you",
-        "parameters": [
-          {
-            "description": "API access_token of user.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          }
-        ],
         "produces": [
           "application/json"
         ],
@@ -2487,6 +2753,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Gets users that shared workflow(s) with the authenticated user."
@@ -2496,15 +2765,6 @@
       "get": {
         "description": "This resource provides information about users that the authenticated user shared workflow(s) with.",
         "operationId": "get_users_you_shared_with",
-        "parameters": [
-          {
-            "description": "API access_token of user.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          }
-        ],
         "produces": [
           "application/json"
         ],
@@ -2584,6 +2844,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Gets users that the authenticated user shared workflow(s) with."
@@ -2594,13 +2857,6 @@
         "description": "This resource return all current workflows in JSON format.",
         "operationId": "get_workflows",
         "parameters": [
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          },
           {
             "description": "Required. Type of workflows.",
             "in": "query",
@@ -2663,6 +2919,13 @@
             "description": "Include size information of the workspace.",
             "in": "query",
             "name": "include_workspace_size",
+            "type": "boolean"
+          },
+          {
+            "description": "Include per-session notebook secrets for workflows owned by the authenticated user. Intended for interactive-session launch clients.",
+            "in": "query",
+            "name": "include_session_secrets",
+            "required": false,
             "type": "boolean"
           },
           {
@@ -2850,6 +3113,10 @@
                         },
                         "type": "object"
                       },
+                      "session_secret": {
+                        "description": "Present only when include_session_secrets is true and the authenticated user owns the workflow.",
+                        "type": "string"
+                      },
                       "session_status": {
                         "type": "string"
                       },
@@ -2910,6 +3177,9 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
             "examples": {
@@ -2957,6 +3227,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Returns list of all current workflows in REANA."
@@ -2981,19 +3254,23 @@
             "name": "bundle",
             "required": true,
             "type": "file"
-          },
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
           }
         ],
         "produces": [
           "application/json"
         ],
         "responses": {
+          "200": {
+            "description": "The GitLab webhook was processed without creating a workflow, for example when the user's quota is exceeded.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
           "201": {
             "description": "Request succeeded. The workflow has been created.",
             "examples": {
@@ -3042,6 +3319,17 @@
                 "message": "Workflow name cannot be a valid UUIDv4."
               }
             },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "Request failed. The stored GitLab access token is not valid.",
             "schema": {
               "properties": {
                 "message": {
@@ -3174,13 +3462,6 @@
             "name": "target",
             "required": true,
             "type": "string"
-          },
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
           }
         ],
         "produces": [
@@ -3226,6 +3507,9 @@
               },
               "type": "object"
             }
+          },
+          "401": {
+            "description": "The request is not authenticated."
           },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
@@ -3317,12 +3601,6 @@
             "type": "file"
           },
           {
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          },
-          {
             "description": "If true, run offline reproducibility checks on runtime environment image references and return the loaded image and effective runtime UID/GID combinations so the client can optionally pull and inspect them locally.",
             "in": "query",
             "name": "environments",
@@ -3402,7 +3680,7 @@
             }
           },
           "401": {
-            "description": "Request malformed or missing access token.",
+            "description": "The request is not authenticated.",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -3451,6 +3729,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Validate a raw workflow specification bundle."
@@ -3488,13 +3769,6 @@
             "description": "Optional parameter. Sets number of context lines for workspace diff output.",
             "in": "query",
             "name": "context_lines",
-            "required": false,
-            "type": "string"
-          },
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
             "required": false,
             "type": "string"
           }
@@ -3543,6 +3817,9 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
             "examples": {
@@ -3590,6 +3867,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Get diff between two workflows."
@@ -3608,13 +3888,6 @@
             "in": "path",
             "name": "workflow_id_or_name",
             "required": true,
-            "type": "string"
-          },
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
             "type": "string"
           }
         ],
@@ -3653,6 +3926,9 @@
               },
               "type": "object"
             }
+          },
+          "401": {
+            "description": "The request is not authenticated."
           },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
@@ -3701,6 +3977,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Close an interactive workflow session."
@@ -3711,13 +3990,6 @@
         "description": "This resource reports the disk usage of a workflow. Resource is expecting a workflow UUID and some parameters .",
         "operationId": "get_workflow_disk_usage",
         "parameters": [
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          },
           {
             "description": "Required. Analysis UUID or name.",
             "in": "path",
@@ -3824,6 +4096,9 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
             "examples": {
@@ -3871,9 +4146,98 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Get disk usage of a workflow."
+      }
+    },
+    "/api/workflows/{workflow_id_or_name}/interactive-session-secret": {
+      "get": {
+        "description": "Return the random per-session secret used as the notebook access token of the workflow's open interactive session. Only the authenticated workflow owner can retrieve it.",
+        "operationId": "get_interactive_session_secret",
+        "parameters": [
+          {
+            "description": "Required. Workflow UUID or name.",
+            "in": "path",
+            "name": "workflow_id_or_name",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "produces": [
+          "application/json"
+        ],
+        "responses": {
+          "200": {
+            "description": "The interactive session secret was retrieved.",
+            "schema": {
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "session_secret": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "session_secret",
+                "path"
+              ],
+              "type": "object"
+            }
+          },
+          "401": {
+            "description": "The user is not signed in.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "403": {
+            "description": "The user does not own the workflow.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "404": {
+            "description": "The workflow has no open interactive session.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "500": {
+            "description": "Internal server error.",
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
+          }
+        },
+        "summary": "Get the access secret of the open interactive session."
       }
     },
     "/api/workflows/{workflow_id_or_name}/logs": {
@@ -3881,13 +4245,6 @@
         "description": "This resource reports the status of a workflow. Resource is expecting a workflow UUID.",
         "operationId": "get_workflow_logs",
         "parameters": [
-          {
-            "description": "API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          },
           {
             "description": "Required. Analysis UUID or name.",
             "in": "path",
@@ -3976,6 +4333,9 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
             "examples": {
@@ -4023,6 +4383,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Get workflow logs of a workflow."
@@ -4041,13 +4404,6 @@
             "in": "path",
             "name": "workflow_id_or_name",
             "required": true,
-            "type": "string"
-          },
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
             "type": "string"
           },
           {
@@ -4109,6 +4465,9 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
             "examples": {
@@ -4156,6 +4515,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Start an interactive session inside the workflow workspace."
@@ -4171,13 +4533,6 @@
             "in": "path",
             "name": "workflow_id_or_name",
             "required": true,
-            "type": "string"
-          },
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
             "type": "string"
           }
         ],
@@ -4235,6 +4590,9 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
             "examples": {
@@ -4282,6 +4640,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Get parameters of a workflow."
@@ -4292,13 +4653,6 @@
         "description": "This resource deletes the workspace's files that are neither in the input nor in the output of the workflow definition. This resource is expecting a workflow UUID and some parameters.",
         "operationId": "prune_workspace",
         "parameters": [
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          },
           {
             "description": "Required. Analysis UUID or name.",
             "in": "path",
@@ -4365,6 +4719,9 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
             "examples": {
@@ -4420,10 +4777,7 @@
             }
           },
           "503": {
-            "description": "Workspace mutation serialization is unavailable.",
-            "schema": {
-              "$ref": "#/definitions/ErrorResponse"
-            }
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Prune the workspace's files."
@@ -4441,12 +4795,6 @@
             "in": "path",
             "name": "workflow_id_or_name",
             "required": true,
-            "type": "string"
-          },
-          {
-            "in": "query",
-            "name": "access_token",
-            "required": false,
             "type": "string"
           },
           {
@@ -4481,7 +4829,7 @@
             }
           },
           "401": {
-            "description": "Request malformed or missing access token.",
+            "description": "The request is not authenticated.",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -4537,13 +4885,6 @@
         "description": "This resource returns all the retention rules of a given workflow.",
         "operationId": "get_workflow_retention_rules",
         "parameters": [
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          },
           {
             "description": "Required. Analysis UUID or name.",
             "in": "path",
@@ -4672,6 +5013,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Get the retention rules of a workflow."
@@ -4682,13 +5026,6 @@
         "description": "This resource shares a workflow with another user. This resource is expecting a workflow UUID and some parameters.",
         "operationId": "share_workflow",
         "parameters": [
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          },
           {
             "description": "Required. Workflow UUID or name.",
             "in": "path",
@@ -4703,12 +5040,20 @@
             "required": true,
             "schema": {
               "properties": {
+                "group_id": {
+                  "description": "Group identifier within the provider when sharing with a group. Must be given together with group_provider.",
+                  "type": "string"
+                },
+                "group_provider": {
+                  "description": "Group provider tag (e.g. keycloak) when sharing with a group. Must be given together with group_id.",
+                  "type": "string"
+                },
                 "message": {
                   "description": "Optional. Message to include when sharing the workflow.",
                   "type": "string"
                 },
                 "user_email_to_share_with": {
-                  "description": "User to share the workflow with.",
+                  "description": "User to share the workflow with. Mutually exclusive with the group target.",
                   "type": "string"
                 },
                 "valid_until": {
@@ -4716,9 +5061,6 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "user_email_to_share_with"
-              ],
               "type": "object"
             }
           }
@@ -4841,6 +5183,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Share a workflow with another user."
@@ -4851,13 +5196,6 @@
         "description": "This resource returns the share status of a given workflow.",
         "operationId": "get_workflow_share_status",
         "parameters": [
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          },
           {
             "description": "Required. Workflow UUID or name.",
             "in": "path",
@@ -4974,6 +5312,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Get the share status of a workflow."
@@ -4984,13 +5325,6 @@
         "description": "This resource returns the REANA workflow specification used to start the workflow run. Resource is expecting a workflow UUID.",
         "operationId": "get_workflow_specification",
         "parameters": [
-          {
-            "description": "API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          },
           {
             "description": "Required. Analysis UUID or name.",
             "in": "path",
@@ -5123,6 +5457,9 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
             "examples": {
@@ -5170,6 +5507,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Get the specification used for this workflow run."
@@ -5188,13 +5528,6 @@
             "in": "path",
             "name": "workflow_id_or_name",
             "required": true,
-            "type": "string"
-          },
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
             "type": "string"
           },
           {
@@ -5256,6 +5589,9 @@
               },
               "type": "object"
             }
+          },
+          "401": {
+            "description": "The request is not authenticated."
           },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
@@ -5371,13 +5707,6 @@
             "in": "path",
             "name": "workflow_id_or_name",
             "required": true,
-            "type": "string"
-          },
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
             "type": "string"
           }
         ],
@@ -5539,6 +5868,9 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
             "examples": {
@@ -5586,6 +5918,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Get status of a workflow."
@@ -5614,13 +5949,6 @@
             "in": "query",
             "name": "status",
             "required": true,
-            "type": "string"
-          },
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
             "type": "string"
           },
           {
@@ -5689,6 +6017,9 @@
               },
               "type": "object"
             }
+          },
+          "401": {
+            "description": "The request is not authenticated."
           },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
@@ -5800,13 +6131,6 @@
         "operationId": "unshare_workflow",
         "parameters": [
           {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          },
-          {
             "description": "Required. Workflow UUID or name.",
             "in": "path",
             "name": "workflow_id_or_name",
@@ -5864,6 +6188,9 @@
               },
               "type": "object"
             }
+          },
+          "401": {
+            "description": "The request is not authenticated."
           },
           "403": {
             "description": "Request failed. User is not allowed to unshare the workflow.",
@@ -5928,6 +6255,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Unshare a workflow with another user."
@@ -5943,13 +6273,6 @@
             "in": "path",
             "name": "workflow_id_or_name",
             "required": true,
-            "type": "string"
-          },
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
             "type": "string"
           },
           {
@@ -6037,6 +6360,9 @@
               "type": "object"
             }
           },
+          "401": {
+            "description": "The request is not authenticated."
+          },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
             "examples": {
@@ -6084,6 +6410,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Returns the workspace file list."
@@ -6116,13 +6445,6 @@
             "in": "query",
             "name": "file_name",
             "required": true,
-            "type": "string"
-          },
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
             "type": "string"
           },
           {
@@ -6163,6 +6485,9 @@
               },
               "type": "object"
             }
+          },
+          "401": {
+            "description": "The request is not authenticated."
           },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
@@ -6252,13 +6577,6 @@
             "name": "file_name",
             "required": true,
             "type": "string"
-          },
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
           }
         ],
         "produces": [
@@ -6294,6 +6612,9 @@
               },
               "type": "object"
             }
+          },
+          "401": {
+            "description": "The request is not authenticated."
           },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
@@ -6375,13 +6696,6 @@
             "name": "file_name",
             "required": true,
             "type": "string"
-          },
-          {
-            "description": "The API access_token of workflow owner.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
           }
         ],
         "produces": [
@@ -6408,6 +6722,9 @@
           },
           "400": {
             "description": "Request failed. The incoming payload seems malformed."
+          },
+          "401": {
+            "description": "The request is not authenticated."
           },
           "403": {
             "description": "Request failed. User is not allowed to access workflow.",
@@ -6456,6 +6773,9 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Returns the requested file."
@@ -6465,15 +6785,6 @@
       "get": {
         "description": "This resource provides basic information about an authenticated user based on the session cookie presence.",
         "operationId": "get_you",
-        "parameters": [
-          {
-            "description": "API access_token of user.",
-            "in": "query",
-            "name": "access_token",
-            "required": false,
-            "type": "string"
-          }
-        ],
         "produces": [
           "application/json"
         ],
@@ -6511,11 +6822,6 @@
                   }
                 },
                 "reana_server_version": "0.8.1",
-                "reana_token": {
-                  "requested_at": "Mon, 25 May 2020 10:39:57 GMT",
-                  "status": "active",
-                  "value": "Drmhze6EPcv0fN_81Bj-nA"
-                },
                 "username": "jdoe"
               }
             },
@@ -6602,20 +6908,6 @@
                 },
                 "reana_server_version": {
                   "type": "string"
-                },
-                "reana_token": {
-                  "properties": {
-                    "requested_at": {
-                      "type": "string"
-                    },
-                    "status": {
-                      "type": "string"
-                    },
-                    "value": {
-                      "type": "string"
-                    }
-                  },
-                  "type": "object"
                 }
               },
               "type": "object"
@@ -6638,14 +6930,18 @@
             }
           },
           "403": {
-            "description": "Request failed. User token not valid.",
+            "description": "The authenticated identity lacks the required REANA access role.",
             "examples": {
               "application/json": {
-                "message": "Token is not valid."
+                "code": "access_not_granted",
+                "message": "User does not have the required 'reana:user' role."
               }
             },
             "schema": {
               "properties": {
+                "code": {
+                  "type": "string"
+                },
                 "message": {
                   "type": "string"
                 }
@@ -6668,23 +6964,27 @@
               },
               "type": "object"
             }
+          },
+          "503": {
+            "description": "The identity provider or the authentication session store is temporarily unavailable."
           }
         },
         "summary": "Gets information about authenticated user."
       }
-    },
-    "/confirm": {},
-    "/confirm/{token}": {},
-    "/logout/": {},
-    "/oauth/authorized/{remote_app}/": {},
-    "/oauth/disconnect/{remote_app}/": {},
-    "/oauth/login": {},
-    "/oauth/login/{remote_app}/": {},
-    "/oauth/logout": {},
-    "/oauth/signup/{remote_app}/": {},
-    "/oauth/static/{filename}": {},
-    "/signin": {},
-    "/signup/": {}
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "securityDefinitions": {
+    "BearerAuth": {
+      "description": "OIDC access token using the `Bearer <token>` scheme.",
+      "in": "header",
+      "name": "Authorization",
+      "type": "apiKey"
+    }
   },
   "swagger": "2.0"
 }
