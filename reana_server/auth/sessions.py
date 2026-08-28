@@ -182,13 +182,30 @@ def delete_session(sid):
         raise _session_unavailable(error) from error
 
 
+_COUNT_SESSIONS_CACHE_TTL = 5
+"""How long a session count is reused before re-scanning Redis, in seconds.
+
+/api/status is reachable by any signed-in user, and each call would
+otherwise trigger a full Redis SCAN over every session key -- bounding
+that cost here is cheaper and lower-risk than adding this codebase's
+first admin-gated REST endpoint just to restrict who can trigger it.
+"""
+_count_sessions_cache = {"value": 0, "at": 0.0}
+
+
 def count_sessions():
     """Count active BFF sessions (for status reporting)."""
+    now = time.monotonic()
+    if now - _count_sessions_cache["at"] < _COUNT_SESSIONS_CACHE_TTL:
+        return _count_sessions_cache["value"]
     try:
         keys = get_redis().scan_iter(match=_SESSION_KEY.format(sid="*"))
-        return sum(not key.endswith(":lock") for key in keys)
+        count = sum(not key.endswith(":lock") for key in keys)
     except redis.RedisError as error:
         raise _session_unavailable(error) from error
+    _count_sessions_cache["value"] = count
+    _count_sessions_cache["at"] = now
+    return count
 
 
 def delete_sessions_for_subject(issuer, subject, *, dry_run=False):

@@ -160,6 +160,33 @@ def test_count_sessions_excludes_refresh_locks(redis_store):
     assert sessions_module.count_sessions() == 2
 
 
+def test_count_sessions_reuses_a_recent_result_without_rescanning(redis_store):
+    """Repeated calls within the TTL must not re-scan every session key."""
+    redis_store.set("reana:bff:session:one", "{}")
+    real_scan_iter = redis_store.scan_iter
+    calls = []
+
+    def counting_scan_iter(*args, **kwargs):
+        calls.append(1)
+        return real_scan_iter(*args, **kwargs)
+
+    with patch.object(redis_store, "scan_iter", side_effect=counting_scan_iter):
+        assert sessions_module.count_sessions() == 1
+        assert sessions_module.count_sessions() == 1
+        assert len(calls) == 1
+
+        redis_store.set("reana:bff:session:two", "{}")
+        # Still within the TTL: the new session must not be visible yet.
+        assert sessions_module.count_sessions() == 1
+        assert len(calls) == 1
+
+    with patch(
+        "reana_server.auth.sessions.time.monotonic",
+        return_value=time.monotonic() + sessions_module._COUNT_SESSIONS_CACHE_TTL + 1,
+    ):
+        assert sessions_module.count_sessions() == 2
+
+
 class TestLogin:
     def test_disabled_returns_404(self, base_app, monkeypatch):
         monkeypatch.setitem(base_app.config["REANA_AUTH"], "issuer", "")

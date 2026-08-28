@@ -88,6 +88,11 @@ def redis_store(base_app):
     """Replace the Redis client with an in-memory fake."""
     fake = fakeredis.FakeRedis(decode_responses=True)
     base_app.extensions[_sessions_module._REDIS_EXTENSION] = fake
+    # count_sessions() caches its result briefly across calls (see its own
+    # docstring) in a plain module-level dict, not app.extensions, so a
+    # fresh fake Redis per test would otherwise not invalidate a value a
+    # previous test already cached within the TTL window.
+    _sessions_module._count_sessions_cache["at"] = 0.0
     with base_app.app_context():
         yield fake
 
