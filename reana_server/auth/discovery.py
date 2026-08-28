@@ -419,8 +419,9 @@ def discovery_is_unavailable():
     """
     state = _get_discovery_state()
     with state["condition"]:
-        return bool(state["failed_at"]) and not _document_is_usable(
-            state, time.monotonic()
+        return state["permanent_error"] is not None or (
+            bool(state["failed_at"])
+            and not _document_is_usable(state, time.monotonic())
         )
 
 

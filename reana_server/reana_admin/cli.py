@@ -1264,9 +1264,10 @@ def interactive_session_cleanup(  # noqa: C901
     if not pods:
         click.echo("There are no interactive sessions to process!")
 
+    failures = []
     for pod in pods:
+        pod_name = getattr(getattr(pod, "metadata", None), "name", "<unknown>")
         try:
-            pod_name = pod.metadata.name
             workflow_id = pod.metadata.labels["reana-run-session-workflow-uuid"]
             user_id = pod.metadata.labels["user-uuid"]
             workflow = (
@@ -1294,6 +1295,7 @@ def interactive_session_cleanup(  # noqa: C901
                 err=True,
             )
             logging.debug(e, exc_info=True)
+            failures.append(pod_name)
             continue
 
         if user is not None:
@@ -1317,6 +1319,7 @@ def interactive_session_cleanup(  # noqa: C901
                     err=True,
                 )
                 logging.debug(e, exc_info=True)
+                failures.append(pod_name)
             continue
 
         # The inactivity check needs to query the live notebook's own status
@@ -1332,6 +1335,7 @@ def interactive_session_cleanup(  # noqa: C901
                 fg="red",
                 err=True,
             )
+            failures.append(pod_name)
             continue
 
         try:
@@ -1347,6 +1351,7 @@ def interactive_session_cleanup(  # noqa: C901
                 err=True,
             )
             logging.debug(e, exc_info=True)
+            failures.append(pod_name)
             continue
 
         last_activity = datetime.datetime.strptime(
@@ -1376,7 +1381,13 @@ def interactive_session_cleanup(  # noqa: C901
                     err=True,
                 )
                 logging.debug(e, exc_info=True)
+                failures.append(pod_name)
         else:
             click.echo(
                 f"Interactive session '{pod_name}' was updated {duration.days} days ago. Leaving opened."
             )
+
+    if user is not None and failures:
+        raise click.ClickException(
+            "Could not close every interactive session: " + ", ".join(failures)
+        )

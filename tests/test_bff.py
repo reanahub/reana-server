@@ -182,6 +182,21 @@ class TestLogin:
         cookies = response.headers.getlist("Set-Cookie")
         assert any(STATE_COOKIE in cookie for cookie in cookies)
 
+    def test_redirect_preserves_authorization_endpoint_query(
+        self, base_app, bff_config
+    ):
+        """Issuer-specific query parameters remain well-formed."""
+        with base_app.test_client() as client, patch(
+            "reana_server.rest.auth.get_endpoint",
+            return_value=AUTHORIZATION_URL + "?kc_idp_hint=institution",
+        ):
+            response = client.get("/api/login")
+
+        params = parse_qs(urlparse(response.headers["Location"]).query)
+        assert response.status_code == 302
+        assert params["kc_idp_hint"] == ["institution"]
+        assert params["client_id"] == ["reana-server"]
+
     def test_login_does_not_overwrite_gitlab_state(self, base_app, bff_config):
         """The two OAuth flows retain independent in-flight transactions."""
         with base_app.test_client() as client:
@@ -572,6 +587,30 @@ class TestLogout:
 
         assert response.status_code == status
         assert response.headers.getlist("Set-Cookie") == []
+
+    def test_issuer_outage_still_allows_bound_local_logout(
+        self, base_app, bff_config, redis_store, signing_key
+    ):
+        """Stored access-token equality safely binds cookies without JWKS."""
+        token = _make_token(signing_key)
+        _store_bound_session("browser-session-id", "r", "idt", token)
+        with base_app.test_client() as client:
+            self._login_cookies(client, token)
+            with patch(
+                "reana_server.rest.auth.decode_expired_token",
+                side_effect=IssuerUnavailableError("issuer unavailable"),
+            ):
+                response = client.post(
+                    "/api/logout", headers={CSRF_HEADER: "csrf-value"}
+                )
+
+        assert response.status_code == 200
+        assert response.json["logout_url"] == ""
+        assert redis_store.get("reana:bff:session:browser-session-id") is None
+        assert any(
+            cookie.startswith(f"{AUTH_COOKIE}=;")
+            for cookie in response.headers.getlist("Set-Cookie")
+        )
 
     def test_logout_url_failure_does_not_undo_completed_local_logout(
         self, base_app, bff_config, redis_store, signing_key

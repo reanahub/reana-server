@@ -37,6 +37,7 @@ from reana_server.auth.sessions import (
     clear_auth_cookies,
     csrf_ok,
     decode_expired_token,
+    delete_session,
     refresh_session,
     set_auth_cookies,
 )
@@ -182,7 +183,7 @@ def _authorize_and_provision(claims, raw_token):
     return user
 
 
-def _authenticate(include_gitlab_login):
+def _authenticate(include_gitlab_login):  # noqa: C901
     """Resolve the request credentials to a REANA user.
 
     :return: tuple ``(user_or_none, refreshed_cookie_token_or_none)``.
@@ -262,7 +263,16 @@ def _authenticate(include_gitlab_login):
                 )
             refreshed = refresh_result.access_token
             raw_token = refreshed
-            claims = validate_access_token(raw_token)
+            try:
+                claims = validate_access_token(raw_token)
+            except InvalidTokenError as error:
+                # A nominal refresh winner that stored an already-expired or
+                # otherwise unusable token cannot recover on another request.
+                # End the browser session instead of retrying forever.
+                delete_session(session_id)
+                raise _TerminalSessionError(
+                    "Session expired, please log in again."
+                ) from error
         try:
             user = _authorize_and_provision(claims, raw_token)
         except MissingRoleError as error:

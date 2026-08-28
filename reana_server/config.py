@@ -380,6 +380,9 @@ REANA_RATELIMIT_SLOWER = _get_rate_limit("REANA_RATELIMIT_SLOWER", "30 per minut
 REANA_RATELIMIT_SLOWEST = _get_rate_limit("REANA_RATELIMIT_SLOWEST", "5 per hour")
 
 RATELIMIT_PER_ENDPOINT = {
+    "auth.login": REANA_RATELIMIT_SLOWER,
+    "auth.oauth_callback": REANA_RATELIMIT_SLOWER,
+    "auth.logout": REANA_RATELIMIT_SLOWER,
     "launch.launch": REANA_RATELIMIT_SLOW,
     # Both endpoints can spawn a sandboxed validation Job per call (for
     # non-serial specs), so throttle them like ``launch`` to bound the rate at

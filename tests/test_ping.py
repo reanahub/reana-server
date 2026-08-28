@@ -207,3 +207,22 @@ def test_health_ok_when_serving_stale_cached_material(base_app):
 
     assert response.status_code == 200
     assert response.get_json()["checks"]["issuer"] is True
+
+
+def test_health_reports_remembered_permanent_issuer_error(base_app):
+    """Cached material must not mask a known permanent issuer defect."""
+    _reset_auth_caches(base_app)
+    base_app.extensions[sessions_module._REDIS_EXTENSION] = fakeredis.FakeRedis(
+        decode_responses=True
+    )
+    with base_app.app_context():
+        discovery_state = discovery_module._get_discovery_state()
+        discovery_state["doc"] = {"issuer": "https://issuer.example.org"}
+        discovery_state["fetched_at"] = time.monotonic()
+        discovery_state["permanent_error"] = "invalid discovery document"
+
+    with base_app.test_client() as client:
+        response = client.get("/api/health")
+
+    assert response.status_code == 200
+    assert response.get_json()["checks"]["issuer"] is False

@@ -287,21 +287,23 @@ def login():
         next=next_url,
         nonce=nonce,
     )
-    response.headers["Location"] = (
-        authorization_url
-        + "?"
-        + urlencode(
-            {
-                "response_type": "code",
-                "client_id": auth_config["web_client_id"],
-                "redirect_uri": _callback_redirect_uri(),
-                "scope": auth_config["scopes"],
-                "state": state,
-                "nonce": nonce,
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-            }
-        )
+    authorization_parts = urlparse(authorization_url)
+    authorization_parameters = parse_qsl(
+        authorization_parts.query, keep_blank_values=True
+    ) + list(
+        {
+            "response_type": "code",
+            "client_id": auth_config["web_client_id"],
+            "redirect_uri": _callback_redirect_uri(),
+            "scope": auth_config["scopes"],
+            "state": state,
+            "nonce": nonce,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        }.items()
+    )
+    response.headers["Location"] = urlunparse(
+        authorization_parts._replace(query=urlencode(authorization_parameters))
     )
     return response
 
@@ -457,7 +459,7 @@ def oauth_callback():  # noqa: C901
 
     sid = secrets.token_urlsafe(32)
     try:
-        store_session(
+        stored = store_session(
             sid,
             token_body.get("refresh_token", ""),
             id_token,
@@ -467,6 +469,15 @@ def oauth_callback():  # noqa: C901
             client_id=auth_config["web_client_id"],
             created_at=time.time(),
         )
+        if not stored:
+            raise SessionUnavailableError("Browser session could not be stored.")
+        old_sid = request.cookies.get(SESSION_COOKIE)
+        if old_sid and old_sid != sid:
+            old_session = get_session(old_sid)
+            if old_session and session_matches_identity(
+                old_session, claims["iss"], claims["sub"]
+            ):
+                delete_session(old_sid)
     except SessionUnavailableError as error:
         logging.error("Could not establish browser session: %s", error)
         response = jsonify(message=str(error))
@@ -523,12 +534,12 @@ def logout():
         return jsonify(message="User not signed in."), 401
     if not csrf_ok(request.headers, request.cookies):
         return jsonify(message="CSRF token missing or invalid."), 403
+    sid = request.cookies.get(SESSION_COOKIE)
+    if not sid:
+        return clear_auth_cookies(jsonify(logout_url=""))
     try:
-        claims = decode_expired_token(token)
-        sid = request.cookies.get(SESSION_COOKIE)
-        if not sid:
-            raise InvalidTokenError("Browser session id is missing.")
         session_data = get_session(sid)
+        claims = decode_expired_token(token)
         if session_data and not session_matches_identity(
             session_data, claims["iss"], claims["sub"]
         ):
@@ -539,7 +550,17 @@ def logout():
                 "Browser access and session cookies belong to different identities."
             )
         delete_session(sid)
-    except (SessionUnavailableError, IssuerUnavailableError) as error:
+    except IssuerUnavailableError as error:
+        # Logout must remain possible while issuer keys are unavailable. The
+        # exact access-token copy stored under this random session id safely
+        # binds the two cookies without requiring a JWKS lookup.
+        if session_data and secrets.compare_digest(session_data.get("at", ""), token):
+            delete_session(sid)
+            logging.warning("Issuer unavailable during logout; ended local session.")
+            return clear_auth_cookies(jsonify(logout_url=""))
+        logging.warning("Could not validate browser session for logout: %s", error)
+        return jsonify(message=str(error)), 503
+    except SessionUnavailableError as error:
         logging.warning("Could not remove browser session: %s", error)
         return jsonify(message=str(error)), 503
     except IssuerMisconfiguredError as error:

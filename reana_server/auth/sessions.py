@@ -258,6 +258,7 @@ def decode_expired_token(token):
         # this call site just postdates that fix.
         raise
     except Exception as error:
+        logging.exception("Unexpected error while decoding an expired access token.")
         raise InvalidTokenError(f"Invalid token: {error}")
     auth_config = get_auth_config()
     if claims.get("iss") != auth_config["issuer"]:

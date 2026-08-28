@@ -305,8 +305,9 @@ class JWKSCache:
         this is cheap enough to call on every health check.
         """
         with self._lock:
-            return bool(self._refresh_failed_at) and not self._cached_keys_are_usable(
-                time.monotonic()
+            return self._permanent_error is not None or (
+                bool(self._refresh_failed_at)
+                and not self._cached_keys_are_usable(time.monotonic())
             )
 
     def get_key_set_for_kid(self, kid):
