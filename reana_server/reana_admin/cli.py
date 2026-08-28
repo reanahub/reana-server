@@ -45,8 +45,12 @@ from reana_db.models import (
 )
 
 from reana_server.api_client import current_rwc_api_client
-from reana_server.config import ADMIN_USER_ID, REANA_HOSTNAME
+from reana_server.config import ADMIN_USER_ID, LOG_RETENTION_PERIOD, REANA_HOSTNAME
 from reana_server.reana_admin.check_workflows import check_workspaces
+from reana_server.reana_admin.log_retention import (
+    iter_log_retention_candidates,
+    prune_workflow_logs,
+)
 from reana_server.reana_admin.options import (
     add_user_options,
     add_workflow_option,
@@ -772,6 +776,103 @@ def queue_consume(
         logging.exception(error)
     else:
         consumer.run()
+
+
+@reana_admin.command()
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="List workflows whose logs would be pruned without changing them.",
+)
+@click.option(
+    "--force-date",
+    type=click.DateTime(formats=["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S"]),
+    help="Use this UTC date and time when calculating the retention cutoff.",
+)
+@click.option(
+    "--batch-size",
+    type=click.IntRange(min=1),
+    default=100,
+    show_default=True,
+    help="Maximum number of workflow records fetched at once.",
+)
+@click.option(
+    "--yes-i-am-sure",
+    is_flag=True,
+    help="Do not ask for confirmation when doing potentially dangerous operations.",
+)
+@admin_access_token_option
+def logs_prune(
+    dry_run: bool,
+    force_date: Optional[datetime.datetime],
+    batch_size: int,
+    yes_i_am_sure: bool,
+    admin_access_token: str,
+) -> None:
+    """Prune expired workflow engine, service and job logs."""
+    if LOG_RETENTION_PERIOD is None:
+        click.echo("Workflow log retention is disabled; logs are kept forever.")
+        return
+
+    current_time = force_date or datetime.datetime.now(datetime.timezone.utc)
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=datetime.timezone.utc)
+    else:
+        current_time = current_time.astimezone(datetime.timezone.utc)
+
+    if force_date:
+        if not yes_i_am_sure and not dry_run:
+            click.confirm(
+                click.style(
+                    "Pruning expired workflow logs "
+                    f"as if the current time were {current_time.isoformat()}.\n"
+                    "Are you sure you want to continue?",
+                    fg="red",
+                    bold=True,
+                ),
+                abort=True,
+            )
+        click.echo(f"The current time is forced to be {current_time.isoformat()}")
+
+    cutoff = (current_time - datetime.timedelta(days=LOG_RETENTION_PERIOD)).replace(
+        tzinfo=None
+    )
+    click.echo(
+        f"Pruning workflow logs older than {cutoff.isoformat()}Z "
+        f"({LOG_RETENTION_PERIOD} days)."
+    )
+
+    candidates = 0
+    pruned = 0
+    failures = 0
+    for workflow in iter_log_retention_candidates(cutoff, batch_size=batch_size):
+        workflow_id = workflow.id_
+        click.echo(f"Workflow {workflow_id}: logs are eligible for pruning.")
+        candidates += 1
+        if dry_run:
+            continue
+
+        try:
+            prune_workflow_logs(workflow, pruned_at=current_time)
+            Session.commit()
+            pruned += 1
+        except Exception as error:
+            Session.rollback()
+            failures += 1
+            click.secho(
+                f"Workflow {workflow_id}: failed to prune logs: {error}", fg="red"
+            )
+            logging.debug(error, exc_info=True)
+
+    if dry_run:
+        click.echo(f"{candidates} workflow(s) would be pruned.")
+    else:
+        click.echo(f"{pruned} workflow(s) pruned.")
+    if failures:
+        raise click.ClickException(
+            f"Failed to prune logs for {failures} workflow(s); they will be retried."
+        )
 
 
 @reana_admin.command()

@@ -54,6 +54,30 @@ def test_get_int_env_variable(monkeypatch, caplog, env_value, expected):
         assert f"Invalid {env_variable}" not in caplog.text
 
 
+@pytest.mark.parametrize(
+    ("env_value", "expected"),
+    [(None, None), ("forever", None), ("0", 0), ("60", 60)],
+)
+def test_log_retention_period(monkeypatch, env_value, expected):
+    """Test parsing the system-wide workflow log retention period."""
+    if env_value is None:
+        monkeypatch.delenv("LOG_RETENTION_PERIOD", raising=False)
+    else:
+        monkeypatch.setenv("LOG_RETENTION_PERIOD", env_value)
+
+    test_config = _load_config_module()
+
+    assert test_config.LOG_RETENTION_PERIOD == expected
+
+
+def test_log_retention_period_rejects_negative_values(monkeypatch):
+    """Test that a negative retention period cannot prune logs prematurely."""
+    monkeypatch.setenv("LOG_RETENTION_PERIOD", "-1")
+
+    with pytest.raises(ValueError, match="must be non-negative"):
+        _load_config_module()
+
+
 def test_keycloak_user_info_endpoint_is_enabled(monkeypatch):
     """Test that generic Keycloak SSO enables user info endpoint lookups."""
     issuer_url = "https://auth.example.org/auth/realms/example"

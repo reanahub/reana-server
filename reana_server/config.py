@@ -711,6 +711,20 @@ The value "forever" means "do not apply any rules to files by default", and it i
 DEFAULT_WORKSPACE_RETENTION_RULE = "**/*"
 """Workspace retention rule which will be applied to all the workflows by default."""
 
+# Workflow log retention
+# ======================
+_log_retention_period_env = os.getenv("LOG_RETENTION_PERIOD", "forever")
+if _log_retention_period_env == "forever":
+    LOG_RETENTION_PERIOD: Optional[int] = None
+else:
+    LOG_RETENTION_PERIOD = int(_log_retention_period_env)
+    if LOG_RETENTION_PERIOD < 0:
+        raise ValueError("LOG_RETENTION_PERIOD must be non-negative or 'forever'.")
+"""Period in days after which logs of terminated workflows are pruned.
+
+The value ``forever`` disables automatic log pruning and is represented by ``None``.
+"""
+
 # Interactive sessions configuration
 # ==================
 _reana_interactive_session_max_inactivity_period_env = os.getenv(

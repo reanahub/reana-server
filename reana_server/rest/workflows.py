@@ -16,6 +16,7 @@ import shutil
 import traceback
 import tempfile
 import uuid
+from datetime import timezone
 
 import requests
 from bravado.exception import BravadoTimeoutError, HTTPError
@@ -639,6 +640,14 @@ def validate_workflow_specification(user):  # noqa
     finally:
         if abs_dir:
             shutil.rmtree(abs_dir, ignore_errors=True)
+
+
+def _serialize_logs_pruned_at(logs_pruned_at):
+    """Return a workflow log pruning timestamp in UTC ISO 8601 format."""
+    if logs_pruned_at.tzinfo is None:
+        logs_pruned_at = logs_pruned_at.replace(tzinfo=timezone.utc)
+    logs_pruned_at = logs_pruned_at.astimezone(timezone.utc)
+    return logs_pruned_at.isoformat().replace("+00:00", "Z")
 
 
 @blueprint.route("/workflows", methods=["GET"])
@@ -1706,6 +1715,26 @@ def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
                 "message": "Workflow cdcf48b1-c2f3-4693-8230-b066e088c6ac does
                             not exist"
               }
+        410:
+          description: >-
+            Request failed because the workflow logs were pruned by the
+            cluster retention policy.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              logs_pruned_at:
+                type: string
+                format: date-time
+          examples:
+            application/json:
+              {
+                "message": "The logs for this run were pruned by the cluster's
+                            retention policy on 2026-07-13T03:00:00Z and are no
+                            longer available.",
+                "logs_pruned_at": "2026-07-13T03:00:00Z"
+              }
         500:
           description: >-
             Request failed. Internal controller error.
@@ -1724,6 +1753,34 @@ def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
         steps = request.json if request.is_json else None
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
+
+        # Resolve the workflow locally so expired logs can be reported without
+        # asking the workflow controller to assemble them. Preserve the current
+        # controller-provided error semantics when the workflow is not found.
+        try:
+            workflow = _get_workflow_with_uuid_or_name(
+                workflow_id_or_name,
+                str(user.id_),
+                include_shared_workflows=True,
+            )
+        except ValueError:
+            workflow = None
+
+        if workflow and workflow.logs_pruned_at:
+            logs_pruned_at = _serialize_logs_pruned_at(workflow.logs_pruned_at)
+            message = (
+                "The logs for this run were pruned by the cluster's retention "
+                f"policy on {logs_pruned_at} and are no longer available."
+            )
+            return (
+                jsonify(
+                    {
+                        "message": message,
+                        "logs_pruned_at": logs_pruned_at,
+                    }
+                ),
+                410,
+            )
 
         response, http_response = current_rwc_api_client.api.get_workflow_logs(
             user=str(user.id_),
