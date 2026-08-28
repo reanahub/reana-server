@@ -102,6 +102,8 @@ def gitlab_webhook_token(user):
       description: >-
         Return expiry metadata for the current user's delegated GitLab
         webhook authorization. The secret itself is never returned.
+      produces:
+       - application/json
       responses:
         200:
           description: GitLab webhook authorization status.
@@ -144,6 +146,8 @@ def gitlab_webhook_token(user):
         the authorization had already expired, the response includes a
         ``message`` pointing this out, since REANA cannot detect or repair a
         GitLab-side auto-disable on its own.
+      produces:
+       - application/json
       responses:
         200:
           description: Renewed GitLab webhook authorization status.

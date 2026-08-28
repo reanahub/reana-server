@@ -70,6 +70,8 @@ def get_you(user):
             properties:
               email:
                 type: string
+              full_name:
+                type: string
               reana_server_version:
                 type: string
               quota:

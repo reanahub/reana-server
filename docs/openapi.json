@@ -585,6 +585,9 @@
       "get": {
         "description": "Return expiry metadata for the current user's delegated GitLab webhook authorization. The secret itself is never returned.",
         "operationId": "get_gitlab_webhook_token",
+        "produces": [
+          "application/json"
+        ],
         "responses": {
           "200": {
             "description": "GitLab webhook authorization status.",
@@ -634,6 +637,9 @@
       "put": {
         "description": "Confirm the current user's REANA entitlement and extend the delegated GitLab webhook authorization without rotating its secret. Renewal does not re-enable a webhook that GitLab has disabled; the user must send a test delivery or re-enable it from that project's GitLab settings. If the authorization had already expired, the response includes a ``message`` pointing this out, since REANA cannot detect or repair a GitLab-side auto-disable on its own.",
         "operationId": "renew_gitlab_webhook_token",
+        "produces": [
+          "application/json"
+        ],
         "responses": {
           "200": {
             "description": "Renewed GitLab webhook authorization status.",
@@ -6719,6 +6725,9 @@
             "schema": {
               "properties": {
                 "email": {
+                  "type": "string"
+                },
+                "full_name": {
                   "type": "string"
                 },
                 "quota": {
