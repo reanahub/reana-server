@@ -20,7 +20,7 @@ from reana_commons.utils import copy_openapi_specs
 from swagger_spec_validator.validator20 import validate_json
 
 from reana_server.version import __version__
-from reana_server.factory import create_minimal_app
+from reana_server.factory import create_app
 
 # Import your marshmallow schemas here
 # from example_package.schemas import Example_schema,
@@ -59,6 +59,9 @@ def build_openapi_spec(publish):
         version=ver,
         openapi_version="2.0",
         info=dict(description=desc),
+        # REANA API operations require a Bearer token by default. Public and
+        # browser-session endpoints explicitly opt out in their docstrings.
+        security=[{"BearerAuth": []}],
         plugins=(FlaskPlugin(),),
     )
 
@@ -92,6 +95,15 @@ def build_openapi_spec(publish):
                     },
                 },
             },
+        },
+    )
+    spec.components.security_scheme(
+        "BearerAuth",
+        {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "description": "OIDC access token using the `Bearer <token>` scheme.",
         },
     )
 
@@ -140,6 +152,6 @@ def build_openapi_spec(publish):
 
 
 if __name__ == "__main__":
-    app = create_minimal_app()
+    app = create_app({"SECRET_KEY": "openapi-generation-only"})
     with app.app_context():
         build_openapi_spec()

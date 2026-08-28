@@ -54,8 +54,8 @@ def test_get_int_env_variable(monkeypatch, caplog, env_value, expected):
         assert f"Invalid {env_variable}" not in caplog.text
 
 
-def test_keycloak_user_info_endpoint_is_enabled(monkeypatch):
-    """Test that generic Keycloak SSO enables user info endpoint lookups."""
+def test_legacy_keycloak_provider_setting_is_removed(monkeypatch):
+    """The retired Invenio provider setting is not part of OIDC auth config."""
     issuer_url = "https://auth.example.org/auth/realms/example"
     login_providers_configs = [
         {
@@ -82,4 +82,4 @@ def test_keycloak_user_info_endpoint_is_enabled(monkeypatch):
 
     test_config = _load_config_module()
 
-    assert test_config.OAUTHCLIENT_KEYCLOAK_USER_INFO_FROM_ENDPOINT is True
+    assert not hasattr(test_config, "OAUTHCLIENT_KEYCLOAK_USER_INFO_FROM_ENDPOINT")

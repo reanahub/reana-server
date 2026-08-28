@@ -8,8 +8,6 @@
 """Common options for the REANA administrator command line tool."""
 
 import functools
-import os
-import sys
 
 import click
 from reana_db.database import Session
@@ -17,33 +15,8 @@ from reana_db.models import Workflow
 
 from reana_server.utils import (
     _get_user_by_criteria,
-    _validate_admin_access_token,
     is_uuid_v4,
 )
-
-
-def admin_access_token_option(func):
-    """Click option to load admin access token."""
-
-    @click.option(
-        "--admin-access-token",
-        required=True,
-        default=os.environ.get("REANA_ADMIN_ACCESS_TOKEN"),
-        help="The access token of an administrator.",
-    )
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            _validate_admin_access_token(kwargs.get("admin_access_token"))
-        except (RuntimeError, ValueError) as e:
-            click.echo(
-                click.style(str(e), fg="red"),
-                err=True,
-            )
-            sys.exit(1)
-        return func(*args, **kwargs)
-
-    return wrapper
 
 
 def add_user_options(func):
@@ -55,13 +28,13 @@ def add_user_options(func):
     def wrapper(*args, email, id_, **kwargs):
         if id_ is not None and email is not None:
             click.secho("Cannot provide --email and --id at the same time.", fg="red")
-            sys.exit(1)
+            raise click.exceptions.Exit(1)
         user = None
         if id_ is not None or email is not None:
             user = _get_user_by_criteria(id_, email)
             if not user:
                 click.secho("User not found.", fg="red")
-                sys.exit(1)
+                raise click.exceptions.Exit(1)
         func(*args, user=user, **kwargs)
 
     return wrapper
@@ -80,7 +53,7 @@ def add_workflow_option(**attrs):
             if workflow_uuid is not None:
                 if not is_uuid_v4(workflow_uuid):
                     click.secho("Invalid workflow UUID.", fg="red")
-                    sys.exit(1)
+                    raise click.exceptions.Exit(1)
                 workflow = (
                     Session.query(Workflow)
                     .filter(Workflow.id_ == workflow_uuid)
@@ -88,7 +61,7 @@ def add_workflow_option(**attrs):
                 )
                 if not workflow:
                     click.secho("Workflow not found.", fg="red")
-                    sys.exit(1)
+                    raise click.exceptions.Exit(1)
             func(*args, workflow=workflow, **kwargs)
 
         return wrapper

@@ -11,7 +11,6 @@
 import datetime
 import logging
 from pathlib import Path
-import secrets
 import sys
 import traceback
 from typing import List, Optional
@@ -21,7 +20,6 @@ import requests
 import tablib
 from click.core import ParameterSource
 from flask.cli import with_appcontext
-from invenio_accounts.utils import register_user
 from kubernetes.client.rest import ApiException
 from reana_commons.config import (
     REANA_RESOURCE_HEALTH_COLORS,
@@ -34,23 +32,24 @@ from reana_commons.utils import click_table_printer
 from reana_db.config import DEFAULT_QUOTA_LIMITS
 from reana_db.database import Session
 from reana_db.models import (
+    RunStatus,
     QuotaHealth,
     Resource,
     User,
     UserResource,
-    UserTokenStatus,
     Workflow,
     WorkspaceRetentionRule,
     WorkspaceRetentionRuleStatus,
 )
 
 from reana_server.api_client import current_rwc_api_client
+from reana_server.auth.provision import link_user_identity
+from reana_server.auth.sessions import delete_sessions_for_subject
 from reana_server.config import ADMIN_USER_ID, REANA_HOSTNAME
 from reana_server.reana_admin.check_workflows import check_workspaces
 from reana_server.reana_admin.options import (
     add_user_options,
     add_workflow_option,
-    admin_access_token_option,
 )
 from reana_server.reana_admin.retention_rule_deleter import RetentionRuleDeleter
 from reana_server.status import STATUS_OBJECT_TYPES
@@ -69,10 +68,7 @@ from reana_server.utils import (
     _import_users,
     _set_quota_period,
     _validate_email,
-    _validate_password,
     create_user_workspace,
-    grant_access_token_to_user,
-    revoke_access_token_of_user,
     _set_quota_limit,
 )
 
@@ -96,42 +92,290 @@ def _unset_if_option_omitted(ctx, param, value):
     required=True,
     help="The email of the admin user.",
 )
-@click.option("--password", "-p", callback=_validate_password, required=True)
 @click.option("-i", "--id", "id_", default=ADMIN_USER_ID)
+@click.option(
+    "--idp-issuer",
+    help="OIDC issuer URL to link explicitly to the administrator.",
+)
+@click.option(
+    "--idp-subject",
+    help="OIDC subject to link explicitly to the administrator.",
+)
 @with_appcontext
-def users_create_default(email, password, id_):
-    """Create default user.
+def users_create_default(email, id_, idp_issuer, idp_subject):
+    """Create the default administrator user.
 
-    This user has the administrator role
-    and can retrieve other user information as well as create
-    new users.
+    Credentials are owned by the OIDC issuer (e.g. the bundled Keycloak);
+    pass both identity options to create or update a pre-linked REANA row.
+    Omit both only when an external issuer's immutable subject is not yet
+    available, then rerun this command with both options before login.
     """
     reana_user_characteristics = {
         "id_": id_,
         "email": email,
     }
     try:
-        user = Session.query(User).filter_by(**reana_user_characteristics).first()
+        if bool(idp_issuer) != bool(idp_subject):
+            raise ValueError(
+                "--idp-issuer and --idp-subject must be provided together."
+            )
+        user_by_id = Session.query(User).filter_by(id_=id_).one_or_none()
+        user_by_email = Session.query(User).filter_by(email=email).one_or_none()
+        if user_by_id and user_by_email and user_by_id.id_ != user_by_email.id_:
+            raise ValueError("Administrator id and email belong to different users.")
+        user = user_by_id or user_by_email
         if not user:
-            reana_user_characteristics["access_token"] = secrets.token_urlsafe(16)
             user = User(**reana_user_characteristics)
             create_user_workspace(user.get_user_workspace())
             Session.add(user)
-            Session.commit()
-            # create invenio user, passing `confirmed_at` to mark it as confirmed
-            register_user(
-                email=email, password=password, confirmed_at=datetime.datetime.now()
-            )
-            click.echo(reana_user_characteristics["access_token"])
+        elif str(user.id_) != str(id_) or user.email != email:
+            raise ValueError("Existing administrator id or email does not match.")
+
+        if idp_issuer and idp_subject:
+            link_user_identity(user, idp_issuer, idp_subject)
+        Session.commit()
+        click.echo(str(user.id_))
     except Exception as e:
+        Session.rollback()
         click.echo("Something went wrong: {0}".format(e))
         sys.exit(1)
+
+
+@reana_admin.command("link-user-identity")
+@click.option(
+    "-e",
+    "--email",
+    callback=_validate_email,
+    required=True,
+    help="Email of the existing REANA user to link.",
+)
+@click.option("--idp-issuer", required=True, help="Trusted OIDC issuer URL.")
+@click.option("--idp-subject", required=True, help="Immutable OIDC subject.")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Validate the single-user link without committing it.",
+)
+@with_appcontext
+def link_user_identity_command(email, idp_issuer, idp_subject, dry_run):
+    """Explicitly link one existing user during an OIDC migration."""
+    try:
+        user = Session.query(User).filter_by(email=email).one_or_none()
+        if user is None:
+            raise ValueError(f"No REANA user exists for '{email}'.")
+        link_user_identity(user, idp_issuer, idp_subject)
+        if dry_run:
+            Session.rollback()
+            click.echo(f"Would link {email} to {idp_issuer} / {idp_subject}.")
+        else:
+            Session.commit()
+            click.echo(f"Linked {email} to {idp_issuer} / {idp_subject}.")
+    except Exception as error:
+        Session.rollback()
+        raise click.ClickException(str(error)) from error
+
+
+@reana_admin.command("gitlab-webhook-revoke")
+@click.option(
+    "--delete-secret",
+    is_flag=True,
+    help=(
+        "Also delete the secret. Hooks already installed in GitLab stop working "
+        "permanently and the user must recreate them through REANA."
+    ),
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Report what would be revoked without committing the change.",
+)
+@add_user_options
+def gitlab_webhook_revoke(delete_secret: bool, dry_run: bool, user: Optional[User]):
+    """Revoke a user's delegated GitLab webhook authorization immediately.
+
+    Webhook secrets are delegated capabilities that expire on their own after
+    ``REANA_GITLAB_WEBHOOK_SECRET_MAX_LIFETIME``. This command ends one now,
+    without waiting for that bound, so that an offboarded or compromised
+    account stops launching workflows from GitLab straight away.
+
+    By default the secret is kept but de-authorized: the user can restore it
+    from the REANA web interface, which re-checks their current identity
+    provider entitlement. Use ``--delete-secret`` when the secret itself must
+    be considered compromised.
+    """
+    if user is None:
+        click.secho("Please specify the user with --email or --id.", fg="red", err=True)
+        raise click.exceptions.Exit(1)
+    if not user.gitlab_webhook_secret:
+        click.echo(f"{user.email} has no GitLab webhook authorization to revoke.")
+        return
+    try:
+        user.gitlab_webhook_secret_expires_at = None
+        if delete_secret:
+            user.gitlab_webhook_secret = None
+        if dry_run:
+            Session.rollback()
+            click.echo(
+                f"Would revoke the GitLab webhook authorization of {user.email}."
+            )
+            return
+        Session.commit()
+    except Exception as error:
+        Session.rollback()
+        raise click.ClickException(str(error)) from error
+    click.secho(
+        f"Revoked the GitLab webhook authorization of {user.email}.", fg="green"
+    )
+    if delete_secret:
+        click.echo(
+            "The secret was deleted. Existing GitLab hooks are permanently "
+            "rejected; the user must re-enable each project in REANA."
+        )
+    else:
+        click.echo(
+            "The secret is preserved. The user can re-authorize it from the "
+            "REANA web interface while they still hold the required role."
+        )
+
+
+@reana_admin.command("revoke-identity")
+@click.option(
+    "--delete-secret",
+    is_flag=True,
+    help=(
+        "Also delete the GitLab webhook secret. Hooks already installed in "
+        "GitLab stop working permanently and the user must recreate them "
+        "through REANA."
+    ),
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Report what would be revoked without changing or deleting anything.",
+)
+@add_user_options
+@with_appcontext
+@click.pass_context
+def revoke_identity(
+    ctx, delete_secret: bool, dry_run: bool, user: Optional[User]
+) -> None:
+    """Revoke every REANA-side session and secret for one identity at once.
+
+    Closes the user's open interactive sessions immediately, revokes their
+    GitLab webhook authorization, and deletes their browser (BFF) sessions
+    -- everything REANA itself can revoke without delay, in one command
+    instead of three. Equivalent to running ``interactive-session-cleanup
+    --email``, ``gitlab-webhook-revoke --email``, and a BFF-session
+    revocation separately; see those commands for narrower standalone use
+    (e.g. only closing sessions, or only a leaked-secret response).
+
+    The three subsystems are independent (Kubernetes, the database, and
+    Redis respectively) and are each attempted even if another one fails --
+    an outage in one must not leave the others un-revoked. The GitLab
+    webhook and BFF-session steps run first since neither depends on
+    Kubernetes; the exit code is non-zero if any subsystem failed, after
+    every subsystem has been attempted.
+
+    This does NOT remove the user's identity-provider role/entitlement, and
+    cannot revoke a JWT access token already issued: REANA validates bearer
+    tokens statelessly, so a live one keeps working until it expires
+    regardless of anything this command does. For offboarding or a
+    suspected compromise, remove the identity-provider role FIRST, then run
+    this -- the same ordering ``gitlab-webhook-revoke``'s documentation
+    already requires, now covering every REANA-side credential at once.
+    """
+    if user is None:
+        click.secho("Please specify the user with --email or --id.", fg="red", err=True)
+        raise click.exceptions.Exit(1)
+
+    # Snapshotted up front, before any subsystem below can commit or roll
+    # back: SQLAlchemy expires ``user``'s attributes by default after
+    # gitlab_webhook_revoke's commit (or its rollback, on failure), so any
+    # later access to user.email/idp_issuer/idp_subject would issue a fresh
+    # database query. During a genuine, *continuing* database outage that
+    # reload also fails -- which would make the BFF/Redis step below report
+    # itself as failed even though Redis revocation never actually depends
+    # on the database. Reading these once now keeps the BFF step truly
+    # independent of the other two subsystems' database access.
+    snapshot_email = user.email
+    snapshot_idp_issuer = user.idp_issuer
+    snapshot_idp_subject = user.idp_subject
+
+    failures = []
+
+    try:
+        ctx.invoke(
+            gitlab_webhook_revoke,
+            delete_secret=delete_secret,
+            dry_run=dry_run,
+            email=snapshot_email,
+            id_=None,
+        )
+    except (Exception, SystemExit) as error:
+        failures.append("GitLab webhook authorization")
+        click.secho(
+            f"Failed to revoke the GitLab webhook authorization: {error}",
+            fg="red",
+            err=True,
+        )
+
+    try:
+        if snapshot_idp_subject:
+            count = delete_sessions_for_subject(
+                snapshot_idp_issuer, snapshot_idp_subject, dry_run=dry_run
+            )
+            verb = "Would delete" if dry_run else "Deleted"
+            click.echo(f"{verb} {count} browser session(s) for {snapshot_email}.")
+        else:
+            click.echo(
+                f"{snapshot_email} has no linked identity-provider subject "
+                "yet; no browser sessions to look up."
+            )
+    except (Exception, SystemExit) as error:
+        failures.append("browser (BFF) sessions")
+        click.secho(f"Failed to delete browser sessions: {error}", fg="red", err=True)
+
+    try:
+        # Unlike the BFF step, this one legitimately depends on the
+        # database: its own user-option lookup re-queries the user, and it
+        # maps running pods to Workflow rows. A database outage failing
+        # this step is a genuine, correctly-attributed failure, not the
+        # cross-subsystem leak the snapshot above avoids.
+        ctx.invoke(
+            interactive_session_cleanup,
+            days=None,
+            dry_run=dry_run,
+            email=snapshot_email,
+            id_=None,
+        )
+    except (Exception, SystemExit) as error:
+        failures.append("interactive sessions")
+        click.secho(
+            f"Failed to close interactive sessions: {error}", fg="red", err=True
+        )
+
+    click.secho(
+        "Remember to remove this user's identity-provider role separately "
+        "-- a live access token keeps working until it expires regardless "
+        "of anything this command does.",
+        fg="yellow",
+    )
+
+    if failures:
+        click.secho(
+            "revoke-identity did not fully succeed -- failed subsystem(s): "
+            + ", ".join(failures)
+            + ". Subsystems that did not fail were still revoked; re-run "
+            "this command to retry the ones that failed.",
+            fg="red",
+            err=True,
+        )
+        raise click.exceptions.Exit(1)
 
 
 @reana_admin.command("user-list", help="List users according to the search criteria.")
 @click.option("--id", help="The id of the user.")
 @click.option("-e", "--email", help="The email of the user.")
-@click.option("--user-access-token", help="The access token of the user.")
 @click.option(
     "--json",
     "output_format",
@@ -139,21 +383,19 @@ def users_create_default(email, password, id_):
     default=None,
     help="Get output in JSON format.",
 )
-@admin_access_token_option
 @click.pass_context
-def list_users(ctx, id, email, user_access_token, admin_access_token, output_format):
+def list_users(ctx, id, email, output_format):
     """List users according to the search criteria."""
     try:
-        response = _get_users(id, email, user_access_token)
-        headers = ["id", "email", "access_token", "access_token_status"]
+        response = _get_users(id, email)
+        headers = ["id", "email", "idp_subject"]
         data = []
         for user in response:
             data.append(
                 (
                     str(user.id_),
                     user.email,
-                    str(user.access_token),
-                    str(user.access_token_status),
+                    str(user.idp_subject or ""),
                 )
             )
         if output_format:
@@ -183,15 +425,13 @@ def list_users(ctx, id, email, user_access_token, admin_access_token, output_for
     required=True,
     help="The email of the user.",
 )
-@click.option("--user-access-token", help="The access token of the user.")
-@admin_access_token_option
 @click.pass_context
-def create_user(ctx, email, user_access_token, admin_access_token):
-    """Create a new user. Requires the token of an administrator."""
+def create_user(ctx, email):
+    """Create a new user."""
     try:
-        response = _create_user(email, user_access_token)
-        headers = ["id", "email", "access_token"]
-        data = [(str(response.id_), response.email, response.access_token)]
+        response = _create_user(email)
+        headers = ["id", "email"]
+        data = [(str(response.id_), response.email)]
         click.echo(click.style("User was successfully created.", fg="green"))
         click_table_printer(headers, [], data)
 
@@ -205,9 +445,8 @@ def create_user(ctx, email, user_access_token, admin_access_token):
 
 
 @reana_admin.command("user-export")
-@admin_access_token_option
 @click.pass_context
-def export_users(ctx, admin_access_token):
+def export_users(ctx):
     """Export all users in current REANA cluster."""
     try:
         csv_file = _export_users()
@@ -221,7 +460,6 @@ def export_users(ctx, admin_access_token):
 
 
 @reana_admin.command("user-import")
-@admin_access_token_option
 @click.option(
     "-f",
     "--file",
@@ -230,7 +468,7 @@ def export_users(ctx, admin_access_token):
     type=click.File(),
 )
 @click.pass_context
-def import_users(ctx, admin_access_token, file_):
+def import_users(ctx, file_):
     """Import users from file."""
     try:
         _import_users(file_)
@@ -238,107 +476,6 @@ def import_users(ctx, admin_access_token, file_):
     except Exception as e:
         click.secho(
             "Something went wrong while importing users:\n{}".format(e),
-            fg="red",
-            err=True,
-        )
-
-
-@reana_admin.command("token-grant", help="Grant a token to the selected user.")
-@admin_access_token_option
-@click.option("--id", "id_", help="The id of the user.")
-@click.option("-e", "--email", help="The email of the user.")
-def token_grant(admin_access_token, id_, email):
-    """Grant a token to the selected user."""
-    try:
-        # token grant is committed before email is sent
-        admin = _get_admin_user_or_raise(requested_via="reana_admin.token-grant")
-        user = _get_user_by_criteria(id_, email)
-        error_msg = None
-        if not user:
-            error_msg = f"User {id_ or email} does not exist."
-        elif user.access_token:
-            error_msg = (
-                f"User {user.id_} ({user.email}) has already an active access token."
-            )
-        if error_msg:
-            click.secho(f"ERROR: {error_msg}", fg="red")
-            sys.exit(1)
-        if user.access_token_status in [UserTokenStatus.revoked.name, None]:
-            click.confirm(
-                f"User {user.id_} ({user.email}) access token status"
-                f" is {user.access_token_status}, do you want to"
-                " proceed?",
-                abort=True,
-            )
-        _, log_msg = grant_access_token_to_user(
-            user,
-            granted_by=admin,
-            send_notification_email=True,
-            include_token_in_log=True,  # will only send if REANA_ACCESS_TOKEN_ISSUANCE_POLICY == "manual"
-            requested_via="reana_admin.token-grant",
-        )
-        click.secho(log_msg, fg="green")
-
-    except click.exceptions.Abort:
-        click.echo("Grant token aborted.")
-    except REANAEmailNotificationError as e:
-        # Email dispatch failed, but token was granted. Still show the canonical success message.
-        log_msg = getattr(e, "log_msg", None)
-        if log_msg:
-            click.secho(log_msg, fg="green")
-        click.secho(
-            "Something went wrong while sending email:\n{}".format(e),
-            fg="red",
-            err=True,
-        )
-    except Exception as e:
-        click.secho(
-            "Something went wrong while granting token:\n{}".format(e),
-            fg="red",
-            err=True,
-        )
-
-
-@reana_admin.command("token-revoke", help="Revoke selected user's token.")
-@admin_access_token_option
-@click.option("--id", "id_", help="The id of the user.")
-@click.option("-e", "--email", help="The email of the user.")
-def token_revoke(admin_access_token, id_, email):
-    """Revoke selected user's token."""
-    try:
-        admin = _get_admin_user_or_raise(requested_via="reana_admin.token-revoke")
-        user = _get_user_by_criteria(id_, email)
-        error_msg = None
-        if not user:
-            error_msg = f"User {id_ or email} does not exist."
-        elif not user.access_token:
-            error_msg = (
-                f"User {user.id_} ({user.email}) does not have an"
-                " active access token."
-            )
-        if error_msg:
-            click.secho(f"ERROR: {error_msg}", fg="red")
-            sys.exit(1)
-
-        _, log_msg = revoke_access_token_of_user(
-            user,
-            revoked_by=admin,
-            send_notification_email=True,
-            requested_via="reana_admin.token-revoke",
-        )
-        click.secho(log_msg, fg="green")
-    except REANAEmailNotificationError as e:
-        log_msg = getattr(e, "log_msg", None)
-        if log_msg:
-            click.secho(log_msg, fg="green")
-        click.secho(
-            "Something went wrong while sending email:\n{}".format(e),
-            fg="red",
-            err=True,
-        )
-    except Exception as e:
-        click.secho(
-            "Something went wrong while revoking token:\n{}".format(e),
             fg="red",
             err=True,
         )
@@ -359,8 +496,7 @@ def token_revoke(admin_access_token, id_, email):
     default=None,
     help="Send the status by email to the configured receiver.",
 )
-@admin_access_token_option
-def status_report(types, email, admin_access_token):
+def status_report(types, email):
     """Retrieve a status report summary of the REANA system."""
 
     def _print_row(data, column_widths):
@@ -438,7 +574,6 @@ def status_report(types, email, admin_access_token):
 @reana_admin.command("quota-usage", help="List quota usage of users.")
 @click.option("--id", help="The id of the user.")
 @click.option("-e", "--email", help="The email of the user.")
-@click.option("--user-access-token", help="The access token of the user.")
 @click.option(
     "--json",
     "output_format",
@@ -455,14 +590,11 @@ def status_report(types, email, admin_access_token):
     callback=lambda ctx, param, value: "human_readable" if value else "raw",
     help="Show quota usage values in human readable format.",
 )
-@admin_access_token_option
 @click.pass_context
-def list_quota_usage(
-    ctx, id, email, user_access_token, admin_access_token, output_format, human_readable
-):
+def list_quota_usage(ctx, id, email, output_format, human_readable):
     """List quota usage of users."""
     try:
-        response = _get_users(id, email, user_access_token)
+        response = _get_users(id, email)
         headers = ["id", "email", "cpu-used", "cpu-limit", "disk-used", "disk-limit"]
         health_order = {
             QuotaHealth.healthy.name: 0,
@@ -556,11 +688,8 @@ def list_quota_resources(ctx):
 @click.option(
     "--limit", "-l", help="New limit in canonical unit.", required=True, type=int
 )
-@admin_access_token_option
 @click.pass_context
-def set_quota_limit(
-    ctx, emails, resource_type, resource_name, limit, admin_access_token
-):
+def set_quota_limit(ctx, emails, resource_type, resource_name, limit):
     """Set quota limits to the given users per resource."""
     msg, status_code, fatal = _set_quota_limit(
         limit=limit,
@@ -605,7 +734,6 @@ def set_quota_limit(
     callback=_unset_if_option_omitted,
     help="Current active quota period start datetime.",
 )
-@admin_access_token_option
 @click.pass_context
 def set_quota_period(
     ctx,
@@ -614,7 +742,6 @@ def set_quota_period(
     resource_type,
     quota_period_months,
     quota_period_start_at,
-    admin_access_token,
 ):
     """Set periodic quota fields for one user."""
     if int(bool(user_id)) + int(bool(email)) != 1:
@@ -652,9 +779,8 @@ def set_quota_period(
     custom settings, will be kept during the upgrade, and won't be automatically
     updated to match the new default limit value.""",
 )
-@admin_access_token_option
 @click.pass_context
-def set_default_quota_limit(ctx, admin_access_token: str):
+def set_default_quota_limit(ctx):
     """Set default quota limits for users who do not have any custom limits defined."""
     users_without_quota_limits = (
         Session.query(User)
@@ -692,7 +818,6 @@ def set_default_quota_limit(ctx, admin_access_token: str):
                         resource_name=resource.name,
                         resource_type=resource.type_.name,
                         limit=default_limit,
-                        admin_access_token=admin_access_token,
                     )
 
 
@@ -723,13 +848,11 @@ def set_default_quota_limit(ctx, admin_access_token: str):
     default=False,
     help="Manually decide which messages to remove from the queue.",
 )
-@admin_access_token_option
 def queue_consume(
     queue_name: str,
     key: Optional[str],
     values_to_delete: List[str],
     interactive: bool,
-    admin_access_token: str,
 ):
     """Start consuming specified queue and remove selected messages.
 
@@ -793,14 +916,12 @@ def queue_consume(
 )
 @add_user_options
 @add_workflow_option()
-@admin_access_token_option
 def retention_rules_apply(  # noqa: C901
     dry_run: bool,
     force_date: Optional[datetime.datetime],
     yes_i_am_sure: bool,
     user: Optional[User],
     workflow: Optional[Workflow],
-    admin_access_token: str,
 ) -> None:
     """Apply pending retentions rules."""
     if user and workflow and user.id_ != workflow.owner_id:
@@ -938,10 +1059,7 @@ def retention_rules_apply(  # noqa: C901
     required=True,
     type=click.IntRange(min=0),
 )
-@admin_access_token_option
-def retention_rules_extend(
-    workflow: Optional[Workflow], days: int, admin_access_token: str
-) -> None:
+def retention_rules_extend(workflow: Optional[Workflow], days: int) -> None:
     """Extend active retentions rules."""
     click.echo("Fetching all the active rules")
     active_rules = (
@@ -989,12 +1107,10 @@ def retention_rules_extend(
     is_flag=True,
     help="Show all workflows/sessions/workspaces, even if in-sync.",
 )
-@admin_access_token_option
 def check_workflows(
     date_start: datetime.datetime,
     date_end: Optional[datetime.datetime],
     show_all: bool,
-    admin_access_token: str,
 ) -> None:
     """Check consistency of selected workflow run statuses between database, message queue and Kubernetes."""
     from .check_workflows import (
@@ -1096,7 +1212,6 @@ def check_workflows(
     "--days",
     "-d",
     help="Close interactive sessions that are inactive for more than the specified number of days.",
-    required=True,
     type=click.IntRange(min=0),
 )
 @click.option(
@@ -1105,19 +1220,42 @@ def check_workflows(
     default=False,
     help="Show which interactive sessions would be closed, without closing them. [default=False]",
 )
-@admin_access_token_option
-def interactive_session_cleanup(
-    days: int, dry_run: bool, admin_access_token: str
+@add_user_options
+def interactive_session_cleanup(  # noqa: C901
+    days: Optional[int], dry_run: bool, user: Optional[User]
 ) -> None:
-    """Close inactive interactive sessions."""
-    click.echo(
-        f"Starting to close interactive sessions running longer than {days} days.."
-    )
+    """Close inactive interactive sessions, or one user's immediately.
+
+    Without ``--email``/``--id``, closes sessions inactive for more than
+    ``--days``. With ``--email``/``--id``, ignores ``--days`` and closes
+    every one of that user's active sessions right away -- this is REANA's
+    way to make interactive-session revocation immediate (rather than
+    bounded only by the configured inactivity cleanup) when offboarding a
+    user or responding to a suspected account compromise, matching
+    ``gitlab-webhook-revoke``'s role in the webhook revocation lifecycle.
+    """
+    if user is None and days is None:
+        click.secho(
+            "Please specify --days for inactivity-based cleanup, "
+            "or --email/--id to immediately close one user's sessions.",
+            fg="red",
+            err=True,
+        )
+        raise click.exceptions.Exit(1)
+    if user is not None:
+        click.echo(f"Starting to close all interactive sessions for {user.email}..")
+    else:
+        click.echo(
+            f"Starting to close interactive sessions running longer than {days} days.."
+        )
     click.echo("Fetching interactive session pods..")
+    label_selector = "reana_workflow_mode=session"
+    if user is not None:
+        label_selector += f",user-uuid={user.id_}"
     try:
         pods = current_k8s_corev1_api_client.list_namespaced_pod(
             namespace=REANA_RUNTIME_KUBERNETES_NAMESPACE,
-            label_selector="reana_workflow_mode=session",
+            label_selector=label_selector,
         ).items
     except ApiException as e:
         click.secho(f"Couldn't fetch a list of pods: {e}", fg="red", err=True)
@@ -1126,14 +1264,30 @@ def interactive_session_cleanup(
     if not pods:
         click.echo("There are no interactive sessions to process!")
 
+    failures = []
     for pod in pods:
+        pod_name = getattr(getattr(pod, "metadata", None), "name", "<unknown>")
         try:
-            pod_name = pod.metadata.name
             workflow_id = pod.metadata.labels["reana-run-session-workflow-uuid"]
             user_id = pod.metadata.labels["user-uuid"]
-            container_args = pod.spec.containers[0].args
-            # find `--NotebookApp.token` session container argument and parse the user token value from it
-            token = next(filter(lambda a: "token" in a, container_args)).split("'")[1]
+            workflow = (
+                Session.query(Workflow)
+                .filter_by(id_=workflow_id, owner_id=user_id)
+                .one_or_none()
+            )
+            if workflow is None:
+                raise ValueError("matching workflow not found")
+            matching_sessions = [
+                session
+                for session in workflow.sessions
+                if session.status != RunStatus.deleted
+                and (
+                    pod_name == session.name or pod_name.startswith(f"{session.name}-")
+                )
+            ]
+            if len(matching_sessions) != 1:
+                raise ValueError("matching interactive session not found")
+            matching_session = matching_sessions[0]
         except Exception as e:
             click.secho(
                 f"Couldn't parse user details from '{pod_name}' session metadata: {e}",
@@ -1141,12 +1295,54 @@ def interactive_session_cleanup(
                 err=True,
             )
             logging.debug(e, exc_info=True)
+            failures.append(pod_name)
+            continue
+
+        if user is not None:
+            # Immediate revocation: close regardless of inactivity duration,
+            # so this isn't gated by the session's own (self-reported, and
+            # therefore potentially compromised-account-controlled) status.
+            if dry_run:
+                click.echo(f"Interactive session '{pod_name}' would be closed.")
+                continue
+            try:
+                current_rwc_api_client.api.close_interactive_session(
+                    user=user_id, workflow_id_or_name=workflow_id
+                ).result()
+                click.secho(
+                    f"Interactive session '{pod_name}' has been closed.", fg="green"
+                )
+            except Exception as e:
+                click.secho(
+                    f"Couldn't close interactive session '{pod_name}': {e}",
+                    fg="red",
+                    err=True,
+                )
+                logging.debug(e, exc_info=True)
+                failures.append(pod_name)
+            continue
+
+        # The inactivity check needs to query the live notebook's own status
+        # endpoint, which requires the session's token -- unlike immediate
+        # revocation above, which only needs the workflow/user identity.
+        # Sessions created before the session-token feature shipped have
+        # session_secret == None and can't be inactivity-checked this way.
+        token = matching_session.session_secret
+        if not token:
+            click.secho(
+                f"Interactive session '{pod_name}' has no session token, "
+                "cannot check its inactivity status.",
+                fg="red",
+                err=True,
+            )
+            failures.append(pod_name)
             continue
 
         try:
             session_status = requests.get(
                 f"http://reana-run-session-{workflow_id}.{REANA_RUNTIME_KUBERNETES_NAMESPACE}:8081/{workflow_id}/api/status",
                 headers={"Authorization": f"token {token}"},
+                timeout=10,
             ).json()
         except Exception as e:
             click.secho(
@@ -1155,6 +1351,7 @@ def interactive_session_cleanup(
                 err=True,
             )
             logging.debug(e, exc_info=True)
+            failures.append(pod_name)
             continue
 
         last_activity = datetime.datetime.strptime(
@@ -1184,7 +1381,13 @@ def interactive_session_cleanup(
                     err=True,
                 )
                 logging.debug(e, exc_info=True)
+                failures.append(pod_name)
         else:
             click.echo(
                 f"Interactive session '{pod_name}' was updated {duration.days} days ago. Leaving opened."
             )
+
+    if user is not None and failures:
+        raise click.ClickException(
+            "Could not close every interactive session: " + ", ".join(failures)
+        )

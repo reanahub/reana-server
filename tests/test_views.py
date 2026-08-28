@@ -15,8 +15,11 @@ import os
 import shutil
 import zipfile
 import yaml
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 from io import BytesIO
+from threading import Barrier
 from uuid import uuid4
 
 import pytest
@@ -28,11 +31,13 @@ from reana_commons.config import (
     WORKFLOW_RUNTIME_USER_UID,
 )
 from reana_commons.testing import make_mock_api_client
+from reana_commons.errors import REANAMissingWorkspaceError
 
 from reana_db.models import (
-    User,
+    InteractiveSession,
     InteractiveSessionType,
     RunStatus,
+    User,
     Workflow,
     WorkflowResource,
     WorkspaceRetentionAuditLog,
@@ -46,10 +51,6 @@ from reana_commons.errors import (
 )
 from reana_commons.k8s.secrets import UserSecrets, Secret
 
-from reana_server.utils import (
-    _create_and_associate_local_user,
-    _create_and_associate_oauth_user,
-)
 from reana_server.workspace_mutations import (
     WorkspaceMutationConflict,
     WorkspaceMutationUnavailable,
@@ -70,7 +71,7 @@ def _validation_shared_volume(app, monkeypatch):
     )
 
 
-def test_get_workflows(app, user0, _get_user_mock):
+def test_get_workflows(app, user0, auth_headers):
     """Test get_workflows view."""
     with app.test_client() as client:
         with patch(
@@ -85,18 +86,78 @@ def test_get_workflows(app, user0, _get_user_mock):
 
             res = client.get(
                 url_for("workflows.get_workflows"),
-                query_string={"access_token": "wrongtoken", "type": "batch"},
+                headers={"Authorization": "Bearer wrongtoken"},
+                query_string={"type": "batch"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.get(
                 url_for("workflows.get_workflows"),
+                headers=auth_headers(user0),
                 query_string={
-                    "access_token": user0.access_token,
                     "type": "batch",
                 },
             )
             assert res.status_code == 200
+
+
+def test_role_revocation_blocks_workflow_listing(app, user0, auth_headers):
+    """Workflow metadata is not exposed after coarse access is revoked."""
+    with app.test_client() as client:
+        res = client.get(
+            url_for("workflows.get_workflows"),
+            headers=auth_headers(user0, roles=()),
+            query_string={"type": "batch"},
+        )
+    assert res.status_code == 403
+
+
+def test_get_you_returns_stable_access_not_granted(app, user0, auth_headers):
+    """The UI receives a deliberate machine-readable entitlement result."""
+    with app.test_client() as client:
+        res = client.get(
+            url_for("users.get_you"),
+            headers=auth_headers(user0, roles=()),
+        )
+    assert res.status_code == 403
+    assert res.json["code"] == "access_not_granted"
+
+
+def test_first_time_roleless_identity_is_rejected_without_userinfo(app, make_token):
+    """Entitlement failure precedes both profile I/O and JIT provisioning."""
+    token = make_token("never-provisioned-roleless", roles=())
+    with patch("reana_server.auth.provision.fetch_userinfo") as fetch_userinfo:
+        with app.test_client() as client:
+            res = client.get(
+                url_for("users.get_you"),
+                headers={"Authorization": f"Bearer {token}"},
+            )
+    assert res.status_code == 403
+    assert res.json["code"] == "access_not_granted"
+    fetch_userinfo.assert_not_called()
+
+
+def test_unshare_workflow_accepts_recipient_in_query(app, user0, auth_headers):
+    """The unshare endpoint accepts the query parameter declared by its API."""
+    response = {"message": "Workflow sharing removed."}
+    http_response = Mock(status_code=200)
+    api_client = make_mock_api_client("reana-workflow-controller")(
+        response, http_response
+    )
+
+    with app.test_client() as client:
+        with patch("reana_server.rest.workflows.current_rwc_api_client", api_client):
+            res = client.post(
+                url_for(
+                    "workflows.unshare_workflow",
+                    workflow_id_or_name=str(uuid4()),
+                ),
+                query_string={"user_email_to_unshare_with": "recipient@example.org"},
+                headers=auth_headers(user0),
+            )
+
+    assert res.status_code == 200
+    assert res.json == response
 
 
 SERIAL_REANA_YAML = (
@@ -170,7 +231,7 @@ def test_create_workflow(
     app,
     session,
     user0,
-    _get_user_mock,
+    auth_headers,
     sample_serial_workflow_in_db,
     monkeypatch,
     tmp_path,
@@ -214,17 +275,15 @@ def test_create_workflow(
 
             res = client.post(
                 url_for("workflows.create_workflow"),
-                query_string={
-                    "access_token": "wrongtoken",
-                },
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             # remote repository given as spec, not implemented
             res = client.post(
                 url_for("workflows.create_workflow"),
+                headers=auth_headers(user0),
                 query_string={
-                    "access_token": user0.access_token,
                     "spec": "not_implemented",
                 },
             )
@@ -233,15 +292,15 @@ def test_create_workflow(
             # no specification bundle provided
             res = client.post(
                 url_for("workflows.create_workflow"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
             assert res.status_code == 400
 
             # name cannot be valid uuid4
             res = client.post(
                 url_for("workflows.create_workflow"),
+                headers=auth_headers(user0),
                 query_string={
-                    "access_token": user0.access_token,
                     "workflow_name": str(uuid4()),
                 },
                 data=_serial_bundle(),
@@ -258,8 +317,8 @@ def test_create_workflow(
             update_user_quota_mock.reset_mock()
             res = client.post(
                 url_for("workflows.create_workflow"),
+                headers=auth_headers(user0),
                 query_string={
-                    "access_token": user0.access_token,
                     "workflow_name": "test",
                 },
                 data=_serial_bundle(),
@@ -285,7 +344,7 @@ def test_create_workflow(
 
 
 def test_create_workflow_rejects_legacy_json_specification(
-    app, user0, _get_user_mock, monkeypatch, tmp_path
+    app, user0, auth_headers, monkeypatch, tmp_path
 ):
     """A released client's JSON create gets actionable upgrade guidance."""
     monkeypatch.setattr("reana_server.rest.workflows.SHARED_VOLUME_PATH", str(tmp_path))
@@ -299,8 +358,8 @@ def test_create_workflow_rejects_legacy_json_specification(
         # arrives as the whole JSON document with no wrapping key.
         res = client.post(
             url_for("workflows.create_workflow"),
+            headers=auth_headers(user0),
             query_string={
-                "access_token": user0.access_token,
                 "workflow_name": "test",
             },
             data=json.dumps(
@@ -329,7 +388,7 @@ def test_create_workflow_rejects_legacy_json_specification(
     [(WorkspaceMutationConflict, 409), (WorkspaceMutationUnavailable, 503)],
 )
 def test_create_workflow_maps_creation_lock_failures(
-    app, user0, _get_user_mock, monkeypatch, tmp_path, lock_error, status_code
+    app, user0, auth_headers, monkeypatch, tmp_path, lock_error, status_code
 ):
     """Creation exposes family-lock contention and infrastructure failures."""
     monkeypatch.setattr("reana_server.rest.workflows.SHARED_VOLUME_PATH", str(tmp_path))
@@ -339,8 +398,8 @@ def test_create_workflow_maps_creation_lock_failures(
     ):
         response = client.post(
             url_for("workflows.create_workflow"),
+            headers=auth_headers(user0),
             query_string={
-                "access_token": user0.access_token,
                 "workflow_name": "locked-create",
             },
             data=_serial_bundle(),
@@ -355,7 +414,7 @@ def test_create_workflow_compensates_an_unexpected_controller_id(
     app,
     session,
     user0,
-    _get_user_mock,
+    auth_headers,
     sample_serial_workflow_in_db,
     monkeypatch,
     tmp_path,
@@ -385,8 +444,8 @@ def test_create_workflow_compensates_an_unexpected_controller_id(
     ):
         response = client.post(
             url_for("workflows.create_workflow"),
+            headers=auth_headers(user0),
             query_string={
-                "access_token": user0.access_token,
                 "workflow_name": "mismatched-create",
             },
             data=_serial_bundle(),
@@ -400,7 +459,7 @@ def test_create_workflow_compensates_an_unexpected_controller_id(
 
 
 def test_create_workflow_rejects_over_quota_user_before_staging(
-    app, session, user0, _get_user_mock, monkeypatch, tmp_path
+    app, session, user0, auth_headers, monkeypatch, tmp_path
 ):
     """An over-quota raw-bundle create is rejected before any expensive work.
 
@@ -422,8 +481,8 @@ def test_create_workflow_rejects_over_quota_user_before_staging(
     ) as load_mock:
         res = client.post(
             url_for("workflows.create_workflow"),
+            headers=auth_headers(user0),
             query_string={
-                "access_token": user0.access_token,
                 "workflow_name": "over-quota",
             },
             data=_serial_bundle(),
@@ -436,7 +495,7 @@ def test_create_workflow_rejects_over_quota_user_before_staging(
 
 
 def test_create_workflow_quota_excess_before_create_leaves_no_orphan(
-    app, session, user0, _get_user_mock, monkeypatch, tmp_path
+    app, session, user0, auth_headers, monkeypatch, tmp_path
 ):
     """A staged bundle that would exceed quota fails before the row is created.
 
@@ -454,8 +513,8 @@ def test_create_workflow_quota_excess_before_create_leaves_no_orphan(
     ):
         res = client.post(
             url_for("workflows.create_workflow"),
+            headers=auth_headers(user0),
             query_string={
-                "access_token": user0.access_token,
                 "workflow_name": "quota-excess",
             },
             data=_serial_bundle(),
@@ -471,7 +530,7 @@ def test_raw_bundle_create_failure_compensates_workspace_and_quota(
     app,
     session,
     user0,
-    _get_user_mock,
+    auth_headers,
     sample_serial_workflow_in_db,
     monkeypatch,
     tmp_path,
@@ -517,8 +576,8 @@ def test_raw_bundle_create_failure_compensates_workspace_and_quota(
     ) as update_mock:
         res = client.post(
             url_for("workflows.create_workflow"),
+            headers=auth_headers(user0),
             query_string={
-                "access_token": user0.access_token,
                 "workflow_name": "transactional-create",
             },
             data=_serial_bundle(),
@@ -558,7 +617,7 @@ def test_raw_bundle_promotion_failure_is_compensated(
     app,
     session,
     user0,
-    _get_user_mock,
+    auth_headers,
     sample_serial_workflow_in_db,
     monkeypatch,
     tmp_path,
@@ -600,8 +659,8 @@ def test_raw_bundle_promotion_failure_is_compensated(
     ) as update_mock:
         res = client.post(
             url_for("workflows.create_workflow"),
+            headers=auth_headers(user0),
             query_string={
-                "access_token": user0.access_token,
                 "workflow_name": "failed-promotion",
             },
             data=_serial_bundle(),
@@ -678,7 +737,7 @@ def test_create_workflow_gitlab_accounts_disk_quota(
     app,
     session,
     user0,
-    _get_user_mock,
+    auth_headers,
     sample_serial_workflow_in_db,
     monkeypatch,
     tmp_path,
@@ -713,7 +772,7 @@ def test_create_workflow_gitlab_accounts_disk_quota(
         ) as update_mock:
             res = client.post(
                 url_for("workflows.create_workflow"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
                 data=json.dumps({"object_kind": "push"}),
                 content_type="application/json",
             )
@@ -727,7 +786,7 @@ def test_create_workflow_gitlab_quota_excess_rolls_back(
     app,
     session,
     user0,
-    _get_user_mock,
+    auth_headers,
     sample_serial_workflow_in_db,
     monkeypatch,
     tmp_path,
@@ -757,7 +816,7 @@ def test_create_workflow_gitlab_quota_excess_rolls_back(
         ) as update_mock:
             res = client.post(
                 url_for("workflows.create_workflow"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
                 data=json.dumps({"object_kind": "push"}),
                 content_type="application/json",
             )
@@ -774,7 +833,7 @@ def test_create_workflow_gitlab_invalid_spec_leaves_no_orphan(
     app,
     session,
     user0,
-    _get_user_mock,
+    auth_headers,
     sample_serial_workflow_in_db,
     monkeypatch,
     tmp_path,
@@ -805,7 +864,7 @@ def test_create_workflow_gitlab_invalid_spec_leaves_no_orphan(
         ) as publish_mock:
             res = client.post(
                 url_for("workflows.create_workflow"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
                 data=json.dumps({"object_kind": "push"}),
                 content_type="application/json",
             )
@@ -822,7 +881,7 @@ def test_create_workflow_gitlab_surfaces_validation_warnings(
     app,
     session,
     user0,
-    _get_user_mock,
+    auth_headers,
     sample_serial_workflow_in_db,
     monkeypatch,
     tmp_path,
@@ -867,7 +926,7 @@ def test_create_workflow_gitlab_surfaces_validation_warnings(
         ):
             res = client.post(
                 url_for("workflows.create_workflow"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
                 data=json.dumps({"object_kind": "push"}),
                 content_type="application/json",
             )
@@ -878,7 +937,7 @@ def test_create_workflow_gitlab_surfaces_validation_warnings(
 def test_launch_validates_definition_before_seeding_inputs(
     app,
     user0,
-    _get_user_mock,
+    auth_headers,
     sample_serial_workflow_in_db,
     monkeypatch,
     tmp_path,
@@ -955,7 +1014,7 @@ def test_launch_validates_definition_before_seeding_inputs(
     ):
         response = client.post(
             url_for("launch.launch"),
-            query_string={"access_token": user0.access_token},
+            headers=auth_headers(user0),
             json={"url": "https://example.org/workflow.zip"},
         )
 
@@ -981,8 +1040,8 @@ def test_validation_and_start_endpoints_use_slow_rate_limit(app):
     authenticated-user limit.
     """
     from flask import request
-    from invenio_app.limiter import set_rate_limit
-    from reana_server.config import REANA_RATELIMIT_SLOW, set_reana_rate_limit
+    from reana_server.config import REANA_RATELIMIT_SLOW
+    from reana_server.factory import _set_rate_limit
 
     for endpoint in (
         "workflows.validate_workflow_specification",
@@ -997,23 +1056,23 @@ def test_validation_and_start_endpoints_use_slow_rate_limit(app):
         )
         with app.test_request_context(url_for(endpoint, **values), method="POST"):
             assert request.endpoint == endpoint
-            assert set_reana_rate_limit() == REANA_RATELIMIT_SLOW
+            assert _set_rate_limit() == REANA_RATELIMIT_SLOW
 
     status_url = url_for("workflows.set_workflow_status", workflow_id_or_name="test")
     with app.test_request_context(
         status_url, method="PUT", query_string={"status": "start"}
     ):
-        assert set_reana_rate_limit() == REANA_RATELIMIT_SLOW
+        assert _set_rate_limit() == REANA_RATELIMIT_SLOW
 
     for status in ("stop", "deleted"):
         with app.test_request_context(
             status_url, method="PUT", query_string={"status": status}
         ):
-            assert set_reana_rate_limit() == set_rate_limit()
+            assert _set_rate_limit() == app.config["RATELIMIT_GUEST_USER"]
 
 
 def test_validate_workflow_specification_environment_check(
-    app, user0, _get_user_mock, monkeypatch, tmp_path
+    app, user0, auth_headers, monkeypatch, tmp_path
 ):
     """The ``environments`` flag drives the optional image check wiring.
 
@@ -1032,7 +1091,7 @@ def test_validate_workflow_specification_environment_check(
             # Without the flag the check is not run and no image data is added.
             res = client.post(
                 url_for("workflows.validate_workflow_specification"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
                 data=_serial_bundle_with_uid_override(),
                 content_type="multipart/form-data",
             )
@@ -1045,8 +1104,8 @@ def test_validate_workflow_specification_environment_check(
             # --environments returns offline findings and image identities.
             res = client.post(
                 url_for("workflows.validate_workflow_specification"),
+                headers=auth_headers(user0),
                 query_string={
-                    "access_token": user0.access_token,
                     "environments": "true",
                 },
                 data=_serial_bundle_with_uid_override(),
@@ -1201,7 +1260,7 @@ def test_environment_marker_eviction_sets_truncated_flag():
 
 
 def test_validate_workflow_specification_internal_error_returns_500(
-    app, user0, _get_user_mock, monkeypatch, tmp_path
+    app, user0, auth_headers, monkeypatch, tmp_path
 ):
     """A sandbox internal/infra failure surfaces as 500, not 200 valid:false.
 
@@ -1219,7 +1278,7 @@ def test_validate_workflow_specification_internal_error_returns_500(
         ):
             res = client.post(
                 url_for("workflows.validate_workflow_specification"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
                 data=_serial_bundle(),
                 content_type="multipart/form-data",
             )
@@ -1231,7 +1290,7 @@ def test_validate_workflow_specification_internal_error_returns_500(
 
 
 def test_validate_workflow_specification_controller_unreachable_returns_500(
-    app, user0, _get_user_mock, monkeypatch, tmp_path
+    app, user0, auth_headers, monkeypatch, tmp_path
 ):
     """A controller outage during validation surfaces as 500, not a 400.
 
@@ -1249,7 +1308,7 @@ def test_validate_workflow_specification_controller_unreachable_returns_500(
         ):
             res = client.post(
                 url_for("workflows.validate_workflow_specification"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
                 data=_serial_bundle(),
                 content_type="multipart/form-data",
             )
@@ -1259,7 +1318,7 @@ def test_validate_workflow_specification_controller_unreachable_returns_500(
 
 
 def test_validate_workflow_specification_unexpected_error_is_opaque(
-    app, user0, _get_user_mock, monkeypatch, tmp_path
+    app, user0, auth_headers, monkeypatch, tmp_path
 ):
     """Unexpected validation exceptions are logged but not returned verbatim."""
     monkeypatch.setattr("reana_server.rest.workflows.SHARED_VOLUME_PATH", str(tmp_path))
@@ -1269,7 +1328,7 @@ def test_validate_workflow_specification_unexpected_error_is_opaque(
     ):
         res = client.post(
             url_for("workflows.validate_workflow_specification"),
-            query_string={"access_token": user0.access_token},
+            headers=auth_headers(user0),
             data=_serial_bundle(),
             content_type="multipart/form-data",
         )
@@ -1280,7 +1339,7 @@ def test_validate_workflow_specification_unexpected_error_is_opaque(
 
 
 def test_validate_workflow_specification_invalid_spec_returns_200(
-    app, user0, _get_user_mock, monkeypatch, tmp_path
+    app, user0, auth_headers, monkeypatch, tmp_path
 ):
     """A genuinely invalid specification stays a 200 ``valid:false`` report.
 
@@ -1302,7 +1361,7 @@ def test_validate_workflow_specification_invalid_spec_returns_200(
         ):
             res = client.post(
                 url_for("workflows.validate_workflow_specification"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
                 data=_serial_bundle(),
                 content_type="multipart/form-data",
             )
@@ -1313,7 +1372,7 @@ def test_validate_workflow_specification_invalid_spec_returns_200(
 
 
 def test_validate_does_not_echo_large_expanded_specification(
-    app, user0, _get_user_mock, monkeypatch, tmp_path
+    app, user0, auth_headers, monkeypatch, tmp_path
 ):
     """An expanded spec above the Go response cap remains an internal artifact."""
     monkeypatch.setattr("reana_server.rest.workflows.SHARED_VOLUME_PATH", str(tmp_path))
@@ -1329,7 +1388,7 @@ def test_validate_does_not_echo_large_expanded_specification(
         ):
             res = client.post(
                 url_for("workflows.validate_workflow_specification"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
                 data=_serial_bundle(),
                 content_type="multipart/form-data",
             )
@@ -1350,14 +1409,14 @@ def test_validate_does_not_echo_large_expanded_specification(
     ],
 )
 def test_validate_malformed_or_non_mapping_yaml_returns_load_report(
-    app, user0, _get_user_mock, monkeypatch, tmp_path, spec
+    app, user0, auth_headers, monkeypatch, tmp_path, spec
 ):
     """Malformed/non-mapping YAML is an invalid spec, not an HTTP 500."""
     monkeypatch.setattr("reana_server.rest.workflows.SHARED_VOLUME_PATH", str(tmp_path))
     with app.test_client() as client:
         res = client.post(
             url_for("workflows.validate_workflow_specification"),
-            query_string={"access_token": user0.access_token},
+            headers=auth_headers(user0),
             data=_bundle_with_spec(spec),
             content_type="multipart/form-data",
         )
@@ -1376,7 +1435,7 @@ def test_validate_malformed_or_non_mapping_yaml_returns_load_report(
     ],
 )
 def test_create_malformed_or_non_mapping_yaml_returns_400(
-    app, user0, _get_user_mock, monkeypatch, tmp_path, spec
+    app, user0, auth_headers, monkeypatch, tmp_path, spec
 ):
     """Create rejects malformed/non-mapping YAML without calling controller."""
     monkeypatch.setattr("reana_server.rest.workflows.SHARED_VOLUME_PATH", str(tmp_path))
@@ -1385,8 +1444,8 @@ def test_create_malformed_or_non_mapping_yaml_returns_400(
         with patch("reana_server.rest.workflows.current_rwc_api_client", rwc_client):
             res = client.post(
                 url_for("workflows.create_workflow"),
+                headers=auth_headers(user0),
                 query_string={
-                    "access_token": user0.access_token,
                     "workflow_name": "invalid-spec",
                 },
                 data=_bundle_with_spec(spec),
@@ -1397,7 +1456,7 @@ def test_create_malformed_or_non_mapping_yaml_returns_400(
     rwc_client.api.create_workflow.assert_not_called()
 
 
-def _post_chunked_multipart(client, path, query_string, parts):
+def _post_chunked_multipart(client, path, headers, parts):
     """POST a multipart body with NO ``Content-Length`` (a chunked upload).
 
     Mirrors ``_serial_bundle()`` but forces a chunked transfer (no
@@ -1425,7 +1484,7 @@ def _post_chunked_multipart(client, path, query_string, parts):
     builder = EnvironBuilder(
         path=path,
         method="POST",
-        query_string=query_string,
+        headers=headers,
         content_type="multipart/form-data; boundary=%s" % boundary,
         input_stream=BytesIO(body),
     )
@@ -1439,14 +1498,14 @@ def _post_chunked_multipart(client, path, query_string, parts):
 
 
 def test_validate_workflow_specification_in_limit_bundle(
-    app, user0, _get_user_mock, monkeypatch, tmp_path
+    app, user0, auth_headers, monkeypatch, tmp_path
 ):
     """Regression: a normal in-limit serial bundle still validates (200)."""
     monkeypatch.setattr("reana_server.rest.workflows.SHARED_VOLUME_PATH", str(tmp_path))
     with app.test_client() as client:
         res = client.post(
             url_for("workflows.validate_workflow_specification"),
-            query_string={"access_token": user0.access_token},
+            headers=auth_headers(user0),
             data=_serial_bundle(),
             content_type="multipart/form-data",
         )
@@ -1457,7 +1516,7 @@ def test_validate_workflow_specification_in_limit_bundle(
 
 
 def test_validate_http_cap_includes_zip_and_multipart_overhead(
-    app, user0, _get_user_mock, monkeypatch, tmp_path
+    app, user0, auth_headers, monkeypatch, tmp_path
 ):
     """An extracted-content-limit bundle is not rejected for framing bytes."""
     from reana_server.rest import workflows as workflow_views
@@ -1485,7 +1544,7 @@ def test_validate_http_cap_includes_zip_and_multipart_overhead(
     with app.test_client() as client:
         res = client.post(
             url_for("workflows.validate_workflow_specification"),
-            query_string={"access_token": user0.access_token},
+            headers=auth_headers(user0),
             data=bundle,
             content_type="multipart/form-data",
         )
@@ -1493,7 +1552,7 @@ def test_validate_http_cap_includes_zip_and_multipart_overhead(
 
 
 def test_validate_workflow_specification_chunked_over_cap_returns_413(
-    app, user0, _get_user_mock, monkeypatch, tmp_path
+    app, user0, auth_headers, monkeypatch, tmp_path
 ):
     """A chunked over-cap bundle upload is rejected mid-parse with 413.
 
@@ -1514,7 +1573,7 @@ def test_validate_workflow_specification_chunked_over_cap_returns_413(
             res = _post_chunked_multipart(
                 client,
                 url_for("workflows.validate_workflow_specification"),
-                {"access_token": user0.access_token},
+                auth_headers(user0),
                 {"bundle": b"X" * 500},
             )
     assert res.status_code == 413
@@ -1532,19 +1591,19 @@ def test_validate_workflow_specification_chunked_over_cap_returns_413(
     ],
 )
 def test_spec_bundle_content_length_over_cap_returns_413(
-    app, user0, _get_user_mock, monkeypatch, endpoint, query
+    app, user0, auth_headers, monkeypatch, endpoint, query
 ):
     """Known-length oversized bundles consistently return HTTP 413."""
     monkeypatch.setattr(
         "reana_server.rest.workflows.REANA_SPEC_BUNDLE_MAX_REQUEST_BYTES", 100
     )
-    query = {"access_token": user0.access_token, **query}
     with app.test_client() as client:
         with patch(
             "reana_server.rest.workflows._stage_validation_bundle"
         ) as stage_mock:
             res = client.post(
                 url_for(endpoint),
+                headers=auth_headers(user0),
                 query_string=query,
                 data=_serial_bundle(),
                 content_type="multipart/form-data",
@@ -1555,7 +1614,7 @@ def test_spec_bundle_content_length_over_cap_returns_413(
 
 
 def test_start_workflow_validates_specification(
-    app, session, user0, sample_serial_workflow_in_db
+    app, session, user0, sample_serial_workflow_in_db, auth_headers
 ):
     """Start re-validates the (authoritative) workspace, not the stored spec.
 
@@ -1592,17 +1651,14 @@ def test_start_workflow_validates_specification(
                 "workflows.start_workflow",
                 workflow_id_or_name=str(workflow.id_),
             ),
-            headers={"Content-Type": "application/json"},
-            query_string={
-                "access_token": user0.access_token,
-            },
+            headers={**auth_headers(user0), "Content-Type": "application/json"},
             data=json.dumps({}),
         )
         assert res.status_code == 400
 
 
 def test_start_workflow_unexpected_error_is_opaque(
-    app, session, user0, sample_serial_workflow_in_db
+    app, session, user0, sample_serial_workflow_in_db, auth_headers
 ):
     """Unexpected start-time validation failures do not disclose internals."""
     workflow = sample_serial_workflow_in_db
@@ -1619,8 +1675,7 @@ def test_start_workflow_unexpected_error_is_opaque(
     ):
         res = client.post(
             url_for("workflows.start_workflow", workflow_id_or_name="test"),
-            headers={"Content-Type": "application/json"},
-            query_string={"access_token": user0.access_token},
+            headers={**auth_headers(user0), "Content-Type": "application/json"},
             data=json.dumps({}),
         )
 
@@ -1630,7 +1685,7 @@ def test_start_workflow_unexpected_error_is_opaque(
 
 
 def test_start_workflow_succeeds_with_valid_workspace(
-    app, session, user0, sample_serial_workflow_in_db
+    app, session, user0, sample_serial_workflow_in_db, auth_headers
 ):
     """A valid workspace passes the binding gate and the workflow is queued."""
     workflow = sample_serial_workflow_in_db
@@ -1649,10 +1704,7 @@ def test_start_workflow_succeeds_with_valid_workspace(
                     "workflows.start_workflow",
                     workflow_id_or_name=str(workflow.id_),
                 ),
-                headers={"Content-Type": "application/json"},
-                query_string={
-                    "access_token": user0.access_token,
-                },
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 data=json.dumps({}),
             )
     assert res.status_code == 200
@@ -1660,7 +1712,7 @@ def test_start_workflow_succeeds_with_valid_workspace(
 
 
 def test_start_workflow_falls_back_to_stored_spec_without_workspace_reana_yaml(
-    app, session, user0, sample_serial_workflow_in_db
+    app, session, user0, sample_serial_workflow_in_db, auth_headers
 ):
     """A workspace with no reana.yaml falls back to the stored spec (SNDBX-02).
 
@@ -1691,16 +1743,53 @@ def test_start_workflow_falls_back_to_stored_spec_without_workspace_reana_yaml(
                     "workflows.start_workflow",
                     workflow_id_or_name=str(workflow.id_),
                 ),
-                headers={"Content-Type": "application/json"},
-                query_string={"access_token": user0.access_token},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 data=json.dumps({}),
             )
     assert res.status_code == 200
     assert res.json["status"] == RunStatus.queued.name
 
 
-def test_start_endpoint_rejects_restart_replacement_payload(
-    app, session, user0, sample_serial_workflow_in_db
+def test_start_missing_workflow_returns_not_found(app, user0, auth_headers):
+    """Starting an unknown or inaccessible workflow returns HTTP 404."""
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.start_workflow",
+                workflow_id_or_name="workflow-that-does-not-exist",
+            ),
+            headers={**auth_headers(user0), "Content-Type": "application/json"},
+            data=json.dumps({}),
+        )
+
+    assert res.status_code == 404
+    assert "does not exist" in res.json["message"]
+
+
+def test_missing_workspace_disk_usage_returns_not_found(
+    app, user0, auth_headers, sample_serial_workflow_in_db
+):
+    """A deleted workspace is an expected missing resource, not a server error."""
+    with patch.object(
+        Workflow,
+        "get_workspace_disk_usage",
+        side_effect=REANAMissingWorkspaceError("Directory does not exist."),
+    ):
+        with app.test_client() as client:
+            res = client.get(
+                url_for(
+                    "workflows.get_workflow_disk_usage",
+                    workflow_id_or_name=str(sample_serial_workflow_in_db.id_),
+                ),
+                headers=auth_headers(user0),
+            )
+
+    assert res.status_code == 404
+    assert res.json["message"] == "Directory does not exist."
+
+
+def test_restart_workflow_validates_specification(
+    app, session, user0, sample_serial_workflow_in_db, auth_headers
 ):
     """A released client's replacement restart gets actionable upgrade guidance."""
     with app.test_client() as client:
@@ -1719,10 +1808,7 @@ def test_start_endpoint_rejects_restart_replacement_payload(
         }
         res = client.post(
             url_for("workflows.start_workflow", workflow_id_or_name="test"),
-            headers={"Content-Type": "application/json"},
-            query_string={
-                "access_token": user0.access_token,
-            },
+            headers={**auth_headers(user0), "Content-Type": "application/json"},
             data=json.dumps(body),
         )
         assert res.status_code == 400
@@ -1732,7 +1818,7 @@ def test_start_endpoint_rejects_restart_replacement_payload(
 
 
 def test_atomic_restart_posts_replacement_and_parameters_together(
-    app, session, user0, sample_serial_workflow_in_db
+    app, session, user0, sample_serial_workflow_in_db, auth_headers
 ):
     """The multipart operation validates, promotes and submits one replacement."""
     workflow = sample_serial_workflow_in_db
@@ -1752,7 +1838,7 @@ def test_atomic_restart_posts_replacement_and_parameters_together(
     ):
         res = client.post(
             url_for("workflows.restart_workflow", workflow_id_or_name="test"),
-            query_string={"access_token": user0.access_token},
+            headers=auth_headers(user0),
             data={
                 "replacement": (BytesIO(replacement.encode()), "replacement.yaml"),
                 "parameters": json.dumps(
@@ -1775,7 +1861,7 @@ def test_atomic_restart_posts_replacement_and_parameters_together(
 
 
 def test_atomic_restart_failure_restores_canonical_specification(
-    app, session, user0, sample_serial_workflow_in_db
+    app, session, user0, sample_serial_workflow_in_db, auth_headers
 ):
     """A submission failure restores the previous bytes before releasing the lock."""
     workflow = sample_serial_workflow_in_db
@@ -1817,7 +1903,7 @@ def test_atomic_restart_failure_restores_canonical_specification(
     ), patch("reana_server.rest.workflows._recalculate_shared_workspace_quota"):
         res = client.post(
             url_for("workflows.restart_workflow", workflow_id_or_name="test"),
-            query_string={"access_token": user0.access_token},
+            headers=auth_headers(user0),
             data={"replacement": (BytesIO(replacement.encode()), "replacement.yaml")},
         )
 
@@ -1860,7 +1946,7 @@ def test_atomic_restart_failure_restores_canonical_specification(
 
 
 def test_atomic_restart_rejects_malformed_parameters_before_cloning(
-    app, session, user0, sample_serial_workflow_in_db
+    app, session, user0, sample_serial_workflow_in_db, auth_headers
 ):
     """Multipart parameters have one small JSON-object contract."""
     workflow = sample_serial_workflow_in_db
@@ -1874,7 +1960,7 @@ def test_atomic_restart_rejects_malformed_parameters_before_cloning(
     ) as clone_workflow:
         res = client.post(
             url_for("workflows.restart_workflow", workflow_id_or_name="test"),
-            query_string={"access_token": user0.access_token},
+            headers=auth_headers(user0),
             data={
                 "replacement": (BytesIO(SERIAL_REANA_YAML.encode()), "reana.yaml"),
                 "parameters": json.dumps({"restart": True}),
@@ -1887,7 +1973,7 @@ def test_atomic_restart_rejects_malformed_parameters_before_cloning(
 
 
 def test_atomic_restart_rejects_missing_workspace_source(
-    app, session, user0, sample_serial_workflow_in_db
+    app, session, user0, sample_serial_workflow_in_db, auth_headers
 ):
     """Replacement specs may only reference source already in the workspace."""
     workflow = sample_serial_workflow_in_db
@@ -1909,7 +1995,7 @@ def test_atomic_restart_rejects_missing_workspace_source(
     ) as clone_workflow:
         res = client.post(
             url_for("workflows.restart_workflow", workflow_id_or_name="test"),
-            query_string={"access_token": user0.access_token},
+            headers=auth_headers(user0),
             data={"replacement": (BytesIO(replacement.encode()), "replacement.yaml")},
         )
 
@@ -1940,7 +2026,7 @@ def test_restart_overlong_path_error_is_bounded():
 
 
 def test_atomic_restart_formats_unsafe_workspace_source(
-    app, session, user0, sample_serial_workflow_in_db
+    app, session, user0, sample_serial_workflow_in_db, auth_headers
 ):
     """Typed unsafe paths receive stable restart-specific diagnostics."""
     workflow = sample_serial_workflow_in_db
@@ -1959,7 +2045,7 @@ def test_atomic_restart_formats_unsafe_workspace_source(
     ) as clone_workflow:
         res = client.post(
             url_for("workflows.restart_workflow", workflow_id_or_name="test"),
-            query_string={"access_token": user0.access_token},
+            headers=auth_headers(user0),
             data={"replacement": (BytesIO(replacement.encode()), "replacement.yaml")},
         )
 
@@ -1996,7 +2082,30 @@ def test_enforce_restart_spec_constraints_allows_present_changed_file(tmp_path):
     _enforce_restart_spec_constraints(workflow, new_spec)
 
 
-def test_info_surfaces_kubernetes_min_user_uid(app, user0, _get_user_mock):
+def test_restart_stopped_workflow_returns_conflict(
+    app, session, user0, sample_serial_workflow_in_db, auth_headers, caplog
+):
+    """Restarting a stopped workflow is an expected HTTP 409 conflict."""
+    sample_serial_workflow_in_db.status = RunStatus.stopped
+    session.add(sample_serial_workflow_in_db)
+    session.commit()
+
+    with app.test_client() as client:
+        res = client.post(
+            url_for(
+                "workflows.start_workflow",
+                workflow_id_or_name=str(sample_serial_workflow_in_db.id_),
+            ),
+            headers={**auth_headers(user0), "Content-Type": "application/json"},
+            data=json.dumps({"restart": True}),
+        )
+
+    assert res.status_code == 409
+    assert res.json["message"] == "Only finished or failed workflows can be restarted."
+    assert not [record for record in caplog.records if record.levelname == "ERROR"]
+
+
+def test_info_surfaces_kubernetes_min_user_uid(app, user0, auth_headers):
     """Test /info exposes the configured minimum Kubernetes user ID."""
     with app.test_client() as client:
         with patch(
@@ -2007,7 +2116,7 @@ def test_info_surfaces_kubernetes_min_user_uid(app, user0, _get_user_mock):
         ):
             res = client.get(
                 url_for("info.info"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
     assert res.status_code == 200
     payload = res.json
@@ -2063,7 +2172,7 @@ def test_patch_quota_rejects_non_integer_quota_period_months(app):
 
 
 def test_get_workflow_specification(
-    app, user0, _get_user_mock, sample_yadage_workflow_in_db
+    app, user0, auth_headers, sample_yadage_workflow_in_db
 ):
     """Test get_workflow_specification view."""
     with app.test_client() as client:
@@ -2080,17 +2189,16 @@ def test_get_workflow_specification(
                 url_for(
                     "workflows.get_workflow_specification", workflow_id_or_name="1"
                 ),
-                query_string={"access_token": "wrongtoken"},
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.get(
                 url_for(
                     "workflows.get_workflow_specification",
                     workflow_id_or_name=sample_yadage_workflow_in_db.id_,
                 ),
-                headers={"Content-Type": "application/json"},
-                query_string={"access_token": user0.access_token},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 data=json.dumps(None),
             )
             parsed_res = json.loads(res.data)
@@ -2109,7 +2217,7 @@ def test_get_workflow_specification(
             )
 
 
-def test_get_workflow_logs(app, user0, _get_user_mock):
+def test_get_workflow_logs(app, user0, auth_headers):
     """Test get_workflow_logs view."""
     with app.test_client() as client:
         with patch(
@@ -2123,20 +2231,19 @@ def test_get_workflow_logs(app, user0, _get_user_mock):
 
             res = client.get(
                 url_for("workflows.get_workflow_logs", workflow_id_or_name="1"),
-                query_string={"access_token": "wrongtoken"},
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.get(
                 url_for("workflows.get_workflow_logs", workflow_id_or_name="1"),
-                headers={"Content-Type": "application/json"},
-                query_string={"access_token": user0.access_token},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 data=json.dumps(None),
             )
             assert res.status_code == 200
 
 
-def test_get_workflow_status(app, user0, _get_user_mock):
+def test_get_workflow_status(app, user0, auth_headers):
     """Test get_workflow_logs view."""
     with app.test_client() as client:
         with patch(
@@ -2149,19 +2256,18 @@ def test_get_workflow_status(app, user0, _get_user_mock):
             assert res.status_code == 401
             res = client.get(
                 url_for("workflows.get_workflow_status", workflow_id_or_name="1"),
-                query_string={"access_token": "wrongtoken"},
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.get(
                 url_for("workflows.get_workflow_status", workflow_id_or_name="1"),
-                headers={"Content-Type": "application/json"},
-                query_string={"access_token": user0.access_token},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
             )
             assert res.status_code == 200
 
 
-def test_set_workflow_status(app, user0, _get_user_mock):
+def test_set_workflow_status(app, user0, auth_headers):
     """Test set_workflow_status view."""
     with app.test_client() as client:
         with patch(
@@ -2175,22 +2281,20 @@ def test_set_workflow_status(app, user0, _get_user_mock):
 
             res = client.put(
                 url_for("workflows.set_workflow_status", workflow_id_or_name="1"),
-                query_string={"access_token": "wrongtoken"},
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.put(
                 url_for("workflows.set_workflow_status", workflow_id_or_name="1"),
-                headers={"Content-Type": "application/json"},
-                query_string={"access_token": user0.access_token},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
             )
-            assert res.status_code == 422
+            assert res.status_code == 400
 
             res = client.put(
                 url_for("workflows.set_workflow_status", workflow_id_or_name="1"),
-                headers={"Content-Type": "application/json"},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 query_string={
-                    "access_token": user0.access_token,
                     "status": "stop",
                 },
                 data=json.dumps({}),
@@ -2198,7 +2302,7 @@ def test_set_workflow_status(app, user0, _get_user_mock):
             assert res.status_code == 200
 
 
-def test_set_workflow_status_start_uses_submission_boundary(app, user0, _get_user_mock):
+def test_set_workflow_status_start_uses_submission_boundary(app, user0, auth_headers):
     """Legacy ``status=start`` uses the same serialized submission boundary."""
     rwc_mock = Mock()
     submission_response = {
@@ -2219,9 +2323,8 @@ def test_set_workflow_status_start_uses_submission_boundary(app, user0, _get_use
         ) as submit_workflow:
             res = client.put(
                 url_for("workflows.set_workflow_status", workflow_id_or_name="1"),
-                headers={"Content-Type": "application/json"},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 query_string={
-                    "access_token": user0.access_token,
                     "status": "start",
                 },
                 data=json.dumps({"input_parameters": {"number": 42}}),
@@ -2254,7 +2357,7 @@ def test_submission_boundary_enforces_quota(user0):
 
 
 def test_start_workflow_returns_409_when_workspace_locked(
-    app, session, user0, sample_serial_workflow_in_db
+    app, session, user0, sample_serial_workflow_in_db, auth_headers
 ):
     """The ``/start`` route is serialized under the workspace-mutation lock.
 
@@ -2283,8 +2386,7 @@ def test_start_workflow_returns_409_when_workspace_locked(
                     "workflows.start_workflow",
                     workflow_id_or_name=str(workflow.id_),
                 ),
-                headers={"Content-Type": "application/json"},
-                query_string={"access_token": user0.access_token},
+                headers={**auth_headers(user0), "Content-Type": "application/json"},
                 data=json.dumps({}),
             )
     assert res.status_code == 409
@@ -2340,7 +2442,7 @@ def test_workspace_mutation_decorator_maps_lock_failures(
     assert response.get_json()["message"]
 
 
-def test_status_delete_locks_all_workspaces_but_stop_does_not(app, user0):
+def test_status_delete_locks_all_workspaces_but_stop_does_not(app, user0, auth_headers):
     """Only destructive status changes enter the multi-workspace boundary."""
     from reana_server.rest import workflows
 
@@ -2380,12 +2482,14 @@ def test_status_delete_locks_all_workspaces_but_stop_does_not(app, user0):
     ):
         deleted = client.put(
             url_for("workflows.set_workflow_status", workflow_id_or_name="workflow"),
-            query_string={"access_token": user0.access_token, "status": "deleted"},
+            headers=auth_headers(user0),
+            query_string={"status": "deleted"},
             json={"all_runs": True},
         )
         stopped = client.put(
             url_for("workflows.set_workflow_status", workflow_id_or_name="workflow"),
-            query_string={"access_token": user0.access_token, "status": "stop"},
+            headers=auth_headers(user0),
+            query_string={"status": "stop"},
             json={},
         )
 
@@ -2433,7 +2537,7 @@ def test_shared_workspace_quota_scans_once_for_all_siblings(
     assert {resource.quota_used for resource in resources} == {123}
 
 
-def test_upload_file(app, user0, _get_user_mock):
+def test_upload_file(app, user0, auth_headers):
     """Test upload_file view."""
     with app.test_client() as client:
         with patch("reana_server.rest.workflows.requests"):
@@ -2447,22 +2551,21 @@ def test_upload_file(app, user0, _get_user_mock):
 
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
+                headers={"Authorization": "Bearer wrongtoken"},
                 query_string={
                     "file_name": "test_upload.txt",
-                    "access_token": "wrongtoken",
                 },
                 input_stream=BytesIO(file_content),
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             # wrong content type
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
                 query_string={
-                    "access_token": user0.access_token,
                     "file_name": "test_upload.txt",
                 },
-                headers={"Content-Type": "multipart/form-data"},
+                headers={**auth_headers(user0), "Content-Type": "multipart/form-data"},
                 input_stream=BytesIO(file_content),
             )
             assert res.status_code == 400
@@ -2470,10 +2573,12 @@ def test_upload_file(app, user0, _get_user_mock):
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
                 query_string={
-                    "access_token": user0.access_token,
                     "file_name": None,
                 },
-                headers={"Content-Type": "application/octet-stream"},
+                headers={
+                    **auth_headers(user0),
+                    "Content-Type": "application/octet-stream",
+                },
                 input_stream=BytesIO(file_content),
             )
             assert res.status_code == 400
@@ -2499,10 +2604,12 @@ def test_upload_file(app, user0, _get_user_mock):
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
                 query_string={
-                    "access_token": user0.access_token,
                     "file_name": "test_upload.txt",
                 },
-                headers={"Content-Type": "application/octet-stream"},
+                headers={
+                    **auth_headers(user0),
+                    "Content-Type": "application/octet-stream",
+                },
                 input_stream=BytesIO(file_content),
             )
             requests_client.post.assert_called_once()
@@ -2513,8 +2620,8 @@ def test_upload_file(app, user0, _get_user_mock):
             # workspace data because Werkzeug would spool it before quota.
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
+                headers=auth_headers(user0),
                 query_string={
-                    "access_token": user0.access_token,
                     "file_name": "multipart-upload.txt",
                 },
                 data={"file": (BytesIO(file_content), "local-file.txt")},
@@ -2527,10 +2634,12 @@ def test_upload_file(app, user0, _get_user_mock):
             res = client.post(
                 url_for("workflows.upload_file", workflow_id_or_name="1"),
                 query_string={
-                    "access_token": user0.access_token,
                     "file_name": "empty.txt",
                 },
-                headers={"Content-Type": "application/octet-stream"},
+                headers={
+                    **auth_headers(user0),
+                    "Content-Type": "application/octet-stream",
+                },
                 input_stream=BytesIO(b""),
             )
             assert requests_client.post.call_count == 2
@@ -2547,7 +2656,7 @@ def test_upload_file(app, user0, _get_user_mock):
 
 
 def test_upload_controller_timeout_returns_503_and_releases_lock(
-    app, user0, _get_user_mock
+    app, user0, auth_headers
 ):
     """A stalled controller never strands the workspace mutation lock."""
     from reana_server.rest import workflows
@@ -2571,11 +2680,10 @@ def test_upload_controller_timeout_returns_503_and_releases_lock(
     ):
         response = client.post(
             url_for("workflows.upload_file", workflow_id_or_name="1"),
+            headers={**auth_headers(user0), "Content-Type": "application/octet-stream"},
             query_string={
-                "access_token": user0.access_token,
                 "file_name": "input.dat",
             },
-            headers={"Content-Type": "application/octet-stream"},
             input_stream=BytesIO(b"payload"),
         )
 
@@ -2583,7 +2691,7 @@ def test_upload_controller_timeout_returns_503_and_releases_lock(
     assert entered == ["enter", "exit"]
 
 
-def test_download_file(app, user0, _get_user_mock):
+def test_download_file(app, user0, auth_headers):
     """Test download_file view."""
     with app.test_client() as client:
         with patch("reana_server.rest.workflows.requests"):
@@ -2606,12 +2714,12 @@ def test_download_file(app, user0, _get_user_mock):
                     workflow_id_or_name="1",
                     file_name="test_download",
                 ),
+                headers={"Authorization": "Bearer wrongtoken"},
                 query_string={
                     "file_name": "test_upload.txt",
-                    "access_token": "wrongtoken",
                 },
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
         requests_mock = Mock()
         requests_response_mock = Mock()
@@ -2627,14 +2735,14 @@ def test_download_file(app, user0, _get_user_mock):
                     workflow_id_or_name="1",
                     file_name="test_download",
                 ),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
 
             requests_client.get.assert_called_once()
             assert requests_client.get.return_value.status_code == 200
 
 
-def test_delete_file(app, user0, _get_user_mock):
+def test_delete_file(app, user0, auth_headers):
     """Test delete_file view."""
     mock_response = Mock()
     mock_response.headers = {"Content-Type": "multipart/form-data"}
@@ -2662,11 +2770,9 @@ def test_delete_file(app, user0, _get_user_mock):
                     workflow_id_or_name="1",
                     file_name="test_delete.txt",
                 ),
-                query_string={
-                    "access_token": "wrongtoken",
-                },
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.delete(
                 url_for(
@@ -2674,12 +2780,12 @@ def test_delete_file(app, user0, _get_user_mock):
                     workflow_id_or_name="1",
                     file_name="test_delete.txt",
                 ),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
             assert res.status_code == 200
 
 
-def test_get_files(app, user0, _get_user_mock):
+def test_get_files(app, user0, auth_headers):
     """Test get_files view."""
     with app.test_client() as client:
         with patch(
@@ -2691,13 +2797,13 @@ def test_get_files(app, user0, _get_user_mock):
 
             res = client.get(
                 url_for("workflows.get_files", workflow_id_or_name="1"),
-                query_string={"access_token": "wrongtoken"},
+                headers={"Authorization": "Bearer wrongtoken"},
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             res = client.get(
                 url_for("workflows.get_files", workflow_id_or_name="1"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
             assert res.status_code == 500
 
@@ -2712,12 +2818,12 @@ def test_get_files(app, user0, _get_user_mock):
         ):
             res = client.get(
                 url_for("workflows.get_files", workflow_id_or_name="1"),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
             assert res.status_code == 200
 
 
-def test_move_files(app, user0, _get_user_mock):
+def test_move_files(app, user0, auth_headers):
     """Test move_files view."""
     with app.test_client() as client:
         with patch(
@@ -2736,14 +2842,14 @@ def test_move_files(app, user0, _get_user_mock):
 
             res = client.put(
                 url_for("workflows.move_files", workflow_id_or_name="1"),
+                headers={"Authorization": "Bearer wrongtoken"},
                 query_string={
                     "user": user0.id_,
                     "source": "source.txt",
                     "target": "target.txt",
-                    "access_token": "wrongtoken",
                 },
             )
-            assert res.status_code == 403
+            assert res.status_code == 401
 
             mock_response = Mock()
             mock_response.status_code = 200
@@ -2756,8 +2862,8 @@ def test_move_files(app, user0, _get_user_mock):
             ):
                 res = client.put(
                     url_for("workflows.move_files", workflow_id_or_name="1"),
+                    headers=auth_headers(user0),
                     query_string={
-                        "access_token": user0.access_token,
                         "source": "source.txt",
                         "target": "target.txt",
                     },
@@ -2776,7 +2882,7 @@ def test_open_interactive_session(
     sample_serial_workflow_in_db,
     interactive_session_type,
     expected_status_code,
-    _get_user_mock,
+    auth_headers,
 ):
     """Test open interactive session."""
     with app.test_client() as client:
@@ -2790,7 +2896,7 @@ def test_open_interactive_session(
                     workflow_id_or_name=sample_serial_workflow_in_db.id_,
                     interactive_session_type=interactive_session_type,
                 ),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
             assert res.status_code == expected_status_code
 
@@ -2801,7 +2907,7 @@ def test_close_interactive_session(
     user0,
     sample_serial_workflow_in_db,
     expected_status_code,
-    _get_user_mock,
+    auth_headers,
 ):
     """Test close an interactive session."""
     with app.test_client() as client:
@@ -2814,48 +2920,125 @@ def test_close_interactive_session(
                     "workflows.close_interactive_session",
                     workflow_id_or_name=sample_serial_workflow_in_db.id_,
                 ),
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
             assert res.status_code == expected_status_code
 
 
-def test_create_and_associate_oauth_user(app, session):
-    user_email = "johndoe@reana.io"
-    user_fullname = "John Doe"
-    username = "johndoe"
-    account_info = {
-        "user": {
-            "email": user_email,
-            "profile": {"full_name": user_fullname, "username": username},
-        }
+def test_get_interactive_session_secret(
+    app, session, user0, auth_headers, sample_serial_workflow_in_db
+):
+    """Only the workflow owner can retrieve an active session secret."""
+    interactive_session = InteractiveSession(
+        name="run-session-secret",
+        path="/session/path",
+        owner_id=user0.id_,
+        status=RunStatus.created,
+        session_secret="notebook-secret",
+    )
+    sample_serial_workflow_in_db.sessions.append(interactive_session)
+    session.commit()
+    endpoint = url_for(
+        "workflows.get_interactive_session_secret",
+        workflow_id_or_name=sample_serial_workflow_in_db.id_,
+    )
+
+    with app.test_client() as client:
+        response = client.get(endpoint, headers=auth_headers(user0))
+
+    assert response.status_code == 200
+    assert response.json == {
+        "path": "/session/path",
+        "session_secret": "notebook-secret",
     }
-    user = session.query(User).filter_by(email=user_email).one_or_none()
-    assert user is None
-    _create_and_associate_oauth_user(None, account_info=account_info)
-    user = session.query(User).filter_by(email=user_email).one_or_none()
-    assert user
-    assert user.email == user_email
-    assert user.full_name == user_fullname
-    assert user.username == username
 
 
-def test_create_and_associate_local_user(app, session):
-    mock_user = Mock(email="johndoe@reana.io")
-    user = session.query(User).filter_by(email=mock_user.email).one_or_none()
-    assert user is None
-    with patch(
-        "reana_server.utils._send_confirmation_email"
-    ) as send_confirmation_email:
-        _create_and_associate_local_user(None, user=mock_user)
-        send_confirmation_email.assert_called_once()
-    user = session.query(User).filter_by(email=mock_user.email).one_or_none()
-    assert user
-    assert user.email == mock_user.email
-    assert user.full_name == mock_user.email
-    assert user.username == mock_user.email
+def test_get_workflows_optionally_includes_owned_session_secrets(
+    app, session, user0, user1, auth_headers, sample_serial_workflow_in_db
+):
+    """Interactive listings can fetch all owned launch secrets in one request."""
+    interactive_session = InteractiveSession(
+        name="listed-session-secret",
+        path="/session/path",
+        owner_id=user0.id_,
+        status=RunStatus.created,
+        session_secret="notebook-secret",
+    )
+    sample_serial_workflow_in_db.sessions.append(interactive_session)
+    session.commit()
+    workflow_item = {
+        "id": str(sample_serial_workflow_in_db.id_),
+        "name": sample_serial_workflow_in_db.name,
+        "session_uri": "/session/path",
+    }
+    mock_http_response = Mock(status_code=200)
+    mock_api_client = make_mock_api_client("reana-workflow-controller")(
+        {"items": [workflow_item]}, mock_http_response
+    )
+
+    with app.test_client() as client, patch(
+        "reana_server.rest.workflows.current_rwc_api_client", mock_api_client
+    ):
+        response_without_secrets = client.get(
+            url_for("workflows.get_workflows"),
+            headers=auth_headers(user0),
+            query_string={"type": "interactive"},
+        )
+        response_with_secrets = client.get(
+            url_for("workflows.get_workflows"),
+            headers=auth_headers(user0),
+            query_string={
+                "type": "interactive",
+                "include_session_secrets": "true",
+            },
+        )
+        shared_response_with_secrets = client.get(
+            url_for("workflows.get_workflows"),
+            headers=auth_headers(user1),
+            query_string={
+                "type": "interactive",
+                "include_session_secrets": "true",
+            },
+        )
+
+    assert "session_secret" not in response_without_secrets.json["items"][0]
+    assert response_with_secrets.json["items"][0]["session_secret"] == (
+        "notebook-secret"
+    )
+    assert "session_secret" not in shared_response_with_secrets.json["items"][0]
 
 
-def test_get_workflow_retention_rules(app, user0):
+def test_get_interactive_session_secret_requires_owner(
+    app, user1, auth_headers, sample_serial_workflow_in_db
+):
+    """A different authenticated user cannot retrieve the secret."""
+    endpoint = url_for(
+        "workflows.get_interactive_session_secret",
+        workflow_id_or_name=sample_serial_workflow_in_db.id_,
+    )
+
+    with app.test_client() as client:
+        response = client.get(endpoint, headers=auth_headers(user1))
+
+    assert response.status_code == 403
+
+
+def test_get_interactive_session_secret_without_session_returns_404(
+    app, user0, auth_headers, sample_serial_workflow_in_db
+):
+    """The endpoint reports when no open interactive session exists."""
+    endpoint = url_for(
+        "workflows.get_interactive_session_secret",
+        workflow_id_or_name=sample_serial_workflow_in_db.id_,
+    )
+
+    with app.test_client() as client:
+        response = client.get(endpoint, headers=auth_headers(user0))
+
+    assert response.status_code == 404
+
+
+def test_get_workflow_retention_rules(app, user0, auth_headers):
     """Test get_workflow_retention_rules."""
     endpoint_url = url_for(
         "workflows.get_workflow_retention_rules", workflow_id_or_name="workflow"
@@ -2866,8 +3049,10 @@ def test_get_workflow_retention_rules(app, user0):
         assert res.status_code == 401
 
         # Token not valid
-        res = client.get(endpoint_url, query_string={"access_token": "invalid_token"})
-        assert res.status_code == 403
+        res = client.get(
+            endpoint_url, headers={"Authorization": "Bearer invalid_token"}
+        )
+        assert res.status_code == 401
 
         # Test that status code is propagated from r-w-controller
         status_code = 404
@@ -2879,14 +3064,12 @@ def test_get_workflow_retention_rules(app, user0):
                 mock_response, mock_http_response
             ),
         ):
-            res = client.get(
-                endpoint_url, query_string={"access_token": user0.access_token}
-            )
+            res = client.get(endpoint_url, query_string={}, headers=auth_headers(user0))
             assert res.status_code == status_code
             assert "message" in res.json
 
 
-def test_prune_workspace(app, user0, sample_serial_workflow_in_db):
+def test_prune_workspace(app, user0, sample_serial_workflow_in_db, auth_headers):
     """Test prune_workspace."""
     endpoint_url = url_for(
         "workflows.prune_workspace",
@@ -2898,8 +3081,10 @@ def test_prune_workspace(app, user0, sample_serial_workflow_in_db):
         assert res.status_code == 401
 
         # Test invalid token
-        res = client.post(endpoint_url, query_string={"access_token": "invalid_token"})
-        assert res.status_code == 403
+        res = client.post(
+            endpoint_url, headers={"Authorization": "Bearer invalid_token"}
+        )
+        assert res.status_code == 401
 
         # Test invalid workflow name
         res = client.post(
@@ -2907,31 +3092,29 @@ def test_prune_workspace(app, user0, sample_serial_workflow_in_db):
                 "workflows.prune_workspace",
                 workflow_id_or_name="invalid_wf",
             ),
-            query_string={"access_token": user0.access_token},
+            headers=auth_headers(user0),
         )
         assert res.status_code == 403
 
         # Test normal behaviour
         status_code = 200
-        res = client.post(
-            endpoint_url, query_string={"access_token": user0.access_token}
-        )
+        res = client.post(endpoint_url, query_string={}, headers=auth_headers(user0))
         assert res.status_code == status_code
         assert "The workspace has been correctly pruned." in res.json["message"]
 
         res = client.post(
             endpoint_url,
             query_string={
-                "access_token": user0.access_token,
                 "include_inputs": True,
                 "include_outputs": True,
             },
+            headers=auth_headers(user0),
         )
         assert res.status_code == status_code
         assert "The workspace has been correctly pruned." in res.json["message"]
 
 
-def test_gitlab_projects(app: Flask, user0):
+def test_gitlab_projects(app: Flask, user0, auth_headers):
     """Test fetching of GitLab projects."""
     with app.test_client() as client:
         # token not provided
@@ -2940,9 +3123,9 @@ def test_gitlab_projects(app: Flask, user0):
 
         # invalid REANA token
         res = client.get(
-            "/api/gitlab/projects", query_string={"access_token": "invalid"}
+            "/api/gitlab/projects", headers={"Authorization": "Bearer invalid"}
         )
-        assert res.status_code == 403
+        assert res.status_code == 401
 
         # missing GitLab token
         fetch_mock = Mock()
@@ -2956,7 +3139,7 @@ def test_gitlab_projects(app: Flask, user0):
         ):
             res = client.get(
                 "/api/gitlab/projects",
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
             assert res.status_code == 401
 
@@ -3011,7 +3194,7 @@ def test_gitlab_projects(app: Flask, user0):
         ):
             res = client.get(
                 "/api/gitlab/projects",
-                query_string={"access_token": user0.access_token},
+                headers=auth_headers(user0),
             )
 
         assert res.status_code == 200
@@ -3024,3 +3207,291 @@ def test_gitlab_projects(app: Flask, user0):
         assert res.json["items"][0]["url"] == "url"
         assert res.json["items"][0]["path"] == "abcd"
         assert res.json["items"][0]["hook_id"] == 456
+
+
+def test_new_gitlab_webhook_uses_dedicated_secret(app, session, user0, auth_headers):
+    """New hooks never reuse a legacy REANA access token."""
+    gitlab_client = Mock()
+    gitlab_client.create_webhook.return_value.json.return_value = {"id": 42}
+
+    with app.test_client() as client, patch(
+        "reana_server.rest.gitlab.GitLabClient.from_k8s_secret",
+        return_value=gitlab_client,
+    ):
+        response = client.post(
+            "/api/gitlab/webhook",
+            json={"project_id": "project-1"},
+            headers=auth_headers(user0),
+        )
+
+    assert response.status_code == 201
+    session.refresh(user0)
+    assert user0.gitlab_webhook_secret
+    assert user0.gitlab_webhook_secret_expires_at > datetime.utcnow()
+    webhook_config = gitlab_client.create_webhook.call_args.args[1]
+    assert webhook_config["token"] == user0.gitlab_webhook_secret
+    # The delegated secret is delivered over a TLS-verified channel by default.
+    assert webhook_config["enable_ssl_verification"] is True
+
+
+def test_gitlab_webhook_ssl_verification_can_be_disabled_for_dev(
+    app, session, user0, auth_headers
+):
+    """Self-signed development installs may opt out of webhook SSL verification."""
+    gitlab_client = Mock()
+    gitlab_client.create_webhook.return_value.json.return_value = {"id": 7}
+
+    app.config["REANA_GITLAB_WEBHOOK_SSL_VERIFICATION"] = False
+    with app.test_client() as client, patch(
+        "reana_server.rest.gitlab.GitLabClient.from_k8s_secret",
+        return_value=gitlab_client,
+    ):
+        response = client.post(
+            "/api/gitlab/webhook",
+            json={"project_id": "project-1"},
+            headers=auth_headers(user0),
+        )
+
+    assert response.status_code == 201
+    webhook_config = gitlab_client.create_webhook.call_args.args[1]
+    assert webhook_config["enable_ssl_verification"] is False
+
+
+def test_first_webhook_enables_install_the_persisted_secret(
+    app, session, user0, auth_headers
+):
+    """A later first-time enable installs the stored secret, not its own.
+
+    The user row is locked while the secret is created, so under concurrency a
+    losing first enable reuses the winner's persisted secret rather than
+    installing a fresh value REANA would reject. Sequentially this is observable
+    as: the second enable never generates a new secret and installs the first.
+    """
+    gitlab_client = Mock()
+    gitlab_client.create_webhook.return_value.json.side_effect = [
+        {"id": 1},
+        {"id": 2},
+    ]
+
+    with app.test_client() as client, patch(
+        "reana_server.rest.gitlab.GitLabClient.from_k8s_secret",
+        return_value=gitlab_client,
+    ), patch(
+        "reana_server.rest.gitlab.secrets.token_urlsafe",
+        side_effect=["winning-secret", "losing-secret"],
+    ):
+        first = client.post(
+            "/api/gitlab/webhook",
+            json={"project_id": "project-1"},
+            headers=auth_headers(user0),
+        )
+        second = client.post(
+            "/api/gitlab/webhook",
+            json={"project_id": "project-2"},
+            headers=auth_headers(user0),
+        )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    session.refresh(user0)
+    tokens = [
+        call.args[1]["token"] for call in gitlab_client.create_webhook.call_args_list
+    ]
+    # Both projects were configured with the single persisted secret; the second
+    # enable never installed its own "losing-secret".
+    assert tokens == ["winning-secret", "winning-secret"]
+    assert user0.gitlab_webhook_secret == "winning-secret"
+
+
+def test_concurrent_first_webhook_enables_serialize_on_one_secret(
+    app, session, user0, auth_headers
+):
+    """Two truly concurrent first-time enables must not install different secrets.
+
+    Unlike the sequential test above (which only proves the *outcome* of two
+    calls made one after another), this fires two real threads through the
+    Flask test client, synchronized with a barrier so both reach
+    ``get_or_create_bearer_secret``'s row lock at the same time -- proving
+    the lock actually serializes concurrent database transactions, not just
+    that the code reads correctly in isolation.
+    """
+    from reana_server.rest import gitlab as gitlab_module
+
+    gitlab_client = Mock()
+    gitlab_client.create_webhook.return_value.json.side_effect = [
+        {"id": 1},
+        {"id": 2},
+    ]
+    # Link the identity and mint the header once up front, outside the race:
+    # auth_headers() itself writes to the DB on first use, and the point of
+    # this test is to race the webhook-secret creation, not identity linking.
+    headers = auth_headers(user0)
+
+    entry_barrier = Barrier(2)
+    real_get_or_create_bearer_secret = gitlab_module.get_or_create_bearer_secret
+
+    def _synchronized_get_or_create_bearer_secret(*args, **kwargs):
+        entry_barrier.wait(timeout=10)
+        return real_get_or_create_bearer_secret(*args, **kwargs)
+
+    def _enable(project_id):
+        with app.test_client() as client:
+            return client.post(
+                "/api/gitlab/webhook",
+                json={"project_id": project_id},
+                headers=headers,
+            )
+
+    with patch(
+        "reana_server.rest.gitlab.GitLabClient.from_k8s_secret",
+        return_value=gitlab_client,
+    ), patch.object(
+        gitlab_module,
+        "get_or_create_bearer_secret",
+        new=_synchronized_get_or_create_bearer_secret,
+    ):
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            responses = list(executor.map(_enable, ["project-1", "project-2"]))
+
+    assert [response.status_code for response in responses] == [201, 201]
+    session.refresh(user0)
+    tokens = [
+        call.args[1]["token"] for call in gitlab_client.create_webhook.call_args_list
+    ]
+    # Both concurrent enables installed the same secret -- whichever one won
+    # the row lock -- not two different, independently generated values.
+    assert tokens[0] == tokens[1] == user0.gitlab_webhook_secret
+
+
+def test_gitlab_webhook_token_status_and_renewal(app, session, user0, auth_headers):
+    """Renewal extends authorization without rotating the shared secret."""
+    user0.gitlab_webhook_secret = "existing-webhook-secret"
+    user0.gitlab_webhook_secret_expires_at = datetime.utcnow() - timedelta(days=1)
+    session.commit()
+
+    app.config["REANA_GITLAB_WEBHOOK_SECRET_MAX_LIFETIME"] = 3600
+    with app.test_client() as client:
+        status = client.get("/api/gitlab/webhook-token", headers=auth_headers(user0))
+        renewed = client.put("/api/gitlab/webhook-token", headers=auth_headers(user0))
+
+    assert status.status_code == 200
+    assert status.json["configured"]
+    assert status.json["expired"]
+    assert renewed.status_code == 200
+    assert renewed.json["configured"]
+    assert not renewed.json["expired"]
+    assert renewed.json["max_lifetime_seconds"] == 3600
+    # Renewing an already-expired authorization warns that GitLab may have
+    # auto-disabled affected webhooks, since REANA cannot detect or repair
+    # that on its own.
+    assert "may have" in renewed.json["message"]
+    session.refresh(user0)
+    assert user0.gitlab_webhook_secret == "existing-webhook-secret"
+    assert (
+        datetime.utcnow() + timedelta(minutes=59)
+        < (user0.gitlab_webhook_secret_expires_at)
+        < datetime.utcnow() + timedelta(minutes=61)
+    )
+
+
+def test_gitlab_webhook_token_renewal_of_still_valid_secret_has_no_warning(
+    app, session, user0, auth_headers
+):
+    """Renewing before expiry never had a chance to be auto-disabled."""
+    user0.gitlab_webhook_secret = "existing-webhook-secret"
+    user0.gitlab_webhook_secret_expires_at = datetime.utcnow() + timedelta(days=1)
+    session.commit()
+
+    with app.test_client() as client:
+        renewed = client.put("/api/gitlab/webhook-token", headers=auth_headers(user0))
+
+    assert renewed.status_code == 200
+    assert "message" not in renewed.json
+
+
+def test_gitlab_webhook_token_first_renewal_of_never_expiring_secret_warns(
+    app, session, user0, auth_headers
+):
+    """A pre-expiry-enforcement secret with no expiry is fail-closed too.
+
+    Its first renewal must warn the same way an ordinarily-expired one
+    does, since it was equally rejecting deliveries until now.
+    """
+    user0.gitlab_webhook_secret = "existing-webhook-secret"
+    user0.gitlab_webhook_secret_expires_at = None
+    session.commit()
+
+    with app.test_client() as client:
+        renewed = client.put("/api/gitlab/webhook-token", headers=auth_headers(user0))
+
+    assert renewed.status_code == 200
+    assert "may have" in renewed.json["message"]
+
+
+def test_gitlab_webhook_token_renewal_does_not_call_gitlab(
+    app, session, user0, auth_headers
+):
+    """User-wide renewal leaves disabled-hook recovery to GitLab's UI."""
+    user0.gitlab_webhook_secret = "existing-webhook-secret"
+    user0.gitlab_webhook_secret_expires_at = datetime.utcnow() - timedelta(days=1)
+    session.commit()
+
+    with app.test_client() as client, patch(
+        "reana_server.rest.gitlab.GitLabClient.from_k8s_secret"
+    ) as from_k8s_secret:
+        renewed = client.put("/api/gitlab/webhook-token", headers=auth_headers(user0))
+
+    assert renewed.status_code == 200
+    from_k8s_secret.assert_not_called()
+
+
+def test_gitlab_webhook_token_renewal_requires_existing_secret(
+    app, user0, auth_headers
+):
+    """Renewal cannot mint a capability before a webhook is configured."""
+    with app.test_client() as client:
+        response = client.put("/api/gitlab/webhook-token", headers=auth_headers(user0))
+    assert response.status_code == 404
+
+
+def test_gitlab_webhook_token_renewal_requires_current_role(
+    app, session, user0, auth_headers
+):
+    """A revoked user cannot extend the delegated webhook capability."""
+    expired_at = datetime.utcnow() - timedelta(days=1)
+    user0.gitlab_webhook_secret = "existing-webhook-secret"
+    user0.gitlab_webhook_secret_expires_at = expired_at
+    session.commit()
+
+    with app.test_client() as client:
+        response = client.put(
+            "/api/gitlab/webhook-token",
+            headers=auth_headers(user0, roles=()),
+        )
+
+    assert response.status_code == 403
+    session.refresh(user0)
+    assert user0.gitlab_webhook_secret_expires_at == expired_at
+
+
+def test_new_gitlab_webhook_rejects_expired_authorization(
+    app, session, user0, auth_headers
+):
+    """Creating another hook does not implicitly renew the shared capability."""
+    user0.gitlab_webhook_secret = "expired-webhook-secret"
+    user0.gitlab_webhook_secret_expires_at = datetime.utcnow() - timedelta(seconds=1)
+    session.commit()
+    gitlab_client = Mock()
+
+    with app.test_client() as client, patch(
+        "reana_server.rest.gitlab.GitLabClient.from_k8s_secret",
+        return_value=gitlab_client,
+    ):
+        response = client.post(
+            "/api/gitlab/webhook",
+            json={"project_id": "project-1"},
+            headers=auth_headers(user0),
+        )
+
+    assert response.status_code == 409
+    gitlab_client.create_webhook.assert_not_called()
