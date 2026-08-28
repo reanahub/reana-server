@@ -215,13 +215,17 @@ class TestLogin:
         """Issuer-specific query parameters remain well-formed."""
         with base_app.test_client() as client, patch(
             "reana_server.rest.auth.get_endpoint",
-            return_value=AUTHORIZATION_URL + "?kc_idp_hint=institution",
+            return_value=(
+                AUTHORIZATION_URL + "?kc_idp_hint=institution&client_id=issuer-default"
+            ),
         ):
             response = client.get("/api/login")
 
         params = parse_qs(urlparse(response.headers["Location"]).query)
         assert response.status_code == 302
         assert params["kc_idp_hint"] == ["institution"]
+        # OAuth-controlled values override any defaults embedded in the
+        # discovered endpoint, avoiding ambiguous duplicate parameters.
         assert params["client_id"] == ["reana-server"]
 
     def test_login_does_not_overwrite_gitlab_state(self, base_app, bff_config):

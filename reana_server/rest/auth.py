@@ -288,20 +288,21 @@ def login():
         nonce=nonce,
     )
     authorization_parts = urlparse(authorization_url)
-    authorization_parameters = parse_qsl(
-        authorization_parts.query, keep_blank_values=True
-    ) + list(
-        {
-            "response_type": "code",
-            "client_id": auth_config["web_client_id"],
-            "redirect_uri": _callback_redirect_uri(),
-            "scope": auth_config["scopes"],
-            "state": state,
-            "nonce": nonce,
-            "code_challenge": challenge,
-            "code_challenge_method": "S256",
-        }.items()
-    )
+    oauth_parameters = {
+        "response_type": "code",
+        "client_id": auth_config["web_client_id"],
+        "redirect_uri": _callback_redirect_uri(),
+        "scope": auth_config["scopes"],
+        "state": state,
+        "nonce": nonce,
+        "code_challenge": challenge,
+        "code_challenge_method": "S256",
+    }
+    authorization_parameters = [
+        (key, value)
+        for key, value in parse_qsl(authorization_parts.query, keep_blank_values=True)
+        if key not in oauth_parameters
+    ] + list(oauth_parameters.items())
     response.headers["Location"] = urlunparse(
         authorization_parts._replace(query=urlencode(authorization_parameters))
     )
@@ -554,7 +555,10 @@ def logout():
         # Logout must remain possible while issuer keys are unavailable. The
         # exact access-token copy stored under this random session id safely
         # binds the two cookies without requiring a JWKS lookup.
-        if session_data and secrets.compare_digest(session_data.get("at", ""), token):
+        stored_access_token = session_data.get("at") if session_data else None
+        if isinstance(stored_access_token, str) and secrets.compare_digest(
+            stored_access_token, token
+        ):
             delete_session(sid)
             logging.warning("Issuer unavailable during logout; ended local session.")
             return clear_auth_cookies(jsonify(logout_url=""))
