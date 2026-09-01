@@ -1148,16 +1148,22 @@
                   "type": "string"
                 },
                 "validation_warnings": {
-                  "description": "Dictionary of validation warnings, if any. Each key is a property that was not correctly validated.",
-                  "properties": {
-                    "additional_properties": {
-                      "items": {
+                  "description": "List of structured validation warnings, if any.",
+                  "items": {
+                    "properties": {
+                      "code": {
                         "type": "string"
                       },
-                      "type": "array"
-                    }
+                      "message": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      }
+                    },
+                    "type": "object"
                   },
-                  "type": "object"
+                  "type": "array"
                 },
                 "workflow_id": {
                   "type": "string"
