@@ -39,6 +39,7 @@ from reana_db.models import (
     User,
     UserResource,
     UserTokenStatus,
+    UserWorkflow,
     Workflow,
     WorkspaceRetentionRule,
     WorkspaceRetentionRuleStatus,
@@ -967,6 +968,17 @@ def retention_rules_extend(
         rule.apply_on = apply_on
         Session.add(rule)
     Session.commit()
+
+
+@reana_admin.command("workflow-sharing-expired-cleanup")
+def workflow_sharing_expired_cleanup() -> None:
+    """Remove workflow shares that have passed their expiration date."""
+    expired_shares = Session.query(UserWorkflow).filter(
+        UserWorkflow.valid_until < datetime.datetime.now()
+    )
+    number_of_expired_shares = expired_shares.delete(synchronize_session=False)
+    Session.commit()
+    click.echo(f"Removed {number_of_expired_shares} expired workflow share(s).")
 
 
 @reana_admin.command("check-workflows")

@@ -29,6 +29,7 @@ from reana_db.models import (
     User,
     UserResource,
     UserTokenStatus,
+    UserWorkflow,
     Workflow,
     WorkspaceRetentionRuleStatus,
     generate_uuid,
@@ -800,6 +801,50 @@ def test_retention_rules_extend(workflow_with_retention_rules, user0):
     for rule in workflow.retention_rules:
         if rule.status == WorkspaceRetentionRuleStatus.active:
             assert rule.retention_days > extend_days
+
+
+def test_workflow_sharing_expired_cleanup(session, user0):
+    """Test removing only expired workflow shares."""
+    workflow = Workflow(
+        id_=uuid.uuid4(),
+        name="shared-workflow",
+        owner_id=user0.id_,
+        reana_specification={},
+        type_="serial",
+    )
+    users = [User(email=f"shared-user-{index}@example.org") for index in range(3)]
+    session.add_all([workflow, *users])
+    session.flush()
+
+    now = datetime.datetime.now()
+    shares = [
+        UserWorkflow(
+            workflow_id=workflow.id_,
+            user_id=users[0].id_,
+            valid_until=now - datetime.timedelta(days=1),
+        ),
+        UserWorkflow(
+            workflow_id=workflow.id_,
+            user_id=users[1].id_,
+            valid_until=now + datetime.timedelta(days=1),
+        ),
+        UserWorkflow(workflow_id=workflow.id_, user_id=users[2].id_, valid_until=None),
+    ]
+    session.add_all(shares)
+    session.commit()
+
+    result = CliRunner().invoke(reana_admin, ["workflow-sharing-expired-cleanup"])
+
+    assert result.exit_code == 0
+    assert result.output == "Removed 1 expired workflow share(s).\n"
+    remaining_user_ids = {share.user_id for share in session.query(UserWorkflow).all()}
+    assert remaining_user_ids == {users[1].id_, users[2].id_}
+
+    result = CliRunner().invoke(reana_admin, ["workflow-sharing-expired-cleanup"])
+
+    assert result.exit_code == 0
+    assert result.output == "Removed 0 expired workflow share(s).\n"
+    assert session.query(UserWorkflow).count() == 2
 
 
 def test_retention_rule_deleter_file_outside_workspace(tmp_path):
