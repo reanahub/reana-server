@@ -33,6 +33,7 @@ from reana_db.models import (
     User,
     InteractiveSessionType,
     RunStatus,
+    UserWorkflow,
     Workflow,
     WorkflowResource,
     WorkspaceRetentionAuditLog,
@@ -2134,6 +2135,133 @@ def test_get_workflow_logs(app, user0, _get_user_mock):
                 data=json.dumps(None),
             )
             assert res.status_code == 200
+
+
+def test_get_workflow_disk_usage_hides_htcondor_transfer_paths(
+    app,
+    session,
+    user1,
+    user2,
+    sample_serial_workflow_in_db_owned_by_user1,
+):
+    """Test hiding internal HTCondor transfer paths from disk usage details."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    session.add(UserWorkflow(workflow_id=workflow.id_, user_id=user2.id_))
+    session.commit()
+
+    detailed_usage = [
+        {"name": "", "size": {"raw": 42}},
+        {"name": "/result.txt", "size": {"raw": 10}},
+        {
+            "name": "/reana_job.123.filetransfer",
+            "size": {"raw": 20},
+        },
+        {
+            "name": "/reana_job.123.filetransfer/credential.cc",
+            "size": {"raw": 10},
+        },
+        {
+            "name": "/output/reana_job.123.filetransfer/user-result.txt",
+            "size": {"raw": 2},
+        },
+    ]
+    summary_usage = [{"name": "", "size": {"raw": 42}}]
+    requested_modes = []
+
+    def get_workspace_disk_usage(_workflow, summarize=False, search=None):
+        requested_modes.append((summarize, search))
+        return summary_usage if summarize else detailed_usage
+
+    with patch.object(
+        Workflow,
+        "get_workspace_disk_usage",
+        autospec=True,
+        side_effect=get_workspace_disk_usage,
+    ), app.test_client() as client:
+        for user in (user1, user2):
+            response = client.get(
+                url_for(
+                    "workflows.get_workflow_disk_usage",
+                    workflow_id_or_name=workflow.id_,
+                ),
+                query_string={"access_token": user.access_token},
+                json={"summarize": False},
+            )
+            assert response.status_code == 200
+            assert response.get_json()["disk_usage_info"] == [
+                {"name": "", "size": {"raw": 42}},
+                {"name": "/result.txt", "size": {"raw": 10}},
+                {
+                    "name": "/output/reana_job.123.filetransfer/user-result.txt",
+                    "size": {"raw": 2},
+                },
+            ]
+
+            response = client.get(
+                url_for(
+                    "workflows.get_workflow_disk_usage",
+                    workflow_id_or_name=workflow.id_,
+                ),
+                query_string={"access_token": user.access_token},
+                json={"summarize": True},
+            )
+            assert response.status_code == 200
+            assert response.get_json()["disk_usage_info"] == summary_usage
+
+    assert requested_modes == [
+        (False, None),
+        (True, None),
+        (False, None),
+        (True, None),
+    ]
+
+
+def test_summarized_disk_usage_search_hides_htcondor_transfer_paths(
+    app,
+    session,
+    user2,
+    sample_serial_workflow_in_db_owned_by_user1,
+):
+    """Test filtering real summarised disk usage results selected by name."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    session.add(UserWorkflow(workflow_id=workflow.id_, user_id=user2.id_))
+    session.commit()
+
+    visible_path = os.path.join(workflow.workspace_path, "result.txt")
+    internal_path = os.path.join(
+        workflow.workspace_path,
+        "reana_job.123.filetransfer",
+        "credential.cc",
+    )
+    os.makedirs(os.path.dirname(internal_path))
+    with open(visible_path, "w") as visible_file:
+        visible_file.write("visible result")
+    with open(internal_path, "w") as credential_cache:
+        credential_cache.write("kerberos credential")
+
+    search = json.dumps(
+        {
+            "name": [
+                "result.txt",
+                "reana_job.*.filetransfer/credential.cc",
+            ]
+        }
+    )
+    with app.test_client() as client:
+        response = client.get(
+            url_for(
+                "workflows.get_workflow_disk_usage",
+                workflow_id_or_name=workflow.id_,
+            ),
+            query_string={"access_token": user2.access_token},
+            json={"summarize": True, "search": search},
+        )
+
+    assert response.status_code == 200
+    disk_usage_names = {
+        file_["name"] for file_ in response.get_json()["disk_usage_info"]
+    }
+    assert disk_usage_names == {"/result.txt"}
 
 
 def test_get_workflow_status(app, user0, _get_user_mock):

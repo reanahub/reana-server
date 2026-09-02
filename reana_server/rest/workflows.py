@@ -16,6 +16,8 @@ import shutil
 import traceback
 import tempfile
 import uuid
+from fnmatch import fnmatchcase
+from pathlib import Path
 
 import requests
 from bravado.exception import BravadoTimeoutError, HTTPError
@@ -38,6 +40,7 @@ from reana_commons.specification_paths import (
     SPECIFICATION_BUNDLE_MAX_PATH_BYTES,
     open_regular_file_beneath,
 )
+from reana_commons.utils import remove_upper_level_references
 from reana_commons.validation.environments import iter_environment_tag_warnings
 from reana_commons.validation.images import iter_image_environments
 from reana_commons.validation.report import (
@@ -141,6 +144,7 @@ _BUNDLE_MAX_FORM_MEMORY_SIZE = 1024 * 1024
 
 _INTERNAL_ERROR_MESSAGE = "An internal server error occurred."
 _FILE_COPY_CHUNK_SIZE = 1024 * 1024
+_HTCONDOR_FILE_TRANSFER_DIRECTORY_PATTERN = "reana_job.*.filetransfer"
 
 
 _RWC_MUTATION_REQUEST_OPTIONS = {
@@ -149,6 +153,15 @@ _RWC_MUTATION_REQUEST_OPTIONS = {
 }
 # Backward-compatible private alias for focused server tests and extensions.
 _workspace_mutation_lock = workspace_mutation_lock
+
+
+def _is_htcondor_file_transfer_path(path):
+    """Return whether a path addresses an internal HTCondor transfer directory."""
+    normalised_path = remove_upper_level_references(os.fspath(path))
+    path_parts = Path(normalised_path).parts
+    return bool(path_parts) and fnmatchcase(
+        path_parts[0], _HTCONDOR_FILE_TRANSFER_DIRECTORY_PATTERN
+    )
 
 
 def _legacy_specification_message(replacement_hint):
@@ -4649,6 +4662,11 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
         disk_usage_info = workflow.get_workspace_disk_usage(
             summarize=summarize, search=search
         )
+        disk_usage_info = [
+            file_
+            for file_ in disk_usage_info
+            if not _is_htcondor_file_transfer_path(file_["name"])
+        ]
         response = {
             "workflow_id": workflow.id_,
             "workflow_name": workflow.name,
