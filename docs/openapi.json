@@ -2009,14 +2009,39 @@
                   "sort": 3
                 },
                 "workflow": {
-                  "available": 24,
+                  "available": 4,
+                  "backends": {
+                    "dask": {
+                      "available": 4,
+                      "health": "healthy",
+                      "percentage": 80,
+                      "total": 5,
+                      "used": 1
+                    },
+                    "htcondorcern": {
+                      "available": 197,
+                      "health": "healthy",
+                      "percentage": 99,
+                      "total": 200,
+                      "used": 3
+                    },
+                    "kubernetes": {
+                      "available": 24,
+                      "health": "healthy",
+                      "percentage": 80,
+                      "total": 30,
+                      "used": 6
+                    }
+                  },
+                  "bottleneck": "dask",
                   "health": "healthy",
                   "pending": 2,
                   "percentage": 80,
                   "queued": 2,
                   "running": 4,
                   "sort": 2,
-                  "total": 30
+                  "total": 5,
+                  "used": 1
                 }
               }
             },
@@ -2087,6 +2112,32 @@
                     "available": {
                       "type": "number"
                     },
+                    "backends": {
+                      "additionalProperties": {
+                        "properties": {
+                          "available": {
+                            "type": "number"
+                          },
+                          "health": {
+                            "type": "string"
+                          },
+                          "percentage": {
+                            "type": "number"
+                          },
+                          "total": {
+                            "type": "number"
+                          },
+                          "used": {
+                            "type": "number"
+                          }
+                        },
+                        "type": "object"
+                      },
+                      "type": "object"
+                    },
+                    "bottleneck": {
+                      "type": "string"
+                    },
                     "health": {
                       "type": "string"
                     },
@@ -2106,6 +2157,9 @@
                       "type": "number"
                     },
                     "total": {
+                      "type": "number"
+                    },
+                    "used": {
                       "type": "number"
                     }
                   },

@@ -17,11 +17,11 @@ from invenio_accounts.models import SessionActivity
 from kubernetes.client.rest import ApiException
 from marshmallow import Schema, fields
 from reana_commons.config import (
+    get_concurrent_workflows_cap,
     REANA_COMPONENT_PREFIX,
     REANA_COMPUTE_BACKENDS,
     REANA_INFRASTRUCTURE_KUBERNETES_NAMESPACE,
     REANA_RUNTIME_KUBERNETES_NAMESPACE,
-    REANA_MAX_CONCURRENT_BATCH_WORKFLOWS,
     SHARED_VOLUME_PATH,
 )
 from reana_commons.job_utils import kubernetes_memory_to_bytes
@@ -44,7 +44,11 @@ from reana_db.models import (
 )
 from sqlalchemy import desc
 
-from reana_server.config import REANA_KUBERNETES_JOBS_MEMORY_LIMIT_IN_BYTES
+from reana_server.config import (
+    DASK_ENABLED,
+    REANA_KUBERNETES_JOBS_MEMORY_LIMIT_IN_BYTES,
+    SUPPORTED_COMPUTE_BACKENDS,
+)
 
 
 class REANAStatus:
@@ -653,25 +657,71 @@ class ClusterHealth:
         }
 
     def get_workflow_health(self):
-        """Get cluster workflows health information."""
+        """Get cluster workflows health information.
+
+        Concurrency is capped independently per compute backend and per Dask
+        cluster (see ``check_concurrent_workflows_limit``), so the dashboard
+        reports one tile per capped resource under ``backends`` and surfaces the
+        most-constrained one at the top level. This keeps the dashboard's notion
+        of "cluster full" aligned with the scheduler's admission decision instead
+        of a single global counter.
+        """
         wf_status_obj = WorkflowsStatus()
 
         running = wf_status_obj.get_workflows_by_status(RunStatus.running)
         queued = wf_status_obj.get_workflows_by_status(RunStatus.queued)
         pending = wf_status_obj.get_workflows_by_status(RunStatus.pending)
-        total = REANA_MAX_CONCURRENT_BATCH_WORKFLOWS
-        used = running + pending
-        available = ClusterHealth.get_available(used, total)
-        percentage = ClusterHealth.get_percentage(used, total)
 
+        active_counts = Workflow.count_active_per_backend()
+
+        # One tile per configured compute backend (so operators see headroom even
+        # at zero usage), plus any backend currently in use, plus the Dask cap.
+        resources = (
+            set(SUPPORTED_COMPUTE_BACKENDS) | {"kubernetes"} | set(active_counts)
+        )
+        resources.discard("dask")
+        resources = sorted(resources)
+        # Dask capacity only exists where Dask is enabled, so reporting an idle
+        # tile on a cluster that rejects Dask workflows at validation would
+        # advertise capacity that cannot be used. Workflows still running from
+        # before Dask was disabled are real usage and stay visible.
+        if DASK_ENABLED or active_counts.get("dask", 0):
+            resources.append("dask")
+
+        backends = {}
+        bottleneck = None
+        for resource in resources:
+            total = get_concurrent_workflows_cap(resource)
+            used = active_counts.get(resource, 0)
+            # A cap of zero means the resource is closed, so no headroom is
+            # available. ``get_percentage`` treats a zero total as "unknown"
+            # and would report 100% available, contradicting the scheduler,
+            # which admits nothing at all for such a resource.
+            percentage = 0 if total == 0 else ClusterHealth.get_percentage(used, total)
+            backends[resource] = {
+                "used": used,
+                "total": total,
+                "available": ClusterHealth.get_available(used, total),
+                "percentage": percentage,
+                "health": ClusterHealth.get_health_status(percentage),
+            }
+            # The most-constrained resource is the one with the least available
+            # headroom (``percentage`` reports availability, see get_percentage).
+            if bottleneck is None or percentage < backends[bottleneck]["percentage"]:
+                bottleneck = resource
+
+        binding = backends[bottleneck]
         return {
             "running": running,
             "queued": queued,
             "pending": pending,
-            "available": available,
-            "total": total,
-            "percentage": percentage,
-            "health": ClusterHealth.get_health_status(percentage),
+            "backends": backends,
+            "bottleneck": bottleneck,
+            "used": binding["used"],
+            "available": binding["available"],
+            "total": binding["total"],
+            "percentage": binding["percentage"],
+            "health": binding["health"],
             "sort": 2,
         }
 
