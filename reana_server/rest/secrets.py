@@ -23,24 +23,31 @@ from marshmallow import Schema, validate
 from reana_server.decorators import signin_required
 
 blueprint = Blueprint("secrets", __name__)
+_RESERVED_USER_SECRET_NAMES = {"REANA_USER_SECRETS_TYPES"}
+
+
+def _validate_user_secret_name(secret_name: str):
+    """Reject reserved secret names used by REANA control variables."""
+    if secret_name in _RESERVED_USER_SECRET_NAMES:
+        raise marshmallow.ValidationError(
+            f"Secret name {secret_name} is reserved for internal use."
+        )
 
 
 class AddSecretsBodySchema(Schema):
     """Schema for add_secrets endpoint body."""
 
-    body = (
-        fields.Dict(
-            keys=fields.Str(),
-            values=fields.Nested(
-                {
-                    "value": fields.Str(required=True),
-                    "type": fields.Str(
-                        validate=validate.OneOf(Secret.types), required=True
-                    ),
-                }
-            ),
-            required=True,
+    body = fields.Dict(
+        keys=fields.Str(validate=_validate_user_secret_name),
+        values=fields.Nested(
+            {
+                "value": fields.Str(required=True),
+                "type": fields.Str(
+                    validate=validate.OneOf(Secret.types), required=True
+                ),
+            }
         ),
+        required=True,
     )
 
 
@@ -153,7 +160,9 @@ def add_secrets(user, overwrite=False):
               }
     """
     json_body = request.json
-    AddSecretsBodySchema().validate({"body": json_body})
+    validation_errors = AddSecretsBodySchema().validate({"body": json_body})
+    if validation_errors:
+        return jsonify({"message": validation_errors}), 400
 
     try:
         secrets = [
