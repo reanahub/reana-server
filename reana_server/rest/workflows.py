@@ -23,6 +23,7 @@ import requests
 from bravado.exception import BravadoTimeoutError, HTTPError
 from flask import Blueprint, Response, jsonify, request, stream_with_context
 from jsonschema.exceptions import ValidationError
+from sqlalchemy.orm import joinedload
 from werkzeug.exceptions import RequestEntityTooLarge
 from reana_commons import workspace
 from reana_commons.config import (
@@ -32,6 +33,7 @@ from reana_commons.config import (
     WORKFLOW_RUNTIME_USER_UID,
 )
 from reana_commons.errors import (
+    REANAMissingWorkspaceError,
     REANAQuotaExceededError,
     REANASpecificationPathError,
     REANAValidationError,
@@ -481,10 +483,6 @@ def validate_workflow_specification(user):  # noqa
             reana.yaml plus explicitly declared workflow sources.
           required: true
           type: file
-        - name: access_token
-          in: query
-          required: false
-          type: string
         - name: environments
           in: query
           description: If true, run offline reproducibility checks on runtime
@@ -543,7 +541,7 @@ def validate_workflow_specification(user):  # noqa
           schema:
             $ref: '#/definitions/ErrorResponse'
         401:
-          description: Request malformed or missing access token.
+          description: The request is not authenticated.
           schema:
             $ref: '#/definitions/ErrorResponse'
         403:
@@ -575,6 +573,10 @@ def validate_workflow_specification(user):  # noqa
             properties:
               message:
                 type: string
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
     """
     abs_dir = None
     try:
@@ -660,6 +662,7 @@ def validate_workflow_specification(user):  # noqa
         "size": fields.Int(validate=validate.Range(min=1)),
         "include_progress": fields.Bool(),
         "include_workspace_size": fields.Bool(),
+        "include_session_secrets": fields.Bool(),
         "workflow_id_or_name": fields.Str(),
         "shared": fields.Bool(),
         "shared_by": fields.Str(),
@@ -668,7 +671,7 @@ def validate_workflow_specification(user):  # noqa
     location="query",
     unknown=marshmallow.EXCLUDE,
 )
-@signin_required(token_required=False)
+@signin_required()
 def get_workflows(user, **kwargs):  # noqa
     r"""Get all current workflows in REANA.
 
@@ -681,11 +684,6 @@ def get_workflows(user, **kwargs):  # noqa
       produces:
        - application/json
       parameters:
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
         - name: type
           in: query
           description: Required. Type of workflows.
@@ -730,6 +728,13 @@ def get_workflows(user, **kwargs):  # noqa
         - name: include_workspace_size
           in: query
           description: Include size information of the workspace.
+          type: boolean
+        - name: include_session_secrets
+          in: query
+          description: >-
+            Include per-session notebook secrets for workflows owned by the
+            authenticated user. Intended for interactive-session launch clients.
+          required: false
           type: boolean
         - name: workflow_id_or_name
           in: query
@@ -797,6 +802,11 @@ def get_workflows(user, **kwargs):  # noqa
                       type: string
                     session_uri:
                       type: string
+                    session_secret:
+                      type: string
+                      description: >-
+                        Present only when include_session_secrets is true and
+                        the authenticated user owns the workflow.
                     progress:
                       type: object
                       properties:
@@ -912,6 +922,12 @@ def get_workflows(user, **kwargs):  # noqa
               {
                 "message": "Your request contains not valid JSON."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -956,6 +972,7 @@ def get_workflows(user, **kwargs):  # noqa
               }
     """
     try:
+        include_session_secrets = kwargs.pop("include_session_secrets", False)
         type_ = request.args.get("type", "batch")
         search = request.args.get("search")
         sort = request.args.get("sort", "desc")
@@ -970,6 +987,42 @@ def get_workflows(user, **kwargs):  # noqa
             verbose=bool(verbose),
             **kwargs,
         ).result()
+
+        workflow_items = response.get("items", [])
+        for item in workflow_items:
+            # Session credentials are server-owned data and must never pass
+            # through from the workflow-controller response implicitly.
+            item.pop("session_secret", None)
+        if include_session_secrets and type_ == "interactive":
+            workflow_ids = [item["id"] for item in workflow_items]
+            owned_workflows = (
+                Session.query(Workflow)
+                .options(joinedload(Workflow.sessions))
+                .filter(
+                    Workflow.id_.in_(workflow_ids),
+                    Workflow.owner_id == user.id_,
+                )
+                .all()
+                if workflow_ids
+                else []
+            )
+            session_secrets = {}
+            for workflow in owned_workflows:
+                open_session = next(
+                    (
+                        session
+                        for session in workflow.sessions
+                        if session.session_secret
+                        and session.status != RunStatus.deleted
+                    ),
+                    None,
+                )
+                if open_session:
+                    session_secrets[str(workflow.id_)] = open_session.session_secret
+            for item in workflow_items:
+                session_secret = session_secrets.get(str(item["id"]))
+                if session_secret:
+                    item["session_secret"] = session_secret
 
         return jsonify(response), http_response.status_code
     except HTTPError as e:
@@ -1017,11 +1070,6 @@ def create_workflow(user):  # noqa
             reana.yaml plus explicitly declared workflow sources.
           required: true
           type: file
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
       responses:
         201:
           description: >-
@@ -1053,6 +1101,23 @@ def create_workflow(user):  # noqa
                 "workflow_id": "cdcf48b1-c2f3-4693-8230-b066e088c6ac",
                 "workflow_name": "mytest.1"
               }
+        200:
+          description: >-
+            The GitLab webhook was processed without creating a workflow, for
+            example when the user's quota is exceeded.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+        401:
+          description: >-
+            Request failed. The stored GitLab access token is not valid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
         400:
           description: >-
             Request failed. The incoming payload seems malformed
@@ -1066,6 +1131,10 @@ def create_workflow(user):  # noqa
               {
                 "message": "Workflow name cannot be a valid UUIDv4."
               }
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -1428,11 +1497,6 @@ def get_workflow_specification(workflow_id_or_name, user):  # noqa
       produces:
         - application/json
       parameters:
-        - name: access_token
-          in: query
-          description: API access_token of workflow owner.
-          required: false
-          type: string
         - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -1531,6 +1595,12 @@ def get_workflow_specification(workflow_id_or_name, user):  # noqa
                   }
                 }
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -1625,11 +1695,6 @@ def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
       produces:
         - application/json
       parameters:
-        - name: access_token
-          in: query
-          description: API access_token of workflow owner.
-          required: false
-          type: string
         - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -1695,6 +1760,12 @@ def get_workflow_logs(workflow_id_or_name, user, **kwargs):  # noqa
               {
                 "message": "Malformed request."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -1781,11 +1852,6 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
           in: path
           description: Required. Analysis UUID or name.
           required: true
-          type: string
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
           type: string
       responses:
         200:
@@ -1893,6 +1959,12 @@ def get_workflow_status(workflow_id_or_name, user):  # noqa
               {
                 "message": "Malformed request."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -2335,12 +2407,16 @@ def _submit_workflow_locked(workflow, user, **parameters):  # noqa: C901
         restart_spec_validated = False
         if restart:
             if workflow.status not in [RunStatus.finished, RunStatus.failed]:
-                raise ValueError("Only finished or failed workflows can be restarted.")
+                message = "Only finished or failed workflows can be restarted."
+                logging.info("Workflow restart conflict: %s", message)
+                return {"message": message}, 409
             if workflow.workspace_has_pending_retention_rules():
-                raise ValueError(
+                message = (
                     "The workflow cannot be restarted because some retention rules are "
                     "currently being applied to the workspace. Please retry later."
                 )
+                logging.info("Workflow restart conflict: %s", message)
+                return {"message": message}, 409
             if replacement_specification_path:
                 retention_rule_states = _workspace_retention_rule_states(
                     workflow.workspace_path
@@ -2381,10 +2457,12 @@ def _submit_workflow_locked(workflow, user, **parameters):  # noqa: C901
                 workflow = clone_workflow(workflow, None, None)
                 cloned_restart_workflow = workflow
         elif workflow.status != RunStatus.created:
-            raise ValueError(
+            message = (
                 "Workflow {} is already {} and cannot be started "
                 "again.".format(workflow.get_full_workflow_name(), workflow.status.name)
             )
+            logging.info("Workflow start conflict: %s", message)
+            return {"message": message}, 409
         # Binding validation gate. The workspace is the source of truth (A1) and
         # is mutable, so when it carries a reana.yaml we re-load + re-validate it
         # *now* -- right before queueing -- and refresh the stored specification
@@ -2466,8 +2544,8 @@ def _submit_workflow_locked(workflow, user, **parameters):  # noqa: C901
         logging.error(traceback.format_exc())
         return {"message": str(e)}, 400
     except ValueError as e:
-        logging.error(traceback.format_exc())
-        return {"message": str(e)}, 403
+        logging.info("Invalid workflow start request: %s", e)
+        return {"message": str(e)}, 400
     except Exception:
         return _internal_error_response("Unexpected error starting a workflow."), 500
     finally:
@@ -2491,9 +2569,18 @@ def _submit_workflow(workflow_id_or_name, user, _resolved_workflow=None, **param
             raise REANAQuotaExceededError(get_quota_excess_message(user))
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-        workflow = _resolved_workflow or _get_workflow_with_uuid_or_name(
-            workflow_id_or_name, str(user.id_)
-        )
+        if _resolved_workflow:
+            workflow = _resolved_workflow
+        else:
+            try:
+                workflow = _get_workflow_with_uuid_or_name(
+                    workflow_id_or_name, str(user.id_)
+                )
+            except ValueError as error:
+                logging.info(
+                    "Workflow requested for submission was not found: %s", error
+                )
+                return {"message": str(error)}, 404
         with _workspace_mutation_lock(workflow.workspace_path):
             # The identifier must be resolved before taking the workspace lock,
             # but submission decisions must use state refreshed while holding it.
@@ -2573,10 +2660,6 @@ def restart_workflow(workflow_id_or_name, user):
           in: path
           required: true
           type: string
-        - name: access_token
-          in: query
-          required: false
-          type: string
         - name: replacement
           in: formData
           required: true
@@ -2599,7 +2682,7 @@ def restart_workflow(workflow_id_or_name, user):
           schema:
             $ref: '#/definitions/ErrorResponse'
         401:
-          description: Request malformed or missing access token.
+          description: The request is not authenticated.
           schema:
             $ref: '#/definitions/ErrorResponse'
         403:
@@ -2746,11 +2829,6 @@ def start_workflow(workflow_id_or_name, user, **parameters):  # noqa
           description: Required. Analysis UUID or name.
           required: true
           type: string
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
         - name: parameters
           in: body
           description: >-
@@ -2800,6 +2878,12 @@ def start_workflow(workflow_id_or_name, user, **parameters):  # noqa
               {
                 "message": "Malformed request."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -2950,11 +3034,6 @@ def set_workflow_status(workflow_id_or_name, user, status, **parameters):  # noq
             - start
             - stop
             - deleted
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
         - name: parameters
           in: body
           description: >-
@@ -3019,6 +3098,12 @@ def set_workflow_status(workflow_id_or_name, user, status, **parameters):  # noq
               {
                 "message": "Malformed request."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -3224,11 +3309,6 @@ def upload_file(workflow_id_or_name, user):  # noqa
           description: Required. File name.
           required: true
           type: string
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
         - name: preview
           in: query
           description: >-
@@ -3258,6 +3338,12 @@ def upload_file(workflow_id_or_name, user):  # noqa
               {
                 "message": "No file_name provided"
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -3404,11 +3490,6 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
           description: Required. Name (or path) of the file to be downloaded.
           required: true
           type: string
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
       responses:
         200:
           description: >-
@@ -3423,6 +3504,12 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
         400:
           description: >-
             Request failed. The incoming payload seems malformed.
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -3527,11 +3614,6 @@ def delete_file(workflow_id_or_name, file_name, user):  # noqa
           description: Required. Name (or path) of the file to be deleted.
           required: true
           type: string
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
       responses:
         200:
           description: >-
@@ -3553,6 +3635,12 @@ def delete_file(workflow_id_or_name, file_name, user):  # noqa
                   properties:
                     error:
                       type: string
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -3658,11 +3746,6 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
           description: Required. Analysis UUID or name.
           required: true
           type: string
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
         - name: file_name
           in: query
           description: File name(s) (glob) to list.
@@ -3725,6 +3808,12 @@ def get_files(workflow_id_or_name, user, **kwargs):  # noqa
                             results. Available filters: file name, size, or
                             last-modified."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -3810,11 +3899,6 @@ def get_workflow_parameters(workflow_id_or_name, user):  # noqa
           description: Required. Analysis UUID or name.
           required: true
           type: string
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
       responses:
         200:
           description: >-
@@ -3856,6 +3940,12 @@ def get_workflow_parameters(workflow_id_or_name, user):  # noqa
               {
                 "message": "Malformed request."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -3961,11 +4051,6 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b, user):  # no
           required: false
           type: string
           default: '5'
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
       responses:
         200:
           description: >-
@@ -3998,6 +4083,12 @@ def get_workflow_diff(workflow_id_or_name_a, workflow_id_or_name_b, user):  # no
               {
                 "message": "Malformed request."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -4098,11 +4189,6 @@ def open_interactive_session(
           description: Required. Workflow UUID or name.
           required: true
           type: string
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
         - name: interactive_session_type
           in: path
           description: Type of interactive session to use.
@@ -4147,6 +4233,12 @@ def open_interactive_session(
               {
                 "message": "Malformed request."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -4261,11 +4353,6 @@ def close_interactive_session(workflow_id_or_name, user):  # noqa
           description: Required. Workflow UUID or name.
           required: true
           type: string
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
       responses:
         200:
           description: >-
@@ -4293,6 +4380,12 @@ def close_interactive_session(workflow_id_or_name, user):  # noqa
               {
                 "message": "Malformed request."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -4357,6 +4450,106 @@ def close_interactive_session(workflow_id_or_name, user):  # noqa
         return jsonify({"message": str(e)}), 500
 
 
+@blueprint.route(
+    "/workflows/<workflow_id_or_name>/interactive-session-secret",
+    methods=["GET"],
+)
+@signin_required()
+def get_interactive_session_secret(workflow_id_or_name, user):
+    r"""Get the access secret of the workflow's open interactive session.
+
+    ---
+    get:
+      summary: Get the access secret of the open interactive session.
+      operationId: get_interactive_session_secret
+      description: >-
+        Return the random per-session secret used as the notebook access token
+        of the workflow's open interactive session. Only the authenticated
+        workflow owner can retrieve it.
+      produces:
+        - application/json
+      parameters:
+        - name: workflow_id_or_name
+          in: path
+          description: Required. Workflow UUID or name.
+          required: true
+          type: string
+      responses:
+        200:
+          description: The interactive session secret was retrieved.
+          schema:
+            type: object
+            required:
+              - session_secret
+              - path
+            properties:
+              session_secret:
+                type: string
+              path:
+                type: string
+        401:
+          description: The user is not signed in.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
+        403:
+          description: The user does not own the workflow.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+        404:
+          description: The workflow has no open interactive session.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+        500:
+          description: Internal server error.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+    """
+    try:
+        workflow = _get_workflow_with_uuid_or_name(workflow_id_or_name, str(user.id_))
+        open_session = next(
+            (
+                session
+                for session in workflow.sessions
+                if session.session_secret and session.status != RunStatus.deleted
+            ),
+            None,
+        )
+        if open_session is None:
+            return (
+                jsonify(message="The workflow has no open interactive session."),
+                404,
+            )
+        return (
+            jsonify(
+                session_secret=open_session.session_secret,
+                path=open_session.path,
+            ),
+            200,
+        )
+    except ValueError as error:
+        logging.exception(str(error))
+        return jsonify(message=str(error)), 403
+    except Exception as error:
+        logging.exception(str(error))
+        return jsonify(message=str(error)), 500
+
+
 @blueprint.route("/workflows/move_files/<workflow_id_or_name>", methods=["PUT"])
 @signin_required()
 @_serialize_workspace_mutation
@@ -4388,11 +4581,6 @@ def move_files(workflow_id_or_name, user):  # noqa
           in: query
           description: Required. Target file(s).
           required: true
-          type: string
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
           type: string
       responses:
         200:
@@ -4428,6 +4616,12 @@ def move_files(workflow_id_or_name, user):  # noqa
               {
                 "message": "Malformed request."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -4530,11 +4724,6 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
       produces:
         - application/json
       parameters:
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
         - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -4611,6 +4800,12 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
               {
                 "message": "Malformed request."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -4659,9 +4854,13 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
 
         if not workflow_id_or_name:
             raise ValueError("workflow_id_or_name is not supplied")
-        workflow = _get_workflow_with_uuid_or_name(
-            workflow_id_or_name, str(user.id_), True
-        )
+        try:
+            workflow = _get_workflow_with_uuid_or_name(
+                workflow_id_or_name, str(user.id_), True
+            )
+        except ValueError as error:
+            logging.info("Workflow requested for disk usage was not found: %s", error)
+            return jsonify(message=str(error)), 404
         summarize = bool(parameters.get("summarize", False))
         search = parameters.get("search", None)
         disk_usage_info = workflow.get_workspace_disk_usage(
@@ -4683,6 +4882,12 @@ def get_workflow_disk_usage(workflow_id_or_name, user):  # noqa
     except HTTPError as e:
         logging.error(traceback.format_exc())
         return jsonify(e.response.json()), e.response.status_code
+    except REANAMissingWorkspaceError as error:
+        message = (
+            getattr(error, "message", None) or "Workflow workspace does not exist."
+        )
+        logging.info("Workflow workspace is unavailable: %s", message)
+        return jsonify(message=message), 404
     except ValueError as e:
         logging.error(traceback.format_exc())
         return jsonify({"message": str(e)}), 403
@@ -4705,11 +4910,6 @@ def get_workflow_retention_rules(workflow_id_or_name, user):
       produces:
        - application/json
       parameters:
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
         - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -4770,6 +4970,10 @@ def get_workflow_retention_rules(workflow_id_or_name, user):
               {
                 "message": "User not signed in."
               }
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. Credentials are invalid or revoked.
@@ -4854,11 +5058,6 @@ def prune_workspace(
       produces:
         - application/json
       parameters:
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
         - name: workflow_id_or_name
           in: path
           description: Required. Analysis UUID or name.
@@ -4917,6 +5116,12 @@ def prune_workspace(
               {
                 "message": "Malformed request."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -5014,11 +5219,6 @@ def share_workflow(workflow_id_or_name, user, **kwargs):
       produces:
         - application/json
       parameters:
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
         - name: workflow_id_or_name
           in: path
           description: Required. Workflow UUID or name.
@@ -5082,6 +5282,10 @@ def share_workflow(workflow_id_or_name, user, **kwargs):
               {
                 "message": "User not signed in."
               }
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. Credentials are invalid or revoked.
@@ -5155,9 +5359,9 @@ def share_workflow(workflow_id_or_name, user, **kwargs):
 @blueprint.route("/workflows/<workflow_id_or_name>/unshare", methods=["POST"])
 @use_kwargs(
     {
-        "user_email_to_unshare_with": fields.String(),
+        "user_email_to_unshare_with": fields.String(required=True),
     },
-    location="json",
+    location="query",
     unknown=marshmallow.EXCLUDE,
 )
 @signin_required()
@@ -5174,11 +5378,6 @@ def unshare_workflow(workflow_id_or_name, user, user_email_to_unshare_with):
       produces:
         - application/json
       parameters:
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
         - name: workflow_id_or_name
           in: path
           description: Required. Workflow UUID or name.
@@ -5223,6 +5422,12 @@ def unshare_workflow(workflow_id_or_name, user, user_email_to_unshare_with):
               {
                 "message": "Malformed request."
               }
+        401:
+          description: The request is not authenticated.
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to unshare the workflow.
@@ -5315,11 +5520,6 @@ def get_workflow_share_status(workflow_id_or_name, user):
       produces:
        - application/json
       parameters:
-        - name: access_token
-          in: query
-          description: The API access_token of workflow owner.
-          required: false
-          type: string
         - name: workflow_id_or_name
           in: path
           description: Required. Workflow UUID or name.
@@ -5371,6 +5571,10 @@ def get_workflow_share_status(workflow_id_or_name, user):
               {
                 "message": "User not signed in."
               }
+        503:
+          description: >-
+            The identity provider or the authentication session store is
+            temporarily unavailable.
         403:
           description: >-
             Request failed. Credentials are invalid or revoked.

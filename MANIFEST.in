@@ -18,7 +18,6 @@ include docs/*.json
 include docs/requirements.txt
 recursive-include reana_server *.py
 recursive-include reana_server *.json
-recursive-include reana_server/templates *.txt
 prune docs/_build
 recursive-include docs *.py
 recursive-include docs *.png
