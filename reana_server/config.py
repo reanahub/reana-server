@@ -306,6 +306,10 @@ APP_DEFAULT_SECURE_HEADERS = {
     "strict_transport_security_max_age": 31536000,
     "strict_transport_security_include_subdomains": True,
     "referrer_policy": "strict-origin-when-cross-origin",
+    # Flask-Talisman sends the deprecated ``X-XSS-Protection: 1; mode=block``
+    # by default. Modern browsers ignore it and the Content-Security-Policy
+    # below covers script injection, so omit it like reana-ui does.
+    "x_xss_protection": False,
     "content_security_policy": {
         "default-src": ["'self'"],
         "script-src": ["'self'"],

@@ -133,6 +133,14 @@ def test_security_headers_on_normal_response():
         assert res.headers.get(header) == value
 
 
+def test_deprecated_xss_protection_header_not_sent():
+    """The deprecated X-XSS-Protection header is not sent."""
+    with _make_app().test_client() as client:
+        res = client.get("/test")
+
+    assert "X-XSS-Protection" not in res.headers
+
+
 def test_factory_auth_override_reaches_all_auth_subsystems():
     """Factory auth overrides configure every runtime consumer and cache."""
     issuer = "https://override.example.org/realms/reana"
