@@ -2924,6 +2924,42 @@ def test_download_file(app, user0, auth_headers):
             assert requests_client.get.return_value.status_code == 200
 
 
+@pytest.mark.parametrize(
+    "content_type, frame_options, frame_ancestors",
+    [
+        ("application/pdf", "SAMEORIGIN", "frame-ancestors 'self'"),
+        ("text/html; charset=utf-8", "DENY", "frame-ancestors 'none'"),
+        ("application/octet-stream", "DENY", "frame-ancestors 'none'"),
+    ],
+)
+def test_download_file_framing_headers(
+    app, user0, auth_headers, content_type, frame_options, frame_ancestors
+):
+    """Only PDF previews may be embedded, and only by REANA's own pages."""
+    rwc_response = Mock()
+    rwc_response.status_code = 200
+    rwc_response.headers = {"Content-Type": content_type}
+    rwc_response.iter_content = Mock(return_value=[b"content"])
+    requests_mock = Mock()
+    requests_mock.get = Mock(return_value=rwc_response)
+    with app.test_client() as client, patch(
+        "reana_server.rest.workflows.requests", requests_mock
+    ):
+        res = client.get(
+            url_for(
+                "workflows.download_file",
+                workflow_id_or_name="1",
+                file_name="results/plot",
+            ),
+            headers=auth_headers(user0),
+            query_string={"preview": True},
+        )
+
+    assert res.status_code == 200
+    assert res.headers["X-Frame-Options"] == frame_options
+    assert frame_ancestors in res.headers["Content-Security-Policy"]
+
+
 def test_delete_file(app, user0, auth_headers):
     """Test delete_file view."""
     mock_response = Mock()

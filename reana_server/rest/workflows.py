@@ -21,7 +21,7 @@ from pathlib import Path
 
 import requests
 from bravado.exception import BravadoTimeoutError, HTTPError
-from flask import Blueprint, Response, jsonify, request, stream_with_context
+from flask import Blueprint, Response, g, jsonify, request, stream_with_context
 from jsonschema.exceptions import ValidationError
 from sqlalchemy.orm import joinedload
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -3573,6 +3573,9 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
             response.headers["Content-Disposition"] = req.headers.get(
                 "Content-Disposition"
             )
+        if response.mimetype == "application/pdf":
+            # REANA-UI previews PDF files by embedding them in an <object>.
+            g.reana_allow_same_origin_framing = True
         return response, req.status_code
 
     except HTTPError as e:

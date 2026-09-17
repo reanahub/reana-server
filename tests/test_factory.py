@@ -8,10 +8,11 @@
 
 """Tests for the REANA Flask application factory."""
 
+import copy
 from unittest.mock import Mock, patch
 
 import pytest
-from flask import Flask
+from flask import Flask, g
 from marshmallow.exceptions import ValidationError
 from werkzeug.exceptions import UnprocessableEntity
 
@@ -20,6 +21,7 @@ from reana_server.auth.sessions import _refresh_lock_ttl
 from reana_server.auth.config import get_auth_config
 from reana_server.auth.provision import email_linking_allowed
 from reana_server.auth.errors import AuthError, InvalidTokenError
+from reana_server.config import APP_DEFAULT_SECURE_HEADERS
 from reana_server.factory import (
     _rate_limit_key,
     _set_rate_limit,
@@ -139,6 +141,87 @@ def test_deprecated_xss_protection_header_not_sent():
         res = client.get("/test")
 
     assert "X-XSS-Protection" not in res.headers
+
+
+def _make_app_with_embeddable_route(config=None):
+    """Test app whose ``/embeddable`` route opts in to same-origin framing."""
+    app = _make_app(config)
+
+    @app.route("/embeddable")
+    def embeddable_route():
+        g.reana_allow_same_origin_framing = True
+        return "OK"
+
+    return app
+
+
+def _frame_ancestors_config(*sources):
+    """Deployment configuration with a customised frame-ancestors list.
+
+    Without sources the directive is dropped altogether, as a deployment
+    relying on X-Frame-Options alone would have it.
+    """
+    secure_headers = copy.deepcopy(APP_DEFAULT_SECURE_HEADERS)
+    policy = secure_headers["content_security_policy"]
+    if sources:
+        policy["frame-ancestors"] = list(sources)
+    else:
+        del policy["frame-ancestors"]
+    return {"APP_DEFAULT_SECURE_HEADERS": secure_headers}
+
+
+def test_same_origin_framing_only_when_view_opts_in():
+    """Opted-in responses may be embedded by REANA's own pages only."""
+    app = _make_app_with_embeddable_route()
+
+    with app.test_client() as client:
+        embeddable = client.get("/embeddable")
+        default = client.get("/test")
+
+    assert embeddable.headers["X-Frame-Options"] == "SAMEORIGIN"
+    assert embeddable.headers["Content-Security-Policy"] == _EXPECTED_SECURITY_HEADERS[
+        "Content-Security-Policy"
+    ].replace("frame-ancestors 'none'", "frame-ancestors 'self'")
+    assert default.headers["X-Frame-Options"] == "DENY"
+    assert "frame-ancestors 'none'" in default.headers["Content-Security-Policy"]
+
+
+@pytest.mark.parametrize(
+    "sources",
+    [
+        ("https://portal.example.org",),
+        ("'self'", "https://portal.example.org"),
+    ],
+)
+def test_same_origin_framing_keeps_configured_frame_ancestors(sources):
+    """A deployment's own frame-ancestors allow-list is never broadened.
+
+    Browsers enforce frame-ancestors over X-Frame-Options, so an allow-list
+    without REANA's own origin keeps blocking the PDF preview: opting into
+    it has to remain the deployment's explicit choice.
+    """
+    app = _make_app_with_embeddable_route(_frame_ancestors_config(*sources))
+
+    with app.test_client() as client:
+        res = client.get("/embeddable")
+
+    assert res.headers["Content-Security-Policy"] == _EXPECTED_SECURITY_HEADERS[
+        "Content-Security-Policy"
+    ].replace("frame-ancestors 'none'", f"frame-ancestors {' '.join(sources)}")
+    assert res.headers["X-Frame-Options"] == "DENY"
+
+
+def test_same_origin_framing_without_configured_frame_ancestors():
+    """Without a frame-ancestors directive only X-Frame-Options is relaxed."""
+    app = _make_app_with_embeddable_route(_frame_ancestors_config())
+
+    with app.test_client() as client:
+        res = client.get("/embeddable")
+
+    assert res.headers["Content-Security-Policy"] == _EXPECTED_SECURITY_HEADERS[
+        "Content-Security-Policy"
+    ].replace("frame-ancestors 'none'; ", "")
+    assert res.headers["X-Frame-Options"] == "SAMEORIGIN"
 
 
 def test_factory_auth_override_reaches_all_auth_subsystems():

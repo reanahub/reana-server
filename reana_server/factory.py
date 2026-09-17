@@ -41,6 +41,45 @@ _SECURITY_HEADERS = {
 }
 
 
+def _allow_same_origin_framing(response):
+    """Let REANA's own pages embed responses whose view opted in.
+
+    The anti-framing defaults (``X-Frame-Options: DENY`` and
+    ``frame-ancestors 'none'``) also block ``<object>`` elements, which
+    REANA-UI uses to preview PDF files. Views opt in by setting
+    ``g.reana_allow_same_origin_framing``; with the default configuration
+    other origins stay blocked.
+
+    Only the deny-everything default is relaxed. A deployment that
+    configured its own ``frame-ancestors`` allow-list keeps both headers
+    verbatim, because broadening an operator's policy has to be an explicit
+    decision. Browsers enforce ``frame-ancestors`` over ``X-Frame-Options``,
+    so such a deployment only gets PDF previews if its allow-list already
+    covers REANA's own origin.
+    """
+    if not g.get("reana_allow_same_origin_framing"):
+        return response
+    policy = response.headers.get("Content-Security-Policy")
+    directives = [part.strip() for part in (policy or "").split(";") if part.strip()]
+    frame_ancestors = [
+        directive
+        for directive in directives
+        if directive.lower().split()[:1] == ["frame-ancestors"]
+    ]
+    if any(
+        directive.lower().split()[1:] != ["'none'"] for directive in frame_ancestors
+    ):
+        return response
+    if response.headers.get("X-Frame-Options", "").upper() == "DENY":
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    if frame_ancestors:
+        response.headers["Content-Security-Policy"] = "; ".join(
+            "frame-ancestors 'self'" if directive in frame_ancestors else directive
+            for directive in directives
+        )
+    return response
+
+
 def handle_rate_limit_error(error: RateLimitExceeded):
     """Error handler for flask_limiter exception ``RateLimitExceeded``.
 
@@ -301,8 +340,10 @@ def create_app(config_mapping=None):
             response.headers[header] = value
         return response
 
-    # Register after the REANA hook so Flask runs the REANA-specific header
-    # additions after Talisman's defaults.
+    app.after_request(_allow_same_origin_framing)
+
+    # Register after the REANA hooks so Flask runs the REANA-specific header
+    # additions and relaxations after Talisman's defaults.
     Talisman(app, **app.config["APP_DEFAULT_SECURE_HEADERS"])
 
     # Register API routes
