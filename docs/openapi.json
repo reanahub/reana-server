@@ -6598,6 +6598,7 @@
         "produces": [
           "application/octet-stream",
           "application/json",
+          "application/pdf",
           "application/zip",
           "image/*",
           "text/html"

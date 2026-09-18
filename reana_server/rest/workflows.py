@@ -3476,6 +3476,7 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
       produces:
         - application/octet-stream
         - application/json
+        - application/pdf
         - application/zip
         - image/*
         - text/html
