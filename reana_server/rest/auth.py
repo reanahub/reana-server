@@ -133,12 +133,26 @@ def _client_facing_endpoint_url(endpoint_url):
     )
 
 
+# Endpoint overrides that reana-client must see as well: it starts its own
+# authorization requests from the relayed document, so an override carrying
+# issuer-specific query parameters (e.g. INDIGO IAM's ``audience``) would
+# otherwise reach browser logins only.
+_RELAYED_ENDPOINT_OVERRIDES = {
+    "authorization_url": "authorization_endpoint",
+    "device_authorization_url": "device_authorization_endpoint",
+}
+
+
 def _client_facing_openid_configuration(document):
     """Return discovery document suitable for host/browser-side clients."""
     public_document = dict(document)
-    issuer = get_auth_config()["issuer"]
+    auth_config = get_auth_config()
+    issuer = auth_config["issuer"]
     if issuer:
         public_document["issuer"] = issuer
+    for name, field in _RELAYED_ENDPOINT_OVERRIDES.items():
+        if auth_config.get(name):
+            public_document[field] = get_endpoint(name)
     for field in (
         "authorization_endpoint",
         "token_endpoint",

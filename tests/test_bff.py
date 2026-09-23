@@ -73,6 +73,73 @@ def test_client_facing_endpoint_rewrites_different_backchannel_path(
     )
 
 
+def _relayed_discovery(base_app, monkeypatch, **overrides):
+    """Fetch the relayed discovery document with the given endpoint overrides."""
+    auth = base_app.config["REANA_AUTH"]
+    monkeypatch.setitem(auth, "issuer", ISSUER)
+    monkeypatch.setitem(auth, "cli_client_id", "reana-cli")
+    for name, value in overrides.items():
+        monkeypatch.setitem(auth, name, value)
+    discovered = {
+        "issuer": ISSUER,
+        "authorization_endpoint": AUTHORIZATION_URL,
+        "token_endpoint": TOKEN_URL,
+        "device_authorization_endpoint": f"{ISSUER}/device",
+    }
+    with patch(
+        "reana_server.rest.auth.get_openid_configuration", return_value=discovered
+    ):
+        response = base_app.test_client().get("/api/.well-known/openid-configuration")
+    assert response.status_code == 200
+    return response.get_json()
+
+
+def test_relayed_discovery_applies_authorization_endpoint_overrides(
+    base_app, monkeypatch
+):
+    """reana-client must receive the same authorization endpoints as the BFF."""
+    document = _relayed_discovery(
+        base_app,
+        monkeypatch,
+        authorization_url=f"{AUTHORIZATION_URL}?audience=reana",
+        device_authorization_url=f"{ISSUER}/device?audience=reana",
+    )
+
+    assert document["authorization_endpoint"] == (f"{AUTHORIZATION_URL}?audience=reana")
+    assert document["device_authorization_endpoint"] == (
+        f"{ISSUER}/device?audience=reana"
+    )
+    assert document["token_endpoint"] == TOKEN_URL
+    assert document["reana_cli_client_id"] == "reana-cli"
+
+
+def test_relayed_discovery_keeps_discovered_endpoints_without_overrides(
+    base_app, monkeypatch
+):
+    """Without overrides the issuer's own endpoints are relayed unchanged."""
+    document = _relayed_discovery(
+        base_app, monkeypatch, authorization_url="", device_authorization_url=""
+    )
+
+    assert document["authorization_endpoint"] == AUTHORIZATION_URL
+    assert document["device_authorization_endpoint"] == f"{ISSUER}/device"
+
+
+def test_relayed_discovery_rejects_invalid_override(base_app, monkeypatch):
+    """An unusable override fails the relay instead of reaching the client."""
+    auth = base_app.config["REANA_AUTH"]
+    monkeypatch.setitem(auth, "issuer", ISSUER)
+    monkeypatch.setitem(auth, "cli_client_id", "reana-cli")
+    monkeypatch.setitem(auth, "device_authorization_url", "http://evil.example/device")
+    with patch(
+        "reana_server.rest.auth.get_openid_configuration",
+        return_value={"issuer": ISSUER, "authorization_endpoint": AUTHORIZATION_URL},
+    ):
+        response = base_app.test_client().get("/api/.well-known/openid-configuration")
+
+    assert response.status_code == 500
+
+
 @pytest.fixture
 def signing_key():
     return JsonWebKey.generate_key("EC", "P-256", is_private=True)
