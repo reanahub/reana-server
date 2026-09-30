@@ -2960,6 +2960,44 @@ def test_download_file_framing_headers(
     assert frame_ancestors in res.headers["Content-Security-Policy"]
 
 
+@pytest.mark.parametrize(
+    "content_type, sandboxed",
+    [
+        ("text/html; charset=utf-8", True),
+        ("application/pdf", False),
+        ("image/svg+xml", False),
+        ("text/plain", False),
+    ],
+)
+def test_download_file_sandboxes_html(
+    app, user0, auth_headers, content_type, sandboxed
+):
+    """HTML files get a sandboxed policy allowing their inline scripts."""
+    rwc_response = Mock()
+    rwc_response.status_code = 200
+    rwc_response.headers = {"Content-Type": content_type}
+    rwc_response.iter_content = Mock(return_value=[b"content"])
+    requests_mock = Mock()
+    requests_mock.get = Mock(return_value=rwc_response)
+    with app.test_client() as client, patch(
+        "reana_server.rest.workflows.requests", requests_mock
+    ):
+        res = client.get(
+            url_for(
+                "workflows.download_file",
+                workflow_id_or_name="1",
+                file_name="results/report.html",
+            ),
+            headers=auth_headers(user0),
+            query_string={"preview": True},
+        )
+
+    policy = res.headers["Content-Security-Policy"]
+    assert (policy == app.config["USER_HTML_CONTENT_SECURITY_POLICY"]) is sandboxed
+    assert policy.startswith("sandbox ") is sandboxed
+    assert "allow-same-origin" not in policy
+
+
 def test_delete_file(app, user0, auth_headers):
     """Test delete_file view."""
     mock_response = Mock()
