@@ -52,7 +52,7 @@
   "info": {
     "description": "Submit workflows to be run on REANA Cloud",
     "title": "REANA Server",
-    "version": "0.95.0a6"
+    "version": "0.95.0a7"
   },
   "paths": {
     "/api/.well-known/openid-configuration": {
@@ -1677,7 +1677,7 @@
                   "workflow-specification-bundles-v1"
                 ],
                 "message": "OK",
-                "reana_server_version": "0.95.0a6",
+                "reana_server_version": "0.95.0a7",
                 "status": 200
               }
             },

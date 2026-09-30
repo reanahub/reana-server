@@ -66,7 +66,7 @@ def ping():  # noqa
             application/json:
               message: OK
               status: 200
-              reana_server_version: 0.95.0a6
+              reana_server_version: 0.95.0a7
               api_capabilities: ["workflow-specification-bundles-v1"]
     """
 
