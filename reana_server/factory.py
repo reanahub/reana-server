@@ -80,6 +80,22 @@ def _allow_same_origin_framing(response):
     return response
 
 
+def _sandbox_user_html(response):
+    """Render user-generated HTML files in a sandbox with their own policy.
+
+    Workspace HTML files (e.g. Snakemake reports) need inline scripts, which
+    the default Content-Security-Policy blocks. Views serving such files set
+    ``g.reana_sandbox_user_html`` so that the response gets
+    ``USER_HTML_CONTENT_SECURITY_POLICY`` instead, whose ``sandbox`` directive
+    renders the page in an opaque origin, isolated from REANA.
+    """
+    if g.get("reana_sandbox_user_html"):
+        response.headers["Content-Security-Policy"] = current_app.config[
+            "USER_HTML_CONTENT_SECURITY_POLICY"
+        ]
+    return response
+
+
 def handle_rate_limit_error(error: RateLimitExceeded):
     """Error handler for flask_limiter exception ``RateLimitExceeded``.
 
@@ -341,6 +357,7 @@ def create_app(config_mapping=None):
         return response
 
     app.after_request(_allow_same_origin_framing)
+    app.after_request(_sandbox_user_html)
 
     # Register after the REANA hooks so Flask runs the REANA-specific header
     # additions and relaxations after Talisman's defaults.

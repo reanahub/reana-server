@@ -330,6 +330,50 @@ if "REANA_FORCE_HTTPS" in os.environ:
         strtobool(os.getenv("REANA_FORCE_HTTPS"))
     )
 
+USER_HTML_CONTENT_SECURITY_POLICY = "; ".join(
+    [
+        # Without ``allow-same-origin`` the browser renders the document in an
+        # opaque origin, so its scripts cannot read REANA cookies or call the
+        # REANA API on the user's behalf. ``allow-popups`` and
+        # ``allow-popups-to-escape-sandbox`` let links and Vega actions open
+        # normal tabs; ``allow-downloads`` lets reports save embedded results.
+        "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox "
+        "allow-downloads",
+        "default-src 'none'",
+        # Reports use inline scripts and may load libraries from CDNs; Vega
+        # evaluates its expressions with ``new Function``.
+        "script-src 'unsafe-inline' 'unsafe-eval' data: blob: https:",
+        "style-src 'unsafe-inline' data: blob: https:",
+        "img-src data: blob: https:",
+        "font-src data: https:",
+        "media-src data: blob:",
+        # Blocks fetch/XHR, WebSocket, EventSource and sendBeacon to HTTP(S)
+        # URLs. HTTPS loads of images, scripts, styles and fonts stay allowed.
+        "connect-src data: blob:",
+        "worker-src blob:",
+        "frame-src data: blob:",
+        "frame-ancestors 'none'",
+        "form-action 'none'",
+        "object-src 'none'",
+    ]
+)
+"""Content-Security-Policy of user-generated HTML files served from workspaces.
+
+HTML reports produced by workflows (e.g. Snakemake reports) are usually
+self-contained pages relying on inline scripts and styles, which the default
+policy blocks. They are rendered in a sandbox instead, isolated from REANA.
+
+This policy replaces the one from ``APP_DEFAULT_SECURE_HEADERS`` for these
+files, including any directives that operators added there.
+
+Only self-contained HTML is supported. Because of the opaque origin, a page
+cannot load other workspace files through relative links (e.g.
+``<img src="plots/plot.png">``), as ``Cross-Origin-Resource-Policy`` blocks
+them, and its scripts cannot use cookies or browser storage. Chrome also
+blocks its PDF viewer inside the sandbox, so PDF results embedded in a report
+do not show in Chrome; the PDF file can be opened from the workspace instead.
+"""
+
 APP_HEALTH_BLUEPRINT_ENABLED = False
 
 

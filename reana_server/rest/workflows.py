@@ -3577,6 +3577,9 @@ def download_file(workflow_id_or_name, file_name, user):  # noqa
         if response.mimetype == "application/pdf":
             # REANA-UI previews PDF files by embedding them in an <object>.
             g.reana_allow_same_origin_framing = True
+        elif response.mimetype == "text/html":
+            # REANA-UI opens HTML files, such as Snakemake reports, in a new tab.
+            g.reana_sandbox_user_html = True
         return response, req.status_code
 
     except HTTPError as e:
