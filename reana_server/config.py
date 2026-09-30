@@ -325,6 +325,34 @@ APP_DEFAULT_SECURE_HEADERS = {
 APP_DEFAULT_SECURE_HEADERS.update(
     json.loads(os.getenv("APP_DEFAULT_SECURE_HEADERS", "{}"))
 )
+
+USER_HTML_CONTENT_SECURITY_POLICY = "; ".join(
+    [
+        # Without ``allow-same-origin`` the browser renders the document in an
+        # opaque origin, so its scripts cannot read REANA cookies or call the
+        # REANA API on the user's behalf.
+        "sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox "
+        "allow-downloads allow-modals",
+        "default-src 'none'",
+        "script-src 'unsafe-inline' 'unsafe-eval' data: blob: https:",
+        "style-src 'unsafe-inline' data: blob: https:",
+        "img-src data: blob: https:",
+        "font-src data: https:",
+        "media-src data: blob:",
+        "connect-src data: blob:",
+        "worker-src blob:",
+        "frame-src data: blob:",
+        "frame-ancestors 'none'",
+        "form-action 'none'",
+        "object-src 'none'",
+    ]
+)
+"""Content-Security-Policy of user-generated HTML files served from workspaces.
+
+HTML reports produced by workflows (e.g. Snakemake reports) are usually
+self-contained pages relying on inline scripts and styles, which the default
+policy blocks. They are rendered in a sandbox instead, isolated from REANA.
+"""
 if "REANA_FORCE_HTTPS" in os.environ:
     APP_DEFAULT_SECURE_HEADERS["force_https"] = bool(
         strtobool(os.getenv("REANA_FORCE_HTTPS"))

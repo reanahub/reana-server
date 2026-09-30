@@ -211,6 +211,31 @@ def test_same_origin_framing_keeps_configured_frame_ancestors(sources):
     assert res.headers["X-Frame-Options"] == "DENY"
 
 
+def test_user_html_sandbox_only_when_view_opts_in():
+    """Opted-in responses get the sandboxed policy for user HTML."""
+    app = _make_app()
+
+    @app.route("/user-html")
+    def user_html_route():
+        g.reana_sandbox_user_html = True
+        return "OK"
+
+    with app.test_client() as client:
+        sandboxed = client.get("/user-html")
+        default = client.get("/test")
+
+    policy = sandboxed.headers["Content-Security-Policy"]
+    assert policy == app.config["USER_HTML_CONTENT_SECURITY_POLICY"]
+    assert policy.startswith("sandbox allow-scripts ")
+    assert "allow-same-origin" not in policy
+    assert "frame-ancestors 'none'" in policy
+    assert sandboxed.headers["X-Frame-Options"] == "DENY"
+    assert (
+        default.headers["Content-Security-Policy"]
+        == _EXPECTED_SECURITY_HEADERS["Content-Security-Policy"]
+    )
+
+
 def test_same_origin_framing_without_configured_frame_ancestors():
     """Without a frame-ancestors directive only X-Frame-Options is relaxed."""
     app = _make_app_with_embeddable_route(_frame_ancestors_config())
