@@ -13,6 +13,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from flask import Flask, g
+from limits.util import parse
 from marshmallow.exceptions import ValidationError
 from werkzeug.exceptions import UnprocessableEntity
 
@@ -761,3 +762,89 @@ def test_proxyfix_selects_client_address_from_one_trusted_proxy():
         )
 
     assert response.text == "ip:192.0.2.44"
+
+
+def _make_rate_limited_app(login_limit):
+    """Create an app enforcing ``login_limit`` on the browser login flow."""
+    return _make_app(
+        {
+            "RATELIMIT_ENABLED": True,
+            "RATELIMIT_GUEST_USER": "1000 per minute",
+            "RATELIMIT_PER_ENDPOINT": {
+                "auth.login": login_limit,
+                "auth.oauth_callback": login_limit,
+                "auth.logout": login_limit,
+            },
+        }
+    )
+
+
+def test_browser_login_endpoints_use_login_rate_limit():
+    """Starting and completing a browser login carry the group-login budget."""
+    import reana_server.config as server_config
+
+    assert parse(server_config.REANA_RATELIMIT_LOGIN) == parse("120 per minute")
+    app = _make_app({"RATELIMIT_PER_ENDPOINT": server_config.RATELIMIT_PER_ENDPOINT})
+    for path in ("/api/login", "/api/oauth/callback"):
+        with app.test_request_context(path):
+            assert _set_rate_limit() == server_config.REANA_RATELIMIT_LOGIN
+    with app.test_request_context("/api/logout", method="POST"):
+        assert _set_rate_limit() == server_config.REANA_RATELIMIT_SLOWER
+
+
+def test_shared_address_login_budget_counts_each_endpoint_separately():
+    """One address gets the full budget for the login start and the callback."""
+    group_size = 5
+    app = _make_rate_limited_app(f"{group_size} per minute")
+    shared_address = {"REMOTE_ADDR": "192.0.2.1"}
+
+    # Everybody starts a login and returns from the identity provider: two
+    # requests per person, each counted against its own endpoint budget.
+    for _ in range(group_size):
+        with app.test_client() as client:
+            start = client.get("/api/login", environ_base=shared_address)
+            callback = client.get("/api/oauth/callback", environ_base=shared_address)
+        # Browser login is disabled in this app (no issuer). Only the limiter
+        # is under test, and it runs before the view.
+        assert start.status_code == 404
+        assert callback.status_code == 404
+
+    with app.test_client() as client:
+        # Requests beyond the budget stay limited for that address ...
+        assert client.get("/api/login", environ_base=shared_address).status_code == 429
+        assert (
+            client.get("/api/oauth/callback", environ_base=shared_address).status_code
+            == 429
+        )
+        # ... without affecting other addresses or other endpoints.
+        other_address = {"REMOTE_ADDR": "192.0.2.2"}
+        assert client.get("/api/login", environ_base=other_address).status_code != 429
+        assert (
+            client.post("/api/logout", environ_base=shared_address).status_code != 429
+        )
+
+
+def test_login_rate_limit_key_ignores_client_supplied_flow_values():
+    """A fresh OAuth state or cookie cannot select a fresh login counter."""
+    app = _make_rate_limited_app("2 per minute")
+    shared_address = {"REMOTE_ADDR": "192.0.2.1"}
+    statuses = []
+    for attempt in range(4):
+        with app.test_client() as client:
+            client.set_cookie("reana_oauth_state", f"cookie-{attempt}", path="/api")
+            response = client.get(
+                "/api/oauth/callback",
+                query_string={"state": f"state-{attempt}", "code": "code"},
+                headers={"User-Agent": f"agent-{attempt}"},
+                environ_base=shared_address,
+            )
+        statuses.append(response.status_code)
+
+    # Browser login is disabled in this app (no issuer), so the view answers
+    # 404 until the limiter, which runs before it, starts answering 429.
+    assert statuses == [404, 404, 429, 429]
+
+    with app.test_request_context("/api/oauth/callback", environ_base=shared_address):
+        assert _rate_limit_key() == "ip:192.0.2.1:auth.oauth_callback"
+    with app.test_request_context("/api/login", environ_base=shared_address):
+        assert _rate_limit_key() == "ip:192.0.2.1:auth.login"

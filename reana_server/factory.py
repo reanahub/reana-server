@@ -223,6 +223,13 @@ def _rate_limit_key():
     sharing a NAT do not share one authenticated counter; unauthenticated
     requests fall back to the proxy-normalised client address.
 
+    The browser login endpoints are necessarily unauthenticated, so people
+    behind one address share their budget. Each of them gets its own
+    per-address counter, so that one login is not counted twice (start and
+    callback) and other throttled endpoints cannot use up the login budget.
+    The key never includes client-supplied values such as the OAuth state:
+    a state is free to obtain, so it must not select a fresh counter.
+
     Accepted tradeoff: this replaces the previous IP-only bucket with no
     residual per-IP ceiling behind it, so an issuer that allows open
     self-service registration lets one source mint unlimited distinct
@@ -245,7 +252,10 @@ def _rate_limit_key():
         subject = claims.get("sub", "")
         if issuer and subject:
             return f"user:{issuer}:{subject}"
-    return f"ip:{request.remote_addr or 'unknown'}"
+    key = f"ip:{request.remote_addr or 'unknown'}"
+    if request.endpoint in current_app.config.get("RATELIMIT_LOGIN_FLOW_ENDPOINTS", ()):
+        key = f"{key}:{request.endpoint}"
+    return key
 
 
 def _set_rate_limit():
