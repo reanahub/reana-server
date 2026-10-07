@@ -51,6 +51,7 @@ from reana_server.utils import (
     prevent_disk_quota_excess,
     publish_workflow_submission,
     get_workspace_retention_rules,
+    shorten_workflow_name,
 )
 from reana_server.validation import (
     SpecValidationServiceError,
@@ -237,6 +238,11 @@ def launch(user, url, name="", parameters="{}", specification=None):
     validation_directory = None
     try:
         user_id = str(user.id_)
+
+        # Reject an invalid user-supplied name before fetching anything
+        supplied_workflow_name = name.replace(" ", "")
+        validate_workflow_name(supplied_workflow_name)
+
         tmpdir = get_fetched_workflows_dir(user_id)
 
         # Fetch the workflow spec
@@ -244,8 +250,10 @@ def launch(user, url, name="", parameters="{}", specification=None):
         fetcher.fetch()
         specification_path = fetcher.workflow_spec_path()
 
-        # Generate the workflow name
-        workflow_name = name.replace(" ", "") or fetcher.generate_workflow_name()
+        # Generate the workflow name, shortening it if it is too long
+        workflow_name = supplied_workflow_name or shorten_workflow_name(
+            fetcher.generate_workflow_name()
+        )
         validate_workflow_name(workflow_name)
 
         # Load + validate the spec authoritatively. Loading runs in-process for

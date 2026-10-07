@@ -276,6 +276,14 @@ def _compensate_failed_workflow_create(workflow, user):
         )
 
 
+def _validate_workflow_name(workflow_name):
+    """Validate the workflow name, reporting problems as validation errors."""
+    try:
+        validate_workflow_name(workflow_name)
+    except ValueError as e:
+        raise REANAValidationError(str(e))
+
+
 def _is_truthy_arg(value):
     """Interpret a query-string flag (``?environments=true``) as a boolean."""
     return str(value).lower() in ("1", "true", "yes", "on")
@@ -1287,6 +1295,7 @@ def create_workflow(user):  # noqa
             # never trusts a client-serialized specification.
             git_metadata = {}
             workflow_name = request.args.get("workflow_name", "")
+            _validate_workflow_name(workflow_name)
             # Reject an over-quota user *before* any expensive work (staging the
             # bundle on the shared volume and spawning a sandbox validation Job).
             if user.has_exceeded_quota():
@@ -1317,7 +1326,7 @@ def create_workflow(user):  # noqa
             _fail_gitlab_commit_build_status(user, git_url, git_commit_sha, message)
             return jsonify({"message": "Gitlab webhook was processed"}), 200
 
-        validate_workflow_name(workflow_name)
+        _validate_workflow_name(workflow_name)
         if is_uuid_v4(workflow_name):
             return jsonify({"message": "Workflow name cannot be a valid UUIDv4."}), 400
 
