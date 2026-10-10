@@ -12,6 +12,7 @@ import enum
 import logging
 import subprocess
 from datetime import datetime, timedelta
+from typing import Literal
 
 from kubernetes.client.rest import ApiException
 from marshmallow import Schema, fields
@@ -534,6 +535,29 @@ class JobsStatus(REANAStatus):
 
         return query.count()
 
+    def get_jobs_whose_nodes_are_unavailable(
+        self, job_type: Literal["batch", "job", "session"]
+    ):
+        """Get the number of jobs whose nodes are unavailable."""
+        unschedulable_nodes = NodesStatus().get_unschedulable_nodes()
+
+        pods = []
+        for node in unschedulable_nodes:
+            pods.extend(
+                current_k8s_corev1_api_client.list_namespaced_pod(
+                    REANA_RUNTIME_KUBERNETES_NAMESPACE,
+                    field_selector=f"spec.node_name={node}",
+                ).items
+            )
+
+        job_pods = [
+            pod.metadata.name
+            for pod in pods
+            if pod.metadata.name.startswith(f"{REANA_COMPONENT_PREFIX}-run-{job_type}")
+        ]
+
+        return len(job_pods)
+
     def get_k8s_jobs_by_status(self, status):
         """Get from k8s API jobs in ``status`` status."""
         pods = current_k8s_corev1_api_client.list_namespaced_pod(
@@ -647,12 +671,14 @@ class ClusterHealth:
         used = running + pending
         total = jobs_status_obj.get_total_slots() or used
         available = ClusterHealth.get_available(used, total)
+        unavailable = jobs_status_obj.get_jobs_whose_nodes_are_unavailable("job")
         percentage = ClusterHealth.get_percentage(used, total)
 
         return {
             "running": running,
             "pending": pending,
             "available": available,
+            "unavailable": unavailable,
             "total": total,
             "percentage": percentage,
             "health": ClusterHealth.get_health_status(percentage),
@@ -662,6 +688,7 @@ class ClusterHealth:
     def get_workflow_health(self):
         """Get cluster workflows health information."""
         wf_status_obj = WorkflowsStatus()
+        jobs_status_obj = JobsStatus()
 
         running = wf_status_obj.get_workflows_by_status(RunStatus.running)
         queued = wf_status_obj.get_workflows_by_status(RunStatus.queued)
@@ -669,6 +696,7 @@ class ClusterHealth:
         total = REANA_MAX_CONCURRENT_BATCH_WORKFLOWS
         used = running + pending
         available = ClusterHealth.get_available(used, total)
+        unavailable = jobs_status_obj.get_jobs_whose_nodes_are_unavailable("batch")
         percentage = ClusterHealth.get_percentage(used, total)
 
         return {
@@ -676,6 +704,7 @@ class ClusterHealth:
             "queued": queued,
             "pending": pending,
             "available": available,
+            "unavailable": unavailable,
             "total": total,
             "percentage": percentage,
             "health": ClusterHealth.get_health_status(percentage),
@@ -685,8 +714,12 @@ class ClusterHealth:
     def get_session_health(self):
         """Get cluster sessions health information."""
         session_status_obj = InteractiveSessionsStatus()
+        jobs_status_obj = JobsStatus()
 
-        return {"active": session_status_obj.get_active(), "sort": 3}
+        active = session_status_obj.get_active()
+        unavailable = jobs_status_obj.get_jobs_whose_nodes_are_unavailable("session")
+
+        return {"active": active, "sort": 3, "unavailable": unavailable}
 
 
 class ClusterHealthSchema(Schema):
