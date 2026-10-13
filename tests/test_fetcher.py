@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2022 CERN.
+# Copyright (C) 2022, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -9,6 +9,7 @@
 
 import os
 import subprocess
+import sys
 from urllib.request import urlretrieve
 import pytest
 from unittest.mock import MagicMock, Mock, patch
@@ -20,6 +21,9 @@ from git import Repo
 from reana_server.fetcher import (
     _get_github_fetcher,
     _get_gitlab_fetcher,
+    _remote_ref_candidates,
+    _remote_refs,
+    _resolve_provider_tree_path,
     get_fetcher,
     ParsedUrl,
     REANAFetcherError,
@@ -40,6 +44,54 @@ GITLAB_REPO_ZIP = (
 )
 ZENODO_URL = "https://zenodo.org/record/5752285/files/circular-health-data-processing-master.zip?download=1"
 YAML_URL = "https://raw.githubusercontent.com/reanahub/reana-demo-root6-roofit/master/reana.yaml"
+
+
+def create_git_repository(repo_path, files):
+    """Create a git repository with one commit for each file."""
+    repository = Repo.init(repo_path, initial_branch="main")
+
+    commits = []
+    for file, content in files:
+        file_path = os.path.join(repo_path, file)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "w") as f:
+            f.write(content)
+        repository.index.add(file_path)
+        commit = repository.index.commit(f"Add {file}")
+        commits.append(commit.hexsha)
+
+    return repository, commits
+
+
+def create_git_repository_with_refs(repo_path):
+    """Create a local repository advertising branches, tags and a decoy ref."""
+    repository, _ = create_git_repository(repo_path, [("reana.yaml", "spec\n")])
+    with repository.config_writer() as config:
+        config.set_value("user", "name", "REANA")
+        config.set_value("user", "email", "info@reana.io")
+    repository.create_head("feature/x")
+    # Annotated tags also advertise a dereferenced ``^{}`` line.
+    repository.create_tag("v1.0", message="Release 1.0")
+    # ``ls-remote`` tail-matches literal operands, so this ref is also returned
+    # when querying ``refs/heads/main`` and must be discarded by the exact filter.
+    repository.create_head("decoy/refs/heads/main")
+    return repository
+
+
+def create_zip_file(archive_path, files):
+    """Create a zip archive with the given files."""
+    with zipfile.ZipFile(archive_path, "w") as zip_file:
+        for file, content in files:
+            zip_file.writestr(file, content)
+
+
+def download_from_archive(archive_path):
+    """Return a download mock side effect that copies a local archive."""
+
+    def download(_url, output_path):
+        urlretrieve(f"file://{archive_path}", output_path)
+
+    return download
 
 
 @pytest.mark.parametrize(
@@ -107,31 +159,6 @@ def test_fetcher_selection(url, expected_fetcher_class, tmp_path):
 )
 def test_fetcher_git(with_git_ref, spec, tmp_path):
     """Test fetching the workflow specification from a git repository."""
-
-    def create_git_repository(repo_path, files, idx):
-        """Create a git repository with one commit for each file."""
-        repository = Repo.init(repo_path, initial_branch="main")
-
-        commits = []
-        for file, content in files:
-            file_path = os.path.join(repo_path, file)
-            with open(file_path, "w") as f:
-                f.write(content)
-            repository.index.add(file_path)
-            commit = repository.index.commit(f"Add {file}")
-            commits.append(commit.hexsha)
-
-        # Checkout given commit
-        repository.git.checkout(commits[idx])
-        # Create branch
-        repository.create_head("new-branch")
-        # Create tag
-        repository.create_tag("new-tag")
-        # Go back to main branch
-        repository.git.checkout("main")
-
-        return commits
-
     repo_dir = os.path.join(tmp_path, "repo")
     output_dir = os.path.join(tmp_path, "output")
 
@@ -142,7 +169,11 @@ def test_fetcher_git(with_git_ref, spec, tmp_path):
         ("reana-not-present.yaml", "Content of reana-not-present.yaml"),
     ]
 
-    commits = create_git_repository(repo_dir, files, idx=1)
+    repository, commits = create_git_repository(repo_dir, files)
+    repository.git.checkout(commits[1])
+    repository.create_head("new-branch")
+    repository.create_tag("new-tag")
+    repository.git.checkout("main")
 
     if with_git_ref == "branch":
         git_ref = "new-branch"
@@ -210,7 +241,7 @@ def test_fetcher_git_timeout_kills_and_reaps_process(tmp_path):
     fetcher._clone_tree_exceeds_limits = Mock(return_value=False)
 
     with patch("reana_server.fetcher.subprocess.Popen", return_value=process), patch(
-        "reana_server.fetcher.resource.prlimit"
+        "reana_server.fetcher.resource.prlimit", create=True
     ), patch("reana_server.fetcher.FETCHER_REQUEST_TIMEOUT", 1), patch(
         "reana_server.fetcher.time.monotonic", side_effect=[0, 0, 2]
     ):
@@ -250,12 +281,517 @@ def test_fetcher_git_fast_completion_keeps_final_strict_scan(tmp_path):
     fetcher._clone_tree_exceeds_limits = Mock(side_effect=[False, False])
 
     with patch("reana_server.fetcher.subprocess.Popen", return_value=process), patch(
-        "reana_server.fetcher.resource.prlimit"
+        "reana_server.fetcher.resource.prlimit", create=True
     ), patch("reana_server.fetcher.time.monotonic", side_effect=[0, 0]):
         assert fetcher._run_bounded_git(["git", "clone"])
 
     assert process.wait_timeouts == [0.5]
     assert fetcher._clone_tree_exceeds_limits.call_args_list[1].kwargs["strict"]
+
+
+@pytest.mark.parametrize(
+    "url, remote_refs, expected_archive_ref, expected_workflow_name",
+    [
+        (
+            "https://github.com/user/repo/tree/main/workflows/example",
+            {"refs/heads/main"},
+            "/archive/main.zip",
+            "repo-main-workflows-example",
+        ),
+        (
+            "https://gitlab.com/group/user/repo/-/tree/release/v1/workflows/example",
+            {"refs/heads/release", "refs/tags/release/v1"},
+            "sha=release%2Fv1",
+            "repo-release-v1-workflows-example",
+        ),
+        (
+            "https://github.com/user/repo/tree/HEAD/workflows/example",
+            set(),
+            "/archive/HEAD.zip",
+            "repo-HEAD-workflows-example",
+        ),
+        (
+            "https://gitlab.com/group/user/repo/-/tree/HEAD/foo/workflows/example",
+            {"refs/tags/HEAD/foo"},
+            "sha=HEAD%2Ffoo",
+            "repo-HEAD-foo-workflows-example",
+        ),
+    ],
+)
+def test_provider_fetcher_tree_path_prefers_longest_ref_prefix(
+    url, remote_refs, expected_archive_ref, expected_workflow_name, tmp_path
+):
+    """Test provider tree URLs prefer the longest ref and select workflow roots."""
+    archive_path = os.path.join(tmp_path, "archive.zip")
+    output_dir = os.path.join(tmp_path, "output")
+    os.makedirs(output_dir)
+    create_zip_file(
+        archive_path,
+        [
+            ("repo-main/reana.yaml", "root spec\n"),
+            ("repo-main/workflows/example/reana.yaml", "nested spec\n"),
+            ("repo-main/workflows/example/helloworld.py", "print('hello')\n"),
+        ],
+    )
+
+    with patch("reana_server.fetcher._remote_refs", return_value=remote_refs), patch(
+        "reana_server.fetcher.WorkflowFetcherBase._download_file",
+        side_effect=download_from_archive(archive_path),
+    ) as mock_download:
+        fetcher = get_fetcher(url, output_dir)
+        assert isinstance(fetcher, WorkflowFetcherZip)
+        assert fetcher.generate_workflow_name() == expected_workflow_name
+        fetcher.fetch()
+
+    assert expected_archive_ref in mock_download.call_args.args[0]
+    expected_root_path = os.path.join(output_dir, "workflows", "example")
+    assert fetcher.workflow_root_path() == expected_root_path
+    assert fetcher.workflow_spec_path() == os.path.join(
+        expected_root_path, "reana.yaml"
+    )
+
+
+@pytest.mark.parametrize(
+    "url, workflow_path, expected_workflow_name",
+    [
+        (
+            "https://github.com/user/repo/tree/main/workflows/my%20analysis",
+            "workflows/my analysis",
+            "repo-main-workflows-my-analysis",
+        ),
+        (
+            "https://gitlab.com/user/repo/-/tree/main/workflows/caf%C3%A9",
+            "workflows/café",
+            "repo-main-workflows-caf",
+        ),
+    ],
+)
+def test_provider_fetcher_decodes_percent_encoded_tree_paths(
+    url, workflow_path, expected_workflow_name, tmp_path
+):
+    """Test provider tree URL path segments are decoded exactly once."""
+    archive_path = os.path.join(tmp_path, "archive.zip")
+    output_dir = os.path.join(tmp_path, "output")
+    os.makedirs(output_dir)
+    create_zip_file(
+        archive_path,
+        [
+            ("repo-main/reana.yaml", "root spec\n"),
+            (f"repo-main/{workflow_path}/reana.yaml", "nested spec\n"),
+        ],
+    )
+
+    with patch(
+        "reana_server.fetcher._remote_refs", return_value={"refs/heads/main"}
+    ), patch(
+        "reana_server.fetcher.WorkflowFetcherBase._download_file",
+        side_effect=download_from_archive(archive_path),
+    ):
+        fetcher = get_fetcher(url, output_dir)
+        assert fetcher.generate_workflow_name() == expected_workflow_name
+        fetcher.fetch()
+
+    expected_root_path = os.path.join(output_dir, *workflow_path.split("/"))
+    assert fetcher.workflow_root_path() == expected_root_path
+    assert fetcher.workflow_spec_path() == os.path.join(
+        expected_root_path, "reana.yaml"
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://github.com/user/repo/tree/main/%2E%2E/etc",
+        "https://github.com/user/repo/tree/main/workflows%2Fexample",
+        "https://github.com/user/repo/tree/main/%00",
+        "https://github.com/user/repo/tree/main//workflows/example",
+        "https://gitlab.com/user/repo/-/tree/main/%5C",
+        "https://gitlab.com/user/repo/-/tree/main/%ZZ",
+    ],
+)
+def test_provider_fetcher_rejects_invalid_tree_path_segments(url, tmp_path):
+    """Test unsafe provider tree URL segments are rejected before ref lookup."""
+    with patch(
+        "reana_server.fetcher._remote_refs",
+        side_effect=AssertionError("remote refs must not be queried"),
+    ):
+        with pytest.raises(
+            REANAFetcherError, match="Invalid path to the workflow directory"
+        ):
+            get_fetcher(url, tmp_path)
+
+
+def test_provider_fetcher_does_not_expand_encoded_git_globs(tmp_path):
+    """Test encoded Git glob characters cannot broaden remote ref discovery."""
+    with patch("reana_server.fetcher.subprocess.Popen") as popen:
+        with pytest.raises(
+            REANAFetcherError,
+            match=r'Cannot checkout the given Git reference "\*/workflow"',
+        ):
+            get_fetcher(
+                "https://github.com/user/repo/tree/%2A/workflow",
+                tmp_path,
+            )
+
+    popen.assert_not_called()
+
+
+def test_provider_fetcher_full_sha_folder_works_when_remote_refs_fail(tmp_path):
+    """Test full commit-SHA tree URLs can fall back when ref discovery fails."""
+    git_ref = "ABCDEF0123456789ABCDEF0123456789ABCDEF01"
+    archive_path = os.path.join(tmp_path, "archive.zip")
+    output_dir = os.path.join(tmp_path, "output")
+    os.makedirs(output_dir)
+    create_zip_file(
+        archive_path,
+        [("repo-main/workflows/example/reana.yaml", "nested spec\n")],
+    )
+
+    with patch(
+        "reana_server.fetcher._remote_refs",
+        side_effect=REANAFetcherError("Cannot resolve refs"),
+    ), patch(
+        "reana_server.fetcher.WorkflowFetcherBase._download_file",
+        side_effect=download_from_archive(archive_path),
+    ) as mock_download:
+        fetcher = get_fetcher(
+            f"https://github.com/user/repo/tree/{git_ref}/workflows/example",
+            output_dir,
+        )
+        fetcher.fetch()
+
+    assert f"/archive/{git_ref}.zip" in mock_download.call_args.args[0]
+    expected_root_path = os.path.join(output_dir, "workflows", "example")
+    assert fetcher.workflow_spec_path() == os.path.join(
+        expected_root_path, "reana.yaml"
+    )
+
+
+def test_provider_fetcher_head_folder_works_when_remote_refs_fail(tmp_path):
+    """Test symbolic HEAD tree URLs remain available when ref discovery fails."""
+    archive_path = os.path.join(tmp_path, "archive.zip")
+    output_dir = os.path.join(tmp_path, "output")
+    os.makedirs(output_dir)
+    create_zip_file(
+        archive_path,
+        [("repo-main/workflows/example/reana.yaml", "nested spec\n")],
+    )
+
+    with patch(
+        "reana_server.fetcher._remote_refs",
+        side_effect=REANAFetcherError("Cannot resolve refs"),
+    ), patch(
+        "reana_server.fetcher.WorkflowFetcherBase._download_file",
+        side_effect=download_from_archive(archive_path),
+    ) as mock_download:
+        fetcher = get_fetcher(
+            "https://github.com/user/repo/tree/HEAD/workflows/example",
+            output_dir,
+        )
+        fetcher.fetch()
+
+    assert "/archive/HEAD.zip" in mock_download.call_args.args[0]
+    expected_root_path = os.path.join(output_dir, "workflows", "example")
+    assert fetcher.workflow_spec_path() == os.path.join(
+        expected_root_path, "reana.yaml"
+    )
+
+
+def test_provider_fetcher_abbreviated_sha_folder_requires_remote_ref_lookup(tmp_path):
+    """Test ambiguous abbreviated SHAs still require successful ref discovery."""
+    with patch(
+        "reana_server.fetcher._remote_refs",
+        side_effect=REANAFetcherError("Cannot resolve refs"),
+    ):
+        with pytest.raises(REANAFetcherError, match="Cannot resolve refs"):
+            get_fetcher(
+                "https://github.com/user/repo/tree/abcdef0/workflows/example",
+                tmp_path,
+            )
+
+
+def test_provider_fetcher_tree_path_with_explicit_spec_in_workflow_root(tmp_path):
+    """Test explicit specification paths resolve inside selected workflow roots."""
+    archive_path = os.path.join(tmp_path, "archive.zip")
+    output_dir = os.path.join(tmp_path, "output")
+    os.makedirs(output_dir)
+    create_zip_file(
+        archive_path,
+        [
+            ("repo-main/reana.yaml", "root spec\n"),
+            ("repo-main/nested/custom.yaml", "nested spec\n"),
+        ],
+    )
+
+    with patch(
+        "reana_server.fetcher._remote_refs", return_value={"refs/heads/main"}
+    ), patch(
+        "reana_server.fetcher.WorkflowFetcherBase._download_file",
+        side_effect=download_from_archive(archive_path),
+    ):
+        fetcher = get_fetcher(
+            "https://github.com/user/repo/tree/main/nested",
+            output_dir,
+            spec="custom.yaml",
+        )
+        fetcher.fetch()
+
+    assert fetcher.workflow_spec_path() == os.path.join(
+        output_dir, "nested", "custom.yaml"
+    )
+
+
+def test_provider_fetcher_tree_path_does_not_fallback_to_repo_root_spec(tmp_path):
+    """Test folder URLs do not resolve explicit specs outside the workflow root."""
+    archive_path = os.path.join(tmp_path, "archive.zip")
+    output_dir = os.path.join(tmp_path, "output")
+    os.makedirs(output_dir)
+    create_zip_file(
+        archive_path,
+        [
+            ("repo-main/reana.yaml", "root spec\n"),
+            ("repo-main/nested/README.md", "nested placeholder\n"),
+        ],
+    )
+
+    with patch(
+        "reana_server.fetcher._remote_refs", return_value={"refs/heads/main"}
+    ), patch(
+        "reana_server.fetcher.WorkflowFetcherBase._download_file",
+        side_effect=download_from_archive(archive_path),
+    ):
+        fetcher = get_fetcher(
+            "https://github.com/user/repo/tree/main/nested",
+            output_dir,
+            spec="reana.yaml",
+        )
+        fetcher.fetch()
+
+    with pytest.raises(
+        REANAFetcherError, match="Cannot find the provided workflow specification"
+    ):
+        fetcher.workflow_spec_path()
+
+
+@pytest.mark.parametrize("spec", ["../reana.yaml", "../../etc/passwd.yaml"])
+def test_provider_fetcher_rejects_spec_path_traversal(spec, tmp_path):
+    """Test explicit specs cannot escape the selected workflow root."""
+    archive_path = os.path.join(tmp_path, "archive.zip")
+    output_dir = os.path.join(tmp_path, "output")
+    os.makedirs(output_dir)
+    create_zip_file(
+        archive_path,
+        [
+            ("repo-main/reana.yaml", "root spec\n"),
+            ("repo-main/nested/reana.yaml", "nested spec\n"),
+        ],
+    )
+
+    with patch(
+        "reana_server.fetcher._remote_refs", return_value={"refs/heads/main"}
+    ), patch(
+        "reana_server.fetcher.WorkflowFetcherBase._download_file",
+        side_effect=download_from_archive(archive_path),
+    ):
+        fetcher = get_fetcher(
+            "https://github.com/user/repo/tree/main/nested",
+            output_dir,
+            spec=spec,
+        )
+        fetcher.fetch()
+
+    with pytest.raises(
+        REANAFetcherError, match="Invalid path to the workflow specification"
+    ):
+        fetcher.workflow_spec_path()
+
+
+def test_remote_refs_queries_only_candidate_refs():
+    """Test remote ref discovery asks Git only for possible tree refs."""
+    output = (
+        b"abc123\trefs/heads/main\n"
+        b"abc123\trefs/tags/main\n"
+        b"abc123\trefs/heads/other\n"
+    )
+    ref_candidates = ("refs/heads/main", "refs/tags/main")
+    with patch(
+        "reana_server.fetcher._run_bounded_git_output", return_value=output
+    ) as run:
+        assert _remote_refs("https://example.org/repo.git", ref_candidates) == {
+            "refs/heads/main",
+            "refs/tags/main",
+        }
+
+    assert run.call_args.args[0] == [
+        "git",
+        "ls-remote",
+        "--heads",
+        "--tags",
+        "--",
+        "https://example.org/repo.git",
+        "refs/heads/main",
+        "refs/tags/main",
+    ]
+    assert run.call_args.args[1] > 0
+    assert run.call_args.args[2] == 4
+
+
+def test_remote_ref_candidates_exclude_git_glob_patterns():
+    """Test user-controlled glob characters cannot broaden remote ref output."""
+    assert _remote_ref_candidates(["main", "*"]) == (
+        "refs/heads/main",
+        "refs/tags/main",
+    )
+    assert _remote_ref_candidates(["*", "workflow"]) == ()
+    assert _remote_ref_candidates(["HEAD", "foo"]) == (
+        "refs/heads/HEAD/foo",
+        "refs/tags/HEAD/foo",
+    )
+
+
+def test_remote_refs_does_not_query_glob_candidates():
+    """Test remote ref discovery skips a set containing only glob patterns."""
+    with patch("reana_server.fetcher._run_bounded_git_output") as run:
+        assert _remote_refs("https://example.org/repo.git", ["refs/heads/*"]) == set()
+
+    run.assert_not_called()
+
+
+def test_remote_refs_failure_raises_fetcher_error():
+    """Test remote ref resolution failures are reported as fetcher errors."""
+    with patch("reana_server.fetcher.subprocess.Popen", side_effect=OSError):
+        with pytest.raises(
+            REANAFetcherError, match="Cannot resolve Git references from the given"
+        ):
+            _remote_refs("https://example.org/repo.git", ["refs/heads/main"])
+
+
+def test_remote_refs_rejects_excessive_suffix_matches(tmp_path):
+    """Test suffix-matching refs cannot produce unbounded buffered output."""
+    fake_git = tmp_path / "git"
+    fake_git.write_text(
+        f"#!{sys.executable}\n"
+        "for index in range(100):\n"
+        "    print('0' * 40 + '\\trefs/heads/prefix-' + "
+        "str(index) + '/refs/heads/main')\n"
+    )
+    fake_git.chmod(0o755)
+
+    with patch.dict(os.environ, {"PATH": str(tmp_path)}):
+        with pytest.raises(
+            REANAFetcherError,
+            match="Git reference discovery output exceeded its limit",
+        ):
+            _remote_refs("https://example.org/repo.git", ["refs/heads/main"])
+
+
+def test_remote_refs_reaps_git_on_unexpected_errors(tmp_path):
+    """Test the Git child is reaped on exit paths other than expected errors."""
+    fake_git = tmp_path / "git"
+    fake_git.write_text(f"#!{sys.executable}\nimport time\ntime.sleep(30)\n")
+    fake_git.chmod(0o755)
+
+    processes = []
+    original_popen = subprocess.Popen
+
+    def record_popen(*args, **kwargs):
+        process = original_popen(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    with patch.dict(os.environ, {"PATH": str(tmp_path)}), patch(
+        "reana_server.fetcher.subprocess.Popen", side_effect=record_popen
+    ), patch(
+        "reana_server.fetcher.selectors.DefaultSelector",
+        side_effect=RuntimeError("Unexpected selector failure"),
+    ):
+        with pytest.raises(RuntimeError, match="Unexpected selector failure"):
+            _remote_refs("https://example.org/repo.git", ["refs/heads/main"])
+
+    assert len(processes) == 1
+    assert processes[0].poll() is not None
+
+
+def test_remote_refs_matches_real_repository_refs(tmp_path):
+    """Test remote ref discovery parses real bounded ``git ls-remote`` output."""
+    repo_path = os.path.join(tmp_path, "repo")
+    create_git_repository_with_refs(repo_path)
+
+    assert _remote_refs(
+        repo_path,
+        [
+            "refs/heads/feature/x",
+            "refs/tags/feature/x",
+            "refs/heads/main",
+            "refs/tags/main",
+            "refs/heads/v1.0",
+            "refs/tags/v1.0",
+        ],
+    ) == {"refs/heads/feature/x", "refs/heads/main", "refs/tags/v1.0"}
+
+
+def test_remote_refs_missing_repository_raises_fetcher_error(tmp_path):
+    """Test a non-zero Git exit is reported as a fetcher error."""
+    missing_repo_path = os.path.join(tmp_path, "missing")
+
+    with pytest.raises(
+        REANAFetcherError, match="Cannot resolve Git references from the given"
+    ):
+        _remote_refs(missing_repo_path, ["refs/heads/main"])
+
+
+def test_resolve_provider_tree_path_uses_real_remote_refs(tmp_path):
+    """Test tree path resolution against real remote ref discovery."""
+    repo_path = os.path.join(tmp_path, "repo")
+    create_git_repository_with_refs(repo_path)
+
+    assert _resolve_provider_tree_path(repo_path, "feature/x/workflows/example") == (
+        "feature/x",
+        "workflows/example",
+        "feature/x/workflows/example",
+    )
+    assert _resolve_provider_tree_path(repo_path, "v1.0/workflows/example") == (
+        "v1.0",
+        "workflows/example",
+        "v1.0/workflows/example",
+    )
+    # Abbreviated SHAs are accepted once discovery proves no ref takes precedence.
+    assert _resolve_provider_tree_path(repo_path, "abcdef0/workflows/example") == (
+        "abcdef0",
+        "workflows/example",
+        "abcdef0/workflows/example",
+    )
+    with pytest.raises(REANAFetcherError, match="Cannot checkout the given Git"):
+        _resolve_provider_tree_path(repo_path, "unknown/workflows/example")
+
+
+def test_provider_fetcher_abbreviated_sha_folder_after_successful_discovery(tmp_path):
+    """Test abbreviated SHAs are used once discovery finds no matching ref."""
+    archive_path = os.path.join(tmp_path, "archive.zip")
+    output_dir = os.path.join(tmp_path, "output")
+    os.makedirs(output_dir)
+    create_zip_file(
+        archive_path,
+        [("repo-main/workflows/example/reana.yaml", "nested spec\n")],
+    )
+
+    with patch(
+        "reana_server.fetcher._remote_refs", return_value={"refs/heads/main"}
+    ), patch(
+        "reana_server.fetcher.WorkflowFetcherBase._download_file",
+        side_effect=download_from_archive(archive_path),
+    ) as mock_download:
+        fetcher = get_fetcher(
+            "https://github.com/user/repo/tree/abcdef0/workflows/example",
+            output_dir,
+        )
+        fetcher.fetch()
+
+    assert "/archive/abcdef0.zip" in mock_download.call_args.args[0]
+    expected_root_path = os.path.join(output_dir, "workflows", "example")
+    assert fetcher.workflow_spec_path() == os.path.join(
+        expected_root_path, "reana.yaml"
+    )
 
 
 @pytest.mark.parametrize(
@@ -321,12 +857,6 @@ def test_fetcher_yaml(spec_name, spec_argument, tmp_path):
 def test_fetcher_zip(with_top_level_dir, spec, tmp_path):
     """Test fetching the workflow specification from a zip archive."""
 
-    def create_zip_file(archive_path, files):
-        """Create a zip archive with the given files."""
-        with zipfile.ZipFile(archive_path, "w") as zip_file:
-            for file, content in files:
-                zip_file.writestr(file, content)
-
     input_dir = os.path.join(tmp_path, "input")
     os.makedirs(input_dir)
     output_dir = os.path.join(tmp_path, "output")
@@ -356,6 +886,36 @@ def test_fetcher_zip(with_top_level_dir, spec, tmp_path):
         expected_path = os.path.join(output_dir, spec or "reana.yaml")
         assert expected_path == fetcher.workflow_spec_path()
         assert os.path.isfile(expected_path)
+
+
+def test_fetcher_zip_with_workflow_directory(tmp_path):
+    """Test archive fetchers can select a workflow directory after extraction."""
+    input_dir = os.path.join(tmp_path, "input")
+    os.makedirs(input_dir)
+    output_dir = os.path.join(tmp_path, "output")
+    os.makedirs(output_dir)
+    archive_path = os.path.join(input_dir, "archive.zip")
+    with zipfile.ZipFile(archive_path, "w") as zip_file:
+        zip_file.writestr("repo-main/reana.yaml", "root spec\n")
+        zip_file.writestr("repo-main/workflows/example/reana.yaml", "nested spec\n")
+
+    mock_download = Mock()
+    mock_download.side_effect = urlretrieve
+    with patch(
+        "reana_server.fetcher.WorkflowFetcherBase._download_file", mock_download
+    ):
+        fetcher = WorkflowFetcherZip(
+            ParsedUrl(f"file://{archive_path}"),
+            output_dir,
+            workflow_path="workflows/example",
+        )
+        fetcher.fetch()
+
+    expected_root_path = os.path.join(output_dir, "workflows", "example")
+    assert fetcher.workflow_root_path() == expected_root_path
+    assert fetcher.workflow_spec_path() == os.path.join(
+        expected_root_path, "reana.yaml"
+    )
 
 
 def test_fetcher_zip_counts_directory_entries_towards_limit():
@@ -454,32 +1014,84 @@ def test_fetcher_rejects_entry_count_before_zipfile(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize(
-    "url, username, repository, git_ref",
+    "url, username, repository, tree_path, remote_refs, expected_ref, workflow_path",
     [
-        ("https://github.com/user/repo", "user", "repo", None),
-        ("https://github.com/user/repo/", "user", "repo", None),
-        ("https://github.com/user/repo.git", "user", "repo", None),
-        ("https://github.com/user/repo.git/", "user", "repo", None),
-        ("https://github.com/user/repo/tree/branch", "user", "repo", "branch"),
-        ("https://github.com/user/repo/tree/branch/", "user", "repo", "branch"),
+        ("https://github.com/user/repo", "user", "repo", None, set(), None, None),
+        ("https://github.com/user/repo/", "user", "repo", None, set(), None, None),
+        ("https://github.com/user/repo.git", "user", "repo", None, set(), None, None),
+        ("https://github.com/user/repo.git/", "user", "repo", None, set(), None, None),
+        (
+            "https://github.com/user/repo/tree/branch",
+            "user",
+            "repo",
+            "branch",
+            set(),
+            "branch",
+            None,
+        ),
+        (
+            "https://github.com/user/repo/tree/branch/",
+            "user",
+            "repo",
+            "branch",
+            set(),
+            "branch",
+            None,
+        ),
         (
             "https://github.com/user/repo/tree/tag/with/slashes",
             "user",
             "repo",
             "tag/with/slashes",
+            {"refs/heads/tag/with/slashes"},
+            "tag/with/slashes",
+            None,
         ),
         (
             "https://github.com/user/repo/tree/tag/with/slashes/",
             "user",
             "repo",
             "tag/with/slashes",
+            {"refs/heads/tag/with/slashes"},
+            "tag/with/slashes",
+            None,
+        ),
+        (
+            "https://github.com/user/repo/tree/branch/workflows/example",
+            "user",
+            "repo",
+            "branch/workflows/example",
+            {"refs/heads/branch"},
+            "branch",
+            "workflows/example",
+        ),
+        (
+            "https://github.com/user/repo/tree/tag/with/slashes/workflows/example",
+            "user",
+            "repo",
+            "tag/with/slashes/workflows/example",
+            {"refs/tags/tag/with/slashes"},
+            "tag/with/slashes",
+            "workflows/example",
         ),
     ],
 )
-def test_github_fetcher(url, username, repository, git_ref, tmp_path):
+def test_github_fetcher(
+    url,
+    username,
+    repository,
+    tree_path,
+    remote_refs,
+    expected_ref,
+    workflow_path,
+    tmp_path,
+):
     """GitHub repositories use bounded provider ZIP snapshots."""
     mock_zip_fetcher = Mock()
-    with patch("reana_server.fetcher.WorkflowFetcherZip", mock_zip_fetcher):
+    with patch("reana_server.fetcher.WorkflowFetcherZip", mock_zip_fetcher), patch(
+        "reana_server.fetcher._remote_refs",
+        return_value=remote_refs,
+    ):
         _get_github_fetcher(ParsedUrl(url), tmp_path)
         mock_zip_fetcher.assert_called_once()
         (
@@ -487,16 +1099,23 @@ def test_github_fetcher(url, username, repository, git_ref, tmp_path):
             call_tmp_path,
             call_spec,
             call_workflow_name,
+            call_workflow_path,
         ) = mock_zip_fetcher.call_args.args
         assert call_parsed_url.original_url.startswith(
             f"https://github.com/{username}/{repository}/archive/"
         )
         assert call_parsed_url.original_url.endswith(".zip")
+        assert (
+            f"/archive/{expected_ref}.zip" in call_parsed_url.original_url
+            if expected_ref
+            else "/archive/HEAD.zip" in call_parsed_url.original_url
+        )
         assert call_tmp_path == tmp_path
         assert call_spec is None
         assert call_workflow_name == (
-            repository if not git_ref else f"{repository}-{git_ref}"
+            repository if not tree_path else f"{repository}-{tree_path}"
         )
+        assert call_workflow_path == workflow_path
 
 
 @pytest.mark.parametrize(
@@ -542,38 +1161,101 @@ def test_invalid_github_fetcher(url, tmp_path):
 
 
 @pytest.mark.parametrize(
-    "url, username, repository, git_ref",
+    "url, username, repository, tree_path, remote_refs, expected_ref, workflow_path",
     [
-        ("https://gitlab.com/user/repo", "user", "repo", None),
-        ("https://gitlab.cern.ch/user/repo", "user", "repo", None),
-        ("https://gitlab.com/group/user/repo", "group/user", "repo", None),
-        ("https://gitlab.com/user/repo.git/", "user", "repo", None),
-        ("https://gitlab.com/group/user/repo.git/", "group/user", "repo", None),
-        ("https://gitlab.com/user/repo/-/tree/branch", "user", "repo", "branch"),
+        ("https://gitlab.com/user/repo", "user", "repo", None, set(), None, None),
+        ("https://gitlab.cern.ch/user/repo", "user", "repo", None, set(), None, None),
+        (
+            "https://gitlab.com/group/user/repo",
+            "group/user",
+            "repo",
+            None,
+            set(),
+            None,
+            None,
+        ),
+        ("https://gitlab.com/user/repo.git/", "user", "repo", None, set(), None, None),
+        (
+            "https://gitlab.com/group/user/repo.git/",
+            "group/user",
+            "repo",
+            None,
+            set(),
+            None,
+            None,
+        ),
+        (
+            "https://gitlab.com/user/repo/-/tree/branch",
+            "user",
+            "repo",
+            "branch",
+            set(),
+            "branch",
+            None,
+        ),
         (
             "https://gitlab.com/group/user/repo/-/tree/branch",
             "group/user",
             "repo",
             "branch",
+            set(),
+            "branch",
+            None,
         ),
         (
             "https://gitlab.com/group/user/repo/-/tree/tag/with/slashes",
             "group/user",
             "repo",
             "tag/with/slashes",
+            {"refs/heads/tag/with/slashes"},
+            "tag/with/slashes",
+            None,
         ),
         (
             "https://gitlab.com/group/user/repo/-/tree/tag/with/slashes/",
             "group/user",
             "repo",
             "tag/with/slashes",
+            {"refs/heads/tag/with/slashes"},
+            "tag/with/slashes",
+            None,
+        ),
+        (
+            "https://gitlab.com/group/user/repo/-/tree/branch/workflows/example",
+            "group/user",
+            "repo",
+            "branch/workflows/example",
+            {"refs/heads/branch"},
+            "branch",
+            "workflows/example",
+        ),
+        (
+            "https://gitlab.com/group/user/repo/-/tree/tag/with/slashes/workflows/example",
+            "group/user",
+            "repo",
+            "tag/with/slashes/workflows/example",
+            {"refs/tags/tag/with/slashes"},
+            "tag/with/slashes",
+            "workflows/example",
         ),
     ],
 )
-def test_gitlab_fetcher(url, username, repository, git_ref, tmp_path):
+def test_gitlab_fetcher(
+    url,
+    username,
+    repository,
+    tree_path,
+    remote_refs,
+    expected_ref,
+    workflow_path,
+    tmp_path,
+):
     """GitLab repositories use bounded provider ZIP snapshots."""
     mock_zip_fetcher = Mock()
-    with patch("reana_server.fetcher.WorkflowFetcherZip", mock_zip_fetcher):
+    with patch("reana_server.fetcher.WorkflowFetcherZip", mock_zip_fetcher), patch(
+        "reana_server.fetcher._remote_refs",
+        return_value=remote_refs,
+    ):
         parsed_url = ParsedUrl(url)
         _get_gitlab_fetcher(ParsedUrl(url), tmp_path)
         mock_zip_fetcher.assert_called_once()
@@ -582,16 +1264,23 @@ def test_gitlab_fetcher(url, username, repository, git_ref, tmp_path):
             call_tmp_path,
             call_spec,
             call_workflow_name,
+            call_workflow_path,
         ) = mock_zip_fetcher.call_args.args
         assert call_parsed_url.original_url.startswith(
             f"https://{parsed_url.hostname}/api/v4/projects/"
         )
         assert "repository/archive.zip?sha=" in call_parsed_url.original_url
+        assert (
+            f"sha={expected_ref.replace('/', '%2F')}" in call_parsed_url.original_url
+            if expected_ref
+            else "sha=HEAD" in call_parsed_url.original_url
+        )
         assert call_tmp_path == tmp_path
         assert call_spec is None
         assert call_workflow_name == (
-            repository if not git_ref else f"{repository}-{git_ref}"
+            repository if not tree_path else f"{repository}-{tree_path}"
         )
+        assert call_workflow_path == workflow_path
 
 
 @pytest.mark.parametrize(
@@ -617,7 +1306,11 @@ def test_gitlab_fetcher(url, username, repository, git_ref, tmp_path):
 )
 def test_workflow_name_generation(url, expected_name, tmp_path):
     """Test the generation of the workflow name from the given URL."""
-    assert get_fetcher(url, tmp_path).generate_workflow_name() == expected_name
+    with patch(
+        "reana_server.fetcher._remote_refs",
+        return_value={"refs/heads/tag/with/slashes"},
+    ):
+        assert get_fetcher(url, tmp_path).generate_workflow_name() == expected_name
 
 
 @patch("reana_server.fetcher.FETCHER_MAXIMUM_FILE_SIZE", 100)
