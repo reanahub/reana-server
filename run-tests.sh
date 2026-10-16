@@ -51,6 +51,13 @@ docker_build() {
     docker build -t docker.io/reanahub/reana-server .
 }
 
+docker_uwsgi_unicode() {
+    # The check must run in the Python interpreter embedded in uWSGI, which
+    # selects its filesystem encoding differently from a standalone python3.
+    docker run --rm --entrypoint "" docker.io/reanahub/reana-server \
+        uwsgi --pyrun scripts/check_uwsgi_unicode_filenames.py
+}
+
 docs_openapi() {
     FLASK_APP=reana_server/app.py python ./scripts/generate_openapi_spec.py
     diff -q -w temp_openapi.json docs/openapi.json
@@ -153,6 +160,7 @@ python_tests() {
 
 all() {
     docker_build
+    docker_uwsgi_unicode
     docs_openapi
     docs_sphinx
     format_black
@@ -175,6 +183,7 @@ help() {
     echo "Options:"
     echo "  --all                  Perform all checks [default]"
     echo "  --docker-build         Check Docker build"
+    echo "  --docker-uwsgi-unicode Check Unicode file names in Docker image"
     echo "  --docs-openapi         Check OpenAPI specification"
     echo "  --docs-sphinx          Check Sphinx docs build"
     echo "  --format-black         Check formatting of Python code"
@@ -203,6 +212,7 @@ case $arg in
 --all) all ;;
 --help) help ;;
 --docker-build) docker_build ;;
+--docker-uwsgi-unicode) docker_uwsgi_unicode ;;
 --docs-openapi) docs_openapi ;;
 --docs-sphinx) docs_sphinx ;;
 --format-black) format_black ;;

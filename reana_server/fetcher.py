@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2022 CERN.
+# Copyright (C) 2022, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -614,6 +614,14 @@ class WorkflowFetcherZip(WorkflowFetcherBase):
                     except OSError:
                         pass
                 raise
+            except UnicodeError:
+                # The archive is valid, but the file name cannot be stored
+                # using the filesystem encoding of the running interpreter.
+                raise REANAFetcherError(
+                    "Could not extract remote source entry "
+                    f"{ascii(entry.filename)}: the file name cannot be "
+                    "represented in the filesystem encoding of the server"
+                )
             except (OSError, EOFError, RuntimeError, zipfile.BadZipFile) as exc:
                 if not entry.is_dir():
                     try:
