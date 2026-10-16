@@ -5044,7 +5044,7 @@ def get_workflow_retention_rules(workflow_id_or_name, user):
         "include_inputs": fields.Boolean(),
         "include_outputs": fields.Boolean(),
     },
-    location="json",
+    location="query",
     unknown=marshmallow.EXCLUDE,
 )
 @signin_required()

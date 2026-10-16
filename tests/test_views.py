@@ -3370,6 +3370,49 @@ def test_prune_workspace(app, user0, sample_serial_workflow_in_db, auth_headers)
         assert "The workspace has been correctly pruned." in res.json["message"]
 
 
+@pytest.mark.parametrize(
+    "include_inputs, include_outputs, expected_files",
+    [
+        (False, False, {"input.txt", "output.txt"}),
+        (True, False, {"output.txt"}),
+        (False, True, {"input.txt"}),
+        (True, True, set()),
+    ],
+)
+def test_prune_workspace_include_inputs_outputs(
+    app,
+    user0,
+    sample_serial_workflow_in_db,
+    auth_headers,
+    include_inputs,
+    include_outputs,
+    expected_files,
+):
+    """Test that prune_workspace honours its query-string flags."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification = {
+        **workflow.reana_specification,
+        "inputs": {"files": ["input.txt"]},
+        "outputs": {"files": ["output.txt"]},
+    }
+    os.makedirs(workflow.workspace_path, exist_ok=True)
+    for name in ("input.txt", "output.txt", "other.txt"):
+        with open(os.path.join(workflow.workspace_path, name), "w") as f:
+            f.write(name)
+
+    with app.test_client() as client:
+        res = client.post(
+            url_for("workflows.prune_workspace", workflow_id_or_name=workflow.id_),
+            query_string={
+                "include_inputs": include_inputs,
+                "include_outputs": include_outputs,
+            },
+            headers=auth_headers(user0),
+        )
+    assert res.status_code == 200
+    assert set(os.listdir(workflow.workspace_path)) == expected_files
+
+
 def test_gitlab_projects(app: Flask, user0, auth_headers):
     """Test fetching of GitLab projects."""
     with app.test_client() as client:
