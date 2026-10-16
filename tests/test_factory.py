@@ -848,3 +848,62 @@ def test_login_rate_limit_key_ignores_client_supplied_flow_values():
         assert _rate_limit_key() == "ip:192.0.2.1:auth.oauth_callback"
     with app.test_request_context("/api/login", environ_base=shared_address):
         assert _rate_limit_key() == "ip:192.0.2.1:auth.login"
+
+
+def _post_slow_requests(paths, slow_limit="1/5 second"):
+    """Send ``(method, path)`` requests of one user, return their statuses."""
+    import reana_server.config as server_config
+
+    app = _make_app(
+        {
+            "RATELIMIT_ENABLED": True,
+            "REANA_RATELIMIT_SLOW": slow_limit,
+            "RATELIMIT_PER_ENDPOINT": {
+                endpoint: slow_limit
+                for endpoint, limit in server_config.RATELIMIT_PER_ENDPOINT.items()
+                if limit == server_config.REANA_RATELIMIT_SLOW
+            },
+        }
+    )
+    claims = {"iss": "https://idp.example.org", "sub": "alice"}
+    with patch(
+        "reana_server.factory._validated_rate_limit_claims", return_value=claims
+    ), app.test_client() as client:
+        # No credentials are sent, so authentication answers 401 after the
+        # limiter has counted the request; only the limiter is under test.
+        return [client.open(path, method=method).status_code for method, path in paths]
+
+
+def test_workflow_start_after_creation_is_not_rate_limited():
+    """``reana-client run`` can create and start a workflow in one slow window."""
+    statuses = _post_slow_requests(
+        [("POST", "/api/workflows"), ("POST", "/api/workflows/my-analysis/start")]
+    )
+
+    assert statuses == [401, 401]
+
+
+def test_workflow_starts_share_one_rate_limit_counter():
+    """Both ways to start a workflow stay limited by one slow-limit slot."""
+    statuses = _post_slow_requests(
+        [
+            ("POST", "/api/workflows/my-analysis/start"),
+            ("PUT", "/api/workflows/my-analysis/status?status=start"),
+            ("POST", "/api/workflows/my-analysis/start"),
+        ]
+    )
+
+    assert statuses == [401, 429, 429]
+
+
+def test_validation_job_endpoints_keep_one_shared_rate_limit_counter():
+    """Creation, validation and restart share the validation Job budget."""
+    statuses = _post_slow_requests(
+        [
+            ("POST", "/api/workflows"),
+            ("POST", "/api/workflows/validate"),
+            ("POST", "/api/workflows/my-analysis/restart"),
+        ]
+    )
+
+    assert statuses == [401, 429, 429]
