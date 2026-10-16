@@ -596,52 +596,123 @@ class TestLogout:
         assert response.status_code == 503
         assert response.headers.getlist("Set-Cookie") == []
 
-    @pytest.mark.parametrize(
-        "error,status",
-        [
-            (IssuerUnavailableError("issuer unavailable"), 503),
-            (IssuerMisconfiguredError("issuer misconfigured"), 500),
-        ],
-    )
-    def test_token_validation_failure_preserves_retryable_logout(
-        self, base_app, bff_config, signing_key, error, status
-    ):
-        token = _make_token(signing_key)
+    ISSUER_FAILURES = [
+        IssuerUnavailableError("issuer unavailable"),
+        IssuerMisconfiguredError("issuer misconfigured"),
+    ]
+
+    def _logout_during_issuer_failure(self, base_app, token, error, csrf="csrf-value"):
         with base_app.test_client() as client:
             self._login_cookies(client, token)
             with patch(
                 "reana_server.rest.auth.decode_expired_token", side_effect=error
-            ):
-                response = client.post(
-                    "/api/logout", headers={CSRF_HEADER: "csrf-value"}
-                )
+            ), patch("reana_server.rest.auth.get_endpoint") as get_endpoint:
+                response = client.post("/api/logout", headers={CSRF_HEADER: csrf})
+        get_endpoint.assert_not_called()
+        return response
 
-        assert response.status_code == status
-        assert response.headers.getlist("Set-Cookie") == []
+    @staticmethod
+    def _assert_local_cookies_cleared(response):
+        assert response.status_code == 200
+        assert response.json == {"logout_url": ""}
+        cleared = response.headers.getlist("Set-Cookie")
+        for name in (AUTH_COOKIE, SESSION_COOKIE, CSRF_COOKIE):
+            assert any(cookie.startswith(f"{name}=;") for cookie in cleared)
 
-    def test_issuer_outage_still_allows_bound_local_logout(
-        self, base_app, bff_config, redis_store, signing_key
+    @pytest.mark.parametrize("error", ISSUER_FAILURES)
+    def test_issuer_failure_still_allows_bound_local_logout(
+        self, base_app, bff_config, redis_store, signing_key, error
     ):
         """Stored access-token equality safely binds cookies without JWKS."""
         token = _make_token(signing_key)
         _store_bound_session("browser-session-id", "r", "idt", token)
-        with base_app.test_client() as client:
-            self._login_cookies(client, token)
-            with patch(
-                "reana_server.rest.auth.decode_expired_token",
-                side_effect=IssuerUnavailableError("issuer unavailable"),
-            ):
-                response = client.post(
-                    "/api/logout", headers={CSRF_HEADER: "csrf-value"}
-                )
 
-        assert response.status_code == 200
-        assert response.json["logout_url"] == ""
+        response = self._logout_during_issuer_failure(base_app, token, error)
+
+        self._assert_local_cookies_cleared(response)
         assert redis_store.get("reana:bff:session:browser-session-id") is None
-        assert any(
-            cookie.startswith(f"{AUTH_COOKIE}=;")
-            for cookie in response.headers.getlist("Set-Cookie")
+
+    @pytest.mark.parametrize("error", ISSUER_FAILURES)
+    @pytest.mark.parametrize(
+        "stored_access_token", ["", "another-access-token", None, 12345]
+    )
+    def test_issuer_failure_with_unmatched_token_clears_cookies_only(
+        self, base_app, bff_config, redis_store, signing_key, error, stored_access_token
+    ):
+        """An unverified, unmatched cookie must never delete a stored session."""
+        token = _make_token(signing_key)
+        _store_bound_session("browser-session-id", "victim-refresh", "victim-idt", "")
+        key = "reana:bff:session:browser-session-id"
+        stored = json.loads(redis_store.get(key))
+        if stored_access_token is None:
+            del stored["at"]
+        else:
+            stored["at"] = stored_access_token
+        redis_store.set(key, json.dumps(stored), keepttl=True)
+
+        response = self._logout_during_issuer_failure(base_app, token, error)
+
+        self._assert_local_cookies_cleared(response)
+        assert json.loads(redis_store.get(key)) == stored
+        assert "victim-idt" not in response.get_data(as_text=True)
+
+    @pytest.mark.parametrize("error", ISSUER_FAILURES)
+    def test_issuer_failure_without_stored_session_clears_cookies(
+        self, base_app, bff_config, redis_store, signing_key, error
+    ):
+        response = self._logout_during_issuer_failure(
+            base_app, _make_token(signing_key), error
         )
+
+        self._assert_local_cookies_cleared(response)
+        assert redis_store.keys("*") == []
+
+    @pytest.mark.parametrize("error", ISSUER_FAILURES)
+    def test_issuer_failure_does_not_bypass_csrf(
+        self, base_app, bff_config, redis_store, signing_key, error
+    ):
+        token = _make_token(signing_key)
+        _store_bound_session("browser-session-id", "r", "idt", token)
+
+        response = self._logout_during_issuer_failure(
+            base_app, token, error, csrf="wrong-value"
+        )
+
+        assert response.status_code == 403
+        assert response.headers.getlist("Set-Cookie") == []
+        assert redis_store.get("reana:bff:session:browser-session-id") is not None
+
+    @pytest.mark.parametrize("error", ISSUER_FAILURES)
+    def test_issuer_failure_with_session_delete_failure_returns_503(
+        self, base_app, bff_config, redis_store, signing_key, error
+    ):
+        """A real session-store failure stays a retryable error with cookies kept."""
+        token = _make_token(signing_key)
+        _store_bound_session("browser-session-id", "r", "idt", token)
+        with patch(
+            "reana_server.rest.auth.delete_session",
+            side_effect=SessionUnavailableError("cache unavailable"),
+        ):
+            response = self._logout_during_issuer_failure(base_app, token, error)
+
+        assert response.status_code == 503
+        assert response.headers.getlist("Set-Cookie") == []
+        assert redis_store.get("reana:bff:session:browser-session-id") is not None
+
+    @pytest.mark.parametrize("error", ISSUER_FAILURES)
+    def test_issuer_failure_with_session_read_failure_returns_503(
+        self, base_app, bff_config, signing_key, error
+    ):
+        with patch(
+            "reana_server.rest.auth.get_session",
+            side_effect=SessionUnavailableError("cache unavailable"),
+        ):
+            response = self._logout_during_issuer_failure(
+                base_app, _make_token(signing_key), error
+            )
+
+        assert response.status_code == 503
+        assert response.headers.getlist("Set-Cookie") == []
 
     def test_logout_url_failure_does_not_undo_completed_local_logout(
         self, base_app, bff_config, redis_store, signing_key
