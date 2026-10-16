@@ -38,7 +38,7 @@ extras_require = {
         "apispec-webframeworks",
         "reana-commons[kubernetes,yadage,snakemake,cwl,tests]>=0.95.0a26,<0.96.0",
         "fakeredis>=2.0.0",
-        "reana-db[tests]>=0.95.0a13,<0.96.0",
+        "reana-db[tests]>=0.95.0a14,<0.96.0",
     ],
 }
 
@@ -53,7 +53,7 @@ install_requires = [
     "gitpython>=3.1",
     "marshmallow>=3.5.0,<4.0.0",
     "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a26,<0.96.0",
-    "reana-db>=0.95.0a13,<0.96.0",
+    "reana-db>=0.95.0a14,<0.96.0",
     "requests>=2.25.0",
     "tablib>=0.12.1",
     "uWSGI>=2.0.31",
