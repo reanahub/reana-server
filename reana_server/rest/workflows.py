@@ -70,6 +70,7 @@ from reana_db.utils import (
     build_workspace_path,
     get_disk_usage_or_zero,
     get_default_quota_resource,
+    should_skip_quota_update,
     store_workflow_disk_quota,
     update_users_disk_quota,
 )
@@ -5185,6 +5186,8 @@ def prune_workspace(
         deleter = Deleter(workflow)
         for file_or_dir in workspace.iterdir(deleter.workspace, ""):
             deleter.delete_files(which_to_keep, file_or_dir)
+        if not should_skip_quota_update(ResourceType.disk):
+            _recalculate_shared_workspace_quota(workflow, workflow.owner)
         response = {
             "message": "The workspace has been correctly pruned.",
             "workflow_id": workflow.id_,
