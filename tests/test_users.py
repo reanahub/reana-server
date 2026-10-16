@@ -8,14 +8,16 @@
 
 """Test users endpoints."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from bravado_core.spec import Spec
 from bravado_core.validate import validate_object
 from flask import url_for
+from reana_db.models import UserWorkflow, Workflow
 
 
 @pytest.mark.parametrize("full_name", [None, "", "Jane Doe"])
@@ -61,6 +63,42 @@ def test_get_users_shared_with_you(app, user1, auth_headers):
         )
 
         assert response.status_code == 200
+
+
+@pytest.mark.parametrize("valid_until_days, is_listed", [(0, True), (-1, False)])
+def test_get_users_shared_with_you_ignores_expired_shares(
+    app, session, user1, user2, auth_headers, valid_until_days, is_listed
+):
+    """A user who shared a workflow is listed until the share expires."""
+    workflow = Workflow(
+        id_=uuid4(),
+        name="shared-workflow",
+        owner_id=user2.id_,
+        reana_specification={},
+        type_="serial",
+    )
+    session.add(workflow)
+    session.flush()
+    today = datetime.combine(datetime.now().date(), datetime.min.time())
+    session.add(
+        UserWorkflow(
+            workflow_id=workflow.id_,
+            user_id=user1.id_,
+            valid_until=today + timedelta(days=valid_until_days),
+        )
+    )
+    session.commit()
+
+    with app.test_client() as client:
+        response = client.get(
+            url_for("users.get_users_shared_with_you"),
+            headers=auth_headers(user1),
+        )
+
+    assert response.status_code == 200
+    assert response.json["users_shared_with_you"] == (
+        [{"email": user2.email}] if is_listed else []
+    )
 
 
 def test_get_users_you_shared_with(app, user1, auth_headers):

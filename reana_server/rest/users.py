@@ -316,7 +316,7 @@ def get_users_shared_with_you(user):
     try:
         shared_workflows_ids = (
             Session.query(UserWorkflow.workflow_id)
-            .filter(UserWorkflow.user_id == user.id_)
+            .filter(UserWorkflow.user_id == user.id_, UserWorkflow.is_active)
             .subquery()
         )
 
