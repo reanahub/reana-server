@@ -9,6 +9,7 @@
 
 import base64
 import csv
+import hashlib
 import io
 import logging
 import os
@@ -25,7 +26,12 @@ import click
 from flask import url_for
 from marshmallow.exceptions import ValidationError
 from marshmallow.validate import Email
-from reana_commons.config import REANAConfig, REANA_WORKFLOW_UMASK, SHARED_VOLUME_PATH
+from reana_commons.config import (
+    REANAConfig,
+    REANA_WORKFLOW_NAME_MAX_LENGTH,
+    REANA_WORKFLOW_UMASK,
+    SHARED_VOLUME_PATH,
+)
 from reana_commons.errors import (
     REANAQuotaExceededError,
     REANAValidationError,
@@ -99,6 +105,24 @@ def is_uuid_v4(uuid_or_name):
         return False
 
     return uuid.hex == uuid_or_name.replace("-", "")
+
+
+def shorten_workflow_name(workflow_name: str) -> str:
+    """Shorten an automatically generated workflow name that is too long.
+
+    The name is truncated and a short hash of the full name is appended, so
+    that different long names sharing the same prefix remain distinct and
+    are not treated as runs of the same workflow.
+
+    :param workflow_name: Generated workflow name.
+    :returns: The same name if it fits, otherwise its shortened form.
+    """
+    if len(workflow_name) <= REANA_WORKFLOW_NAME_MAX_LENGTH:
+        return workflow_name
+    suffix = hashlib.sha256(workflow_name.encode("utf-8")).hexdigest()[:8]
+    prefix_length = REANA_WORKFLOW_NAME_MAX_LENGTH - len(suffix) - 1
+    prefix = workflow_name[:prefix_length].rstrip("-")
+    return f"{prefix}-{suffix}"
 
 
 def initialise_workspace_umask():
