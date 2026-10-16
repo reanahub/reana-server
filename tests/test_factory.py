@@ -18,7 +18,7 @@ from marshmallow.exceptions import ValidationError
 from werkzeug.exceptions import UnprocessableEntity
 
 from reana_server.auth import discovery, sessions, tokens
-from reana_server.auth.sessions import _refresh_lock_ttl
+from reana_server.auth.sessions import AUTH_COOKIE, _refresh_lock_ttl
 from reana_server.auth.config import get_auth_config
 from reana_server.auth.provision import email_linking_allowed
 from reana_server.auth.errors import AuthError, InvalidTokenError
@@ -789,7 +789,7 @@ def test_browser_login_endpoints_use_login_rate_limit():
         with app.test_request_context(path):
             assert _set_rate_limit() == server_config.REANA_RATELIMIT_LOGIN
     with app.test_request_context("/api/logout", method="POST"):
-        assert _set_rate_limit() == server_config.REANA_RATELIMIT_SLOWER
+        assert _set_rate_limit() == server_config.REANA_RATELIMIT_LOGIN
 
 
 def test_shared_address_login_budget_counts_each_endpoint_separately():
@@ -848,3 +848,32 @@ def test_login_rate_limit_key_ignores_client_supplied_flow_values():
         assert _rate_limit_key() == "ip:192.0.2.1:auth.oauth_callback"
     with app.test_request_context("/api/login", environ_base=shared_address):
         assert _rate_limit_key() == "ip:192.0.2.1:auth.login"
+
+
+def test_shared_address_logout_budget_with_expired_tokens():
+    """People behind one address can sign out with expired access tokens."""
+    group_size = 5
+    app = _make_rate_limited_app(f"{group_size} per minute")
+    shared_address = {"REMOTE_ADDR": "192.0.2.1"}
+
+    def logout(attempt):
+        with app.test_client() as client:
+            # The access token cannot be validated, as after its expiry, so the
+            # request is counted per address.
+            client.set_cookie(AUTH_COOKIE, f"expired-token-{attempt}", path="/api")
+            return client.post("/api/logout", environ_base=shared_address)
+
+    # Browser logout is disabled in this app (no issuer), so the view answers
+    # 404 until the limiter, which runs before it, starts answering 429.
+    assert [logout(attempt).status_code for attempt in range(group_size + 1)] == [
+        404
+    ] * group_size + [429]
+
+    with app.test_client() as client:
+        # Logout requests do not use up the login budget of the address.
+        assert client.get("/api/login", environ_base=shared_address).status_code != 429
+
+    with app.test_request_context(
+        "/api/logout", method="POST", environ_base=shared_address
+    ):
+        assert _rate_limit_key() == "ip:192.0.2.1:auth.logout"
