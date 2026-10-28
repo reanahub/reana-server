@@ -60,13 +60,6 @@ install_requires = [
     "uwsgi-tools>=1.1.1",
     "uwsgitop>=0.12",
     "webargs>=8.0,<9.0",
-    # Yadage dependencies
-    # Pinning adage/packtivity/yadage/yadage-schemas to make sure we use compatible versions.
-    # See https://github.com/reanahub/reana-workflow-engine-yadage/pull/236#discussion_r992475484
-    "adage==0.11.0",  # matches the version in r-w-e-yadage and r-w-validator
-    "packtivity==0.17.1",  # matches the version in r-w-e-yadage and r-w-validator
-    "yadage==0.21.2",  # matches the version in r-w-e-yadage and r-w-validator
-    "yadage-schemas==0.11.1",  # matches the version in r-w-e-yadage and r-w-validator
     # OIDC/JWT authentication
     "authlib>=1.6.0,<2.0.0",
     "redis>=5.0.0",
