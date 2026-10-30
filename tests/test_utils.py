@@ -13,15 +13,20 @@ import stat
 
 import pytest
 from mock import patch
-from reana_commons.config import REANA_WORKFLOW_UMASK
+from reana_commons.config import (
+    REANA_WORKFLOW_NAME_MAX_LENGTH,
+    REANA_WORKFLOW_UMASK,
+)
 from reana_commons.errors import REANAValidationError
-from reana_db.models import ResourceType
+from reana_commons.validation.utils import validate_workflow_name
+from reana_db.models import ResourceType, Workflow
 from reana_server.utils import (
     _set_quota_period,
     create_user_workspace,
     filter_input_files,
     initialise_workspace_umask,
     is_valid_email,
+    shorten_workflow_name,
 )
 
 
@@ -156,3 +161,35 @@ def test_set_quota_period_disabling_cadence_clears_period_start(user0, session):
     assert fatal is False
     assert cpu_user_resource.quota_period_months is None
     assert cpu_user_resource.quota_period_start_at is None
+
+
+def test_workflow_name_max_length_matches_database():
+    """The accepted workflow name length matches the database column."""
+    assert Workflow.name.type.length == REANA_WORKFLOW_NAME_MAX_LENGTH
+
+
+@pytest.mark.parametrize("workflow_name", ["", "myanalysis", "a" * 255])
+def test_shorten_workflow_name_keeps_names_that_fit(workflow_name):
+    """Names within the limit are left unchanged."""
+    assert shorten_workflow_name(workflow_name) == workflow_name
+
+
+def test_shorten_workflow_name_shortens_long_names():
+    """Overlong names are shortened deterministically to a valid name."""
+    workflow_name = "repo-" + "folder-" * 50
+    shortened = shorten_workflow_name(workflow_name)
+    assert len(shortened) <= REANA_WORKFLOW_NAME_MAX_LENGTH
+    assert shortened.startswith("repo-folder-")
+    assert "--" not in shortened
+    assert shortened == shorten_workflow_name(workflow_name)
+    assert validate_workflow_name(shortened) == shortened
+    assert len(shorten_workflow_name("a" * 256)) == 255
+
+
+def test_shorten_workflow_name_keeps_long_names_distinct():
+    """Overlong names sharing the retained prefix do not collapse."""
+    prefix = "a" * 300
+    first = shorten_workflow_name(prefix + "-first")
+    second = shorten_workflow_name(prefix + "-second")
+    assert first[:200] == second[:200]
+    assert first != second

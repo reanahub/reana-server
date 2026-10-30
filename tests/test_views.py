@@ -336,6 +336,22 @@ def test_create_workflow(
             )
             assert res.status_code == 400
 
+            # name cannot be longer than the database allows or contain
+            # illegal characters
+            for invalid_name in ("a" * 256, "my.analysis"):
+                res = client.post(
+                    url_for("workflows.create_workflow"),
+                    headers=auth_headers(user0),
+                    query_string={
+                        "workflow_name": invalid_name,
+                    },
+                    data=_serial_bundle(),
+                    content_type="multipart/form-data",
+                )
+                assert res.status_code == 400
+                assert "Workflow name" in res.json["message"]
+            rwc_client.api.create_workflow.assert_not_called()
+
             # correct case: a serial bundle is loaded and validated in-process,
             # then seeded into the created workspace (C1) and the staging dir is
             # cleaned up. The uploaded bytes are pre-checked against disk quota and
@@ -976,6 +992,54 @@ def test_create_workflow_gitlab_surfaces_validation_warnings(
             )
     assert res.status_code == 200
     assert warning in res.json["validation_warnings"]
+
+
+def test_launch_rejects_supplied_name_that_is_too_long(app, user0, auth_headers):
+    """An overlong user-supplied name is rejected before anything is fetched."""
+    with app.test_client() as client, patch(
+        "reana_server.rest.launch.get_fetcher"
+    ) as get_fetcher_mock:
+        response = client.post(
+            url_for("launch.launch"),
+            headers=auth_headers(user0),
+            json={"url": "https://example.org/workflow.zip", "name": "a" * 256},
+        )
+
+    assert response.status_code == 400
+    assert "too long" in response.json["message"]
+    get_fetcher_mock.assert_not_called()
+
+
+def test_launch_shortens_generated_name_that_is_too_long(
+    app, user0, auth_headers, tmp_path
+):
+    """An overlong generated name is shortened instead of failing the launch."""
+    generated_name = "repository-" + "folder-" * 50 + "analysis"
+    fetcher = Mock()
+    fetcher.generate_workflow_name.return_value = generated_name
+
+    class _StopAfterNaming(Exception):
+        pass
+
+    with app.test_client() as client, patch(
+        "reana_server.rest.launch.get_fetched_workflows_dir",
+        return_value=str(tmp_path),
+    ), patch("reana_server.rest.launch.get_fetcher", return_value=fetcher), patch(
+        "reana_server.rest.launch.validate_workflow_name"
+    ) as validate_name_mock, patch(
+        "reana_server.rest.launch.stage_validation_snapshot",
+        side_effect=_StopAfterNaming,
+    ):
+        client.post(
+            url_for("launch.launch"),
+            headers=auth_headers(user0),
+            json={"url": "https://example.org/workflow.zip"},
+        )
+
+    workflow_name = validate_name_mock.call_args.args[0]
+    assert len(workflow_name) == 255
+    assert workflow_name.startswith("repository-folder-")
+    assert workflow_name != generated_name[:255]
 
 
 def test_launch_validates_definition_before_seeding_inputs(
