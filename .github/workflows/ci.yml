@@ -18,6 +18,9 @@ jobs:
       - name: Build Docker image
         run: ./run-tests.sh --docker-build
 
+      - name: Check Unicode file names in Docker image
+        run: ./run-tests.sh --docker-uwsgi-unicode
+
   docs-sphinx:
     runs-on: ubuntu-24.04
     steps:
