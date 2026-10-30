@@ -75,6 +75,23 @@ def status(**kwargs):  # noqa
                 properties:
                   available:
                     type: number
+                  backends:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        available:
+                          type: number
+                        health:
+                          type: string
+                        percentage:
+                          type: number
+                        total:
+                          type: number
+                        used:
+                          type: number
+                  bottleneck:
+                    type: string
                   running:
                     type: number
                   queued:
@@ -88,6 +105,8 @@ def status(**kwargs):  # noqa
                   sort:
                     type: number
                   total:
+                    type: number
+                  used:
                     type: number
               session:
                 type: object
@@ -121,8 +140,33 @@ def status(**kwargs):  # noqa
                     "sort": 3
                 },
                 "workflow": {
-                    "total": 30,
-                    "available": 24,
+                    "backends": {
+                        "dask": {
+                            "available": 4,
+                            "health": "healthy",
+                            "percentage": 80,
+                            "total": 5,
+                            "used": 1
+                        },
+                        "htcondorcern": {
+                            "available": 197,
+                            "health": "healthy",
+                            "percentage": 99,
+                            "total": 200,
+                            "used": 3
+                        },
+                        "kubernetes": {
+                            "available": 24,
+                            "health": "healthy",
+                            "percentage": 80,
+                            "total": 30,
+                            "used": 6
+                        }
+                    },
+                    "bottleneck": "dask",
+                    "total": 5,
+                    "used": 1,
+                    "available": 4,
                     "queued": 2,
                     "running": 4,
                     "pending": 2,

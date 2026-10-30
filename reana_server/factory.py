@@ -16,7 +16,11 @@ from flask_limiter import Limiter
 from flask_limiter.errors import RateLimitExceeded
 from flask_talisman import Talisman
 from marshmallow.exceptions import ValidationError
-from reana_commons.config import REANA_LOG_FORMAT, REANA_LOG_LEVEL
+from reana_commons.config import (
+    REANA_LOG_FORMAT,
+    REANA_LOG_LEVEL,
+    REANA_MAX_CONCURRENT_BATCH_WORKFLOWS_PER_BACKEND,
+)
 from reana_db.database import Session
 from sqlalchemy_utils.types.encrypted.padding import InvalidPaddingError
 from werkzeug.exceptions import UnprocessableEntity
@@ -309,6 +313,26 @@ def _validate_gitlab_webhook_secret_lifetime(app):
     )
 
 
+def _validate_concurrency_limits(app):
+    """Refuse to start when an enabled external backend has no concurrency limit.
+
+    Such a backend is closed, so its workflows would stay queued until they
+    fail. Kubernetes and Dask always have a limit.
+    """
+    missing = [
+        backend
+        for backend in app.config.get("SUPPORTED_COMPUTE_BACKENDS") or []
+        if backend != "kubernetes"
+        and backend not in REANA_MAX_CONCURRENT_BATCH_WORKFLOWS_PER_BACKEND
+    ]
+    if missing:
+        raise ValueError(
+            f"Compute backends {missing} are enabled but have no concurrency "
+            "limit. Set a limit for each of them in "
+            "REANA_MAX_CONCURRENT_BATCH_WORKFLOWS_PER_BACKEND, or 0 to close it."
+        )
+
+
 def create_app(config_mapping=None):
     """REANA Server application factory.
 
@@ -338,6 +362,7 @@ def create_app(config_mapping=None):
         validate_auth_configuration()
     _validate_secret_key(app)
     _validate_gitlab_webhook_secret_lifetime(app)
+    _validate_concurrency_limits(app)
     if not app.config["REANA_AUTH"]["issuer"]:
         logging.warning(
             "REANA_AUTH_ISSUER is not configured: every authenticated API "

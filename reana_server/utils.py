@@ -60,6 +60,7 @@ from reana_server.complexity import (
     get_workflow_min_job_memory,
     estimate_complexity,
     validate_job_memory_limits,
+    workflow_compute_backends,
 )
 from reana_server.config import (
     ADMIN_USER_ID,
@@ -68,6 +69,7 @@ from reana_server.config import (
     REANA_WORKFLOW_SCHEDULING_POLICY,
     REANA_WORKFLOW_SCHEDULING_POLICIES,
     REANA_QUOTAS_DOCS_URL,
+    SUPPORTED_COMPUTE_BACKENDS,
     WORKSPACE_RETENTION_PERIOD,
     DEFAULT_WORKSPACE_RETENTION_RULE,
 )
@@ -243,13 +245,30 @@ def publish_workflow_submission(workflow, user_id, parameters):
     """Publish workflow submission."""
     from reana_server.status import NodesStatus
 
-    Workflow.update_workflow_status(Session, workflow.id_, RunStatus.queued)
-
     scheduling_policy = REANA_WORKFLOW_SCHEDULING_POLICY
     if scheduling_policy not in REANA_WORKFLOW_SCHEDULING_POLICIES:
         raise ValueError(
             'Workflow scheduling policy "{0}" is not valid.'.format(scheduling_policy)
         )
+
+    # Record the compute backends the workflow uses so that the scheduler can
+    # apply the per-backend concurrency caps. A backend that is not enabled has
+    # no cap and would keep the workflow queued, so reject it before queueing.
+    compute_backends = workflow_compute_backends(
+        workflow.type_, workflow.reana_specification
+    )
+    if SUPPORTED_COMPUTE_BACKENDS:
+        disabled = sorted(set(compute_backends) - set(SUPPORTED_COMPUTE_BACKENDS))
+        if disabled:
+            raise REANAValidationError(
+                f"Compute backends {disabled} are not enabled on this REANA "
+                f"cluster. Enabled compute backends: {SUPPORTED_COMPUTE_BACKENDS}."
+            )
+    workflow.compute_backends = compute_backends
+    Workflow.update_workflow_status(Session, workflow.id_, RunStatus.queued)
+    Session.commit()
+
+    uses_dask = workflow_uses_dask(workflow.reana_specification)
 
     # No need to estimate the complexity for "fifo" strategy
     if scheduling_policy == "fifo":
@@ -261,12 +280,15 @@ def publish_workflow_submission(workflow, user_id, parameters):
         workflow_priority = workflow.get_priority(total_cluster_memory)
         workflow_min_job_memory = get_workflow_min_job_memory(complexity)
         validate_job_memory_limits(complexity)
+
     current_workflow_submission_publisher.publish_workflow_submission(
         user_id=str(user_id),
         workflow_id_or_name=str(workflow.id_),
         parameters=parameters,
         priority=workflow_priority,
         min_job_memory=workflow_min_job_memory,
+        compute_backends=workflow.compute_backends,
+        uses_dask=uses_dask,
     )
 
 
@@ -548,11 +570,23 @@ def build_dask_service(workflow: Workflow) -> Service:
 
 
 def ensure_dask_service(workflow: Workflow) -> bool:
-    """Ensure that a Dask workflow has a matching service DB row."""
-    if not workflow_uses_dask(workflow.reana_specification):
-        return False
+    """Ensure that the Dask service DB row of a workflow matches its specification.
 
+    A row that was created for a specification that no longer requests Dask is
+    removed, so that it is not counted against the Dask concurrency limit.
+    """
     service_name = get_dask_component_name(workflow.id_, "database_model_service")
+    if not workflow_uses_dask(workflow.reana_specification):
+        stale = [
+            s
+            for s in workflow.services
+            if s.name == service_name and s.status == ServiceStatus.created
+        ]
+        for service in stale:
+            workflow.services.remove(service)
+            Session.object_session(workflow).delete(service)
+        return bool(stale)
+
     if any(s.name == service_name for s in workflow.services):
         return False
 

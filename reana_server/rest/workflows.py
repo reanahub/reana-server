@@ -2501,7 +2501,8 @@ def _submit_workflow_locked(workflow, user, **parameters):  # noqa: C901
         validate_input_parameters(input_parameters, original_parameters)
         Session.object_session(workflow).commit()
 
-        # Backfill the Dask service row for legacy workflows created before this fix
+        # Backfill the Dask service row for legacy workflows created before this
+        # fix, or drop it when the reloaded specification no longer requests Dask
         if ensure_dask_service(workflow):
             Session.object_session(workflow).commit()
 

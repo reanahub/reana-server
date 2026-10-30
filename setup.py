@@ -36,9 +36,9 @@ extras_require = {
     "tests": [
         "apispec[yaml]>=3.0",
         "apispec-webframeworks",
-        "reana-commons[kubernetes,yadage,snakemake,cwl,tests]>=0.95.0a24,<0.96.0",
+        "reana-commons[kubernetes,yadage,snakemake,cwl,tests]>=0.95.0a27,<0.96.0",
         "fakeredis>=2.0.0",
-        "reana-db[tests]>=0.95.0a13,<0.96.0",
+        "reana-db[tests]>=0.95.0a15,<0.96.0",
     ],
 }
 
@@ -52,21 +52,14 @@ install_requires = [
     "Flask>=3.0.0,<4.0.0",
     "gitpython>=3.1",
     "marshmallow>=3.5.0,<4.0.0",
-    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a24,<0.96.0",
-    "reana-db>=0.95.0a13,<0.96.0",
+    "reana-commons[kubernetes,yadage,snakemake,cwl]>=0.95.0a27,<0.96.0",
+    "reana-db>=0.95.0a15,<0.96.0",
     "requests>=2.25.0",
     "tablib>=0.12.1",
     "uWSGI>=2.0.31",
     "uwsgi-tools>=1.1.1",
     "uwsgitop>=0.12",
     "webargs>=8.0,<9.0",
-    # Yadage dependencies
-    # Pinning adage/packtivity/yadage/yadage-schemas to make sure we use compatible versions.
-    # See https://github.com/reanahub/reana-workflow-engine-yadage/pull/236#discussion_r992475484
-    "adage==0.11.0",  # matches the version in r-w-e-yadage
-    "packtivity==0.16.2",  # matches the version in r-w-e-yadage
-    "yadage==0.20.1",  # matches the version in r-w-e-yadage
-    "yadage-schemas==0.10.6",  # matches the version in r-w-e-yadage
     # OIDC/JWT authentication
     "authlib>=1.6.0,<2.0.0",
     "redis>=5.0.0",
