@@ -514,7 +514,9 @@ def logout():
       description: >-
         Deletes the server-side session (refresh token), clears the
         authentication cookies and returns the issuer's RP-initiated
-        logout URL for the web application to navigate to.
+        logout URL for the web application to navigate to. When the
+        identity provider cannot be used to validate the session, the
+        cookies are still cleared and the logout URL is empty.
       operationId: bff_logout
       security: []
       produces:
@@ -534,12 +536,8 @@ def logout():
           description: CSRF validation failed.
         503:
           description: >-
-            Browser session storage or the identity provider is temporarily
-            unavailable. Cookies are preserved so logout can be retried.
-        500:
-          description: >-
-            Identity-provider configuration prevents safe session validation.
-            Cookies are preserved so logout can be retried after repair.
+            Browser session storage is temporarily unavailable. Cookies are
+            preserved so logout can be retried.
         404:
           description: Browser login is not enabled.
     """
@@ -556,7 +554,31 @@ def logout():
         return clear_auth_cookies(jsonify(logout_url=""))
     try:
         session_data = get_session(sid)
-        claims = decode_expired_token(token)
+        try:
+            claims = decode_expired_token(token)
+        except (IssuerUnavailableError, IssuerMisconfiguredError) as error:
+            # Logout must remain possible while the issuer's keys cannot be
+            # used, whether the outage is transient or needs an administrator.
+            # The exact access-token copy stored under this random session id
+            # safely binds the two cookies without requiring a JWKS lookup.
+            # Without that match the cookies cannot be tied to the stored
+            # session, which may belong to another identity: clear only this
+            # browser's cookies and let the session expire by its own TTL.
+            stored_access_token = session_data.get("at") if session_data else None
+            if (
+                isinstance(stored_access_token, str)
+                and stored_access_token
+                and secrets.compare_digest(stored_access_token, token)
+            ):
+                delete_session(sid)
+                logging.warning(
+                    "Issuer unusable during logout; ended local session: %s", error
+                )
+            else:
+                logging.warning(
+                    "Issuer unusable during logout; cleared cookies only: %s", error
+                )
+            return clear_auth_cookies(jsonify(logout_url=""))
         if session_data and not session_matches_identity(
             session_data, claims["iss"], claims["sub"]
         ):
@@ -567,25 +589,9 @@ def logout():
                 "Browser access and session cookies belong to different identities."
             )
         delete_session(sid)
-    except IssuerUnavailableError as error:
-        # Logout must remain possible while issuer keys are unavailable. The
-        # exact access-token copy stored under this random session id safely
-        # binds the two cookies without requiring a JWKS lookup.
-        stored_access_token = session_data.get("at") if session_data else None
-        if isinstance(stored_access_token, str) and secrets.compare_digest(
-            stored_access_token, token
-        ):
-            delete_session(sid)
-            logging.warning("Issuer unavailable during logout; ended local session.")
-            return clear_auth_cookies(jsonify(logout_url=""))
-        logging.warning("Could not validate browser session for logout: %s", error)
-        return jsonify(message=str(error)), 503
     except SessionUnavailableError as error:
         logging.warning("Could not remove browser session: %s", error)
         return jsonify(message=str(error)), 503
-    except IssuerMisconfiguredError as error:
-        logging.error("Could not validate browser session for logout: %s", error)
-        return jsonify(message=str(error)), 500
     except (InvalidTokenError, AuthError) as error:
         # A definitively unusable or mismatched cookie cannot safely identify
         # a Redis session to delete. Clear only the local cookie set; unlike a
