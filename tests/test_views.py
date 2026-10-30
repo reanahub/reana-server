@@ -3794,3 +3794,50 @@ def test_new_gitlab_webhook_rejects_expired_authorization(
 
     assert response.status_code == 409
     gitlab_client.create_webhook.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "method, url, request_kwargs, message",
+    [
+        (
+            "get",
+            "/api/workflows",
+            {"query_string": {"size": "abc"}},
+            "Field 'size': Not a valid integer.",
+        ),
+        (
+            "get",
+            "/api/gitlab/projects",
+            {"query_string": {"page": "0"}},
+            "Field 'page': Must be greater than or equal to 1.",
+        ),
+        (
+            "post",
+            "/api/workflows/my-workflow/share",
+            {"json": {}},
+            "Field 'user_email_to_share_with': Missing data for required field.",
+        ),
+        (
+            "post",
+            "/api/workflows/my-workflow/share",
+            {"json": {"user_email_to_share_with": "a@b.org", "unknown": 1}},
+            "Field 'unknown': Unknown field.",
+        ),
+    ],
+)
+def test_invalid_arguments_return_400_with_message(
+    app, user0, auth_headers, method, url, request_kwargs, message
+):
+    """Argument-validation failures always answer 400 with a flat message.
+
+    The requests go through the real application factory, so this pins the
+    response clients see whenever webargs rejects query or JSON arguments.
+    """
+    with app.test_client() as client:
+        res = getattr(client, method)(
+            url, headers=auth_headers(user0), **request_kwargs
+        )
+
+    assert res.status_code == 400
+    assert res.content_type == "application/json"
+    assert res.json == {"message": message}

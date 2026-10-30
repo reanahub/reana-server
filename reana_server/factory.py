@@ -144,6 +144,11 @@ def handle_args_validation_error(error: UnprocessableEntity):
     This error handler is needed to display useful error messages, instead of the
     generic default one, when marshmallow argument validation fails.
 
+    It is the only handler registered for this exception, so every route using
+    ``use_kwargs`` answers invalid arguments with HTTP 400 and a JSON body of
+    the form ``{"message": "Field '<name>': <complaint>"}``. Routes declare
+    that 400 response in their OpenAPI docstring.
+
     ``normalized_messages()`` nests the field errors under the request location
     webargs parsed (and once more per nested schema or collection), so the tree
     is flattened to leaves. Joining its top-level values directly would render

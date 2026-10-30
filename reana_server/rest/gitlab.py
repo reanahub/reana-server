@@ -454,6 +454,19 @@ def gitlab_projects(
                     hook_id:
                       type: integer
                       x-nullable: true
+        400:
+          description: >-
+            Request failed. The request parameters are invalid.
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+          examples:
+            application/json:
+              {
+                "message": "Field 'page': Must be greater than or equal to 1."
+              }
         401:
           description: >-
             Request failed. The stored GitLab access token is not valid.
