@@ -459,6 +459,8 @@ RATELIMIT_PER_ENDPOINT = {
     # which an authenticated user can drive validator Jobs against the cluster.
     "workflows.validate_workflow_specification": REANA_RATELIMIT_SLOW,
     "workflows.create_workflow": REANA_RATELIMIT_SLOW,
+    # Starting has its own counter, so that a workflow can be started right
+    # after its creation; see ``_rate_limit_key``.
     "workflows.start_workflow": REANA_RATELIMIT_SLOW,
     # A restart re-loads and re-validates the workspace, which can spawn a
     # sandboxed validation Job for non-serial specs, so throttle it like start.

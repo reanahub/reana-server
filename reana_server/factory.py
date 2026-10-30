@@ -230,6 +230,13 @@ def _rate_limit_key():
     The key never includes client-supplied values such as the OAuth state:
     a state is free to obtain, so it must not select a fresh counter.
 
+    Starting a workflow has its own counter. ``reana-client run`` creates a
+    workflow, uploads its inputs and starts it, often within one window of
+    ``REANA_RATELIMIT_SLOW``. If the start shared the counter of the creation,
+    the server would refuse it. Launch, validation, creation and restart keep
+    one shared counter. A start can also create a validation Job, thus one
+    user can create up to two validation Jobs in one window.
+
     Accepted tradeoff: this replaces the previous IP-only bucket with no
     residual per-IP ceiling behind it, so an issuer that allows open
     self-service registration lets one source mint unlimited distinct
@@ -246,16 +253,28 @@ def _rate_limit_key():
     (e.g. CERN Keycloak) don't allow open self-registration, so this
     doesn't apply to them.
     """
-    claims = _validated_rate_limit_claims()
-    if claims is not None:
-        issuer = claims.get("iss", "")
-        subject = claims.get("sub", "")
-        if issuer and subject:
-            return f"user:{issuer}:{subject}"
-    key = f"ip:{request.remote_addr or 'unknown'}"
-    if request.endpoint in current_app.config.get("RATELIMIT_LOGIN_FLOW_ENDPOINTS", ()):
-        key = f"{key}:{request.endpoint}"
+    claims = _validated_rate_limit_claims() or {}
+    issuer = claims.get("iss", "")
+    subject = claims.get("sub", "")
+    if issuer and subject:
+        key = f"user:{issuer}:{subject}"
+    else:
+        key = f"ip:{request.remote_addr or 'unknown'}"
+        if request.endpoint in current_app.config.get(
+            "RATELIMIT_LOGIN_FLOW_ENDPOINTS", ()
+        ):
+            key = f"{key}:{request.endpoint}"
+    if _is_workflow_start_request():
+        key = f"{key}:workflow-start"
     return key
+
+
+def _is_workflow_start_request():
+    """Return whether the request starts a workflow."""
+    return request.endpoint == "workflows.start_workflow" or (
+        request.endpoint == "workflows.set_workflow_status"
+        and request.args.get("status") == "start"
+    )
 
 
 def _set_rate_limit():
