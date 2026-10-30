@@ -10,7 +10,7 @@
 
 import logging
 
-from flask import Flask, current_app, g, jsonify, request
+from flask import Flask, Response, current_app, g, jsonify, request
 from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.errors import RateLimitExceeded
@@ -96,12 +96,33 @@ def _sandbox_user_html(response):
     return response
 
 
+RATE_LIMITED_SIGN_IN_PAGE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sign-in temporarily limited - REANA</title>
+</head>
+<body>
+<h1>Sign-in temporarily limited</h1>
+<p>REANA received too many sign-in requests in a short time.
+Wait a minute, then sign in again.</p>
+<p><a href="/signin">Back to the sign-in page</a></p>
+</body>
+</html>
+"""
+"""Page for a rate-limited browser login, which is a top-level navigation."""
+
+
 def handle_rate_limit_error(error: RateLimitExceeded):
     """Error handler for flask_limiter exception ``RateLimitExceeded``.
 
     This error handler is needed to display useful error messages, instead of the
-    generic default one, when rate limit exception is raised.
+    generic default one, when rate limit exception is raised. The browser login
+    endpoints get a human-readable page instead of JSON, because the browser
+    shows their response directly.
     """
+    if request.endpoint in current_app.config.get("RATELIMIT_LOGIN_FLOW_ENDPOINTS", ()):
+        return Response(RATE_LIMITED_SIGN_IN_PAGE, status=429, mimetype="text/html")
     rate_limit = error.description or str(error)
     error_message = (
         f'Too many requests in a given amount of time. Only "{rate_limit}" allowed.'

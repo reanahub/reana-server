@@ -848,3 +848,33 @@ def test_login_rate_limit_key_ignores_client_supplied_flow_values():
         assert _rate_limit_key() == "ip:192.0.2.1:auth.oauth_callback"
     with app.test_request_context("/api/login", environ_base=shared_address):
         assert _rate_limit_key() == "ip:192.0.2.1:auth.login"
+
+
+def test_rate_limited_browser_login_returns_a_readable_page():
+    """A rate-limited login start or callback shows a page with a sign-in link."""
+    app = _make_rate_limited_app("1 per minute")
+    shared_address = {"REMOTE_ADDR": "192.0.2.1"}
+    with app.test_client() as client:
+        for path in ("/api/login", "/api/oauth/callback"):
+            client.get(path, environ_base=shared_address)
+            response = client.get(path, environ_base=shared_address)
+
+            assert response.status_code == 429
+            assert response.mimetype == "text/html"
+            assert '<a href="/signin">' in response.text
+            assert "<script" not in response.text
+            assert response.headers["Content-Security-Policy"] == (
+                _EXPECTED_SECURITY_HEADERS["Content-Security-Policy"]
+            )
+
+
+def test_rate_limited_api_endpoint_keeps_json_response():
+    """Other endpoints keep the JSON rate-limit response."""
+    app = _make_rate_limited_app("1 per minute")
+    shared_address = {"REMOTE_ADDR": "192.0.2.1"}
+    with app.test_client() as client:
+        client.post("/api/logout", environ_base=shared_address)
+        response = client.post("/api/logout", environ_base=shared_address)
+
+    assert response.status_code == 429
+    assert response.json["message"].startswith("Too many requests")
