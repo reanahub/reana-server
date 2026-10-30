@@ -1131,10 +1131,6 @@ def create_workflow(user):  # noqa
               {
                 "message": "Workflow name cannot be a valid UUIDv4."
               }
-        503:
-          description: >-
-            The identity provider or the authentication session store is
-            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -1187,7 +1183,10 @@ def create_workflow(user):  # noqa
               message:
                 type: string
         503:
-          description: Workspace mutation or controller service is unavailable.
+          description: >-
+            The identity provider, the authentication session store, the
+            workspace mutation lock or the workflow controller is
+            temporarily unavailable.
           schema:
             $ref: '#/definitions/ErrorResponse'
         500:
@@ -2880,10 +2879,6 @@ def start_workflow(workflow_id_or_name, user, **parameters):  # noqa
               }
         401:
           description: The request is not authenticated.
-        503:
-          description: >-
-            The identity provider or the authentication session store is
-            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -2939,7 +2934,9 @@ def start_workflow(workflow_id_or_name, user, **parameters):  # noqa
               message:
                 type: string
         503:
-          description: Workspace mutation serialization is unavailable.
+          description: >-
+            The identity provider, the authentication session store or the
+            workspace mutation lock is temporarily unavailable.
           schema:
             $ref: '#/definitions/ErrorResponse'
         500:
@@ -3100,10 +3097,6 @@ def set_workflow_status(workflow_id_or_name, user, status, **parameters):  # noq
               }
         401:
           description: The request is not authenticated.
-        503:
-          description: >-
-            The identity provider or the authentication session store is
-            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -3159,7 +3152,9 @@ def set_workflow_status(workflow_id_or_name, user, status, **parameters):  # noq
               message:
                 type: string
         503:
-          description: Workspace mutation serialization is unavailable.
+          description: >-
+            The identity provider, the authentication session store or the
+            workspace mutation lock is temporarily unavailable.
           schema:
             $ref: '#/definitions/ErrorResponse'
         500:
@@ -3340,10 +3335,6 @@ def upload_file(workflow_id_or_name, user):  # noqa
               }
         401:
           description: The request is not authenticated.
-        503:
-          description: >-
-            The identity provider or the authentication session store is
-            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -3382,7 +3373,10 @@ def upload_file(workflow_id_or_name, user):  # noqa
           schema:
             $ref: '#/definitions/ErrorResponse'
         503:
-          description: Workspace mutation or controller service is unavailable.
+          description: >-
+            The identity provider, the authentication session store, the
+            workspace mutation lock or the workflow controller is
+            temporarily unavailable.
           schema:
             $ref: '#/definitions/ErrorResponse'
         500:
@@ -3644,10 +3638,6 @@ def delete_file(workflow_id_or_name, file_name, user):  # noqa
                       type: string
         401:
           description: The request is not authenticated.
-        503:
-          description: >-
-            The identity provider or the authentication session store is
-            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -3681,7 +3671,9 @@ def delete_file(workflow_id_or_name, file_name, user):  # noqa
           schema:
             $ref: '#/definitions/ErrorResponse'
         503:
-          description: Workspace mutation serialization is unavailable.
+          description: >-
+            The identity provider, the authentication session store or the
+            workspace mutation lock is temporarily unavailable.
           schema:
             $ref: '#/definitions/ErrorResponse'
         500:
@@ -4625,10 +4617,6 @@ def move_files(workflow_id_or_name, user):  # noqa
               }
         401:
           description: The request is not authenticated.
-        503:
-          description: >-
-            The identity provider or the authentication session store is
-            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.
@@ -4672,7 +4660,9 @@ def move_files(workflow_id_or_name, user):  # noqa
                 "message": "Path folder/ does not exist"
               }
         503:
-          description: Workspace mutation serialization is unavailable.
+          description: >-
+            The identity provider, the authentication session store or the
+            workspace mutation lock is temporarily unavailable.
           schema:
             $ref: '#/definitions/ErrorResponse'
         500:
@@ -5107,7 +5097,9 @@ def prune_workspace(
           schema:
             $ref: '#/definitions/ErrorResponse'
         503:
-          description: Workspace mutation serialization is unavailable.
+          description: >-
+            The identity provider, the authentication session store or the
+            workspace mutation lock is temporarily unavailable.
           schema:
             $ref: '#/definitions/ErrorResponse'
         400:
@@ -5125,10 +5117,6 @@ def prune_workspace(
               }
         401:
           description: The request is not authenticated.
-        503:
-          description: >-
-            The identity provider or the authentication session store is
-            temporarily unavailable.
         403:
           description: >-
             Request failed. User is not allowed to access workflow.

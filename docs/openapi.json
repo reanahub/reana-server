@@ -1540,7 +1540,7 @@
             }
           },
           "503": {
-            "description": "Workspace mutation or controller service is unavailable.",
+            "description": "The identity provider, the authentication session store, the workspace mutation lock or the workflow controller is temporarily unavailable.",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -1777,10 +1777,10 @@
             }
           },
           "400": {
-            "description": "Request failed. The incoming data specification seems malformed.",
+            "description": "Request failed. The incoming data specification seems malformed, for example no user or no resource type is specified.",
             "examples": {
               "application/json": {
-                "message": "No user specified."
+                "message": "Resource type is required."
               }
             },
             "schema": {
@@ -3333,7 +3333,7 @@
             "description": "Request failed. Not implemented."
           },
           "503": {
-            "description": "Workspace mutation or controller service is unavailable.",
+            "description": "The identity provider, the authentication session store, the workspace mutation lock or the workflow controller is temporarily unavailable.",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -3484,7 +3484,7 @@
             }
           },
           "503": {
-            "description": "Workspace mutation serialization is unavailable.",
+            "description": "The identity provider, the authentication session store or the workspace mutation lock is temporarily unavailable.",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -4685,7 +4685,10 @@
             }
           },
           "503": {
-            "description": "The identity provider or the authentication session store is temporarily unavailable."
+            "description": "The identity provider, the authentication session store or the workspace mutation lock is temporarily unavailable.",
+            "schema": {
+              "$ref": "#/definitions/ErrorResponse"
+            }
           }
         },
         "summary": "Prune the workspace's files."
@@ -5591,7 +5594,7 @@
             }
           },
           "503": {
-            "description": "Workspace mutation serialization is unavailable.",
+            "description": "The identity provider, the authentication session store or the workspace mutation lock is temporarily unavailable.",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -6019,7 +6022,7 @@
             }
           },
           "503": {
-            "description": "Workspace mutation serialization is unavailable.",
+            "description": "The identity provider, the authentication session store or the workspace mutation lock is temporarily unavailable.",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -6453,7 +6456,7 @@
             }
           },
           "503": {
-            "description": "Workspace mutation or controller service is unavailable.",
+            "description": "The identity provider, the authentication session store, the workspace mutation lock or the workflow controller is temporarily unavailable.",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
@@ -6574,7 +6577,7 @@
             }
           },
           "503": {
-            "description": "Workspace mutation serialization is unavailable.",
+            "description": "The identity provider, the authentication session store or the workspace mutation lock is temporarily unavailable.",
             "schema": {
               "$ref": "#/definitions/ErrorResponse"
             }
