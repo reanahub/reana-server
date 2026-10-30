@@ -410,6 +410,7 @@ def create_app(config_mapping=None):
         workflows,
         info,
         launch,
+        notifications,
         quota,
     )  # noqa
 
@@ -422,6 +423,7 @@ def create_app(config_mapping=None):
     app.register_blueprint(status.blueprint, url_prefix="/api")
     app.register_blueprint(info.blueprint, url_prefix="/api")
     app.register_blueprint(launch.blueprint, url_prefix="/api")
+    app.register_blueprint(notifications.blueprint, url_prefix="/api")
     app.register_blueprint(quota.blueprint, url_prefix="/api")
     app.register_blueprint(auth.blueprint, url_prefix="/api")
 
