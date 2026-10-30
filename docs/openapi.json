@@ -3286,7 +3286,7 @@
             }
           },
           "413": {
-            "description": "The uploaded request exceeds the bounded bundle limit.",
+            "description": "The request exceeds its size limit: the bounded bundle limit for multipart uploads, or the smaller JSON limit for JSON requests.",
             "schema": {
               "properties": {
                 "message": {
