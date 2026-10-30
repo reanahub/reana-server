@@ -435,10 +435,8 @@ budget. The login start and the OAuth callback each have their own counter
 per client address, hence the default lets 120 people behind one address sign
 in within the same minute, which covers a workshop or a lecture hall.
 
-The counters are kept in the memory of each reana-server worker process, so
-they are independent across worker processes and pods, and are reset when a
-worker restarts. The effective budget of one address is therefore up to this
-limit times the number of workers that its requests reach.
+The counters are kept in Redis and are shared by all reana-server processes
+and pods (see ``RATELIMIT_STORAGE_URI``).
 
 Raising the setting permits more login and callback requests from one
 address. A callback with a valid OAuth state can trigger a token request to
@@ -799,3 +797,36 @@ REANA_AUTH = {
     ],
 }
 """OIDC/JWT authentication configuration."""
+
+RATELIMIT_STORAGE_URI = REANA_AUTH["redis_url"]
+"""Rate-limit counter storage, shared by all reana-server processes and pods.
+
+The counters are kept in the same Redis as the browser sessions.
+"""
+
+RATELIMIT_STORAGE_OPTIONS = {
+    "socket_connect_timeout": REANA_AUTH["redis_socket_connect_timeout"],
+    "socket_timeout": REANA_AUTH["redis_socket_timeout"],
+    "health_check_interval": REANA_AUTH["redis_health_check_interval"],
+}
+"""Redis client options, with the same timeouts as the browser sessions."""
+
+RATELIMIT_KEY_PREFIX = "reana:ratelimit"
+"""Prefix of the rate-limit counter keys in Redis."""
+
+RATELIMIT_IN_MEMORY_FALLBACK_ENABLED = True
+"""Use counters in the memory of each process while Redis is unavailable.
+
+Requests are not refused because of a Redis outage. During the outage, each
+reana-server process counts the requests that it receives, so a client can
+make up to the configured number of requests in each process. Flask-Limiter
+checks Redis again from time to time and uses it again when it is back.
+"""
+
+RATELIMIT_SWALLOW_ERRORS = True
+"""Let a request continue when its rate-limit check fails.
+
+When Redis becomes unavailable, requests that a process handles at the same
+time can fail before the process uses its in-memory counters. These requests
+continue without a rate-limit check instead of failing with an error.
+"""

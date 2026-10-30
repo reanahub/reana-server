@@ -13,6 +13,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from flask import Flask, g
+from limits.storage import MemoryStorage
 from limits.util import parse
 from marshmallow.exceptions import ValidationError
 from werkzeug.exceptions import UnprocessableEntity
@@ -67,6 +68,7 @@ def _make_app(config=None):
         "CORS_SUPPORTS_CREDENTIALS": False,
         "REANA_AUTH": {"issuer": "", "bff_enabled": True},
         "RATELIMIT_ENABLED": False,
+        "RATELIMIT_STORAGE_URI": "memory://",
         "RATELIMIT_GUEST_USER": _GUEST_LIMIT,
         "RATELIMIT_AUTHENTICATED_USER": _AUTHENTICATED_LIMIT,
     }
@@ -848,3 +850,57 @@ def test_login_rate_limit_key_ignores_client_supplied_flow_values():
         assert _rate_limit_key() == "ip:192.0.2.1:auth.oauth_callback"
     with app.test_request_context("/api/login", environ_base=shared_address):
         assert _rate_limit_key() == "ip:192.0.2.1:auth.login"
+
+
+def test_rate_limit_counters_use_shared_redis_by_default():
+    """Rate-limit counters use the Redis of the browser sessions."""
+    import reana_server.config as server_config
+
+    auth_config = server_config.REANA_AUTH
+    assert server_config.RATELIMIT_STORAGE_URI == auth_config["redis_url"]
+    assert server_config.RATELIMIT_STORAGE_OPTIONS == {
+        "socket_connect_timeout": auth_config["redis_socket_connect_timeout"],
+        "socket_timeout": auth_config["redis_socket_timeout"],
+        "health_check_interval": auth_config["redis_health_check_interval"],
+    }
+    assert server_config.RATELIMIT_KEY_PREFIX
+    assert server_config.RATELIMIT_IN_MEMORY_FALLBACK_ENABLED is True
+    assert server_config.RATELIMIT_SWALLOW_ERRORS is True
+
+
+def test_rate_limit_budget_is_shared_by_server_processes():
+    """Independent app instances with the same storage share one budget."""
+    shared_storage = MemoryStorage()
+    with patch(
+        "flask_limiter.extension.storage_from_string",
+        return_value=shared_storage,
+    ):
+        first_process = _make_rate_limited_app("2 per minute")
+        second_process = _make_rate_limited_app("2 per minute")
+    address = {"REMOTE_ADDR": "192.0.2.1"}
+
+    with first_process.test_client() as client:
+        for _ in range(2):
+            assert client.get("/api/login", environ_base=address).status_code == 404
+    with second_process.test_client() as client:
+        assert client.get("/api/login", environ_base=address).status_code == 429
+
+
+def test_rate_limit_falls_back_to_memory_when_redis_is_unavailable():
+    """A Redis outage neither fails requests nor removes the limits."""
+    app = _make_app(
+        {
+            "RATELIMIT_ENABLED": True,
+            # Nothing listens on port 1, so every Redis call fails at once.
+            "RATELIMIT_STORAGE_URI": "redis://127.0.0.1:1/0",
+            "RATELIMIT_STORAGE_OPTIONS": {"socket_connect_timeout": 0.5},
+            "RATELIMIT_GUEST_USER": "1000 per minute",
+            "RATELIMIT_PER_ENDPOINT": {"auth.login": "2 per minute"},
+        }
+    )
+    address = {"REMOTE_ADDR": "192.0.2.1"}
+
+    with app.test_client() as client:
+        for _ in range(2):
+            assert client.get("/api/login", environ_base=address).status_code == 404
+        assert client.get("/api/login", environ_base=address).status_code == 429

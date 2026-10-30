@@ -44,6 +44,7 @@ def base_app(tmp_shared_volume_path):
         "TESTING": True,
         "DEBUG": True,
         "RATELIMIT_ENABLED": False,
+        "RATELIMIT_STORAGE_URI": "memory://",
         "SHARED_VOLUME_PATH": tmp_shared_volume_path,
         "SQLALCHEMY_DATABASE_URI": os.getenv("REANA_SQLALCHEMY_DATABASE_URI"),
         "SQLALCHEMY_TRACK_MODIFICATIONS": False,
