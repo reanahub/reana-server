@@ -428,32 +428,34 @@ REANA_RATELIMIT_SLOW = _get_rate_limit("REANA_RATELIMIT_SLOW", "1/5 second")
 REANA_RATELIMIT_SLOWER = _get_rate_limit("REANA_RATELIMIT_SLOWER", "30 per minute")
 REANA_RATELIMIT_SLOWEST = _get_rate_limit("REANA_RATELIMIT_SLOWEST", "5 per hour")
 REANA_RATELIMIT_LOGIN = _get_rate_limit("REANA_RATELIMIT_LOGIN", "120 per minute")
-"""Rate limit for starting and for completing a browser login.
+"""Rate limit for starting and for completing a browser login, and for logout.
 
 A browser that is not signed in yet can only be told apart by its client
 address, so everybody behind one institutional proxy or NAT shares this
-budget. The login start and the OAuth callback each have their own counter
+budget. The same applies to a logout whose access token has expired. The
+login start, the OAuth callback and the logout each have their own counter
 per client address, hence the default lets 120 people behind one address sign
-in within the same minute, which covers a workshop or a lecture hall.
+in, or sign out, within the same minute, which covers a workshop or a lecture
+hall. A logout with a valid access token is counted per user instead.
 
 The counters are kept in the memory of each reana-server worker process, so
 they are independent across worker processes and pods, and are reset when a
 worker restarts. The effective budget of one address is therefore up to this
 limit times the number of workers that its requests reach.
 
-Raising the setting permits more login and callback requests from one
-address. A callback with a valid OAuth state can trigger a token request to
-the identity provider, and the limit cannot distinguish a busy classroom from
-one abusive client. Other routes keep their own limits.
+Raising the setting permits more login, callback and logout requests from
+one address. A callback with a valid OAuth state can trigger a token request
+to the identity provider, and the limit cannot distinguish a busy classroom
+from one abusive client. Other routes keep their own limits.
 """
 
-RATELIMIT_LOGIN_FLOW_ENDPOINTS = ("auth.login", "auth.oauth_callback")
-"""Browser login endpoints that are rate limited separately per address."""
+RATELIMIT_LOGIN_FLOW_ENDPOINTS = ("auth.login", "auth.oauth_callback", "auth.logout")
+"""Browser login and logout endpoints with their own counter per address."""
 
 RATELIMIT_PER_ENDPOINT = {
     "auth.login": REANA_RATELIMIT_LOGIN,
     "auth.oauth_callback": REANA_RATELIMIT_LOGIN,
-    "auth.logout": REANA_RATELIMIT_SLOWER,
+    "auth.logout": REANA_RATELIMIT_LOGIN,
     "launch.launch": REANA_RATELIMIT_SLOW,
     # Both endpoints can spawn a sandboxed validation Job per call (for
     # non-serial specs), so throttle them like ``launch`` to bound the rate at
