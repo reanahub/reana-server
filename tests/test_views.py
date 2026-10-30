@@ -3413,6 +3413,42 @@ def test_prune_workspace_include_inputs_outputs(
     assert set(os.listdir(workflow.workspace_path)) == expected_files
 
 
+@pytest.mark.parametrize("skip_quota_update", [False, True])
+def test_prune_workspace_updates_disk_quota(
+    app, user0, sample_serial_workflow_in_db, auth_headers, skip_quota_update
+):
+    """Prune updates the disk usage when disk accounting is enabled."""
+    workflow = sample_serial_workflow_in_db
+    workflow.reana_specification = {
+        **workflow.reana_specification,
+        "inputs": {"files": ["input.txt"]},
+        "outputs": {"files": ["output.txt"]},
+    }
+    os.makedirs(workflow.workspace_path, exist_ok=True)
+    for name in ("input.txt", "output.txt", "other.txt"):
+        with open(os.path.join(workflow.workspace_path, name), "w") as f:
+            f.write(name)
+
+    with app.test_client() as client, patch(
+        "reana_server.rest.workflows.should_skip_quota_update",
+        return_value=skip_quota_update,
+    ), patch(
+        "reana_server.rest.workflows._recalculate_shared_workspace_quota"
+    ) as recalculate_quota:
+        res = client.post(
+            url_for("workflows.prune_workspace", workflow_id_or_name=workflow.id_),
+            query_string={"include_inputs": True, "include_outputs": True},
+            headers=auth_headers(user0),
+        )
+
+    assert res.status_code == 200
+    assert os.listdir(workflow.workspace_path) == []
+    if skip_quota_update:
+        recalculate_quota.assert_not_called()
+    else:
+        recalculate_quota.assert_called_once_with(workflow, user0)
+
+
 def test_gitlab_projects(app: Flask, user0, auth_headers):
     """Test fetching of GitLab projects."""
     with app.test_client() as client:
