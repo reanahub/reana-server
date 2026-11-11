@@ -8,12 +8,13 @@
 
 """REANA-Server cluster status tests."""
 
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import pytest
 
 from reana_server.auth.errors import SessionUnavailableError
-from reana_server.status import ClusterHealth, UsersStatus
+from reana_server.status import ClusterHealth, PodsStatus, UsersStatus
 
 
 @pytest.fixture
@@ -152,3 +153,25 @@ def test_active_web_users_when_sessions_cannot_be_counted(
         base_app.config["REANA_AUTH"], auth_overrides
     ), patch("reana_server.auth.sessions.count_sessions", side_effect=count_error):
         assert UsersStatus().active_web_users() == expected
+
+
+def test_pods_status_lists_succeeded_pods():
+    """Succeeded pods are selected by their Kubernetes phase name."""
+
+    def list_namespaced_pod(namespace, field_selector):
+        names = (
+            ["reana-run-job-1"] if field_selector == "status.phase=Succeeded" else []
+        )
+        return SimpleNamespace(
+            items=[SimpleNamespace(metadata=SimpleNamespace(name=n)) for n in names]
+        )
+
+    api_client = Mock()
+    api_client.list_namespaced_pod.side_effect = list_namespaced_pod
+    with patch("reana_server.status.current_k8s_corev1_api_client", api_client):
+        pods_status = PodsStatus()
+        status = pods_status.get_status()
+
+    for namespace in pods_status.namespaces:
+        assert status[f"{namespace}_succeeded_pods"] == "\n  reana-run-job-1"
+        assert status[f"{namespace}_failed_pods"] == ""

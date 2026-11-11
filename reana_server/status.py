@@ -488,7 +488,7 @@ class PodsStatus(REANAStatus):
         :type until: datetime
         :type user: reana_db.models.User
         """
-        self.statuses = ["Running", "Pending", "Suceeded", "Failed", "Unknown"]
+        self.statuses = ["Running", "Pending", "Succeeded", "Failed", "Unknown"]
         super().__init__(from_=from_, until=until, user=user)
 
     def get_pods_by_status(self, status, namespace):
