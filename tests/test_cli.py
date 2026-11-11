@@ -16,9 +16,12 @@ import uuid
 from unittest.mock import ANY, MagicMock, Mock, patch
 
 import click
+import fakeredis
 import pytest
 from click.testing import CliRunner
+from flask.cli import ScriptInfo
 from kubernetes.client.rest import ApiException
+from reana_commons.errors import REANAEmailNotificationError
 from reana_commons.testing import make_mock_api_client
 from sqlalchemy.orm import Session as SAOrmSession
 from reana_db.models import (
@@ -433,25 +436,74 @@ def test_gitlab_webhook_revoke_without_configured_secret(app, session):
     assert "no GitLab webhook authorization" in result.output
 
 
-def test_status_report_can_send_email():
+def _invoke_status_report(base_app, args):
+    """Invoke ``status-report`` the way the Flask CLI does, without an app context."""
+    script_info = ScriptInfo(create_app=lambda: base_app, set_debug_flag=False)
+    return CliRunner().invoke(reana_admin, ["status-report", *args], obj=script_info)
+
+
+def test_status_report_can_send_email(base_app):
     """Test that status reports still use the shared SMTP email helper."""
 
     class Status:
         def get_status(self):
             return {"ok": True}
 
-    runner = CliRunner()
     with patch(
         "reana_server.reana_admin.cli.STATUS_OBJECT_TYPES", {"status": Status}
     ), patch("reana_server.reana_admin.cli.send_email") as send_email:
-        result = runner.invoke(
-            reana_admin,
-            ["status-report", "--email", "admin@example.org"],
-        )
+        result = _invoke_status_report(base_app, ["--email", "admin@example.org"])
 
     assert result.exit_code == 0
     send_email.assert_called_once()
     assert send_email.call_args.args[0] == "admin@example.org"
+
+
+def test_status_report_counts_active_web_users(base_app):
+    """Test that the report sets up the app context needed to count sessions."""
+    fake_redis = fakeredis.FakeRedis(decode_responses=True)
+    fake_redis.set("reana:bff:session:one", "{}")
+    fake_redis.set("reana:bff:session:one:lock", "1")
+    with patch.dict(
+        base_app.extensions, {sessions_module._REDIS_EXTENSION: fake_redis}
+    ), patch.dict(sessions_module._count_sessions_cache, {"at": 0.0}):
+        result = _invoke_status_report(base_app, ["--type", "users"])
+
+    assert result.exit_code == 0, result.output
+    assert "active_web_users: 1" in result.output
+
+
+@pytest.mark.parametrize(
+    ("status_error", "email_error", "message"),
+    [
+        (
+            RuntimeError("boom"),
+            None,
+            "Something went wrong while generating the status report",
+        ),
+        (
+            None,
+            REANAEmailNotificationError("SMTP down"),
+            "Something went wrong while sending email",
+        ),
+    ],
+)
+def test_status_report_exits_with_error(base_app, status_error, email_error, message):
+    """Test that a failed status report is visible in the exit code."""
+
+    class Status:
+        def get_status(self):
+            if status_error:
+                raise status_error
+            return {"ok": True}
+
+    with patch(
+        "reana_server.reana_admin.cli.STATUS_OBJECT_TYPES", {"status": Status}
+    ), patch("reana_server.reana_admin.cli.send_email", side_effect=email_error):
+        result = _invoke_status_report(base_app, ["--email", "admin@example.org"])
+
+    assert result.exit_code == 1
+    assert message in result.output
 
 
 class TestMessageConsumer:

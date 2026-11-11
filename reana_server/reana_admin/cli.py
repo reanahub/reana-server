@@ -494,8 +494,9 @@ def import_users(ctx, file_):
     "-e",
     "--email",
     default=None,
-    help="Send the status by email to the configured receiver.",
+    help="Send the status report by email to the given address.",
 )
+@with_appcontext
 def status_report(types, email):
     """Retrieve a status report summary of the REANA system."""
 
@@ -563,12 +564,14 @@ def status_report(types, email):
             fg="red",
             err=True,
         )
+        sys.exit(1)
     except Exception as e:
         click.secho(
             "Something went wrong while generating the status report:\n{}".format(e),
             fg="red",
             err=True,
         )
+        sys.exit(1)
 
 
 @reana_admin.command("quota-usage", help="List quota usage of users.")

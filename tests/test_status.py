@@ -12,7 +12,8 @@ from unittest.mock import patch
 
 import pytest
 
-from reana_server.status import ClusterHealth
+from reana_server.auth.errors import SessionUnavailableError
+from reana_server.status import ClusterHealth, UsersStatus
 
 
 @pytest.fixture
@@ -133,3 +134,21 @@ def test_workflow_health_shows_dask_when_enabled(workflow_health):
         "percentage": 100,
         "health": "healthy",
     }
+
+
+@pytest.mark.parametrize(
+    ("auth_overrides", "count_error", "expected"),
+    [
+        ({"bff_enabled": False}, None, 0),
+        ({"issuer": ""}, None, "unavailable"),
+        ({}, SessionUnavailableError("Session store is down."), "unavailable"),
+    ],
+)
+def test_active_web_users_when_sessions_cannot_be_counted(
+    base_app, auth_overrides, count_error, expected
+):
+    """Zero web users is only reported when browser login is disabled."""
+    with base_app.app_context(), patch.dict(
+        base_app.config["REANA_AUTH"], auth_overrides
+    ), patch("reana_server.auth.sessions.count_sessions", side_effect=count_error):
+        assert UsersStatus().active_web_users() == expected

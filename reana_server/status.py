@@ -189,19 +189,27 @@ class UsersStatus(REANAStatus):
         super().__init__(from_=from_, until=until, user=user)
 
     def active_web_users(self):
-        """Get the number of active web users (BFF sessions in Redis)."""
+        """Get the number of active web users (BFF sessions in Redis).
+
+        Return ``"unavailable"`` when the sessions cannot be counted, rather
+        than a misleading zero.
+        """
         from flask import current_app
 
         from reana_server.auth.sessions import count_sessions
 
         auth_config = current_app.config["REANA_AUTH"]
-        if not (auth_config["bff_enabled"] and auth_config["issuer"]):
+        if not auth_config["bff_enabled"]:
             return 0
+        if not auth_config["issuer"]:
+            # Processes without the OIDC configuration, such as the system
+            # status CronJob, cannot tell whether browser sessions are in use.
+            return "unavailable"
         try:
             return count_sessions()
         except Exception as error:
             logging.warning("Could not count BFF sessions: %s", error)
-            return 0
+            return "unavailable"
 
     def get_status(self):
         """Get status summary for REANA users."""
