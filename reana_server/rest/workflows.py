@@ -78,6 +78,7 @@ from reana_server.config import (
     REANA_HOSTNAME,
     REANA_SPEC_BUNDLE_MAX_BYTES,
     REANA_SPEC_BUNDLE_MAX_REQUEST_BYTES,
+    REANA_WORKFLOW_CREATE_JSON_MAX_REQUEST_BYTES,
     RWC_MUTATION_CONNECT_TIMEOUT,
     RWC_MUTATION_READ_TIMEOUT,
 )
@@ -417,6 +418,32 @@ def _cap_bundle_request_body(max_form_parts=1):
     request.max_content_length = REANA_SPEC_BUNDLE_MAX_REQUEST_BYTES
     request.max_form_memory_size = _BUNDLE_MAX_FORM_MEMORY_SIZE
     request.max_form_parts = max_form_parts
+
+
+def _buffer_json_request_body():
+    """Read a workflow-creation JSON request body, rejecting an oversized one.
+
+    JSON is only accepted here from GitLab webhooks and legacy clients, so the
+    limit is far below the multipart bundle limit set by
+    :func:`_cap_bundle_request_body`. A known ``Content-Length`` is rejected
+    outright. A chunked body (no ``Content-Length``) is read through
+    ``request.max_content_length``, which only *truncates* it at the limit
+    without raising, so the limit is set one byte higher and the body is
+    rejected if that extra byte arrives. Reading stops there, and a body cannot
+    pass as valid JSON merely because its tail was cut off.
+
+    The body is cached by ``get_data``, so it must be buffered here before the
+    first access to ``request.json``, which then parses the cached bytes.
+    """
+    limit = REANA_WORKFLOW_CREATE_JSON_MAX_REQUEST_BYTES
+    too_large = RequestEntityTooLarge(
+        description="JSON request is too large (maximum is {} bytes).".format(limit)
+    )
+    if request.content_length is not None and request.content_length > limit:
+        raise too_large
+    request.max_content_length = limit + 1
+    if len(request.get_data(cache=True)) > limit:
+        raise too_large
 
 
 def _remaining_stream_size(stream):
@@ -1165,7 +1192,9 @@ def create_workflow(user):  # noqa
                             exist."
               }
         413:
-          description: The uploaded request exceeds the bounded bundle limit.
+          description: >-
+            The request exceeds its size limit: the bounded bundle limit for
+            multipart uploads, or the smaller JSON limit for JSON requests.
           schema:
             type: object
             required:
@@ -1216,9 +1245,10 @@ def create_workflow(user):  # noqa
         if request.args.get("spec"):
             return jsonify("Not implemented"), 501
 
-        # Parse the JSON body at most once: a released client posts its whole
-        # serialized specification here, and this runs before the per-view body
-        # cap that only bounds the multipart bundle path.
+        # Parse the JSON body at most once, and only after bounding its size: a
+        # released client posts its whole serialized specification here.
+        if request.is_json:
+            _buffer_json_request_body()
         json_payload = (request.json or {}) if request.is_json else {}
         request_from_gitlab = "object_kind" in json_payload
         # A released client sends the serialized specification as the *entire*

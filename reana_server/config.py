@@ -119,6 +119,18 @@ and multipart framing adds a small fixed overhead. Member-count and path-length
 limits keep this allowance bounded.
 """
 
+REANA_WORKFLOW_CREATE_JSON_MAX_REQUEST_BYTES = int(
+    os.getenv("REANA_WORKFLOW_CREATE_JSON_MAX_REQUEST_BYTES", str(1024 * 1024))
+)
+"""Maximum JSON request bytes accepted when creating a workflow.
+
+Workflow creation only accepts JSON from GitLab webhooks and from legacy clients
+that are told to upload a specification bundle instead. A GitLab push event
+lists at most its 20 newest commits, so a legitimate payload is far smaller than
+a specification bundle, and this limit is deliberately separate from (and much
+smaller than) ``REANA_SPEC_BUNDLE_MAX_REQUEST_BYTES``.
+"""
+
 REANA_SPEC_VALIDATION_TIMEOUT = int(os.getenv("REANA_SPEC_VALIDATION_TIMEOUT", "60"))
 """Wall-clock budget (seconds) used to size the server's read timeout for a
 sandboxed spec validation call.
