@@ -699,12 +699,13 @@ def test_stage_validation_snapshot_uses_copied_yaml_for_scope(monkeypatch, tmp_p
     )
     staged = None
     try:
-        staged, _relative, _bytes, _legacy = (
+        staged, _relative, _bytes, _legacy, original_specification = (
             specification_bundles.stage_validation_snapshot(
                 str(workspace / "reana.yaml"), str(shared)
             )
         )
         assert pathlib.Path(staged, "reana.yaml").read_text() == original
+        assert original_specification["workflow"]["file"] == "Snakefile"
         assert pathlib.Path(staged, "Snakefile").read_text() == "ORIGINAL"
         assert not pathlib.Path(staged, "Otherfile").exists()
     finally:
@@ -724,7 +725,7 @@ def test_stage_validation_snapshot_canonicalizes_selected_filename(tmp_path):
 
     absolute_path = None
     try:
-        absolute_path, _relative, _bytes, _legacy = (
+        absolute_path, _relative, _bytes, _legacy, _original = (
             specification_bundles.stage_validation_snapshot(
                 str(specification), str(shared)
             )
@@ -753,7 +754,7 @@ def test_stage_validation_snapshot_deduplicates_legacy_canonical_input(tmp_path)
 
     absolute_path = None
     try:
-        absolute_path, _relative, _bytes, _legacy = (
+        absolute_path, _relative, _bytes, _legacy, _original = (
             specification_bundles.stage_validation_snapshot(
                 str(specification), str(shared)
             )
@@ -1298,3 +1299,42 @@ def test_validate_images(config, workflow, error):
 def test_validate_retention_rule(rule, days, error):
     with error:
         validate_retention_rule(rule, days)
+
+
+@pytest.mark.parametrize(
+    "raw_inputs,options,error",
+    [
+        ("options: {}", {"FOO": "value"}, 'Operational option "FOO"'),
+        ("options: {initfiles: invalid}", {}, "initfiles must be a list"),
+        ("options: []", {"initfiles": []}, "options must be a mapping"),
+        ("parameters: {input: params.yaml}", {}, "only for CWL and Snakemake"),
+    ],
+)
+def test_snapshot_does_not_suggest_scope_for_unrelated_errors(
+    tmp_path, raw_inputs, options, error
+):
+    """Legacy input declarations do not turn option or shape errors into scope advice."""
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (workspace / "workflow.yaml").write_text("stages: []\n")
+    (workspace / "data.txt").write_text("data")
+    specification = workspace / "reana.yaml"
+    specification.write_text(
+        "workflow:\n  type: yadage\n  file: workflow.yaml\n"
+        "inputs:\n  files: [data.txt]\n  " + raw_inputs + "\n"
+    )
+    if "parameters" in raw_inputs:
+        specification.write_text(
+            specification.read_text().replace(
+                "  file: workflow.yaml\n",
+                "  file: workflow.yaml\n  parameters: {file: params.yaml}\n",
+            )
+        )
+    with pytest.raises(REANAValidationError, match=error) as caught:
+        specification_bundles.stage_validation_snapshot(
+            str(specification), str(shared), operational_options=options
+        )
+    assert "workflow.files/workflow.directories" not in str(caught.value)
+    assert not list((shared / "validation-tmp").iterdir())

@@ -613,6 +613,7 @@ def clone_workflow(workflow, reana_spec, restart_type, validate_spec=True):
             workspace_path=workflow.workspace_path,
             restart=True,
             run_number=workflow.run_number,
+            launcher_url=workflow.launcher_url,
         )
         if workflow_uses_dask(reana_specification):
             cloned_workflow.services.append(build_dask_service(cloned_workflow))

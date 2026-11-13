@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2022, 2023, 2024, 2025 CERN.
+# Copyright (C) 2022, 2023, 2024, 2025, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -492,7 +492,7 @@ def load_and_validate_spec(bundle_dir: str) -> Tuple[Dict, List[Dict]]:
     """Load and validate a raw spec bundle, returning the authoritative spec.
 
     This is the single chokepoint for every server-side path that must load an
-    *untrusted* workflow specification (raw-bundle create, launch, GitLab).
+    *untrusted* workflow specification (create, launch, GitLab, start, restart).
     Loading is done in-process for serial workflows and inside the sandboxed
     validator Job for Snakemake/CWL/Yadage, so the API process never executes
     untrusted workflow code. The valid/invalid decision is always made

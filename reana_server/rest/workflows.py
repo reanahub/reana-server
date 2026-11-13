@@ -9,6 +9,7 @@
 """Reana-Server workflow-functionality Flask-Blueprint."""
 
 import json
+from copy import deepcopy
 import functools
 import logging
 import os
@@ -20,6 +21,7 @@ from fnmatch import fnmatchcase
 from pathlib import Path
 
 import requests
+import yaml
 from bravado.exception import BravadoTimeoutError, HTTPError
 from flask import Blueprint, Response, g, jsonify, request, stream_with_context
 from jsonschema.exceptions import ValidationError
@@ -41,6 +43,7 @@ from reana_commons.errors import (
 from reana_commons.specification_paths import (
     SPECIFICATION_BUNDLE_MAX_PATH_BYTES,
     open_regular_file_beneath,
+    workflow_parameter_file,
 )
 from reana_commons.utils import remove_upper_level_references
 from reana_commons.validation.environments import iter_environment_tag_warnings
@@ -53,6 +56,7 @@ from reana_commons.validation.operational_options import validate_operational_op
 from reana_commons.validation.utils import (
     MAX_LOAD_ERROR_MESSAGE_CHARS,
     bound_error_message,
+    validate_json_tree,
     validate_workflow_name,
 )
 from reana_db.database import Session
@@ -90,6 +94,7 @@ from reana_server.gitlab_client import (
 )
 from reana_server.fetcher import extract_streamed_zip_response
 from reana_server.specification_bundles import (
+    LEGACY_SCOPE_GUIDANCE,
     extract_uploaded_bundle,
     seed_workspace,
     stage_validation_snapshot,
@@ -1266,6 +1271,7 @@ def create_workflow(user):  # noqa
                 _bundle_rel,
                 _bundle_bytes,
                 _legacy_parameters,
+                _original_specification,
             ) = stage_validation_snapshot(specification_path, SHARED_VOLUME_PATH)
             reana_spec_file, validation_warnings = load_and_validate_spec(bundle_dir)
             seed_members, seed_bytes = workspace_seed_members(specification_path)
@@ -2054,19 +2060,19 @@ def _workspace_specification_path(workspace_path):
     )
 
 
-def _stage_workspace_validation_snapshot(workspace_path, specification_path=None):
+def _stage_workspace_validation_snapshot(
+    workspace_path, specification_path=None, operational_options=None
+):
     """Create one bounded immutable definition snapshot of a workspace."""
     specification_path = specification_path or _workspace_specification_path(
         workspace_path
     )
-    staged_directory, _relative_path, _total_bytes, _legacy_parameters = (
-        stage_validation_snapshot(
-            specification_path,
-            SHARED_VOLUME_PATH,
-            source_base_directory=workspace_path,
-        )
+    return stage_validation_snapshot(
+        specification_path,
+        SHARED_VOLUME_PATH,
+        source_base_directory=workspace_path,
+        operational_options=operational_options,
     )
-    return staged_directory
 
 
 def _copy_regular_file(source_root, source_path, destination):
@@ -2176,7 +2182,9 @@ def _load_and_validate_workspace_snapshot(workspace_path):
     """Validate only the declared definition snapshot of a mutable workspace."""
     staged_directory = None
     try:
-        staged_directory = _stage_workspace_validation_snapshot(workspace_path)
+        staged_directory = _stage_workspace_validation_snapshot(
+            workspace_path
+        ).absolute_path
         return load_and_validate_spec(staged_directory)
     finally:
         if staged_directory:
@@ -2326,8 +2334,76 @@ def _enforce_restart_spec_constraints(workflow, new_spec, source_root=None):
             )
 
 
+def _apply_restart_parameter_overrides(directory, input_parameters):
+    """Apply checked run parameters to a completed private restart snapshot."""
+    if not input_parameters:
+        return
+    from reana_commons.specification import load_input_parameters
+
+    # Operational options have already selected the files to stage. Resolve
+    # only YAML here; executable engine sources are still loaded in the sandbox.
+    raw_spec = load_raw_spec_mapping(directory)
+    try:
+        original_parameters = load_input_parameters(raw_spec, directory)
+    except (OSError, ValueError, yaml.YAMLError) as error:
+        raise REANAValidationError(bound_error_message(error)) from error
+    validate_input_parameters(input_parameters, original_parameters)
+    parameter_file, legacy = workflow_parameter_file(raw_spec)
+    original_parameters.update(input_parameters)
+    if parameter_file:
+        # Keep the source directive separate from a runtime parameter named
+        # "input", including with the legacy spelling.
+        parameter_contents = yaml.safe_dump(original_parameters).encode("utf-8")
+        if len(parameter_contents) > REANA_SPEC_BUNDLE_MAX_BYTES:
+            raise REANAValidationError("Restart parameter file is too large.")
+        with open(os.path.join(directory, parameter_file), "wb") as stream:
+            stream.write(parameter_contents)
+        raw_spec.setdefault("inputs", {})["parameters"] = (
+            {"input": parameter_file} if legacy else {}
+        )
+    else:
+        raw_spec.setdefault("inputs", {})["parameters"] = original_parameters
+    contents = yaml.safe_dump(raw_spec).encode("utf-8")
+    if len(contents) > REANA_SPEC_BUNDLE_MAX_BYTES:
+        raise REANAValidationError("Restart specification is too large.")
+    with open(os.path.join(directory, "reana.yaml"), "wb") as stream:
+        stream.write(contents)
+
+
+def _check_plain_restart_reference(workflow, current):
+    """Require an explicit replacement when changing engine or main source."""
+    previous = workflow.reana_specification.get("workflow", {})
+    # This catches obvious variant changes, not provenance: specifications can
+    # share these references while differing in parameters or execution backend.
+    if current.get("type") != workflow.type_ or current.get("file") != previous.get(
+        "file"
+    ):
+        raise REANAValidationError(
+            "The workspace specification changes workflow.type or workflow.file. "
+            "Use restart -f reana.yaml to select a different engine or main "
+            "workflow source explicitly; upload any referenced source files first."
+        )
+
+
+def _missing_restart_specification_message(workflow):
+    """Explain how to restore source declarations missing from the workspace."""
+    message = (
+        "The workspace has no reana.yaml to reload workflow sources. "
+        "Restart with -f reana.yaml once to restore the specification."
+    )
+    if workflow.launcher_url:
+        message += (
+            " Original launch source: {}. Retrieve the intended specification "
+            "and revision from that source; the URL may not identify the exact "
+            "specification used by this run."
+        ).format(workflow.launcher_url)
+    return message
+
+
 def _restart_specification_path_error(error):
     """Return a stable restart diagnostic from typed path-error attributes."""
+    if error.reason in ("max_files", "max_directories", "max_bytes", "empty_directory"):
+        return REANAValidationError(str(error))
     path = error.path
     if error.reason == "max_length":
         return REANAValidationError(
@@ -2383,6 +2459,11 @@ def _restart_specification_path_error(error):
         message = template.format(path)
     else:
         message = template.format(path, error.reason)
+    if error.field in ("inputs.files", "inputs.directories"):
+        message += (
+            " Restart validates the declared files as they are now. "
+            + LEGACY_SCOPE_GUIDANCE
+        )
     return REANAValidationError(message)
 
 
@@ -2395,16 +2476,14 @@ def _submit_workflow_locked(workflow, user, **parameters):  # noqa: C901
         "_replacement_specification_path", None
     )
     staged_restart_directory = None
+    stored_restart_specification = None
     restart_promotion = None
     cloned_restart_workflow = None
     retention_rule_states = None
     restart_completed = False
 
     try:
-        validate_operational_options(workflow.type_, operational_options)
-
         validation_warnings = []
-        restart_spec_validated = False
         if restart:
             if workflow.status not in [RunStatus.finished, RunStatus.failed]:
                 message = "Only finished or failed workflows can be restarted."
@@ -2417,15 +2496,19 @@ def _submit_workflow_locked(workflow, user, **parameters):  # noqa: C901
                 )
                 logging.info("Workflow restart conflict: %s", message)
                 return {"message": message}, 409
-            if replacement_specification_path:
-                retention_rule_states = _workspace_retention_rule_states(
-                    workflow.workspace_path
-                )
+            retention_rule_states = _workspace_retention_rule_states(
+                workflow.workspace_path
+            )
+            if replacement_specification_path or has_reana_spec_file(
+                workflow.workspace_path
+            ):
                 try:
-                    staged_restart_directory = _stage_workspace_validation_snapshot(
+                    snapshot = _stage_workspace_validation_snapshot(
                         workflow.workspace_path,
                         specification_path=replacement_specification_path,
+                        operational_options=operational_options,
                     )
+                    staged_restart_directory = snapshot.absolute_path
                 except REANASpecificationPathError as error:
                     raise _restart_specification_path_error(error) from error
                 workspace_specification = load_raw_spec_mapping(
@@ -2436,26 +2519,102 @@ def _submit_workflow_locked(workflow, user, **parameters):  # noqa: C901
                         "A supplied restart specification must be a non-empty "
                         "YAML mapping."
                     )
-                restart_type = workspace_specification.get("workflow", {}).get("type")
+                restart_definition = workspace_specification.get("workflow")
+                if not isinstance(restart_definition, dict):
+                    raise REANAValidationError("workflow must be a mapping.")
+                restart_type = restart_definition.get("type")
+                if not replacement_specification_path:
+                    _check_plain_restart_reference(workflow, restart_definition)
                 _enforce_restart_spec_constraints(
                     workflow,
                     workspace_specification,
                     source_root=staged_restart_directory,
                 )
+                _apply_restart_parameter_overrides(
+                    staged_restart_directory, input_parameters
+                )
                 reana_specification, validation_warnings = load_and_validate_spec(
                     staged_restart_directory
                 )
-                restart_spec_validated = True
-                workflow = clone_workflow(
-                    workflow, reana_specification, restart_type, validate_spec=False
-                )
-                cloned_restart_workflow = workflow
+                if restart_type == "serial":
+                    # Serial keeps unexpanded commands and executes overrides
+                    # from the submission payload. Preserve the source defaults
+                    # in case a later restart has to reuse the stored steps after
+                    # raw YAML is removed. Keep external engines' loaded metadata
+                    # paired with the effective parameters used to produce it.
+                    stored_restart_specification = deepcopy(reana_specification)
+                    original_inputs = snapshot.original_specification.get("inputs", {})
+                    stored_inputs = stored_restart_specification.setdefault(
+                        "inputs", {}
+                    )
+                    for key in ("parameters", "options"):
+                        if key in original_inputs:
+                            stored_inputs[key] = deepcopy(original_inputs[key])
+                        else:
+                            stored_inputs.pop(key, None)
+                    # Defaults must remain serialisable even when an override
+                    # replaces a YAML-only value in the effective specification.
+                    validate_json_tree(stored_restart_specification)
             else:
-                retention_rule_states = _workspace_retention_rule_states(
-                    workflow.workspace_path
+                # Complete stored Serial steps are self-contained even when
+                # originally read from a file. External engines cannot recover
+                # their original source/parameter declarations from packed data.
+                stored_definition = workflow.reana_specification.get(
+                    "workflow", {}
+                ).get("specification")
+                if (
+                    workflow.type_ != "serial"
+                    or not isinstance(stored_definition, dict)
+                    or not stored_definition.get("steps")
+                ):
+                    raise REANAValidationError(
+                        _missing_restart_specification_message(workflow)
+                    )
+                stored_restart_specification = deepcopy(workflow.reana_specification)
+                reana_specification = deepcopy(stored_restart_specification)
+                restart_type = workflow.type_
+                validate_input_parameters(
+                    input_parameters,
+                    reana_specification.get("inputs", {}).get("parameters", {}),
                 )
-                workflow = clone_workflow(workflow, None, None)
-                cloned_restart_workflow = workflow
+                reana_specification.setdefault("inputs", {}).setdefault(
+                    "parameters", {}
+                ).update(input_parameters)
+                reana_specification["inputs"].setdefault("options", {}).update(
+                    operational_options
+                )
+                validation_warnings = validate_loaded_spec(reana_specification)
+                validation_warnings.append(
+                    {
+                        "code": "restart_stored_serial_specification",
+                        "path": "workflow.specification",
+                        "message": (
+                            "The workspace has no reana.yaml; stored Serial steps "
+                            "were reused and sources were not reloaded. Restart "
+                            "once with -f reana.yaml to enable source reloading."
+                        ),
+                    }
+                )
+
+            operational_options = validate_operational_options(
+                restart_type,
+                dict(
+                    reana_specification.get("inputs", {}).get("options", {}),
+                    **operational_options,
+                ),
+            )
+            workflow = clone_workflow(
+                workflow,
+                stored_restart_specification or reana_specification,
+                restart_type,
+                validate_spec=False,
+            )
+            cloned_restart_workflow = workflow
+            # The controller obtains operational defaults from the workflow row.
+            # Refresh those defaults along with the specification and send the
+            # same merged options through the scheduler to execution.
+            workflow.operational_options = operational_options
+            parameters["operational_options"] = workflow.operational_options
         elif workflow.status != RunStatus.created:
             message = (
                 "Workflow {} is already {} and cannot be started "
@@ -2468,26 +2627,14 @@ def _submit_workflow_locked(workflow, user, **parameters):  # noqa: C901
         # *now* -- right before queueing -- and refresh the stored specification
         # from the loaded result. Loading runs in the sandboxed validator for
         # Snakemake/CWL/Yadage (never in-process) and in-process for serial. This
-        # binds what runs to what was validated; an invalid workspace fails the
+        # checks the submission-time sources; engines that reopen live workspace
+        # files can still observe later edits. An invalid workspace fails the
         # start and the workflow keeps its current status (nothing is queued).
         #
-        # Two cases deliberately do NOT re-load from the workspace and instead
-        # validate the stored authoritative specification in-process (pure, no
-        # code execution -- safe and the only sound option, since an
-        # already-serialized spec cannot be round-tripped through the engine
-        # loaders):
-        #  * plain restart -- clone_workflow already validated the stored spec;
-        #    replacement restarts were handled above before cloning from the
-        #    staged raw specification; and
-        #  * a workspace with no reana.yaml -- launched workflows have it
-        #    stripped by filter_input_files and pre-seeding (legacy) workflows
-        #    never had it, yet the stored spec is a valid, vetted artifact.
-        # The (pure) policy validator is the authoritative check in every branch,
-        # and runtime per-job policy is independently re-enforced regardless.
-        if restart and restart_spec_validated:
+        # Restarts have already loaded and validated their effective snapshot
+        # before cloning. Legacy starts without raw YAML use the stored spec.
+        if restart:
             pass
-        elif restart:
-            validation_warnings = validate_loaded_spec(workflow.reana_specification)
         elif has_reana_spec_file(workflow.workspace_path):
             (
                 workflow.reana_specification,
@@ -2495,10 +2642,12 @@ def _submit_workflow_locked(workflow, user, **parameters):  # noqa: C901
             ) = _load_and_validate_workspace_snapshot(workflow.workspace_path)
         else:
             validation_warnings = validate_loaded_spec(workflow.reana_specification)
-        original_parameters = workflow.reana_specification.get("inputs", {}).get(
-            "parameters", {}
-        )
-        validate_input_parameters(input_parameters, original_parameters)
+        if not restart:
+            validate_operational_options(workflow.type_, operational_options)
+            original_parameters = workflow.reana_specification.get("inputs", {}).get(
+                "parameters", {}
+            )
+            validate_input_parameters(input_parameters, original_parameters)
         Session.object_session(workflow).commit()
 
         # Backfill the Dask service row for legacy workflows created before this
@@ -2511,9 +2660,9 @@ def _submit_workflow_locked(workflow, user, **parameters):  # noqa: C901
         # RWC does not accept in its start schema.
         submission_parameters = dict(parameters)
         submission_parameters.pop("reana_specification", None)
-        if staged_restart_directory:
+        if replacement_specification_path:
             restart_promotion = _promote_restart_specification(
-                workflow.workspace_path, staged_restart_directory
+                workflow.workspace_path, os.path.dirname(replacement_specification_path)
             )
         if cloned_restart_workflow:
             _recalculate_shared_workspace_quota(cloned_restart_workflow, user)
