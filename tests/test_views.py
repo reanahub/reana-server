@@ -2376,6 +2376,56 @@ def test_get_workflow_disk_usage_hides_htcondor_transfer_paths(
     ]
 
 
+@pytest.mark.parametrize(
+    "valid_until_days, specification_status, disk_usage_status",
+    [(1, 200, 200), (-1, 403, 404)],
+)
+def test_workflow_specification_and_disk_usage_apply_share_expiry(
+    app,
+    session,
+    user1,
+    user2,
+    sample_serial_workflow_in_db_owned_by_user1,
+    auth_headers,
+    valid_until_days,
+    specification_status,
+    disk_usage_status,
+):
+    """A recipient reads the specification and disk usage until the share expires."""
+    workflow = sample_serial_workflow_in_db_owned_by_user1
+    today = datetime.combine(datetime.now().date(), datetime.min.time())
+    session.add(
+        UserWorkflow(
+            workflow_id=workflow.id_,
+            user_id=user2.id_,
+            valid_until=today + timedelta(days=valid_until_days),
+        )
+    )
+    session.commit()
+
+    with patch.object(
+        Workflow, "get_workspace_disk_usage", return_value=[]
+    ), app.test_client() as client:
+        response = client.get(
+            url_for(
+                "workflows.get_workflow_specification",
+                workflow_id_or_name=workflow.id_,
+            ),
+            headers=auth_headers(user2),
+        )
+        assert response.status_code == specification_status
+
+        response = client.get(
+            url_for(
+                "workflows.get_workflow_disk_usage",
+                workflow_id_or_name=workflow.id_,
+            ),
+            headers=auth_headers(user2),
+            json={"summarize": True},
+        )
+        assert response.status_code == disk_usage_status
+
+
 def test_summarized_disk_usage_search_hides_htcondor_transfer_paths(
     app,
     session,

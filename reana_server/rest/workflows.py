@@ -5247,7 +5247,7 @@ def share_workflow(workflow_id_or_name, user, **kwargs):
                 description: Optional. Message to include when sharing the workflow.
               valid_until:
                 type: string
-                description: Optional. Date when access to the workflow will expire (format YYYY-MM-DD).
+                description: Optional. Last day of access to the workflow (format YYYY-MM-DD). Access ends at the end of this day (UTC).
             required: [user_email_to_share_with]
       responses:
         200:
@@ -5554,6 +5554,11 @@ def get_workflow_share_status(workflow_id_or_name, user):
                     valid_until:
                       type: string
                       x-nullable: true
+                    expired:
+                      type: boolean
+                      description: >-
+                        Whether the share has expired. The user has no access
+                        to the workflow after the end of the valid_until date (UTC).
           examples:
             application/json:
               {
@@ -5562,7 +5567,8 @@ def get_workflow_share_status(workflow_id_or_name, user):
                 "shared_with": [
                     {
                       "user_email": "bob@example.org",
-                      "valid_until": "2022-11-24T23:59:59"
+                      "valid_until": "2022-11-24T23:59:59",
+                      "expired": true
                     }
                 ]
               }
