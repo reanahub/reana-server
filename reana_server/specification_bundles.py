@@ -15,9 +15,12 @@ import stat
 import struct
 import uuid
 import zipfile
+import yaml
+from copy import deepcopy
 from typing import Dict, NamedTuple, Tuple
 
 from reana_commons.errors import (
+    REANASpecificationPathError,
     REANASpecificationScopeError,
     REANAValidationError,
 )
@@ -27,8 +30,11 @@ from reana_commons.specification_paths import (
     SPECIFICATION_BUNDLE_MAX_DIRECTORIES,
     gather_validation_members,
     gather_workspace_seed_members,
+    load_raw_reana_spec,
     open_regular_file_beneath,
+    uses_legacy_validation_scope,
 )
+from reana_commons.validation.operational_options import validate_operational_options
 
 from reana_server.config import (
     REANA_SPEC_BUNDLE_MAX_BYTES,
@@ -38,6 +44,12 @@ from reana_server.config import (
 )
 
 VALIDATION_STAGING_SUBDIR = "validation-tmp"
+LEGACY_SCOPE_GUIDANCE = (
+    "Use explicit workflow.files/workflow.directories to exclude datasets and "
+    "outputs from validation. Include all loading dependencies, such as Snakemake "
+    "include: files, configfile: targets and locally imported modules; packages "
+    "installed in the validator need not be bundled."
+)
 _COPY_CHUNK_SIZE = 1024 * 1024
 ZIP_MAXIMUM_CENTRAL_DIRECTORY_BYTES = 64 * 1024 * 1024
 _ZIP_EOCD = struct.Struct("<4s4H2LH")
@@ -53,6 +65,16 @@ class ExtractedSpecificationBundle(NamedTuple):
     total_bytes: int
     legacy_parameters: bool
     members: Dict[str, str]
+
+
+class StagedSpecificationBundle(NamedTuple):
+    """Private validation files and the raw defaults copied from their source."""
+
+    absolute_path: str
+    relative_path: str
+    total_bytes: int
+    legacy_parameters: bool
+    original_specification: Dict
 
 
 def preflight_zip_metadata(  # noqa: C901
@@ -226,10 +248,13 @@ def _write_stream(destination: str, source, already_written: int) -> int:
                     break
                 total += len(chunk)
                 if total > REANA_SPEC_BUNDLE_MAX_BYTES:
-                    raise REANAValidationError(
+                    raise REANASpecificationPathError(
                         "Specification bundle is too large (maximum is {} bytes).".format(
                             REANA_SPEC_BUNDLE_MAX_BYTES
-                        )
+                        ),
+                        "validation snapshot",
+                        os.path.basename(destination),
+                        "max_bytes",
                     )
                 output.write(chunk)
     except Exception:
@@ -444,10 +469,12 @@ def stage_validation_snapshot(
     specification_path: str,
     shared_volume_path: str = None,
     source_base_directory: str = None,
-) -> Tuple[str, str, int, bool]:
+    operational_options: Dict = None,
+) -> StagedSpecificationBundle:
     """Copy the declared validation scope into a fresh shared staging directory."""
     absolute_path, relative_path = _fresh_staging_directory(shared_volume_path)
     total_bytes = 0
+    specification = None
     base_directory = source_base_directory or os.path.dirname(
         os.path.abspath(specification_path)
     )
@@ -465,6 +492,29 @@ def stage_validation_snapshot(
         with os.fdopen(descriptor, "rb") as source:
             total_bytes = _write_stream(staged_specification, source, total_bytes)
 
+        original_specification = load_raw_reana_spec(staged_specification)
+        specification = original_specification
+        if operational_options:
+            # Options such as Yadage initfiles select the validation scope, so
+            # apply them before gathering files. Parameter overrides are applied
+            # to the completed private snapshot before loading the engine.
+            specification = deepcopy(original_specification)
+            workflow = specification.get("workflow")
+            inputs = specification.setdefault("inputs", {})
+            if not isinstance(workflow, dict) or not isinstance(inputs, dict):
+                raise REANAValidationError("workflow and inputs must be mappings.")
+            options = inputs.setdefault("options", {})
+            if not isinstance(options, dict):
+                raise REANAValidationError("inputs.options must be a mapping.")
+            validate_operational_options(workflow.get("type"), operational_options)
+            options.update(operational_options)
+            contents = yaml.safe_dump(specification).encode("utf-8")
+            total_bytes = len(contents)
+            if total_bytes > REANA_SPEC_BUNDLE_MAX_BYTES:
+                raise REANAValidationError("Restart specification is too large.")
+            with open(staged_specification, "wb") as destination:
+                destination.write(contents)
+
         members, _specification, legacy_parameters = gather_validation_members(
             staged_specification,
             source_base_directory=base_directory,
@@ -473,10 +523,13 @@ def stage_validation_snapshot(
             ),
         )
         if len(members) > REANA_SPEC_BUNDLE_MAX_FILES:
-            raise REANAValidationError(
+            raise REANASpecificationPathError(
                 "Specification bundle has too many files (maximum is {}).".format(
                     REANA_SPEC_BUNDLE_MAX_FILES
-                )
+                ),
+                "validation snapshot",
+                "",
+                "max_files",
             )
         for member in sorted(members):
             if member == CANONICAL_REANA_SPECIFICATION:
@@ -493,9 +546,33 @@ def stage_validation_snapshot(
             )
             with os.fdopen(descriptor, "rb") as source:
                 total_bytes = _write_stream(destination, source, total_bytes)
-        return absolute_path, relative_path, total_bytes, legacy_parameters
-    except Exception:
+        return StagedSpecificationBundle(
+            absolute_path,
+            relative_path,
+            total_bytes,
+            legacy_parameters,
+            original_specification,
+        )
+    except Exception as error:
         shutil.rmtree(absolute_path, ignore_errors=True)
+        if (
+            isinstance(error, REANASpecificationPathError)
+            and (
+                error.reason in ("max_files", "max_directories", "max_bytes")
+                or (
+                    error.reason in ("empty_directory", "unreadable")
+                    and error.field in ("inputs.files", "inputs.directories")
+                )
+            )
+            and specification
+            and uses_legacy_validation_scope(specification)
+        ):
+            raise REANASpecificationPathError(
+                f"{error} {LEGACY_SCOPE_GUIDANCE}",
+                error.field,
+                error.path,
+                error.reason,
+            ) from error
         raise
 
 
