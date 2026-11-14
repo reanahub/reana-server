@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2022 CERN.
+# Copyright (C) 2022, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -432,6 +432,53 @@ def test_fetcher_zip_converts_extraction_oserror(monkeypatch, tmp_path):
         monkeypatch.setattr("reana_server.fetcher.os.makedirs", fail_makedirs)
         with pytest.raises(REANAFetcherError):
             fetcher._extract_archive_entries(archive, entries)
+
+
+def test_fetcher_zip_extracts_non_ascii_file_names(tmp_path):
+    """Valid archives with non-ASCII file names keep their file names."""
+    names = [
+        "reana.yaml",
+        ".github/ISSUE_TEMPLATE/\u2728-feature-request.md",
+        ".github/ISSUE_TEMPLATE/\U0001fab2-bug-report.md",
+    ]
+    archive_path = tmp_path / "archive.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        for name in names:
+            archive.writestr(name, "workflow: {}")
+    output_path = tmp_path / "output"
+    output_path.mkdir()
+    fetcher = WorkflowFetcherZip(
+        ParsedUrl("file:///archive.zip"),
+        str(output_path),
+    )
+
+    fetcher.extract_archive(str(archive_path))
+
+    for name in names:
+        assert output_path.joinpath(*name.split("/")).is_file()
+
+
+def test_fetcher_zip_reports_file_name_encoding_error(monkeypatch, tmp_path):
+    """Unencodable file names are not reported as an invalid archive."""
+    archive_path = tmp_path / "archive.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("\u2728-feature-request.md", "content")
+    output_path = tmp_path / "output"
+    output_path.mkdir()
+    fetcher = WorkflowFetcherZip(
+        ParsedUrl("file:///archive.zip"),
+        str(output_path),
+    )
+
+    def fail_open(path, *args, **kwargs):
+        raise UnicodeEncodeError("ascii", path, 0, 1, "ordinal not in range(128)")
+
+    monkeypatch.setattr("reana_server.fetcher.os.open", fail_open)
+    with pytest.raises(REANAFetcherError) as excinfo:
+        fetcher.extract_archive(str(archive_path))
+
+    assert "file name cannot be represented" in excinfo.value.message
+    assert "not valid" not in excinfo.value.message
 
 
 def test_fetcher_rejects_entry_count_before_zipfile(monkeypatch, tmp_path):

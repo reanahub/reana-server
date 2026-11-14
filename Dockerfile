@@ -13,6 +13,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Allow pip to install packages in the system site-packages dir
 ENV PIP_BREAK_SYSTEM_PACKAGES=true
 
+# Use UTF-8 so that the Python interpreter embedded in uWSGI can handle
+# non-ASCII file names, e.g. when extracting launched repository archives
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
 # Prepare list of Python dependencies
 COPY requirements.txt /code/
 
