@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2017, 2018, 2020, 2021, 2022, 2023, 2024 CERN.
+# Copyright (C) 2017, 2018, 2020, 2021, 2022, 2023, 2024, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -13,7 +13,9 @@ import json
 import os
 
 import click
+import yaml
 from apispec import APISpec
+from apispec.utils import dedent, trim_docstring
 from apispec_webframeworks.flask import FlaskPlugin
 from flask import current_app
 from reana_commons.utils import copy_openapi_specs
@@ -33,6 +35,44 @@ __api_description__ = "Submit workflows to be run on REANA Cloud"
 
 # Filepath where the OpenAPI specification file should be written to.
 __output_path__ = "temp_openapi.json"
+
+
+class UniqueKeySafeLoader(yaml.SafeLoader):
+    """Safe YAML loader that refuses a repeated key in a mapping."""
+
+    def construct_mapping(self, node, deep=False):
+        """Construct a mapping, failing on its first repeated key."""
+        keys = set()
+        for key_node, _ in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in keys:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    f"found repeated key {key!r}",
+                    key_node.start_mark,
+                )
+            keys.add(key)
+        return super().construct_mapping(node, deep=deep)
+
+
+def check_unique_docstring_keys(endpoint, view):
+    """Fail when the OpenAPI part of a view docstring repeats a key.
+
+    apispec reads the docstrings with ``yaml.safe_load()``, which keeps only
+    the last value of a repeated key, so the other values would be lost from
+    the specification without an error.
+    """
+    lines = trim_docstring(view.__doc__ or "").split("\n")
+    for index, line in enumerate(lines):
+        if line.strip().startswith("---"):
+            try:
+                yaml.load(dedent("\n".join(lines[index:])), UniqueKeySafeLoader)
+            except yaml.constructor.ConstructorError as error:
+                raise click.ClickException(
+                    f"OpenAPI docstring of {endpoint} is not valid:\n{error}"
+                )
+            return
 
 
 @click.command()
@@ -113,6 +153,7 @@ def build_openapi_spec(publish):
     # Collect OpenAPI docstrings from Flask endpoints
     for key in current_app.view_functions:
         if key != "static" and key != "get_openapi_spec":
+            check_unique_docstring_keys(key, current_app.view_functions[key])
             spec.path(view=current_app.view_functions[key])
 
     spec_json = json.dumps(

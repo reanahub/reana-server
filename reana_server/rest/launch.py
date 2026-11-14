@@ -177,10 +177,6 @@ def launch(user, url, name="", parameters="{}", specification=None):
               }
         401:
           description: The request is not authenticated.
-        503:
-          description: >-
-            The identity provider or the authentication session store is
-            temporarily unavailable.
         403:
           description: >-
             Request failed. The user's compute quota has been exceeded.
@@ -216,7 +212,10 @@ def launch(user, url, name="", parameters="{}", specification=None):
           schema:
             $ref: '#/definitions/ErrorResponse'
         503:
-          description: Workspace mutation or controller service is unavailable.
+          description: >-
+            The identity provider, the authentication session store, the
+            workspace mutation lock or the workflow controller is
+            temporarily unavailable.
           schema:
             $ref: '#/definitions/ErrorResponse'
         500:
