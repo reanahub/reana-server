@@ -227,10 +227,11 @@ def _rate_limit_key():
     sharing a NAT do not share one authenticated counter; unauthenticated
     requests fall back to the proxy-normalised client address.
 
-    The browser login endpoints are necessarily unauthenticated, so people
-    behind one address share their budget. Each of them gets its own
-    per-address counter, so that one login is not counted twice (start and
-    callback) and other throttled endpoints cannot use up the login budget.
+    The browser login endpoints are necessarily unauthenticated, and so is
+    a browser logout whose access token has expired, so people behind one
+    address share their budget. Each of them gets its own per-address
+    counter, so that one login is not counted twice (start and callback)
+    and other throttled endpoints cannot use up the login or logout budget.
     The key never includes client-supplied values such as the OAuth state:
     a state is free to obtain, so it must not select a fresh counter.
 
