@@ -261,6 +261,7 @@ def launch(user, url, name="", parameters="{}", specification=None):
             _validation_relative_path,
             _validation_bytes,
             _legacy_parameters,
+            _original_specification,
         ) = stage_validation_snapshot(specification_path, SHARED_VOLUME_PATH)
         reana_yaml, validation_warnings = load_and_validate_spec(validation_directory)
         input_parameters = json.loads(parameters)
