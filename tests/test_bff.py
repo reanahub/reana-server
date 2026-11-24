@@ -14,6 +14,7 @@ from unittest.mock import Mock, patch
 from urllib.parse import parse_qs, urlparse
 
 import pytest
+import redis
 import requests
 from authlib.jose import JsonWebKey
 from authlib.jose import jwt as jose_jwt
@@ -462,6 +463,125 @@ class TestCallback:
         assert not any(cookie.startswith(f"{AUTH_COOKIE}=") for cookie in cookies)
         assert not any(cookie.startswith(f"{SESSION_COOKIE}=") for cookie in cookies)
         assert any(cookie.startswith(f"{STATE_COOKIE}=;") for cookie in cookies)
+
+    def _relogin(self, base_app, signing_key, old_sid="old-session-id"):
+        """Complete a login from a browser that still holds ``old_sid``."""
+        nonce = "relogin-nonce"
+        token_response = Mock(status_code=200)
+        token_response.raise_for_status = Mock()
+        token_response.json.return_value = {
+            "access_token": _make_token(signing_key),
+            "refresh_token": "new-refresh",
+            "id_token": _make_token(signing_key, aud="reana-server", nonce=nonce),
+        }
+        with base_app.test_client() as client:
+            state = _state_cookie_for(
+                base_app, client, verifier="ver", next="/", nonce=nonce
+            )
+            client.set_cookie(SESSION_COOKIE, old_sid, path="/api")
+            with patch(
+                "reana_server.rest.auth.requests.post",
+                return_value=token_response,
+            ), patch(
+                "reana_server.rest.auth.get_or_provision_user",
+                return_value=(Mock(id_="uid"), False),
+            ), patch(
+                "reana_server.rest.auth.secrets.token_urlsafe",
+                return_value="new-session-id",
+            ):
+                return client.get(f"/api/oauth/callback?state={state}&code=the-code")
+
+    @staticmethod
+    def _assert_failed_relogin_keeps_previous_session(response, redis_store):
+        assert response.status_code == 503
+        cookies = response.headers.getlist("Set-Cookie")
+        assert not any(cookie.startswith(f"{AUTH_COOKIE}=") for cookie in cookies)
+        assert not any(cookie.startswith(f"{SESSION_COOKIE}=") for cookie in cookies)
+        assert not any(cookie.startswith(f"{CSRF_COOKIE}=") for cookie in cookies)
+        assert any(cookie.startswith(f"{STATE_COOKIE}=;") for cookie in cookies)
+        assert redis_store.keys("reana:bff:session:*") == [
+            "reana:bff:session:old-session-id"
+        ]
+        assert sessions_module.get_session("old-session-id")["rt"] == "old-refresh"
+
+    def test_relogin_replaces_previous_session_of_same_identity(
+        self, base_app, bff_config, redis_store, signing_key
+    ):
+        _store_bound_session("old-session-id", "old-refresh", "idt", "at")
+
+        response = self._relogin(base_app, signing_key)
+
+        assert response.status_code == 302
+        cookies = response.headers.getlist("Set-Cookie")
+        assert any(
+            cookie.startswith(f"{SESSION_COOKIE}=new-session-id") for cookie in cookies
+        )
+        assert redis_store.keys("reana:bff:session:*") == [
+            "reana:bff:session:new-session-id"
+        ]
+        assert sessions_module.get_session("new-session-id")["rt"] == "new-refresh"
+
+    def test_relogin_keeps_previous_session_of_another_identity(
+        self, base_app, bff_config, redis_store, signing_key
+    ):
+        sessions_module.store_session(
+            "old-session-id",
+            "other-refresh",
+            issuer=ISSUER,
+            subject="another-subject",
+            client_id="reana-server",
+            created_at=time.time(),
+        )
+
+        response = self._relogin(base_app, signing_key)
+
+        assert response.status_code == 302
+        assert sorted(redis_store.keys("reana:bff:session:*")) == [
+            "reana:bff:session:new-session-id",
+            "reana:bff:session:old-session-id",
+        ]
+        assert sessions_module.get_session("old-session-id")["rt"] == "other-refresh"
+
+    def test_relogin_old_session_read_failure_stores_no_new_session(
+        self, base_app, bff_config, redis_store, signing_key, monkeypatch
+    ):
+        _store_bound_session("old-session-id", "old-refresh", "idt", "at")
+        monkeypatch.setattr(
+            redis_store, "get", Mock(side_effect=redis.ConnectionError("read failed"))
+        )
+
+        response = self._relogin(base_app, signing_key)
+
+        monkeypatch.undo()
+        self._assert_failed_relogin_keeps_previous_session(response, redis_store)
+
+    def test_relogin_old_session_delete_failure_stores_no_new_session(
+        self, base_app, bff_config, redis_store, signing_key, monkeypatch
+    ):
+        """Storing the new session and deleting the old one succeed or fail together."""
+        _store_bound_session("old-session-id", "old-refresh", "idt", "at")
+        real_pipeline = redis_store.pipeline
+        queued = []
+
+        def failing_pipeline(*args, **kwargs):
+            pipeline = real_pipeline(*args, **kwargs)
+            real_delete = pipeline.delete
+
+            def delete(*keys):
+                queued.extend(keys)
+                return real_delete(*keys)
+
+            pipeline.delete = delete
+            pipeline.execute = Mock(side_effect=redis.ConnectionError("delete failed"))
+            return pipeline
+
+        monkeypatch.setattr(redis_store, "pipeline", failing_pipeline)
+
+        response = self._relogin(base_app, signing_key)
+
+        monkeypatch.undo()
+        assert queued == ["reana:bff:session:old-session-id"]
+        self._assert_failed_relogin_keeps_previous_session(response, redis_store)
 
     def test_userinfo_outage_during_provisioning_returns_503(
         self, base_app, bff_config
@@ -1411,6 +1531,25 @@ class TestStoreSession:
         assert json.loads(redis_store.get(f"reana:bff:session:{sid}"))["rt"] == (
             "new-refresh"
         )
+
+    def test_replaces_deletes_previous_session_with_the_new_write(self, redis_store):
+        """The superseded session is removed without a separate delete command."""
+        _store_bound_session("old-sid", "old-refresh", "idt", "at")
+        redis_store.delete = Mock(side_effect=redis.ConnectionError("unused"))
+
+        stored = sessions_module.store_session(
+            "new-sid",
+            "new-refresh",
+            issuer=ISSUER,
+            subject="subject-bff",
+            client_id="reana-server",
+            created_at=time.time(),
+            replaces="old-sid",
+        )
+
+        assert stored is True
+        assert redis_store.keys("reana:bff:session:*") == ["reana:bff:session:new-sid"]
+        assert redis_store.ttl("reana:bff:session:new-sid") > 0
 
 
 class TestDeleteSessionsForSubject:

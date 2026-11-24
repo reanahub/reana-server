@@ -101,6 +101,7 @@ def store_session(
     client_id,
     created_at,
     require_existing=False,
+    replaces=None,
 ):
     """Persist a BFF session bound to one issuer, subject, and client.
 
@@ -130,6 +131,13 @@ def store_session(
     issuer round-trip completes -- resurrecting a session that was just
     revoked, with a freshly rotated refresh token. Returns whether the key
     was actually written.
+
+    ``replaces`` is the id of a previous session that a fresh login
+    supersedes. It is deleted in the same Redis transaction that writes the
+    new session, so a storage failure leaves either only the old session or
+    only the new one, never a new session whose cookie was not delivered
+    next to an old one that was not removed. It is meant for fresh logins
+    only and must not be combined with ``require_existing``.
     """
     session_ttl = get_auth_config()["session_ttl"]
     remaining_ttl = math.ceil(created_at + session_ttl - _now())
@@ -137,22 +145,26 @@ def store_session(
         if remaining_ttl <= 0:
             get_redis().delete(_SESSION_KEY.format(sid=sid))
             return False
-        stored = get_redis().set(
-            _SESSION_KEY.format(sid=sid),
-            json.dumps(
-                {
-                    "rt": refresh_token,
-                    "idt": id_token,
-                    "at": access_token,
-                    "iss": issuer,
-                    "sub": subject,
-                    "cid": client_id,
-                    "created_at": created_at,
-                }
-            ),
-            ex=min(session_ttl, remaining_ttl),
-            xx=require_existing,
+        key = _SESSION_KEY.format(sid=sid)
+        value = json.dumps(
+            {
+                "rt": refresh_token,
+                "idt": id_token,
+                "at": access_token,
+                "iss": issuer,
+                "sub": subject,
+                "cid": client_id,
+                "created_at": created_at,
+            }
         )
+        ttl = min(session_ttl, remaining_ttl)
+        if replaces:
+            with get_redis().pipeline(transaction=True) as pipeline:
+                pipeline.set(key, value, ex=ttl, xx=require_existing)
+                pipeline.delete(_SESSION_KEY.format(sid=replaces))
+                stored = pipeline.execute()[0]
+        else:
+            stored = get_redis().set(key, value, ex=ttl, xx=require_existing)
         return bool(stored)
     except redis.RedisError as error:
         raise _session_unavailable(error) from error

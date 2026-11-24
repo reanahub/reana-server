@@ -476,6 +476,18 @@ def oauth_callback():  # noqa: C901
 
     sid = secrets.token_urlsafe(32)
     try:
+        # Decide which previous session this login supersedes before writing
+        # anything, and replace it in the same transaction that stores the new
+        # one. A storage failure at any step then leaves the browser with its
+        # previous cookies and session instead of an undelivered new session.
+        replaced_sid = None
+        old_sid = request.cookies.get(SESSION_COOKIE)
+        if old_sid and old_sid != sid:
+            old_session = get_session(old_sid)
+            if old_session and session_matches_identity(
+                old_session, claims["iss"], claims["sub"]
+            ):
+                replaced_sid = old_sid
         stored = store_session(
             sid,
             token_body.get("refresh_token", ""),
@@ -485,16 +497,10 @@ def oauth_callback():  # noqa: C901
             subject=claims["sub"],
             client_id=auth_config["web_client_id"],
             created_at=time.time(),
+            replaces=replaced_sid,
         )
         if not stored:
             raise SessionUnavailableError("Browser session could not be stored.")
-        old_sid = request.cookies.get(SESSION_COOKIE)
-        if old_sid and old_sid != sid:
-            old_session = get_session(old_sid)
-            if old_session and session_matches_identity(
-                old_session, claims["iss"], claims["sub"]
-            ):
-                delete_session(old_sid)
     except SessionUnavailableError as error:
         logging.error("Could not establish browser session: %s", error)
         response = jsonify(message=str(error))
