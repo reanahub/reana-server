@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 #
 # This file is part of REANA.
-# Copyright (C) 2022 CERN.
+# Copyright (C) 2022, 2026 CERN.
 #
 # REANA is free software; you can redistribute it and/or modify it
 # under the terms of the MIT License; see LICENSE file for more details.
@@ -11,13 +11,15 @@
 from abc import ABC, abstractmethod
 import os
 import posixpath
+import re
 import resource
+import selectors
 import shutil
 import stat
 import subprocess
 import time
 from typing import Any, List, Mapping, Optional, Sequence
-from urllib.parse import quote, quote_plus, urlparse
+from urllib.parse import quote, quote_plus, unquote_to_bytes, urlparse
 import zipfile
 
 import requests
@@ -46,6 +48,25 @@ from reana_server.specification_bundles import preflight_zip_metadata
 
 _GIT_CLONE_POLL_INTERVAL = 0.5
 _FETCHER_MAXIMUM_DIRECTORIES = FETCHER_MAXIMUM_FILES * 2 + 1024
+_INVALID_PERCENT_ESCAPE = re.compile(r"%(?![0-9A-Fa-f]{2})")
+_GIT_LS_REMOTE_GLOB_CHARACTERS = frozenset("*?[")
+_GIT_LS_REMOTE_MAX_OUTPUT_BYTES = 1024 * 1024
+_GIT_LS_REMOTE_OUTPUT_LINES_PER_CANDIDATE = 2
+_GIT_OBJECT_ID_MAX_BYTES = 64
+
+
+def _git_environment() -> dict:
+    """Return the environment used to run Git without interactive prompts."""
+    environment = dict(os.environ)
+    environment["GIT_TERMINAL_PROMPT"] = "0"
+    return environment
+
+
+def _kill_and_reap(process: subprocess.Popen) -> None:
+    """Terminate the given process if it is still running and reap it."""
+    if process.poll() is None:
+        process.kill()
+    process.wait()
 
 
 class REANAFetcherError(Exception):
@@ -91,6 +112,8 @@ class WorkflowFetcherBase(ABC):
         self._parsed_url = parsed_url
         self._output_dir = os.path.abspath(output_dir)
         self._spec = spec
+        self._workflow_path = None
+        self._workflow_root = self._output_dir
 
     @abstractmethod
     def fetch(self) -> None:
@@ -188,28 +211,69 @@ class WorkflowFetcherBase(ABC):
                 specs.append(path)
         return specs
 
+    @staticmethod
+    def _is_path_inside(path: str, base: str) -> bool:
+        """Check whether a path is inside a base directory.
+
+        :param path: Path to check.
+        :param base: Base directory that should contain the path.
+        :returns: ``True`` if the path is inside the base directory, ``False`` otherwise.
+        """
+        real_base_path = os.path.realpath(base)
+        real_path = os.path.realpath(path)
+        try:
+            return os.path.commonpath([real_base_path, real_path]) == real_base_path
+        except ValueError:
+            return False
+
     def _is_path_inside_output_dir(self, path: str) -> bool:
         """Check if a file is inside the output directory.
 
         :param path: Absolute path to the file.
         :returns: ``True`` if the file is inside the output directory, ``False`` otherwise.
         """
-        real_output_dir = os.path.realpath(self._output_dir)
-        real_file_path = os.path.realpath(path)
-        return os.path.commonpath([real_output_dir, real_file_path]) == real_output_dir
+        return self._is_path_inside(path, self._output_dir)
+
+    def _resolve_workflow_root_path(self) -> str:
+        """Resolve the selected workflow root directory.
+
+        The workflow root defaults to the fetcher's output directory, but can point to a
+        subdirectory when launching workflows from repository folder URLs.
+
+        :returns: Absolute path to the selected workflow root directory.
+        """
+        workflow_root = self._output_dir
+        if self._workflow_path:
+            workflow_root = os.path.abspath(
+                os.path.join(self._output_dir, self._workflow_path)
+            )
+            if not self._is_path_inside_output_dir(workflow_root):
+                raise REANAFetcherError("Invalid path to the workflow directory")
+            if not os.path.isdir(workflow_root):
+                raise REANAFetcherError("Cannot find the given workflow directory")
+        return workflow_root
+
+    def workflow_root_path(self) -> str:
+        """Get the path of the selected workflow root directory.
+
+        :returns: Absolute path to the selected workflow root directory.
+        """
+        return self._workflow_root
 
     def workflow_spec_path(self) -> str:
         """Get the path of the workflow specification file.
 
         If the path to the specification file was provided, only that will be used to
-        find the workflow specification. Otherwise, the file will be searched in the
-        output directory. This method should be called after ``fetch``.
+        find the workflow specification inside the selected workflow root directory.
+        Otherwise, the file will be searched in the workflow root directory. This
+        method should be called after ``fetch``.
 
         :returns: Path of the workflow specification file.
         """
         if self._spec:
-            spec_path = os.path.abspath(os.path.join(self._output_dir, self._spec))
-            if not self._is_path_inside_output_dir(spec_path):
+            workflow_root = self.workflow_root_path()
+            spec_path = os.path.abspath(os.path.join(workflow_root, self._spec))
+            if not self._is_path_inside(spec_path, workflow_root):
                 raise REANAFetcherError("Invalid path to the workflow specification")
             if not os.path.isfile(spec_path):
                 raise REANAFetcherError(
@@ -217,7 +281,10 @@ class WorkflowFetcherBase(ABC):
                 )
             return spec_path
 
-        specs = [os.path.abspath(path) for path in self._discover_workflow_specs()]
+        specs = [
+            os.path.abspath(path)
+            for path in self._discover_workflow_specs(self.workflow_root_path())
+        ]
         unique_specs = list(set(specs))
         if not unique_specs:
             raise REANAFetcherError("Workflow specification was not found")
@@ -312,32 +379,26 @@ class WorkflowFetcherGit(WorkflowFetcherBase):
                     raise REANAFetcherError("Remote source contains too many files")
                 if total_size > FETCHER_MAXIMUM_EXTRACTED_SIZE:
                     raise REANAFetcherError("Remote source extracted size exceeded")
+        self._workflow_root = self._resolve_workflow_root_path()
 
     def _run_bounded_git(self, command: Sequence[str]) -> bool:
         """Run Git while bounding its temporary clone tree."""
-        environment = dict(os.environ)
-        environment["GIT_TERMINAL_PROMPT"] = "0"
-
-        def kill_and_reap(process) -> None:
-            if process.poll() is None:
-                process.kill()
-            process.wait()
-
         try:
             process = subprocess.Popen(
                 command,
-                env=environment,
+                env=_git_environment(),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            resource.prlimit(
-                process.pid,
-                resource.RLIMIT_FSIZE,
-                (FETCHER_MAXIMUM_CLONE_SIZE, FETCHER_MAXIMUM_CLONE_SIZE),
-            )
+            if hasattr(resource, "prlimit"):
+                resource.prlimit(
+                    process.pid,
+                    resource.RLIMIT_FSIZE,
+                    (FETCHER_MAXIMUM_CLONE_SIZE, FETCHER_MAXIMUM_CLONE_SIZE),
+                )
         except (OSError, ValueError):
             if "process" in locals():
-                kill_and_reap(process)
+                _kill_and_reap(process)
             return False
 
         clone_file_limit = FETCHER_MAXIMUM_FILES * 2 + 1024
@@ -356,7 +417,7 @@ class WorkflowFetcherGit(WorkflowFetcherBase):
                 except subprocess.TimeoutExpired:
                     pass
         except Exception:
-            kill_and_reap(process)
+            _kill_and_reap(process)
             raise
         # A fast clone can finish between polling intervals. Check its final
         # on-disk state before the caller removes the temporary ``.git`` tree.
@@ -479,6 +540,7 @@ class WorkflowFetcherZip(WorkflowFetcherBase):
         output_dir: str,
         spec: Optional[str] = None,
         workflow_name: Optional[str] = None,
+        workflow_path: Optional[str] = None,
     ):
         """Initialize the workflow specification fetcher.
 
@@ -486,9 +548,11 @@ class WorkflowFetcherZip(WorkflowFetcherBase):
         :param output_dir: Directory where all the data will be saved to.
         :param spec: Optional path to the workflow specification.
         :param workflow_name: Workflow name that overrides the workflow name generation.
+        :param workflow_path: Optional path to the workflow directory inside the archive.
         """
         super().__init__(parsed_url, output_dir, spec)
         self._archive_name = self._parsed_url.basename
+        self._workflow_path = workflow_path
         if workflow_name:
             self._workflow_name = self._clean_workflow_name(workflow_name)
         else:
@@ -501,6 +565,7 @@ class WorkflowFetcherZip(WorkflowFetcherBase):
         archive_path = os.path.join(self._output_dir, self._archive_name)
         self._download_file(self._parsed_url.original_url, archive_path)
         self.extract_archive(archive_path)
+        self._workflow_root = self._resolve_workflow_root_path()
 
     @staticmethod
     def _validate_archive_entries(entries) -> None:
@@ -722,6 +787,230 @@ def _match_url(parsed_url: ParsedUrl, rules: Sequence[str]) -> Mapping[str, Any]
     return components
 
 
+def _looks_like_git_sha(git_ref: str) -> bool:
+    """Check whether the given git ref looks like a commit SHA."""
+    return bool(re.fullmatch(r"[0-9a-f]{7,40}", git_ref, re.IGNORECASE))
+
+
+def _looks_like_full_git_sha(git_ref: str) -> bool:
+    """Check whether the given git ref looks like a full commit SHA."""
+    return bool(re.fullmatch(r"[0-9a-f]{40}", git_ref, re.IGNORECASE))
+
+
+def _decode_provider_tree_path(tree_path: str) -> List[str]:
+    """Decode and validate a GitHub/GitLab tree URL path segment-by-segment."""
+    decoded_segments = []
+    for encoded_segment in tree_path.split("/"):
+        if _INVALID_PERCENT_ESCAPE.search(encoded_segment):
+            raise REANAFetcherError("Invalid path to the workflow directory")
+        try:
+            decoded_segment = unquote_to_bytes(encoded_segment).decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise REANAFetcherError("Invalid path to the workflow directory") from exc
+        if (
+            decoded_segment in ("", ".", "..")
+            or "/" in decoded_segment
+            or "\\" in decoded_segment
+            or "\x00" in decoded_segment
+        ):
+            raise REANAFetcherError("Invalid path to the workflow directory")
+        decoded_segments.append(decoded_segment)
+
+    decoded_tree_path = "/".join(decoded_segments)
+    if (
+        len(decoded_segments) > SPECIFICATION_BUNDLE_MAX_DEPTH
+        or len(decoded_tree_path.encode("utf-8")) > SPECIFICATION_BUNDLE_MAX_PATH_BYTES
+    ):
+        raise REANAFetcherError("Invalid path to the workflow directory")
+    return decoded_segments
+
+
+def _remote_ref_candidates(path_parts: Sequence[str]) -> Sequence[str]:
+    """Return bounded literal remote refs that may match a tree path."""
+    ref_candidates = []
+    for idx in range(len(path_parts), 0, -1):
+        git_ref = "/".join(path_parts[:idx])
+        if git_ref == "HEAD":
+            continue
+        candidates = (f"refs/heads/{git_ref}", f"refs/tags/{git_ref}")
+        ref_candidates.extend(
+            candidate
+            for candidate in candidates
+            if not _GIT_LS_REMOTE_GLOB_CHARACTERS.intersection(candidate)
+        )
+    return tuple(dict.fromkeys(ref_candidates))
+
+
+def _run_bounded_git_output(
+    command: Sequence[str], max_output_bytes: int, max_output_lines: int
+) -> bytes:
+    """Run Git while incrementally enforcing stdout byte and line limits."""
+    process = None
+    output = bytearray()
+    output_lines = 0
+
+    try:
+        process = subprocess.Popen(
+            command,
+            env=_git_environment(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            bufsize=0,
+        )
+        if process.stdout is None:
+            raise OSError("Cannot read Git standard output")
+
+        deadline = time.monotonic() + FETCHER_REQUEST_TIMEOUT
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout, selectors.EVENT_READ)
+            while selector.get_map():
+                remaining_time = deadline - time.monotonic()
+                if remaining_time <= 0:
+                    raise subprocess.TimeoutExpired(command, FETCHER_REQUEST_TIMEOUT)
+
+                events = selector.select(timeout=remaining_time)
+                if not events:
+                    continue
+
+                for key, _ in events:
+                    read_size = min(64 * 1024, max_output_bytes - len(output) + 1)
+                    chunk = os.read(key.fd, read_size)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                        continue
+
+                    output.extend(chunk)
+                    output_lines += chunk.count(b"\n")
+                    if (
+                        len(output) > max_output_bytes
+                        or output_lines > max_output_lines
+                    ):
+                        raise REANAFetcherError(
+                            "Git reference discovery output exceeded its limit"
+                        )
+
+        remaining_time = deadline - time.monotonic()
+        if process.poll() is None:
+            if remaining_time <= 0:
+                raise subprocess.TimeoutExpired(command, FETCHER_REQUEST_TIMEOUT)
+            process.wait(timeout=remaining_time)
+    except (OSError, subprocess.TimeoutExpired, REANAFetcherError) as exc:
+        if isinstance(exc, REANAFetcherError):
+            raise
+        raise REANAFetcherError(
+            "Cannot resolve Git references from the given repository"
+        ) from exc
+    finally:
+        # Reap the child on every exit path, including unexpected exceptions
+        # and interpreter shutdown, before the pipe is closed.
+        if process is not None:
+            _kill_and_reap(process)
+            if process.stdout is not None:
+                process.stdout.close()
+
+    if process.returncode != 0:
+        raise REANAFetcherError(
+            "Cannot resolve Git references from the given repository"
+        )
+    return bytes(output)
+
+
+def _remote_refs(repository_url: str, ref_candidates: Sequence[str]) -> set[str]:
+    """Get matching remote heads and tags from a bounded candidate set."""
+    # ``ls-remote`` treats ref operands as glob patterns. Git ref names cannot
+    # contain these metacharacters, so discard them before spawning Git. Since
+    # literal operands still use tail matching, stdout is bounded independently.
+    ref_candidates = tuple(
+        dict.fromkeys(
+            candidate
+            for candidate in ref_candidates
+            if not _GIT_LS_REMOTE_GLOB_CHARACTERS.intersection(candidate)
+        )
+    )
+    if not ref_candidates:
+        return set()
+
+    max_output_lines = len(ref_candidates) * _GIT_LS_REMOTE_OUTPUT_LINES_PER_CANDIDATE
+    max_ref_bytes = max(len(os.fsencode(ref)) for ref in ref_candidates)
+    max_line_bytes = _GIT_OBJECT_ID_MAX_BYTES + 1 + max_ref_bytes + len(b"^{}\n")
+    max_output_bytes = min(
+        _GIT_LS_REMOTE_MAX_OUTPUT_BYTES, max_output_lines * max_line_bytes
+    )
+    output = _run_bounded_git_output(
+        [
+            "git",
+            "ls-remote",
+            "--heads",
+            "--tags",
+            "--",
+            repository_url,
+            *ref_candidates,
+        ],
+        max_output_bytes,
+        max_output_lines,
+    )
+
+    candidate_refs = {os.fsencode(ref): ref for ref in ref_candidates}
+    return {
+        candidate_refs[parts[1]]
+        for line in output.splitlines()
+        for parts in [line.split(None, 1)]
+        if len(parts) == 2
+        and parts[1] in candidate_refs
+        and not parts[1].endswith(b"^{}")
+    }
+
+
+def _resolve_provider_tree_path(
+    repository_url: str, tree_path: str
+) -> tuple[str, Optional[str], str]:
+    """Resolve a GitHub/GitLab tree path into git ref and workflow subdirectory.
+
+    Tree URLs have the form ``tree/<git_ref>[/path/to/workflow]``. Each URL
+    segment is decoded exactly once before validation. Since Git refs can
+    themselves contain slashes, choose the longest path prefix that resolves to
+    a remote branch or tag and treat the remaining suffix as a workflow
+    subdirectory. Abbreviated SHAs are accepted only after successful remote ref
+    discovery proves no branch or tag takes precedence. Full-length SHAs can
+    fall back when remote ref discovery fails, leaving the archive endpoint to
+    resolve the commit. Symbolic ``HEAD`` is likewise used only after checking
+    for a longer branch or tag and remains available if discovery fails.
+    """
+    path_parts = _decode_provider_tree_path(tree_path)
+    decoded_tree_path = "/".join(path_parts)
+    if len(path_parts) == 1:
+        return path_parts[0], None, decoded_tree_path
+
+    try:
+        remote_refs = _remote_refs(repository_url, _remote_ref_candidates(path_parts))
+    except REANAFetcherError:
+        if _looks_like_full_git_sha(path_parts[0]):
+            return path_parts[0], "/".join(path_parts[1:]), decoded_tree_path
+        if path_parts[0] == "HEAD":
+            return "HEAD", "/".join(path_parts[1:]), decoded_tree_path
+        raise
+
+    for idx in range(len(path_parts), 0, -1):
+        git_ref = "/".join(path_parts[:idx])
+        workflow_path = "/".join(path_parts[idx:]) or None
+        if (
+            f"refs/heads/{git_ref}" in remote_refs
+            or f"refs/tags/{git_ref}" in remote_refs
+        ):
+            return git_ref, workflow_path, decoded_tree_path
+
+    # Commit-SHA tree URLs may point to commits outside the initial shallow clone.
+    # Preserve the previous behavior and let the archive endpoint resolve the SHA.
+    if _looks_like_git_sha(path_parts[0]):
+        return path_parts[0], "/".join(path_parts[1:]), decoded_tree_path
+    if path_parts[0] == "HEAD":
+        return "HEAD", "/".join(path_parts[1:]), decoded_tree_path
+
+    raise REANAFetcherError(
+        f'Cannot checkout the given Git reference "{decoded_tree_path}"'
+    )
+
+
 def _get_github_fetcher(
     parsed_url: ParsedUrl, output_dir: str, spec: Optional[str] = None
 ) -> WorkflowFetcherBase:
@@ -749,7 +1038,7 @@ def _get_github_fetcher(
 
     username = components["username"]
     repository = components["repository"]
-    git_ref = components.get("git_ref")
+    tree_path = components.get("git_ref")
     zip_path = components.get("zip_path")
 
     if zip_path:
@@ -758,12 +1047,21 @@ def _get_github_fetcher(
         workflow_name = f"{repository}-{git_ref}"
         return WorkflowFetcherZip(parsed_url, output_dir, spec, workflow_name)
     else:
+        git_ref = None
+        workflow_path = None
+        if tree_path:
+            repository_url = f"https://github.com/{username}/{repository}.git"
+            git_ref, workflow_path, tree_path = _resolve_provider_tree_path(
+                repository_url, tree_path
+            )
         archive_ref = quote(git_ref or "HEAD", safe="/")
         archive_url = ParsedUrl(
             f"https://github.com/{username}/{repository}/archive/{archive_ref}.zip"
         )
-        workflow_name = repository if not git_ref else f"{repository}-{git_ref}"
-        return WorkflowFetcherZip(archive_url, output_dir, spec, workflow_name)
+        workflow_name = repository if not tree_path else f"{repository}-{tree_path}"
+        return WorkflowFetcherZip(
+            archive_url, output_dir, spec, workflow_name, workflow_path
+        )
 
 
 def _get_gitlab_fetcher(
@@ -794,7 +1092,7 @@ def _get_gitlab_fetcher(
 
     username = components["username"]
     repository = components["repository"]
-    git_ref = components.get("git_ref")
+    tree_path = components.get("git_ref")
     zip_path = components.get("zip_path")
 
     if zip_path:
@@ -803,14 +1101,25 @@ def _get_gitlab_fetcher(
         workflow_name = parsed_url.basename_without_extension
         return WorkflowFetcherZip(parsed_url, output_dir, spec, workflow_name)
     else:
+        git_ref = None
+        workflow_path = None
+        if tree_path:
+            repository_url = (
+                f"https://{parsed_url.hostname}/{username}/{repository}.git"
+            )
+            git_ref, workflow_path, tree_path = _resolve_provider_tree_path(
+                repository_url, tree_path
+            )
         project = quote_plus(f"{username}/{repository}")
         archive_ref = quote(git_ref or "HEAD", safe="")
         archive_url = ParsedUrl(
             f"https://{parsed_url.hostname}/api/v4/projects/{project}/"
             f"repository/archive.zip?sha={archive_ref}"
         )
-        workflow_name = repository if not git_ref else f"{repository}-{git_ref}"
-        return WorkflowFetcherZip(archive_url, output_dir, spec, workflow_name)
+        workflow_name = repository if not tree_path else f"{repository}-{tree_path}"
+        return WorkflowFetcherZip(
+            archive_url, output_dir, spec, workflow_name, workflow_path
+        )
 
 
 def get_fetcher(

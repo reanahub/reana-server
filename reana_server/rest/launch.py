@@ -111,10 +111,11 @@ def launch(user, url, name="", parameters="{}", specification=None):
 
     ---
     post:
-      summary: Launch workflow from a remote REANA specification file.
+      summary: Launch workflow from a remote REANA specification file or repository folder.
       description: >-
         This resource expects a remote reference to a REANA specification
-        file needed to launch a workflow via URL.
+        file or to a GitHub/GitLab repository folder containing a REANA
+        specification file needed to launch a workflow via URL.
       operationId: launch
       consumes:
         - application/json
@@ -130,7 +131,7 @@ def launch(user, url, name="", parameters="{}", specification=None):
               - url
             properties:
               url:
-                description: Remote origin URL where the REANA specification file is hosted.
+                description: Remote origin URL where the REANA specification file or repository folder is hosted.
                 type: string
               name:
                 description: Workflow name.
@@ -139,7 +140,7 @@ def launch(user, url, name="", parameters="{}", specification=None):
                 description: Workflow parameters.
                 type: string
               specification:
-                description: Path to the workflow specification file to be used.
+                description: Path to the workflow specification file to be used. For repository folder URLs, the path is relative to the selected folder.
                 type: string
       responses:
         200:
