@@ -360,6 +360,22 @@
               "type": "object"
             }
           },
+          "400": {
+            "description": "Request failed. The request parameters are invalid.",
+            "examples": {
+              "application/json": {
+                "message": "Field 'page': Must be greater than or equal to 1."
+              }
+            },
+            "schema": {
+              "properties": {
+                "message": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
           "401": {
             "description": "Request failed. The stored GitLab access token is not valid.",
             "schema": {

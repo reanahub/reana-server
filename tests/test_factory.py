@@ -127,6 +127,24 @@ def test_multiple_argument_errors_are_all_reported():
     assert "Field 'size': Not a valid integer." in message
 
 
+def test_argument_validation_handler_is_the_only_422_handler():
+    """No other handler competes for argument-validation failures.
+
+    Flask keeps one handler per exception class and scope, so a second
+    registration (application-wide or on a blueprint) would make the response
+    depend on registration order.
+    """
+    app = _make_app()
+
+    handlers = {
+        scope: code_handlers[422]
+        for scope, code_handlers in app.error_handler_spec.items()
+        if code_handlers.get(422)
+    }
+
+    assert handlers == {None: {UnprocessableEntity: handle_args_validation_error}}
+
+
 def test_security_headers_on_normal_response():
     """Security headers are set on every response."""
     with _make_app().test_client() as client:

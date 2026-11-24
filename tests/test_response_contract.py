@@ -86,10 +86,13 @@ def _declared_status_codes(docstring):
 # reana_server/decorators.py: ``signin_required``'s wrapper returns 401 (no
 # credentials / invalid token), 403 (missing role / CSRF / provisioning
 # error), and 503 (issuer or session-store unavailable); ``check_quota``'s
-# wrapper returns 403 (quota exceeded) and 500 (unexpected error).
+# wrapper returns 403 (quota exceeded) and 500 (unexpected error). webargs'
+# ``use_kwargs`` aborts with 422 on invalid arguments, which
+# ``handle_args_validation_error`` in reana_server/factory.py turns into 400.
 _DECORATOR_CODES = {
     "signin_required": {401, 403, 500, 503},
     "check_quota": {403, 500},
+    "use_kwargs": {400},
 }
 
 
