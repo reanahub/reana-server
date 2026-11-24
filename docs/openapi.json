@@ -1582,7 +1582,7 @@
     },
     "/api/logout": {
       "post": {
-        "description": "Deletes the server-side session (refresh token), clears the authentication cookies and returns the issuer's RP-initiated logout URL for the web application to navigate to.",
+        "description": "Deletes the server-side session (refresh token), clears the authentication cookies and returns the issuer's RP-initiated logout URL for the web application to navigate to. When the identity provider cannot be used to validate the session, the cookies are still cleared and the logout URL is empty.",
         "operationId": "bff_logout",
         "produces": [
           "application/json"
@@ -1608,11 +1608,8 @@
           "404": {
             "description": "Browser login is not enabled."
           },
-          "500": {
-            "description": "Identity-provider configuration prevents safe session validation. Cookies are preserved so logout can be retried after repair."
-          },
           "503": {
-            "description": "Browser session storage or the identity provider is temporarily unavailable. Cookies are preserved so logout can be retried."
+            "description": "Browser session storage is temporarily unavailable. Cookies are preserved so logout can be retried."
           }
         },
         "security": [],
