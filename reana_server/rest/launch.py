@@ -160,13 +160,16 @@ def launch(user, url, name="", parameters="{}", specification=None):
                 type: string
               validation_warnings:
                 description: >-
-                    Dictionary of validation warnings, if any. Each
-                    key is a property that was not correctly validated.
-                type: object
-                properties:
-                  additional_properties:
-                    type: array
-                    items:
+                    List of structured validation warnings, if any.
+                type: array
+                items:
+                  type: object
+                  properties:
+                    code:
+                      type: string
+                    message:
+                      type: string
+                    path:
                       type: string
           examples:
             application/json:
