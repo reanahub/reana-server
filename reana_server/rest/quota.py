@@ -194,7 +194,8 @@ def get_quota_usage():  # noqa
               }
         400:
           description: >-
-            Request failed. The incoming data specification seems malformed.
+            Request failed. The incoming data specification seems malformed,
+            for example no user or no resource type is specified.
           schema:
             type: object
             properties:
@@ -204,10 +205,6 @@ def get_quota_usage():  # noqa
             application/json:
               {
                 "message": "Resource type is required."
-              }
-            application/json:
-              {
-                "message": "No user specified."
               }
         401:
           description: >-
