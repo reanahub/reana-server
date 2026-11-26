@@ -1666,6 +1666,146 @@ def test_spec_bundle_content_length_over_cap_returns_413(
     stage_mock.assert_not_called()
 
 
+def _post_chunked_json(client, path, headers, body):
+    """POST a JSON body with NO ``Content-Length`` (a chunked upload).
+
+    Returns the response together with the input stream, so a test can check how
+    much of the body the server consumed before giving up.
+    """
+    stream = BytesIO(body)
+    builder = EnvironBuilder(
+        path=path,
+        method="POST",
+        headers=headers,
+        content_type="application/json",
+        input_stream=stream,
+    )
+    environ = builder.get_environ()
+    environ.pop("CONTENT_LENGTH", None)
+    environ["wsgi.input_terminated"] = True
+    environ["HTTP_TRANSFER_ENCODING"] = "chunked"
+    return client.open(environ_overrides=environ), stream
+
+
+def test_create_workflow_json_content_length_over_cap_returns_413(
+    app, user0, auth_headers, monkeypatch
+):
+    """A known-length oversized JSON body is rejected before it is parsed.
+
+    The body is deliberately not valid JSON: had it been parsed first, the
+    response would be 400 rather than 413.
+    """
+    monkeypatch.setattr(
+        "reana_server.rest.workflows.REANA_WORKFLOW_CREATE_JSON_MAX_REQUEST_BYTES",
+        100,
+    )
+    with app.test_client() as client, patch(
+        "reana_server.rest.workflows._get_reana_yaml_from_gitlab"
+    ) as gitlab_mock:
+        res = client.post(
+            url_for("workflows.create_workflow"),
+            headers=auth_headers(user0),
+            data=b'{"object_kind": "' + b"A" * 500,
+            content_type="application/json",
+        )
+    assert res.status_code == 413
+    assert "maximum is 100 bytes" in res.json["message"]
+    gitlab_mock.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b'{"object_kind": "' + b"A" * 100_000,
+        # Truncating this at the limit would leave a valid GitLab webhook.
+        b'{"object_kind": "push"}' + b" " * 100_000,
+    ],
+    ids=["oversized-document", "valid-webhook-padded-with-whitespace"],
+)
+def test_create_workflow_json_chunked_over_cap_returns_413(
+    app, user0, auth_headers, monkeypatch, body
+):
+    """A chunked oversized JSON body is stopped while it is being read.
+
+    A chunked body has no ``Content-Length`` to check up front, so only the
+    request-level limit can stop it. The server must give up long before the
+    whole body has been consumed, and must not accept the truncated remainder.
+    """
+    monkeypatch.setattr(
+        "reana_server.rest.workflows.REANA_WORKFLOW_CREATE_JSON_MAX_REQUEST_BYTES",
+        100,
+    )
+    with app.test_client() as client, patch(
+        "reana_server.rest.workflows._get_reana_yaml_from_gitlab"
+    ) as gitlab_mock:
+        res, stream = _post_chunked_json(
+            client, url_for("workflows.create_workflow"), auth_headers(user0), body
+        )
+    assert res.status_code == 413
+    assert "maximum is 100 bytes" in res.json["message"]
+    gitlab_mock.assert_not_called()
+    assert stream.tell() < len(body)
+
+
+@pytest.mark.parametrize("chunked", [False, True], ids=["content-length", "chunked"])
+@pytest.mark.parametrize(
+    ("cap_delta", "expected_status"),
+    [
+        (0, 400),  # exactly at the cap: still parsed, then the legacy guidance
+        (-1, 413),  # one byte over the cap
+    ],
+)
+def test_create_workflow_json_cap_boundary(
+    app, user0, auth_headers, monkeypatch, chunked, cap_delta, expected_status
+):
+    """The limit is inclusive: a body of exactly the cap size is accepted."""
+    body = json.dumps({"version": "0.3.0", "padding": "A" * 50}).encode()
+    monkeypatch.setattr(
+        "reana_server.rest.workflows.REANA_WORKFLOW_CREATE_JSON_MAX_REQUEST_BYTES",
+        len(body) + cap_delta,
+    )
+    with app.test_client() as client:
+        if chunked:
+            res, _stream = _post_chunked_json(
+                client, url_for("workflows.create_workflow"), auth_headers(user0), body
+            )
+        else:
+            res = client.post(
+                url_for("workflows.create_workflow"),
+                headers=auth_headers(user0),
+                query_string={"workflow_name": "boundary"},
+                data=body,
+                content_type="application/json",
+            )
+    assert res.status_code == expected_status
+    if expected_status == 400:
+        assert "reana_specification" in res.json["message"]
+
+
+def test_create_workflow_json_cap_does_not_apply_to_bundle_uploads(
+    app, user0, auth_headers, monkeypatch
+):
+    """Lowering the JSON limit must not reject multipart bundle uploads."""
+    monkeypatch.setattr(
+        "reana_server.rest.workflows.REANA_WORKFLOW_CREATE_JSON_MAX_REQUEST_BYTES",
+        10,
+    )
+    with app.test_client() as client, patch(
+        "reana_server.rest.workflows._stage_validation_bundle",
+        side_effect=REANAValidationError("staged"),
+    ) as stage_mock:
+        res = client.post(
+            url_for("workflows.create_workflow"),
+            headers=auth_headers(user0),
+            query_string={"workflow_name": "bundle-upload"},
+            data=_serial_bundle(),
+            content_type="multipart/form-data",
+        )
+    assert res.status_code == 400
+    assert res.json["message"] == "staged"
+    stage_mock.assert_called_once()
+
+
 def test_start_workflow_validates_specification(
     app, session, user0, sample_serial_workflow_in_db, auth_headers
 ):

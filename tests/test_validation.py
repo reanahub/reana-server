@@ -21,6 +21,7 @@ from contextlib import nullcontext as does_not_raise
 from flask import Flask
 from werkzeug.datastructures import FileStorage, MultiDict
 from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.test import EnvironBuilder
 
 from reana_commons.config import (
     REANA_DEFAULT_SNAKEMAKE_ENV_IMAGE,
@@ -90,6 +91,80 @@ def test_bundle_request_sets_explicit_single_part_limit():
             workflows.request.max_content_length
             == workflows.REANA_SPEC_BUNDLE_MAX_REQUEST_BYTES
         )
+
+
+def test_json_request_size_rejected_before_parsing(monkeypatch):
+    """Oversized JSON requests are rejected using Content-Length."""
+    monkeypatch.setattr(workflows, "REANA_WORKFLOW_CREATE_JSON_MAX_REQUEST_BYTES", 10)
+    app = Flask(__name__)
+    with app.test_request_context(
+        "/api/workflows",
+        method="POST",
+        data=b"01234567890",
+        content_type="application/json",
+    ):
+        with pytest.raises(RequestEntityTooLarge, match="maximum is 10 bytes"):
+            workflows._buffer_json_request_body()
+
+
+def _chunked_json_request(app, body):
+    """Return a request context for a JSON body with no ``Content-Length``.
+
+    Also returns the input stream, to check how much of it was consumed.
+    """
+    stream = io.BytesIO(body)
+    environ = EnvironBuilder(
+        path="/api/workflows",
+        method="POST",
+        content_type="application/json",
+        input_stream=stream,
+    ).get_environ()
+    environ.pop("CONTENT_LENGTH", None)
+    environ["wsgi.input_terminated"] = True
+    return app.request_context(environ), stream
+
+
+def test_chunked_json_request_at_the_limit_is_buffered(monkeypatch):
+    """A chunked body of exactly the limit is accepted and cached for parsing."""
+    monkeypatch.setattr(workflows, "REANA_WORKFLOW_CREATE_JSON_MAX_REQUEST_BYTES", 20)
+    body = b'{"a": "' + b"x" * 11 + b'"}'
+    assert len(body) == 20
+    context, _stream = _chunked_json_request(Flask(__name__), body)
+    with context:
+        workflows._buffer_json_request_body()
+        assert workflows.request.get_data() == body
+        assert workflows.request.json == {"a": "x" * 11}
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b'{"object_kind": "' + b"A" * 100 + b'"}',
+        # Cutting this at the limit would leave valid JSON, so a truncating read
+        # would wrongly accept an oversized request.
+        b'{"object_kind": "push"}' + b" " * 100,
+    ],
+    ids=["oversized-document", "valid-document-padded-with-whitespace"],
+)
+def test_chunked_json_request_over_the_limit_is_rejected(monkeypatch, body):
+    """A chunked body over the limit is rejected, not silently truncated."""
+    monkeypatch.setattr(workflows, "REANA_WORKFLOW_CREATE_JSON_MAX_REQUEST_BYTES", 20)
+    context, stream = _chunked_json_request(Flask(__name__), body)
+    with context:
+        with pytest.raises(RequestEntityTooLarge, match="maximum is 20 bytes"):
+            workflows._buffer_json_request_body()
+    # Reading stopped one byte past the limit instead of consuming the body.
+    assert stream.tell() == 21
+
+
+def test_json_request_cap_is_smaller_than_bundle_cap():
+    """JSON creation requests get their own, much smaller limit."""
+    from reana_server import config
+
+    assert (
+        config.REANA_WORKFLOW_CREATE_JSON_MAX_REQUEST_BYTES
+        < config.REANA_SPEC_BUNDLE_MAX_REQUEST_BYTES
+    )
 
 
 def test_multipart_upload_requires_seekable_temporary_stream():
